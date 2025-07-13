@@ -298,9 +298,13 @@ const aracStatuOptions = useMemo(() => {
             const startDateAuto = new Date(today);
             startDateAuto.setDate(today.getDate() - 6);
 
-            const start = new Date('2025-06-23T00:00:00').toISOString();
-            const end = new Date('2025-06-23T23:59:59').toISOString();
+            const start = startDate
+                ? new Date(`${startDate}T00:00:00`).toISOString()
+                : startDateAuto.toISOString();
 
+            const end = endDate
+                ? new Date(`${endDate}T23:59:59`).toISOString()
+                : today.toISOString();
             const response = await fetch('https://fts-backend-onx4.onrender.com/api/seferler', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

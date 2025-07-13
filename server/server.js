@@ -1,18 +1,22 @@
 const express = require('express');
 const cors = require('cors');
-const fetch = require('node-fetch'); // node-fetch v2
-require('dotenv').config(); // .env dosyasını yükler
-
+require('dotenv').config();
 
 const app = express();
 
-app.use(cors());
+const corsOptions = {
+    origin: ['http://localhost:3000', 'https://filo-web.vercel.app'],
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 app.post('/api/seferler', async (req, res) => {
     try {
         const now = new Date();
-        const trOffset = 3 * 60 * 60 * 1000; // UTC+3
+        const trOffset = 3 * 60 * 60 * 1000;
 
         const end = new Date(now.getTime() + trOffset);
         end.setHours(23, 59, 59, 999);
@@ -20,16 +24,14 @@ app.post('/api/seferler', async (req, res) => {
         const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000 + trOffset);
         start.setHours(0, 0, 0, 0);
 
-        const startDate = start.toISOString();
-        const endDate = end.toISOString();
-
         const body = {
-            startDate,
-            endDate,
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
             userId: 1
         };
 
         console.log('[→] TR zamanlı istek:', body);
+        console.log('✅ API TOKEN:', process.env.API_TOKEN); // Geçici log
 
         const response = await fetch('https://api.odaklojistik.com.tr/api/tmsdespatches/getall', {
             method: 'POST',
@@ -40,15 +42,16 @@ app.post('/api/seferler', async (req, res) => {
             body: JSON.stringify(body)
         });
 
-        const text = await response.text();
-
-        try {
-            const json = JSON.parse(text);
-            res.json(json);
-        } catch (err) {
-            console.error('❌ JSON parse hatası:', err.message);
-            res.status(500).json({ hata: 'Geçersiz JSON', detay: text });
+        // 🔴 BURASI EKLENDİ
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error(`❌ API Hatası: ${response.status} ${response.statusText} - ${errText}`);
+            return res.status(response.status).json({ hata: 'API isteği başarısız', detay: errText });
         }
+
+        const text = await response.text();
+        const json = JSON.parse(text);
+        res.json(json);
 
     } catch (err) {
         console.error('❌ Sunucu hatası:', err.message);
@@ -56,7 +59,7 @@ app.post('/api/seferler', async (req, res) => {
     }
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`✅ Proxy sunucusu çalışıyor: http://localhost:${PORT}`);
 });

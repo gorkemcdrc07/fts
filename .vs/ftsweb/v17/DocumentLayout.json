@@ -7,12 +7,20 @@
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\kullan\u0131c\u0131Islemleri\\ReelAtananSeferler.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Gorkem.Cadirci\\ftsweb\\backend\\index.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\index.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Gorkem.Cadirci\\ftsweb\\server\\server.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:server\\server.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Gorkem.Cadirci\\ftsweb\\src\\kullan\u0131c\u0131Islemleri\\ReelAtananSeferler.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\kullan\u0131c\u0131Islemleri\\ReelAtananSeferler.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Gorkem.Cadirci\\ftsweb\\package.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:package.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Gorkem.Cadirci\\ftsweb\\.gitignore||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:.gitignore||{3B902123-F8A7-4915-9F01-361F908088D0}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Gorkem.Cadirci\\ftsweb\\src\\kullan\u0131c\u0131Islemleri\\Planlama.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
@@ -30,7 +38,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 4,
+          "SelectedChildIndex": 5,
           "Children": [
             {
               "$type": "Bookmark",
@@ -43,27 +51,39 @@
             {
               "$type": "Document",
               "DocumentIndex": 1,
-              "Title": "server.js",
-              "DocumentMoniker": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\server\\server.js",
-              "RelativeDocumentMoniker": "server\\server.js",
-              "ToolTip": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\server\\server.js",
-              "RelativeToolTip": "server\\server.js",
-              "ViewState": "AgIAABgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Title": "index.js",
+              "DocumentMoniker": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\backend\\index.js",
+              "RelativeDocumentMoniker": "backend\\index.js",
+              "ToolTip": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\backend\\index.js",
+              "RelativeToolTip": "backend\\index.js",
+              "ViewState": "AgIAAC8AAAAAAAAAAAAmwGUAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
-              "WhenOpened": "2025-07-11T12:49:18.518Z",
+              "WhenOpened": "2025-07-11T14:21:26.319Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "ReelAtananSeferler.css",
-              "DocumentMoniker": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\src\\kullan\u0131c\u0131Islemleri\\ReelAtananSeferler.css",
-              "RelativeDocumentMoniker": "src\\kullan\u0131c\u0131Islemleri\\ReelAtananSeferler.css",
-              "ToolTip": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\src\\kullan\u0131c\u0131Islemleri\\ReelAtananSeferler.css",
-              "RelativeToolTip": "src\\kullan\u0131c\u0131Islemleri\\ReelAtananSeferler.css",
-              "ViewState": "AgIAAC0AAAAAAAAAAAAAAEUAAAAgAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
-              "WhenOpened": "2025-07-11T10:53:53.531Z"
+              "DocumentIndex": 3,
+              "Title": "package.json",
+              "DocumentMoniker": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\package.json",
+              "RelativeDocumentMoniker": "package.json",
+              "ToolTip": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\package.json",
+              "RelativeToolTip": "package.json",
+              "ViewState": "AgIAAAwAAAAAAAAAAAAgwEIAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-07-11T13:42:56.341Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": ".gitignore",
+              "DocumentMoniker": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\.gitignore",
+              "RelativeDocumentMoniker": ".gitignore",
+              "ToolTip": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\.gitignore",
+              "RelativeToolTip": ".gitignore",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-07-11T13:42:50.394Z"
             },
             {
               "$type": "Document",
@@ -73,14 +93,27 @@
               "RelativeDocumentMoniker": "src\\kullan\u0131c\u0131Islemleri\\ReelAtananSeferler.js",
               "ToolTip": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\src\\kullan\u0131c\u0131Islemleri\\ReelAtananSeferler.js",
               "RelativeToolTip": "src\\kullan\u0131c\u0131Islemleri\\ReelAtananSeferler.js",
-              "ViewState": "AgIAAN0CAAAAAAAAAAAYwP0CAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAABEBAAAAAAAAAAAcwCsBAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
-              "WhenOpened": "2025-07-11T10:26:01.21Z",
+              "WhenOpened": "2025-07-11T13:20:53.879Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 2,
+              "Title": "server.js",
+              "DocumentMoniker": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\server\\server.js",
+              "RelativeDocumentMoniker": "server\\server.js",
+              "ToolTip": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\server\\server.js",
+              "RelativeToolTip": "server\\server.js",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAAsAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2025-07-11T12:49:18.518Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
               "Title": "Planlama.css",
               "DocumentMoniker": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\src\\kullan\u0131c\u0131Islemleri\\Planlama.css",
               "RelativeDocumentMoniker": "src\\kullan\u0131c\u0131Islemleri\\Planlama.css",
@@ -92,13 +125,13 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 5,
               "Title": "Planlama.js",
               "DocumentMoniker": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\src\\kullan\u0131c\u0131Islemleri\\Planlama.js",
               "RelativeDocumentMoniker": "src\\kullan\u0131c\u0131Islemleri\\Planlama.js",
               "ToolTip": "C:\\Users\\Gorkem.Cadirci\\ftsweb\\src\\kullan\u0131c\u0131Islemleri\\Planlama.js",
               "RelativeToolTip": "src\\kullan\u0131c\u0131Islemleri\\Planlama.js",
-              "ViewState": "AgIAAGcAAAAAAAAAAAAAAIUAAAAGAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA4AAAAVAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
               "WhenOpened": "2025-07-11T07:28:13.769Z"
             }

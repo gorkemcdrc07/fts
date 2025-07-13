@@ -1085,7 +1085,9 @@ const splitCell = (value) => {
 const splittedColumns = detailKeys.map(key => splitCell(v[key]));
 
 // 🔥 maxRows artık sadece gerçek alanlara bakıyor
-const maxRows = Math.max(...splittedColumns.map(col => col.length));
+              const maxRows = Math.max(...splittedColumns.map(col => col.length));
+
+              //deneme
 
 
 

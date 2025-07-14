@@ -4,11 +4,30 @@ const fetch = require('node-fetch');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+
+const allowedOrigins = [
+    'https://fts-psi.vercel.app',
+    'https://fts-git-main-gorkems-projects-f9c4a0e9.vercel.app',
+    'https://fts-ya39ieb0j-gorkems-projects-f9c4a0e9.vercel.app',
+    'https://fts-84mb.onrender.com',
+    'http://localhost:3000', // Geliştirme ortamı için
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true); // Postman gibi araçlardan gelen isteklere izin ver
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'CORS policy does not allow this origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    }
+}));
+
 app.use(express.json());
 
 const API_URL = 'https://api.odaklojistik.com.tr/api/tmsdespatches/getall';
-const API_TOKEN = process.env.API_TOKEN;  // Token artık ortam değişkeninden geliyor
+const API_TOKEN = process.env.API_TOKEN;  // Token ortam değişkeninden geliyor
 
 // GET test endpoint
 app.get('/api/proxy/tmsdespatches', (req, res) => {
@@ -51,5 +70,5 @@ app.post('/api/proxy/tmsdespatches', async (req, res) => {
     }
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Proxy server ${PORT} portunda çalışıyor.`));

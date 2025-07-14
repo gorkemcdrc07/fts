@@ -1,0 +1,254 @@
+.reel-filters {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    background-color: #fff;
+    padding: 1.5rem 1.5rem 1rem 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+    margin-bottom: 1.5rem;
+    align-items: end;
+    padding-top: 48px;
+}
+
+    .reel-filters .filter-block {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+        .reel-filters .filter-block.full-width {
+            grid-column: span 4;
+        }
+
+    .reel-filters label {
+        font-size: 15px;
+        font-weight: 600;
+        color: #495057;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+
+    .reel-filters input,
+    .reel-filters select {
+        padding: 0.45rem 0.6rem;
+        font-size: 20px;
+        font-weight: bold;
+        border-radius: 8px;
+        border: 1px solid #ced4da;
+        background-color: #fff;
+        color: #212529;
+    }
+
+    .reel-filters .filter-buttons {
+        grid-column: span 4;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+.filter-buttons .left-buttons {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.filter-buttons .toggle-button {
+    margin-left: auto;
+}
+
+/* Modern Butonlar */
+.reel-filters .filter-buttons .btn {
+    padding: 0.55rem 1.3rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+/* Renk Kodlu Butonlar */
+.btn-list {
+    background: linear-gradient(135deg, #e3fafc, #99e9f2);
+    color: #0b7285;
+    border: 1px solid #66d9e8;
+}
+
+    .btn-list:hover {
+        background: linear-gradient(135deg, #66d9e8, #3bc9db);
+        color: white;
+    }
+
+.btn-sync {
+    background: linear-gradient(135deg, #fff3bf, #ffe066);
+    color: #7c6f00;
+    border: 1px solid #ffd43b;
+}
+
+    .btn-sync:hover {
+        background: linear-gradient(135deg, #ffd43b, #fab005);
+        color: white;
+    }
+
+.btn-save {
+    background: linear-gradient(135deg, #d3f9d8, #69db7c);
+    color: #2f9e44;
+    border: 1px solid #8ce99a;
+}
+
+    .btn-save:hover {
+        background: linear-gradient(135deg, #51cf66, #37b24d);
+        color: white;
+    }
+
+.btn:disabled {
+    background: #dee2e6 !important;
+    color: #adb5bd !important;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* Toggle Butonu */
+.toggle-advanced {
+    padding: 0.55rem 1.2rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 2px dashed #228be6;
+    color: #228be6;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+    .toggle-advanced:hover {
+        background-color: #e7f5ff;
+        color: #1c7ed6;
+        border-color: #1c7ed6;
+    }
+
+/* Gelişmiş filtrelerde sefer no kutusunun genişliği azaltıldı */
+.advanced-filters .sefer-no-filter {
+    max-width: 300px;
+    width: 100%;
+}
+
+/* Gelişmiş Filtreler */
+.advanced-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+    background: #fff;
+    padding: 20px 24px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+    margin-top: 1rem;
+    animation: fadeIn 0.3s ease-in-out;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+    .advanced-filters .filter-block {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .advanced-filters label {
+        font-size: 13px;
+        font-weight: 700;
+        color: #4a5568; /* biraz koyu gri */
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .advanced-filters input,
+    .advanced-filters select {
+        padding: 8px 12px;
+        font-size: 15px;
+        border-radius: 8px;
+        border: 1.5px solid #cbd5e1;
+        background-color: #fefefe;
+        color: #2d3748;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        box-sizing: border-box;
+    }
+
+        .advanced-filters input:focus,
+        .advanced-filters select:focus {
+            border-color: #3182ce;
+            box-shadow: 0 0 8px rgba(49, 130, 206, 0.3);
+            outline: none;
+        }
+
+/* React-select dropdown daha modern ve biraz geniş */
+.Select__control {
+    min-height: 38px;
+    font-size: 15px;
+    border-radius: 8px;
+    border-color: #cbd5e1 !important;
+    box-shadow: none !important;
+    transition: border-color 0.3s ease;
+}
+
+    .Select__control:hover {
+        border-color: #3182ce !important;
+    }
+
+/* Temizle butonu biraz daha öne çıksın */
+.btn-clear {
+    background-color: #e53e3e;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    font-weight: 700;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    width: 100%;
+    max-width: 200px;
+    justify-self: end;
+}
+
+    .btn-clear:hover {
+        background-color: #c53030;
+    }
+
+/* Responsive ayarlar */
+@media (max-width: 768px) {
+    .advanced-filters {
+        grid-template-columns: 1fr;
+        padding: 16px 18px;
+    }
+}
+
+/* Responsive Düzeltmeler */
+@media (max-width: 992px) {
+    .reel-filters {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+        .reel-filters .filter-block.full-width {
+            grid-column: span 2;
+        }
+}
+
+@media (max-width: 576px) {
+    .reel-filters {
+        grid-template-columns: 1fr;
+    }
+
+        .reel-filters .filter-block.full-width {
+            grid-column: span 1;
+        }
+}

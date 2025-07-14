@@ -1,0 +1,9 @@
+/* YukleniyorGosterge.css */
+.yukleniyor-gosterge {
+    padding: 16px;
+    text-align: center;
+    font-size: 18px;
+    color: #64748b; /* orta gri-mavi */
+    font-weight: 600;
+    user-select: none;
+}

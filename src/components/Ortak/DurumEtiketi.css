@@ -1,0 +1,30 @@
+/* DurumEtiketi.css */
+.durum-etiketi {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: white;
+    white-space: nowrap;
+    user-select: none;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Durum tiplerine göre renkler */
+.durum-eslesti {
+    background-color: #2b8a3e; /* koyu yeşil */
+}
+
+.durum-yeni {
+    background-color: #51cf66; /* açık yeşil */
+    color: #0b2e13; /* koyu yeşil metin */
+}
+
+.durum-yok {
+    background-color: #fa5252; /* kırmızı */
+}
+
+.durum-default {
+    background-color: #adb5bd; /* gri */
+}

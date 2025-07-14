@@ -305,10 +305,13 @@ const aracStatuOptions = useMemo(() => {
             const end = endDate
                 ? new Date(`${endDate}T23:59:59`).toISOString()
                 : today.toISOString();
-            const response = await fetch('https://fts-backend-onx4.onrender.com/api/seferler', {
+
+            const response = await fetch('http://localhost:5000/api/proxy/tmsorders', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ startDate: start, endDate: end, userId: 1 }),
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ startDate: start, endDate: end }),
             });
 
             const json = await response.json();
@@ -320,26 +323,29 @@ const aracStatuOptions = useMemo(() => {
                 return;
             }
 
+            // 🔒 Null ve geçersiz kayıtları filtrele
             const gelen = json.Data.filter(item => item && typeof item === 'object');
 
-            const filtreli = gelen.filter(item => {
-                const tip = (item?.VehicleWorkingTypeName || '').toString().trim().toLocaleUpperCase('tr-TR');
-                return tip === 'FİLO' || tip === 'ÖZMAL';
-            });
+            const filtreli = gelen
+                .filter(item => {
+                    const tip = (item?.VehicleWorkingTypeName || '').toString().trim().toLocaleUpperCase('tr-TR');
+                    return tip === 'FİLO' || tip === 'ÖZMAL';
+                });
 
+            // 🔒 Güvenli ordersMap
             const ordersMap = (orders, field) => {
-                try {
-                    if (!Array.isArray(orders)) return '';
-                    return orders.map(o => (o?.[field] ?? '')).filter(Boolean).join('; ');
-                } catch (e) {
-                    console.warn(`⚠ ordersMap hatası (${field}):`, e);
-                    return '';
-                }
+                if (!Array.isArray(orders)) return '';
+                return orders
+                    .filter(o => o && typeof o === 'object')
+                    .map(o => (o[field] ?? ''))
+                    .filter(Boolean)
+                    .join('; ');
             };
 
-            const temizVeri = filtreli.map((sefer) => {
-                const tmsOrders = Array.isArray(sefer.TMSOrders) ? sefer.TMSOrders : [];
-
+            const temizVeri = filtreli
+                .filter(sefer => sefer && typeof sefer === 'object') // 🔐 ek kontrol
+                .map(sefer => {
+                    const tmsOrders = Array.isArray(sefer.TMSOrders) ? sefer.TMSOrders : [];
                 return {
                     sefer_no: sefer?.DocumentNo ?? '',
                     arac_statu: sefer?.VehicleStatus ?? '',
@@ -427,6 +433,7 @@ const aracStatuOptions = useMemo(() => {
             setIsLoading(false);
         }
     };
+
 
 
     const applyFilters = (data) => {
@@ -1045,50 +1052,40 @@ const splitCell = (value) => {
               </tr>
             </thead>
             <tbody>
-{applyFilters(veriler).map((v, i) => {
-  const isExpanded = expandedRows.has(v.sefer_no);
+                            {applyFilters(veriler).map((v, i) => {
+                                if (!v || typeof v !== 'object') return null;
 
-  return (
-    <React.Fragment key={i}>
-      <tr>
-        <td
-          className="reel-td"
-          style={{ cursor: 'pointer', textAlign: 'center', fontWeight: 'bold' }}
-          onClick={() => toggleRow(v.sefer_no)}
-        >
-          {isExpanded ? '−' : '+'}
-        </td>
-        <td className="reel-td">{durumEtiketi(v.reel_durum)}</td>
-        <td className="reel-td">{v.nokta_sayisi}</td>
+                                const isExpanded = expandedRows.has(v.sefer_no);
 
-             {columns.map((key, idx) => (
-  <td key={idx} className="reel-td">{formatCell(v[key])}</td>
-))}
+                                return (
+                                    <React.Fragment key={i}>
+                                        <tr>
+                                            <td
+                                                className="reel-td"
+                                                style={{ cursor: 'pointer', textAlign: 'center', fontWeight: 'bold' }}
+                                                onClick={() => toggleRow(v.sefer_no)}
+                                            >
+                                                {isExpanded ? '−' : '+'}
+                                            </td>
+                                            <td className="reel-td">{durumEtiketi(v.reel_durum)}</td>
+                                            <td className="reel-td">{v.nokta_sayisi}</td>
 
-      </tr>
+                                            {columns.map((key, idx) => (
+                                                <td key={idx} className="reel-td">{formatCell(v[key])}</td>
+                                            ))}
+                                        </tr>
 
-      {isExpanded && (() => {
-     const detailKeys = [
-  'proje_adi',
-  'yukleme_noktasi',
-  'yukleme_ili',
-  'yukleme_ilcesi',
-  'teslim_noktasi',
-  'teslim_ili',
-  'teslim_ilcesi',
-  'yukleme_varis',
-  'yukleme_cikis',
-  'teslim_varis',
-  'teslim_cikis',
-];
+                                        {isExpanded && (() => {
+                                            const detailKeys = [
+                                                'proje_adi', 'yukleme_noktasi', 'yukleme_ili', 'yukleme_ilcesi',
+                                                'teslim_noktasi', 'teslim_ili', 'teslim_ilcesi',
+                                                'yukleme_varis', 'yukleme_cikis', 'teslim_varis', 'teslim_cikis',
+                                            ];
 
-const splittedColumns = detailKeys.map(key => splitCell(v[key]));
+                                            const splittedColumns = detailKeys.map(key => splitCell(v[key]));
+                                            const maxRows = Math.max(...splittedColumns.map(col => (col?.length || 0))); // güvenli hale geldi
 
-// 🔥 maxRows artık sadece gerçek alanlara bakıyor
-              const maxRows = Math.max(...splittedColumns.map(col => col.length));
-
-              //deneme
-
+                                // devam...
 
 
         return (

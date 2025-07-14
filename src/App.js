@@ -6,7 +6,7 @@ import Login from './Login';
 import Anasayfa from './Anasayfa';
 
 // Kullanıcı İşlemleri
-import ReelAtananSeferler from './kullanıcıIslemleri/ReelAtananSeferler';
+import ReelAtananSeferler from './views/ReelAtananSeferler';
 import Siparisler from './kullanıcıIslemleri/Siparisler';
 import Tamamlananlar from './Tamamlananlar';
 import PlakaOnerisi from './kullanıcıIslemleri/PlakaOnerisi';

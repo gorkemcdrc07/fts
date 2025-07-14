@@ -1,9 +1,16 @@
 {
   "ExpandedNodes": [
     "",
-    "\\backend",
-    "\\src"
+    "\\api",
+    "\\src",
+    "\\src\\aracDurum",
+    "\\src\\components",
+    "\\src\\components\\Filters",
+    "\\src\\components\\Ortak",
+    "\\src\\components\\Tablolar",
+    "\\src\\kullanıcıIslemleri",
+    "\\src\\utils"
   ],
-  "SelectedNode": "\\public",
+  "SelectedNode": "\\api\\server.js",
   "PreviewInSolutionExplorer": false
 }

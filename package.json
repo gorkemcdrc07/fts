@@ -15,7 +15,7 @@
     "axios": "^1.10.0",
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",
-    "dotenv": "^17.0.0",
+    "dotenv": "^17.2.0",
     "express": "^5.1.0",
     "file-saver": "^2.0.5",
     "leaflet": "^1.9.4",
@@ -35,11 +35,12 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
+    "nodemon": "^3.1.10",
     "tailwindcss-cli": "^0.1.2"
   },
   "scripts": {
     "start": "react-scripts start",
-    "server": "node server/server.js",
+    "server": "nodemon server/server.js",
     "dev": "concurrently \"npm run server\" \"npm start\"",
     "build": "react-scripts build",
     "test": "react-scripts test",

@@ -38,7 +38,7 @@ const senkronizeEt = async (
         };
 
         // Burada URL'yi sabit olarak değiştiriyoruz
-        const API_BASE_URL = 'https://fts-84mb.onrender.com';
+        const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000'; // ✅
         const response = await fetch(`${API_BASE_URL}/api/proxy/tmsdespatches`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

@@ -37,7 +37,9 @@ const senkronizeEt = async (
             userId: 1,
         };
 
-        const response = await fetch('http://localhost:5000/api/proxy/tmsdespatches', {
+        // Burada URL'yi sabit olarak değiştiriyoruz
+        const API_BASE_URL = 'https://fts-84mb.onrender.com';
+        const response = await fetch(`${API_BASE_URL}/api/proxy/tmsdespatches`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),

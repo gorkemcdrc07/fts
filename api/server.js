@@ -2,6 +2,7 @@ require('dotenv').config(); // dotenv'i en üstte yükle
 const express = require('express');
 const fetch = require('node-fetch');
 const cors = require('cors');
+const path = require('path');  // Burayı ekliyoruz
 
 const app = express();
 
@@ -25,6 +26,9 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// **React build klasörünü statik dosya olarak sunuyoruz**
+app.use(express.static(path.join(__dirname, 'build')));
 
 const API_URL = 'https://api.odaklojistik.com.tr/api/tmsdespatches/getall';
 const API_TOKEN = process.env.API_TOKEN;  // Token ortam değişkeninden geliyor
@@ -68,6 +72,11 @@ app.post('/api/proxy/tmsdespatches', async (req, res) => {
         console.error('Proxy sunucu hatası:', error);
         res.status(500).json({ error: 'Proxy sunucu hatası' });
     }
+});
+
+// **React Router ile frontend routing için**
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
 
 const PORT = process.env.PORT || 5000;

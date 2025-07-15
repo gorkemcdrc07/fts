@@ -43,19 +43,22 @@
     .reel-filters .filter-buttons {
         grid-column: span 4;
         display: flex;
-        flex-wrap: wrap;
         justify-content: space-between;
         align-items: center;
-        gap: 0.75rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 1rem;
     }
 
 .filter-buttons .left-buttons {
     display: flex;
-    gap: 0.75rem;
     flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    flex: 1;
 }
 
-.filter-buttons .toggle-button {
+.toggle-advanced {
     margin-left: auto;
 }
 

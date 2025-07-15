@@ -81,9 +81,18 @@ const senkronizeEt = async (
 
         const temizVeri = filtreli.map((sefer) => {
             const tmsOrders = Array.isArray(sefer.TMSOrders) ? sefer.TMSOrders : [];
+
+            const ordersMap = (orders, field) => {
+                if (!Array.isArray(orders)) return '';
+                return orders
+                    .filter((o) => o && typeof o === 'object')
+                    .map((o) => o[field] ?? '')
+                    .filter(Boolean)
+                    .join('; ');
+            };
+
             return {
                 sefer_no: sefer?.DocumentNo ?? '',
-                arac_statu: sefer?.VehicleStatus ?? '',
                 plaka: sefer?.PlateNumber ?? '',
                 treyler: sefer?.TrailerPlateNumber ?? '',
                 surucu_ad_soyad: sefer?.FullName ?? '',
@@ -105,8 +114,10 @@ const senkronizeEt = async (
                 atama_yapan_kullanici: sefer?.TMSDespatchCreatedBy ?? '',
                 atama_tarihi: sefer?.TMSDespatchCreatedDate ?? null,
                 kayit_zamani: new Date().toISOString(),
+                arac_statu: sefer?.VehicleStatus ?? '',
             };
         });
+
 
         const { data: mevcutVeri, error } = await supabase
             .from('seferler')
@@ -191,7 +202,7 @@ const ReelAtananSeferler = () => {
 
     const [veriler, setVeriler] = useState([]);
     const [tumSeferler, setTumSeferler] = useState([]);
-    const [genisSatirlar, setGenisSatirlar] = useState(new Set());
+    const [genisletilenSatirlar, setGenisletilenSatirlar] = useState(new Set());
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [saving, setSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -201,6 +212,7 @@ const ReelAtananSeferler = () => {
     const navigate = useNavigate();
     const kullaniciAdi = localStorage.getItem('kullaniciAdi')?.toUpperCase();
     const senkronizeYetkili = kullaniciAdi === 'ADMIN' || kullaniciAdi === 'SELİN';
+
 
     const handleDetailChange = (seferNo, satirIndex, alan, newValue) => {
         setVeriler((prevVeriler) =>
@@ -278,6 +290,35 @@ const ReelAtananSeferler = () => {
                     filtreler.secilenSeferler.some((s) => s.value === item.sefer_no))
         );
     };
+    const filtreSecenekleri = useMemo(() => {
+        if (!Array.isArray(veriler)) return {};
+
+        const unique = (key) =>
+            [...new Set(veriler.map((v) => v[key]).filter(Boolean))].map((val) => ({
+                label: val,
+                value: val,
+            }));
+
+        return {
+            plaka: unique('plaka'),
+            musteriAdi: unique('musteri_adi'),
+            projeAdi: unique('proje_adi'),
+            yuklemeNoktasi: unique('yukleme_noktasi'),
+            yuklemeIl: unique('yukleme_ili'),
+            yuklemeIlce: unique('yukleme_ilcesi'),
+            teslimNoktasi: unique('teslim_noktasi'),
+            teslimIl: unique('teslim_ili'),
+            teslimIlce: unique('teslim_ilcesi'),
+            atamaYapan: unique('atama_yapan_kullanici'),
+            aracStatu: unique('arac_statu'),
+            seferNo: veriler
+                .filter((v) => v && typeof v === 'object' && v.sefer_no)
+                .map((v) => ({
+                    label: v.sefer_no,
+                    value: v.sefer_no,
+                })),
+        };
+    }, [veriler]); // ✅ useMemo düzgün kapatıldı
 
     const filtrelenmisVeri = useMemo(() => applyFilters(veriler), [veriler, filtreler]);
 
@@ -286,20 +327,35 @@ const ReelAtananSeferler = () => {
         setVeriler(yeniVeri);
 
         if (yeniVeri.length > 0 && kolonlar.length === 0) {
-            const varsayilanKolonlar = Object.keys(yeniVeri[0]).filter(
-                (k) =>
-                    ![
-                        'sefer_detaylari',
-                        'reel_durum',
-                        'yukleme_varis',
-                        'yukleme_cikis',
-                        'teslim_varis',
-                        'teslim_cikis',
-                    ].includes(k)
-            );
+            const varsayilanKolonlar = [
+                'arac_statu',
+                'sefer_tarihi',
+                'sefer_no',
+                'plaka',
+                'treyler',
+                'surucu_ad_soyad',
+                'surucu_tckn',
+                'surucu_telefon',
+                'musteri_adi',
+                'musteri_siparis_no',
+                'hizmet_adi',
+                'proje_adi',
+                'yukleme_noktasi',
+                'yukleme_ili',
+                'yukleme_ilcesi',
+                'teslim_alan_firma',
+                'teslim_noktasi',
+                'teslim_ili',
+                'teslim_ilcesi',
+                'irsaliye_no',
+                'kayit_zamani',
+                'atama_yapan_kullanici',
+                'atama_tarihi',
+            ];
             setKolonlar(varsayilanKolonlar);
         }
     };
+
 
     const senkronizeTikla = async () => {
         await senkronizeEt(setVeriler, setIsLoading, setSuccessCount, setShowSuccess, filtreler.startDate, filtreler.endDate);
@@ -323,6 +379,12 @@ const ReelAtananSeferler = () => {
             const detaylar = [];
 
             for (const sefer of veriler) {
+                const hucreleriTemizle = (dizi) =>
+                    (dizi || []).map((v) => {
+                        const trimmed = (v || '').trim();
+                        return trimmed === '' || trimmed === '-' || trimmed === '---' ? null : trimmed;
+                    });
+
                 const splitMap = {
                     yukleme_varis: hucreAyir(sefer.yukleme_varis),
                     yukleme_cikis: hucreAyir(sefer.yukleme_cikis),
@@ -336,10 +398,10 @@ const ReelAtananSeferler = () => {
                     detaylar.push({
                         sefer_id: sefer.id,
                         nokta_sirasi: i,
-                        yukleme_varis: splitMap.yukleme_varis[i] || null,
-                        yukleme_cikis: splitMap.yukleme_cikis[i] || null,
-                        teslim_varis: splitMap.teslim_varis[i] || null,
-                        teslim_cikis: splitMap.teslim_cikis[i] || null,
+                        yukleme_varis: hucreleriTemizle(splitMap.yukleme_varis)[i] || null,
+                        yukleme_cikis: hucreleriTemizle(splitMap.yukleme_cikis)[i] || null,
+                        teslim_varis: hucreleriTemizle(splitMap.teslim_varis)[i] || null,
+                        teslim_cikis: hucreleriTemizle(splitMap.teslim_cikis)[i] || null,
                     });
                 }
             }
@@ -349,7 +411,9 @@ const ReelAtananSeferler = () => {
             });
 
             if (!error) alert('🟢 Detaylar kaydedildi');
+            else throw error;
         } catch (err) {
+            console.error('Kayıt hatası:', err);
             alert('🔴 Kayıt hatası');
         } finally {
             setSaving(false);
@@ -380,22 +444,10 @@ const ReelAtananSeferler = () => {
                     filtreler={filtreler}
                     setFiltreler={setFiltreler}
                     filtreleriTemizle={filtreleriTemizle}
-                    secenekler={{
-                        plaka: [],
-                        musteriAdi: [],
-                        projeAdi: [],
-                        yuklemeNoktasi: [],
-                        yuklemeIl: [],
-                        yuklemeIlce: [],
-                        teslimNoktasi: [],
-                        teslimIl: [],
-                        teslimIlce: [],
-                        atamaYapan: [],
-                        aracStatu: [],
-                        seferNo: tumSeferler,
-                    }}
+                    secenekler={filtreSecenekleri}
                 />
             )}
+
 
             <SeferTablosu
                 veriler={veriler}
@@ -404,10 +456,11 @@ const ReelAtananSeferler = () => {
                 suruklemeyiBaslat={suruklemeyiBaslat}
                 suruklemeyeIzinVer={suruklemeyeIzinVer}
                 birakildi={birakildi}
-                genisletilenSatirlar={genisSatirlar}
-                setGenisletilenSatirlar={setGenisSatirlar}
-                handleDetailChange={handleDetailChange}  // Buraya ekledik
+                genisletilenSatirlar={genisletilenSatirlar}
+                setGenisletilenSatirlar={setGenisletilenSatirlar}
+                handleDetailChange={handleDetailChange}
             />
+
 
             {isLoading && (
                 <div

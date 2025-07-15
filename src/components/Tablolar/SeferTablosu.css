@@ -2,14 +2,14 @@
 
 .reel-table-container {
     width: 100%;
-    max-height: 75vh;
+    max-height: 70vh;
     overflow-x: auto;
     overflow-y: auto;
-    background-color: #ffffff;
+    background: #ffffff;
     border-radius: 12px;
-    box-shadow: 0 12px 24px rgba(0,0,0,0.08);
-    padding: 16px;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+    padding: 1rem;
+    font-family: 'Inter', sans-serif;
     -webkit-overflow-scrolling: touch;
 }
 
@@ -17,200 +17,109 @@
     width: max-content;
     min-width: 100%;
     border-collapse: separate;
-    border-spacing: 10px 14px;
-    font-size: 15px;
-    table-layout: fixed;
+    border-spacing: 0 12px;
+    table-layout: auto;
+    font-size: 16px;
+    line-height: 1.6;
 }
 
 .reel-th, .reel-td {
-    padding: 14px 20px;
-    font-weight: 600;
+    padding: 16px 20px;
     text-align: left;
     vertical-align: middle;
-    border-radius: 8px;
-    white-space: normal;
-    word-break: break-word;
-    overflow-wrap: break-word;
-    line-height: 1.5;
-    min-width: 140px;
-    max-width: 260px;
-    background-color: #fafafa;
-    border: 1.5px solid #cbd5e1; /* Hafif mavi-gri kenarlık */
-    transition: background-color 0.3s ease, border-color 0.3s ease;
+    background: #f9fafb;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.25s ease, border-color 0.25s ease;
 }
 
 .reel-th {
-    background-color: #f3f6fb;
-    color: #2c3e50;
-    font-weight: 700;
-    border-bottom: 3px solid #3b82f6;
-    border-left: 1.5px solid #cbd5e1;
+    background: linear-gradient(to bottom, #f1f5f9, #e2e8f0);
+    color: #1e293b;
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-bottom: 2px solid #3b82f6;
     position: sticky;
     top: 0;
-    z-index: 101;
-    user-select: none;
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
-    padding-top: 18px;
-    padding-bottom: 18px;
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
 }
 
-.reel-tr:nth-child(even) {
-    background-color: #ffffff;
+/* Zebra stil */
+.reel-tr:nth-child(even) .reel-td {
+    background: #f8fafc;
 }
 
-.reel-tr:nth-child(odd) {
-    background-color: #f9fbfd;
+.reel-tr:nth-child(odd) .reel-td {
+    background: #ffffff;
 }
 
+/* Hover */
 .reel-td:hover {
-    background-color: #d6e4ff;
-    border-color: #3b82f6;
+    background: #e0f0ff;
+    border-color: #60a5fa;
 }
 
-.reel-table-container::-webkit-scrollbar {
-    height: 8px;
-    background: transparent;
-}
-
-.reel-table-container::-webkit-scrollbar-thumb {
-    background: #3b82f6;
-    border-radius: 4px;
-    opacity: 0.7;
-    transition: opacity 0.3s ease;
-}
-
-    .reel-table-container::-webkit-scrollbar-thumb:hover {
-        opacity: 1;
-    }
-
-/* Aç/Kapa hücresi için stil */
+/* Expand */
 .expand-toggle-cell {
     cursor: pointer;
     text-align: center;
     font-weight: bold;
-    user-select: none;
-    font-size: 18px;
+    font-size: 20px;
     color: #3b82f6;
-}
-
-/* Responsive */
-@media (max-width: 900px) {
-    .reel-table-container {
-        padding: 10px;
-    }
-
-    .reel-th, .reel-td {
-        padding: 10px 14px;
-        min-width: 100px;
-        max-width: 180px;
-        font-size: 14px;
-    }
-}
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
-
-.reel-table-container {
-    width: 100%;
-    max-height: 75vh;
-    overflow-x: auto;
-    overflow-y: auto;
-    background-color: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 12px 24px rgba(0,0,0,0.08);
-    padding: 16px;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-    -webkit-overflow-scrolling: touch;
-}
-
-.reel-table {
-    width: max-content;
-    min-width: 100%;
-    border-collapse: separate;
-    border-spacing: 10px 14px;
-    font-size: 15px;
-    table-layout: fixed;
-}
-
-.reel-th, .reel-td {
-    padding: 14px 20px;
-    font-weight: 600;
-    text-align: left;
-    vertical-align: middle;
-    border-radius: 8px;
-    white-space: normal;
-    word-break: break-word;
-    overflow-wrap: break-word;
-    line-height: 1.5;
-    min-width: 140px;
-    max-width: 260px;
-    background-color: #fafafa;
-    border: 1.5px solid #cbd5e1; /* Hafif mavi-gri kenarlık */
-    transition: background-color 0.3s ease, border-color 0.3s ease;
-}
-
-.reel-th {
-    background-color: #f3f6fb;
-    color: #2c3e50;
-    font-weight: 700;
-    border-bottom: 3px solid #3b82f6;
-    border-left: 1.5px solid #cbd5e1;
-    position: sticky;
-    top: 0;
-    z-index: 101;
     user-select: none;
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
-    padding-top: 18px;
-    padding-bottom: 18px;
 }
 
-.reel-tr:nth-child(even) {
-    background-color: #ffffff;
-}
-
-.reel-tr:nth-child(odd) {
-    background-color: #f9fbfd;
-}
-
-.reel-td:hover {
-    background-color: #d6e4ff;
-    border-color: #3b82f6;
-}
-
+/* Scroll */
 .reel-table-container::-webkit-scrollbar {
-    height: 8px;
-    background: transparent;
+    height: 25px;
 }
 
 .reel-table-container::-webkit-scrollbar-thumb {
-    background: #3b82f6;
-    border-radius: 4px;
-    opacity: 0.7;
-    transition: opacity 0.3s ease;
-}
-
-    .reel-table-container::-webkit-scrollbar-thumb:hover {
-        opacity: 1;
-    }
-
-/* Aç/Kapa hücresi için stil */
-.expand-toggle-cell {
-    cursor: pointer;
-    text-align: center;
-    font-weight: bold;
-    user-select: none;
-    font-size: 18px;
-    color: #3b82f6;
+    background-color: #3b82f6;
+    border-radius: 6px;
+    border: 3px solid #ffffff;
 }
 
 /* Responsive */
 @media (max-width: 900px) {
-    .reel-table-container {
-        padding: 10px;
+    .reel-th, .reel-td {
+        font-size: 14px;
+        padding: 10px 12px;
+        min-width: 120px;
+        max-width: 250px;
     }
 
-    .reel-th, .reel-td {
-        padding: 10px 14px;
-        min-width: 100px;
-        max-width: 180px;
-        font-size: 14px;
+    .expand-toggle-cell {
+        font-size: 18px;
     }
 }
+
+/* 🔽 Sadece sağ kenardan sürüklenebilir */
+.resizable-th {
+    position: relative;
+    min-width: 100px;
+}
+
+/* 🔽 İnce sürükleme alanı */
+.resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    user-select: none;
+    z-index: 5;
+    background-color: transparent;
+}
+
+    /* 🔽 Hover görünürlüğü */
+    .resize-handle:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }

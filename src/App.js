@@ -17,6 +17,7 @@ import AracYonetimi from './aracDurum/AracYonetimi';
 import IzinGirisi from './aracDurum/IzinGirisi';
 import KesintiGirisi from './aracDurum/KesintiGirisi';
 
+
 function App() {
     return (
         <Router>

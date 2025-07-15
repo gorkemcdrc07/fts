@@ -390,6 +390,13 @@ const ReelAtananSeferler = () => {
                     yukleme_cikis: hucreAyir(sefer.yukleme_cikis),
                     teslim_varis: hucreAyir(sefer.teslim_varis),
                     teslim_cikis: hucreAyir(sefer.teslim_cikis),
+                    proje_adi: hucreAyir(sefer.proje_adi),
+                    yukleme_noktasi: hucreAyir(sefer.yukleme_noktasi),
+                    yukleme_ili: hucreAyir(sefer.yukleme_ili),
+                    yukleme_ilcesi: hucreAyir(sefer.yukleme_ilcesi),
+                    teslim_noktasi: hucreAyir(sefer.teslim_noktasi),
+                    teslim_ili: hucreAyir(sefer.teslim_ili),
+                    teslim_ilcesi: hucreAyir(sefer.teslim_ilcesi),
                 };
 
                 const max = Math.max(...Object.values(splitMap).map((d) => d.length));
@@ -402,9 +409,20 @@ const ReelAtananSeferler = () => {
                         yukleme_cikis: hucreleriTemizle(splitMap.yukleme_cikis)[i] || null,
                         teslim_varis: hucreleriTemizle(splitMap.teslim_varis)[i] || null,
                         teslim_cikis: hucreleriTemizle(splitMap.teslim_cikis)[i] || null,
+                        proje_adi: hucreleriTemizle(splitMap.proje_adi)[i] || null,
+                        yukleme_noktasi: hucreleriTemizle(splitMap.yukleme_noktasi)[i] || null,
+                        yukleme_ili: hucreleriTemizle(splitMap.yukleme_ili)[i] || null,
+                        yukleme_ilcesi: hucreleriTemizle(splitMap.yukleme_ilcesi)[i] || null,
+                        teslim_noktasi: hucreleriTemizle(splitMap.teslim_noktasi)[i] || null,
+                        teslim_ili: hucreleriTemizle(splitMap.teslim_ili)[i] || null,
+                        teslim_ilcesi: hucreleriTemizle(splitMap.teslim_ilcesi)[i] || null,
+                        arac_statu: sefer.arac_statu || null,
+                        kayit_zamani: new Date().toISOString(),
                     });
                 }
             }
+
+            console.log('Supabase’e gönderilecek detaylar:', detaylar);
 
             const { error } = await supabase.from('sefer_detaylari').upsert(detaylar, {
                 onConflict: ['sefer_id', 'nokta_sirasi'],
@@ -419,6 +437,7 @@ const ReelAtananSeferler = () => {
             setSaving(false);
         }
     };
+
 
     return (
         <div className="reel-wrapper">

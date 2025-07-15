@@ -438,6 +438,118 @@ const ReelAtananSeferler = () => {
         }
     };
 
+    // ✅ Tamamlananları Aktar fonksiyonu
+    const tamamlananlariAktarTikla = async () => {
+        const tamamlananlar = veriler.filter(
+            (v) => v.arac_statu?.toUpperCase().trim() === 'SEFER TAMAMLANDI'
+        );
+
+        if (tamamlananlar.length === 0) {
+            alert('⚠️ Aktarılacak tamamlanan sefer yok.');
+            return;
+        }
+
+        try {
+            // ✅ Ana veriler
+            const anaVeriler = tamamlananlar.map((v) => ({
+                arac_statu: v.arac_statu ?? null,
+                sefer_tarihi: v.sefer_tarihi ?? null,
+                sefer_no: v.sefer_no ?? null,
+                plaka: v.plaka ?? null,
+                treyler: v.treyler ?? null,
+                surucu_ad_soyad: v.surucu_ad_soyad ?? null,
+                surucu_tckn: v.surucu_tckn ?? null,
+                surucu_telefon: v.surucu_telefon ?? null,
+                musteri_adi: v.musteri_adi ?? null,
+                musteri_siparis_no: v.musteri_siparis_no ?? null,
+                hizmet_adi: v.hizmet_adi ?? null,
+                proje_adi: v.proje_adi ?? null,
+                yukleme_noktasi: v.yukleme_noktasi ?? null,
+                yukleme_ili: v.yukleme_ili ?? null,
+                yukleme_ilcesi: v.yukleme_ilcesi ?? null,
+                teslim_alan_firma: v.teslim_alan_firma ?? null,
+                teslim_noktasi: v.teslim_noktasi ?? null,
+                teslim_ili: v.teslim_ili ?? null,
+                teslim_ilcesi: v.teslim_ilcesi ?? null,
+                irsaliye_no: v.irsaliye_no ?? null,
+                kayit_zamani: new Date().toISOString(),
+                atama_yapan_kullanici: v.atama_yapan_kullanici ?? null,
+                atama_tarihi: v.atama_tarihi ?? null,
+            }));
+
+            const { data: anaSonuc, error: anaError } = await supabase
+                .from('tamamlanan_seferler')
+                .upsert(anaVeriler, { onConflict: ['sefer_no'], returning: 'representation' });
+
+            if (anaError) throw anaError;
+
+            // ✅ Detay veriler
+            const detaylar = [];
+
+            for (const sefer of tamamlananlar) {
+                const hucreAyikla = (val) => (val || '').split(';').map((v) => v.trim());
+
+                const splitMap = {
+                    proje_adi: hucreAyikla(sefer.proje_adi),
+                    yukleme_noktasi: hucreAyikla(sefer.yukleme_noktasi),
+                    yukleme_ili: hucreAyikla(sefer.yukleme_ili),
+                    yukleme_ilcesi: hucreAyikla(sefer.yukleme_ilcesi),
+                    teslim_noktasi: hucreAyikla(sefer.teslim_noktasi),
+                    teslim_ili: hucreAyikla(sefer.teslim_ili),
+                    teslim_ilcesi: hucreAyikla(sefer.teslim_ilcesi),
+                    yukleme_varis: hucreAyikla(sefer.yukleme_varis),
+                    yukleme_cikis: hucreAyikla(sefer.yukleme_cikis),
+                    teslim_varis: hucreAyikla(sefer.teslim_varis),
+                    teslim_cikis: hucreAyikla(sefer.teslim_cikis),
+                };
+
+                const max = Math.max(...Object.values(splitMap).map((dizi) => dizi.length));
+
+                for (let i = 0; i < max; i++) {
+                    detaylar.push({
+                        sefer_no: sefer.sefer_no,
+                        nokta_sirasi: i,
+                        proje_adi: splitMap.proje_adi[i] ?? null,
+                        yukleme_noktasi: splitMap.yukleme_noktasi[i] ?? null,
+                        yukleme_ili: splitMap.yukleme_ili[i] ?? null,
+                        yukleme_ilcesi: splitMap.yukleme_ilcesi[i] ?? null,
+                        teslim_noktasi: splitMap.teslim_noktasi[i] ?? null,
+                        teslim_ili: splitMap.teslim_ili[i] ?? null,
+                        teslim_ilcesi: splitMap.teslim_ilcesi[i] ?? null,
+                        yukleme_varis: splitMap.yukleme_varis[i] ?? null,
+                        yukleme_cikis: splitMap.yukleme_cikis[i] ?? null,
+                        teslim_varis: splitMap.teslim_varis[i] ?? null,
+                        teslim_cikis: splitMap.teslim_cikis[i] ?? null,
+                        kayit_zamani: new Date().toISOString(),
+                        arac_statu: sefer.arac_statu ?? null,
+                    });
+                }
+            }
+
+            const { error: detayError } = await supabase
+                .from('tamamlanan_detaylar')
+                .upsert(detaylar, { onConflict: ['sefer_no', 'nokta_sirasi'] });
+
+            if (detayError) throw detayError;
+
+            // ✅ Aktardıktan sonra eski kayıtları sil
+            const seferNos = tamamlananlar.map((v) => v.sefer_no);
+            const seferIds = tamamlananlar.map((v) => v.id); // sefer_detaylari için
+
+            await supabase.from('seferler').delete().in('sefer_no', seferNos);
+            await supabase.from('sefer_detaylari').delete().in('sefer_id', seferIds);
+
+            // ✅ UI'dan da temizle
+            setVeriler((prev) => prev.filter((v) => !seferNos.includes(v.sefer_no)));
+
+            alert(`✅ ${anaVeriler.length} sefer ve ${detaylar.length} detay aktarıldı ve silindi.`);
+        } catch (err) {
+            console.error('Aktarma hatası:', err);
+            alert('❌ Aktarım sırasında hata oluştu.');
+        }
+    };
+
+
 
     return (
         <div className="reel-wrapper">
@@ -453,6 +565,7 @@ const ReelAtananSeferler = () => {
                 senkronizeTikla={senkronizeTikla}
                 detayKaydetTikla={detaylariKaydet}
                 gorunumKaydetTikla={gorunumKaydet}
+                tamamlananlariAktarTikla={tamamlananlariAktarTikla} // ✅ BU SATIR YOKSA EKLE
                 gelismisFiltreToggle={() => setShowAdvancedFilters((prev) => !prev)}
                 gelismisFiltreAcik={showAdvancedFilters}
                 kaydetmeDurumu={saving}

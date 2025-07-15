@@ -10,6 +10,7 @@ function TemelFiltreler({
     senkronizeTikla,
     detayKaydetTikla,
     gorunumKaydetTikla,
+    tamamlananlariAktarTikla, // ✅ EKLENDİ
     gelismisFiltreToggle,
     gelismisFiltreAcik,
     kaydetmeDurumu,
@@ -79,6 +80,11 @@ function TemelFiltreler({
 
                     <button className="btn btn-clear" onClick={gorunumKaydetTikla}>
                         💾 Görünüm Kaydet
+                    </button>
+
+                    {/* ✅ Yeni Buton */}
+                    <button className="btn btn-complete" onClick={tamamlananlariAktarTikla}>
+                        ✅ Tamamlanan Seferleri Aktar
                     </button>
                 </div>
 

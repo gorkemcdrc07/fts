@@ -8,7 +8,7 @@ import Anasayfa from './Anasayfa';
 // Kullanıcı İşlemleri
 import ReelAtananSeferler from './views/ReelAtananSeferler';
 import Siparisler from './kullanıcıIslemleri/Siparisler';
-import Tamamlananlar from './Tamamlananlar';
+import Tamamlananlar from './kullanıcıIslemleri/Tamamlananlar';
 import PlakaOnerisi from './kullanıcıIslemleri/PlakaOnerisi';
 import Planlama from './kullanıcıIslemleri/Planlama'; // 👈 YENİ
 

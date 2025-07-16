@@ -120,3 +120,6 @@ export const veriListele = async (filtreler) => {
 
     return yeniVeri;
 };
+
+/*deneme
+

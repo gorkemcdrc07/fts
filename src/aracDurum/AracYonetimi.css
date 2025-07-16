@@ -1,155 +1,18 @@
-﻿.arac-yonetim-container {
-  max-width: 1200px;
-  margin: 40px auto;
-  padding: 30px;
-  background-color: #fff;
-  border-radius: 12px;
-  box-shadow: 0 5px 25px rgba(0, 0, 0, 0.07);
-  font-family: 'Segoe UI', sans-serif;
+.arac-yonetim-container {
+    max-width: 2000px; /* Eskiden 1200px idi */
+    margin: 40px auto;
+    padding: 30px;
+    background-color: #fff;
+    border-radius: 12px;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.07);
+    font-family: 'Segoe UI', sans-serif;
 }
 
 h2 {
-  text-align: center;
-  margin-bottom: 30px;
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.ekle-btn {
-  padding: 10px 20px;
-  background-color: #28a745;
-  color: white;
-  font-size: 14px;
-  font-weight: 600;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  margin-bottom: 20px;
-  transition: background 0.2s;
-}
-
-.ekle-btn:hover {
-  background-color: #218838;
-}
-
-.arac-tablo {
-  width: 100%;
-  border-collapse: collapse;
-  overflow: hidden;
-  border-radius: 6px;
-}
-
-.arac-tablo th, .arac-tablo td {
-  padding: 12px 14px;
-  border: 1px solid #dee2e6;
-  text-align: left;
-  font-size: 14px;
-}
-
-.arac-tablo th {
-  background-color: #f8f9fa;
-  font-weight: 600;
-}
-
-.arac-tablo td:last-child {
-  display: flex;
-  gap: 8px;
-}
-
-.arac-tablo button {
-  padding: 6px 10px;
-  border: none;
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.arac-tablo button:hover {
-  opacity: 0.9;
-}
-
-    .arac-tablo button:first-child {
-        background-color: #007bff;
-        color: white;
-    }
-
-.arac-tablo button:last-child {
-  background-color: #dc3545;
-  color: white;
-}
-
-.modal {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0,0,0,0.4);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 999;
-}
-
-.modal-icerik {
-  background: #fff;
-  padding: 30px 40px;
-  border-radius: 10px;
-  width: 100%;
-  max-width: 600px;
-  box-shadow: 0 6px 30px rgba(0,0,0,0.15);
-}
-
-.modal-icerik h3 {
-  text-align: center;
-  margin-bottom: 20px;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 15px;
-}
-
-.form input,
-.form select {
-  padding: 10px;
-  font-size: 14px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-}
-
-.modal-btnlar {
-  grid-column: span 2;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.modal-btnlar button {
-  padding: 8px 16px;
-  border-radius: 5px;
-  border: none;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.modal-btnlar button[type='submit'] {
-  background-color: #007bff;
-  color: white;
-}
-
-.modal-btnlar button[type='button'] {
-  background-color: #6c757d;
-  color: white;
-}
-
-.arac-tablo tr.cikarildi {
-    opacity: 0.6;
-    background-color: #f1f1f1;
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 24px;
+    font-weight: 600;
 }
 
 .ekle-btn {
@@ -159,7 +22,141 @@ h2 {
     border: none;
     cursor: pointer;
     color: white;
+    background-color: #28a745;
+    font-weight: 600;
+    margin-bottom: 20px;
+    transition: background 0.2s;
 }
 
+    .ekle-btn:hover {
+        background-color: #218838;
+    }
 
+.arac-tablo {
+    width: 1600px; /* Genişletildi */
+    border-collapse: collapse;
+    overflow: hidden;
+    border-radius: 6px;
+}
 
+    .arac-tablo th,
+    .arac-tablo td {
+        padding: 10px;
+        text-align: center;
+        border: 1px solid #ccc;
+        white-space: nowrap;
+        font-size: 14px;
+    }
+
+    .arac-tablo th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+    }
+
+    .arac-tablo td:last-child {
+        display: flex;
+        gap: 8px;
+    }
+
+    .arac-tablo button {
+        padding: 6px 10px;
+        border: none;
+        font-size: 13px;
+        font-weight: 500;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+        .arac-tablo button:hover {
+            opacity: 0.9;
+        }
+
+        .arac-tablo button:first-child {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .arac-tablo button:last-child {
+            background-color: #dc3545;
+            color: white;
+        }
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+}
+
+.modal-icerik {
+    background: #fff;
+    padding: 30px 40px;
+    border-radius: 10px;
+    width: 100%;
+    max-width: 600px;
+    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.15);
+}
+
+    .modal-icerik h3 {
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 20px;
+        font-weight: 600;
+    }
+
+.form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 15px;
+}
+
+    .form input,
+    .form select {
+        padding: 10px;
+        font-size: 14px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+    }
+
+.modal-btnlar {
+    grid-column: span 2;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+    .modal-btnlar button {
+        padding: 8px 16px;
+        border-radius: 5px;
+        border: none;
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+        .modal-btnlar button[type='submit'] {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .modal-btnlar button[type='button'] {
+            background-color: #6c757d;
+            color: white;
+        }
+
+.arac-tablo tr.cikarildi {
+    opacity: 0.6;
+    background-color: #f1f1f1;
+}
+
+.tablo-kapsayici {
+    overflow-x: auto;
+    max-width: 95vw;
+    margin: 0 auto;
+}

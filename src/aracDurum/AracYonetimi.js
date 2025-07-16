@@ -66,7 +66,7 @@ function AracYonetimi() {
     }, [filtre, tumAraclar]);
 
     const verileriGetir = async () => {
-        const { data, error } = await supabase.from('plakalar').select('*').order('id');
+        const { data, error } = await supabase.from('plakalar').select('*');
         if (!error && data) {
             const bugun = new Date();
             const guncelData = data.map(arac => {
@@ -380,43 +380,92 @@ function AracYonetimi() {
                 </div>
             )}
 
-            <table className="arac-tablo">
-                <thead>
-                    <tr>
-                        <th>Plaka</th>
-                        <th>Treyler</th>
-                        <th>Sürücü Adı</th>
-                        <th>Telefon</th>
-                        <th>TC</th>
-                        <th>Statü</th>
-                        <th>İşlem</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {araclar.length === 0 ? (
-                        <tr><td colSpan="7">Kayıtlı araç yok</td></tr>
-                    ) : (
-                        araclar.map((arac) => (
-                            <tr key={arac.id}>
-                                <td>{arac.plaka}</td>
-                                <td>{arac.treyler}</td>
-                                <td>{arac.surucu_adi}</td>
-                                <td>{arac.surucu_telefon}</td>
-                                <td>{arac.surucu_tc}</td>
-                                <td>{arac.statu || '-'}</td>
-                                <td>
-                                    <button style={{ backgroundColor: '#17a2b8', color: 'white' }} onClick={() => { setBilgiArac(arac); setBilgiModalAcik(true); }}>Bilgi</button>
-                                    <button style={{ backgroundColor: '#007bff', color: 'white' }} onClick={() => handleDuzenle(arac)}>Düzenle</button>
-                                    {arac.statu !== 'ÇIKARILDI' && (
-                                        <button onClick={() => handleSilIstegi(arac.id)}>Sil</button>
-                                    )}
-                                </td>
+            <div className="tablo-kapsayici">
+                <table className="arac-tablo">
+                    <thead>
+                        <tr>
+                            <th>Plaka</th>
+                            <th>Treyler</th>
+                            <th>Sürücü Adı</th>
+                            <th>Telefon</th>
+                            <th>TC</th>
+                            <th>İkamet Adresi</th>
+                            <th>Çekici Ruhsat</th>
+                            <th>Dorse Ruhsat</th>
+                            <th>Tedarikçi</th>
+                            <th>Çekici Muayene</th>
+                            <th>Dorse Muayene</th>
+                            <th>Trafik Sigorta</th>
+                            <th>Araç Yıl</th>
+                            <th>Dorse Yıl</th>
+                            <th>Bölge</th>
+                            <th>Araç Tip</th>
+                            <th>Dorse Tip</th>
+                            <th>Liftmaster</th>
+                            <th>GPS Seri No</th>
+                            <th>GPS Sim Kart</th>
+                            <th>Odak K1</th>
+                            <th>Statü</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {araclar.length === 0 ? (
+                            <tr key="bos">
+                                <td colSpan="23">Kayıtlı araç yok</td>
                             </tr>
-                        ))
-                    )}
-                </tbody>
-            </table>
+                        ) : (
+                            araclar.map((arac, index) => (
+                                <tr key={arac.id || `${arac.plaka}-${arac.treyler}-${index}`}>
+                                    <td>{arac.plaka}</td>
+                                    <td>{arac.treyler}</td>
+                                    <td>{arac.surucu_adi}</td>
+                                    <td>{arac.surucu_telefon}</td>
+                                    <td>{arac.surucu_tc}</td>
+                                    <td>{arac.ikamet_adresi}</td>
+                                    <td>{arac.cekici_ruhsat_no}</td>
+                                    <td>{arac.dorse_ruhsat_no}</td>
+                                    <td>{arac.tedarikci_isim}</td>
+                                    <td>{arac.cekici_muayene}</td>
+                                    <td>{arac.dorse_muayene}</td>
+                                    <td>{arac.trafik_sigorta}</td>
+                                    <td>{arac.arac_yil}</td>
+                                    <td>{arac.dorse_yil}</td>
+                                    <td>{arac.bolge}</td>
+                                    <td>{arac.arac_tip}</td>
+                                    <td>{arac.dorse_tip}</td>
+                                    <td>{arac.liftmaster}</td>
+                                    <td>{arac.gps_seri_no}</td>
+                                    <td>{arac.gps_sim_kart_no}</td>
+                                    <td>{arac.odak_k1}</td>
+                                    <td>{arac.statu || '-'}</td>
+                                    <td>
+                                        <button
+                                            style={{ backgroundColor: '#17a2b8', color: 'white' }}
+                                            onClick={() => handleBilgiAc(arac)}
+                                        >
+                                            Bilgi
+                                        </button>
+                                        <button
+                                            style={{ backgroundColor: '#007bff', color: 'white' }}
+                                            onClick={() => handleDuzenle(arac)}
+                                        >
+                                            Düzenle
+                                        </button>
+                                        {arac.statu !== 'ÇIKARILDI' && (
+                                            <button onClick={() => handleSilIstegi(arac.id)}>Sil</button>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+
+                </table>
+            </div>
         </div>
+
     );
 }
 

@@ -1,18 +1,50 @@
 .arac-yonetim-container {
-    max-width: 2000px; /* Eskiden 1200px idi */
+    max-width: 98vw;
     margin: 40px auto;
-    padding: 30px;
+    padding: 30px 20px;
     background-color: #fff;
     border-radius: 12px;
     box-shadow: 0 5px 25px rgba(0, 0, 0, 0.07);
     font-family: 'Segoe UI', sans-serif;
+    box-sizing: border-box;
 }
 
 h2 {
     text-align: center;
     margin-bottom: 30px;
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 600;
+    color: #343a40;
+}
+
+.istatistikler {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-bottom: 25px;
+    flex-wrap: wrap;
+}
+
+.istatistik-kutu {
+    padding: 12px 20px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: bold;
+    border-left: 5px solid #007bff;
+}
+
+    .istatistik-kutu.pasif {
+        border-left-color: #dc3545;
+    }
+
+.button-grup,
+.form-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 20px;
 }
 
 .ekle-btn {
@@ -24,7 +56,6 @@ h2 {
     color: white;
     background-color: #28a745;
     font-weight: 600;
-    margin-bottom: 20px;
     transition: background 0.2s;
 }
 
@@ -32,46 +63,76 @@ h2 {
         background-color: #218838;
     }
 
-.arac-tablo {
-    width: 1600px; /* Genişletildi */
-    border-collapse: collapse;
-    overflow: hidden;
-    border-radius: 6px;
+/* TABLO */
+.tablo-kapsayici {
+    overflow-y: auto;
+    max-height: 1300px; /* 🧠 Burayı ihtiyaca göre ayarlayabilirsin */
+    overflow-x: auto;
+    width: 100%;
+    margin: 0 auto;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    background-color: #ffffff;
 }
 
-    .arac-tablo th,
+.arac-tablo {
+    min-width: 1800px;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    background-color: #fff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+    .arac-tablo thead th {
+        background-color: #2f3542;
+        color: #ffffff;
+        padding: 12px 8px;
+        text-transform: uppercase;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
     .arac-tablo td {
         padding: 10px;
         text-align: center;
-        border: 1px solid #ccc;
+        border-bottom: 1px solid #eee;
+        background-color: #fcfcfc;
         white-space: nowrap;
-        font-size: 14px;
+        transition: background-color 0.2s ease;
     }
 
-    .arac-tablo th {
-        background-color: #f8f9fa;
-        font-weight: 600;
+    .arac-tablo tr:hover td {
+        background-color: #f2f9ff;
     }
 
     .arac-tablo td:last-child {
         display: flex;
         gap: 8px;
+        justify-content: center;
+        align-items: center;
     }
 
     .arac-tablo button {
-        padding: 6px 10px;
-        border: none;
+        padding: 6px 12px;
         font-size: 13px;
-        font-weight: 500;
-        border-radius: 4px;
+        border: none;
+        border-radius: 5px;
+        font-weight: 600;
         cursor: pointer;
+        transition: background-color 0.2s ease;
+        white-space: nowrap;
     }
 
-        .arac-tablo button:hover {
-            opacity: 0.9;
+        .arac-tablo button:first-child {
+            background-color: #17a2b8;
+            color: white;
         }
 
-        .arac-tablo button:first-child {
+        .arac-tablo button:nth-child(2) {
             background-color: #007bff;
             color: white;
         }
@@ -81,6 +142,16 @@ h2 {
             color: white;
         }
 
+        .arac-tablo button:hover {
+            filter: brightness(0.95);
+        }
+
+    .arac-tablo tr.cikarildi {
+        opacity: 0.6;
+        background-color: #f1f1f1;
+    }
+
+/* MODAL */
 .modal {
     position: fixed;
     top: 0;
@@ -99,64 +170,91 @@ h2 {
     padding: 30px 40px;
     border-radius: 10px;
     width: 100%;
-    max-width: 600px;
+    max-width: 700px;
     box-shadow: 0 6px 30px rgba(0, 0, 0, 0.15);
 }
 
     .modal-icerik h3 {
         text-align: center;
         margin-bottom: 20px;
-        font-size: 20px;
+        font-size: 22px;
         font-weight: 600;
+        color: #343a40;
     }
 
-.form {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 15px;
+/* FORM */
+.form-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
-    .form input,
-    .form select {
-        padding: 10px;
-        font-size: 14px;
-        border: 1px solid #ccc;
-        border-radius: 6px;
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.form-grid input,
+textarea {
+    padding: 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+    .form-grid input[type="date"] {
+        color: #555;
     }
 
+textarea {
+    resize: vertical;
+}
+
 .modal-btnlar {
-    grid-column: span 2;
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-    margin-top: 10px;
+    margin-top: 20px;
 }
 
     .modal-btnlar button {
-        padding: 8px 16px;
-        border-radius: 5px;
+        padding: 10px 20px;
         border: none;
-        font-weight: 500;
+        font-weight: 600;
+        border-radius: 5px;
         cursor: pointer;
     }
 
-        .modal-btnlar button[type='submit'] {
+        .modal-btnlar button[type="submit"] {
             background-color: #007bff;
             color: white;
         }
 
-        .modal-btnlar button[type='button'] {
+        .modal-btnlar button[type="button"] {
             background-color: #6c757d;
             color: white;
         }
 
-.arac-tablo tr.cikarildi {
-    opacity: 0.6;
-    background-color: #f1f1f1;
-}
+/* RESPONSIVE */
+@media (max-width: 768px) {
+    .arac-tablo th,
+    .arac-tablo td {
+        font-size: 12px;
+        padding: 6px;
+    }
 
-.tablo-kapsayici {
-    overflow-x: auto;
-    max-width: 95vw;
-    margin: 0 auto;
+    .modal-icerik {
+        padding: 20px;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .tablo-kapsayici {
+        max-width: 100%;
+    }
 }

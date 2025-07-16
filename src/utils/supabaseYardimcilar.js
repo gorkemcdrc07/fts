@@ -14,41 +14,41 @@ export const veriListele = async (filtreler) => {
     let query = supabase
         .from('seferler')
         .select(`
-    id,
-    sefer_no,
-    plaka,
-    treyler,
-    surucu_ad_soyad,
-    surucu_tckn,
-    surucu_telefon,
-    musteri_adi,
-    musteri_siparis_no,
-    hizmet_adi,
-    proje_adi,
-    yukleme_noktasi,
-    yukleme_ili,
-    yukleme_ilcesi,
-    teslim_alan_firma,
-    teslim_noktasi,
-    teslim_ili,
-    teslim_ilcesi,
-    irsaliye_no,
-    arac_statu,
-    sefer_tarihi,
-    atama_yapan_kullanici,
-    atama_tarihi,
-    kayit_zamani,
-    reel_durum,
-    sefer_detaylari (
-        id,
-        sefer_id,
-        nokta_sirasi,
-        yukleme_varis,
-        yukleme_cikis,
-        teslim_varis,
-        teslim_cikis
-    )
-`)
+            id,
+            sefer_no,
+            plaka,
+            treyler,
+            surucu_ad_soyad,
+            surucu_tckn,
+            surucu_telefon,
+            musteri_adi,
+            musteri_siparis_no,
+            hizmet_adi,
+            proje_adi,
+            yukleme_noktasi,
+            yukleme_ili,
+            yukleme_ilcesi,
+            teslim_alan_firma,
+            teslim_noktasi,
+            teslim_ili,
+            teslim_ilcesi,
+            irsaliye_no,
+            arac_statu,
+            sefer_tarihi,
+            atama_yapan_kullanici,
+            atama_tarihi,
+            kayit_zamani,
+            reel_durum,
+            sefer_detaylari (
+                id,
+                sefer_id,
+                nokta_sirasi,
+                yukleme_varis,
+                yukleme_cikis,
+                teslim_varis,
+                teslim_cikis
+            )
+        `)
         .gte('sefer_tarihi', `${start}T00:00:00`)
         .lte('sefer_tarihi', `${end}T23:59:59`)
         .order('sefer_tarihi', { ascending: false });
@@ -65,9 +65,27 @@ export const veriListele = async (filtreler) => {
         return [];
     }
 
-    // ID'si olmayan seferleri atla
-    const temizVeri = (data || []).filter((sefer) => sefer?.id);
+    // ✅ TAMAMLANMIŞ SEFERLERİ ÇEK
+    const { data: tamamlananSeferler } = await supabase
+        .from('tamamlanan_seferler')
+        .select('sefer_no');
 
+    const { data: tamamlananDetaylar } = await supabase
+        .from('tamamlanan_detaylar')
+        .select('sefer_no');
+
+    // ✅ TAMAMLANMIŞ SEFERLERİ TEK BİR SET'TE BİRLEŞTİR
+    const tamamlanmisSeferNoSet = new Set([
+        ...(tamamlananSeferler || []).map(s => s.sefer_no),
+        ...(tamamlananDetaylar || []).map(s => s.sefer_no)
+    ]);
+
+    // ✅ FİLTRELE: tamamlanmış olanları gösterme
+    const temizVeri = (data || []).filter(sefer =>
+        sefer?.id && !tamamlanmisSeferNoSet.has(sefer.sefer_no)
+    );
+
+    // ✅ SEFER DURUMUNU HESAPLA
     const yeniVeri = temizVeri.map((sefer) => {
         const detaylar = sefer.sefer_detaylari || [];
 
@@ -75,7 +93,7 @@ export const veriListele = async (filtreler) => {
             const tamam = detaylar.every((d) =>
                 d.yukleme_varis && d.yukleme_cikis && d.teslim_varis && d.teslim_cikis
             );
-            if (tamam && detaylar.length > 0) return 'SEFER TAMAMLANDI';
+            if (detaylar.length > 0 && tamam) return 'SEFER TAMAMLANDI';
 
             return detaylar
                 .map((d, i) => {

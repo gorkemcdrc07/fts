@@ -11,6 +11,22 @@ const BOS_FORM = {
     surucu_adi: '',
     surucu_telefon: '',
     surucu_tc: '',
+    ikamet_adresi: '',
+    cekici_ruhsat_no: '',
+    dorse_ruhsat_no: '',
+    tedarikci_isim: '',
+    cekici_muayene: '',
+    dorse_muayene: '',
+    trafik_sigorta: '',
+    arac_yil: '',
+    dorse_yil: '',
+    bolge: '',
+    arac_tip: '',
+    dorse_tip: '',
+    liftmaster: '',
+    gps_seri_no: '',
+    gps_sim_kart_no: '',
+    odak_k1: '',
 };
 
 const getMevcutKullanici = () => localStorage.getItem('kullanici') || 'Bilinmeyen Kullanıcı';
@@ -107,7 +123,7 @@ function AracYonetimi() {
                 ...form,
                 statu: 'Aktif',
                 ekleyen_kullanici: kullanici,
-                eklenme_tarihi: turkiyeSaatISOString()  // ✅ EKLENEN TARİHİ BURADA GÖNDERİYORUZ
+                eklenen_tarih: turkiyeSaatISOString()  // ✅ EKLENEN TARİHİ BURADA GÖNDERİYORUZ
             }]);
             if (!error) { temizleVeKapat(); verileriGetir(); }
         }
@@ -137,14 +153,39 @@ function AracYonetimi() {
     };
 
     const handleDuzenle = (arac) => {
+        if (!arac.id) {
+            console.error("Düzenlenecek aracın ID'si bulunamadı!", arac);
+            alert("HATA: Bu aracın ID bilgisi eksik.");
+            return;
+        }
+
+        console.log("Düzenleme için seçilen araç:", arac);
+
         setForm({
-            plaka: arac.plaka,
-            treyler: arac.treyler,
-            surucu_adi: arac.surucu_adi,
-            surucu_telefon: arac.surucu_telefon,
-            surucu_tc: arac.surucu_tc,
+            plaka: arac.plaka || '',
+            treyler: arac.treyler || '',
+            surucu_adi: arac.surucu_adi || '',
+            surucu_telefon: arac.surucu_telefon || '',
+            surucu_tc: arac.surucu_tc || '',
+            ikamet_adresi: arac.ikamet_adresi || '',
+            cekici_ruhsat_no: arac.cekici_ruhsat_no || '',
+            dorse_ruhsat_no: arac.dorse_ruhsat_no || '',
+            tedarikci_isim: arac.tedarikci_isim || '',
+            cekici_muayene: arac.cekici_muayene || '',
+            dorse_muayene: arac.dorse_muayene || '',
+            trafik_sigorta: arac.trafik_sigorta || '',
+            arac_yil: arac.arac_yil || '',
+            dorse_yil: arac.dorse_yil || '',
+            bolge: arac.bolge || '',
+            arac_tip: arac.arac_tip || '',
+            dorse_tip: arac.dorse_tip || '',
+            liftmaster: arac.liftmaster || '',
+            gps_seri_no: arac.gps_seri_no || '',
+            gps_sim_kart_no: arac.gps_sim_kart_no || '',
+            odak_k1: arac.odak_k1 || '',
         });
-        setEditId(arac.id);
+
+        setEditId(arac.id); // ✅ artık ID güvenle atanabilir
         setModalAcik(true);
     };
 
@@ -271,17 +312,66 @@ function AracYonetimi() {
                 <div className="modal">
                     <div className="modal-icerik">
                         <h3>{editId ? 'Araç Bilgilerini Güncelle' : 'Yeni Araç Bilgisi'}</h3>
-                        <form onSubmit={handleSubmit} className="form">
-                            <input name="plaka" value={form.plaka} onChange={handleChange} placeholder="Plaka" required />
-                            <input name="treyler" value={form.treyler} onChange={handleChange} placeholder="Treyler" />
-                            <input name="surucu_adi" value={form.surucu_adi} onChange={handleChange} placeholder="Sürücü Adı" />
-                            <input name="surucu_telefon" value={form.surucu_telefon} onChange={handleChange} placeholder="Telefon" />
-                            <input name="surucu_tc" value={form.surucu_tc} onChange={handleChange} placeholder="TC" />
+                        <form onSubmit={handleSubmit} className="form-grid">
+                            <div className="form-row">
+                                <input name="plaka" value={form.plaka} onChange={handleChange} placeholder="Plaka" required />
+                                <input name="treyler" value={form.treyler} onChange={handleChange} placeholder="Treyler" />
+                                <input name="surucu_adi" value={form.surucu_adi} onChange={handleChange} placeholder="Sürücü Adı" />
+                            </div>
+
+                            <div className="form-row">
+                                <input name="surucu_telefon" value={form.surucu_telefon} onChange={handleChange} placeholder="Telefon" />
+                                <input name="surucu_tc" value={form.surucu_tc} onChange={handleChange} placeholder="TC" />
+                                <input name="ikamet_adresi" value={form.ikamet_adresi} onChange={handleChange} placeholder="İkamet Adresi" />
+                            </div>
+
+                            <div className="form-row">
+                                <input name="cekici_ruhsat_no" value={form.cekici_ruhsat_no} onChange={handleChange} placeholder="Çekici Ruhsat No" />
+                                <input name="dorse_ruhsat_no" value={form.dorse_ruhsat_no} onChange={handleChange} placeholder="Dorse Ruhsat No" />
+                                <input name="tedarikci_isim" value={form.tedarikci_isim} onChange={handleChange} placeholder="Tedarikçi İsim" />
+                            </div>
+
+                            <div className="form-row">
+                                <div>
+                                    <label>Çekici Muayene</label>
+                                    <input type="date" name="cekici_muayene" value={form.cekici_muayene} onChange={handleChange} required />
+                                </div>
+                                <div>
+                                    <label>Dorse Muayene</label>
+                                    <input type="date" name="dorse_muayene" value={form.dorse_muayene} onChange={handleChange} required />
+                                </div>
+                                <div>
+                                    <label>Trafik Sigorta</label>
+                                    <input type="date" name="trafik_sigorta" value={form.trafik_sigorta} onChange={handleChange} required />
+                                </div>
+                            </div>
+
+                            <div className="form-row">
+                                <input type="number" name="arac_yil" value={form.arac_yil || ''} onChange={handleChange} placeholder="Araç Yılı" />
+                                <input type="number" name="dorse_yil" value={form.dorse_yil || ''} onChange={handleChange} placeholder="Dorse Yılı" />
+                                <input name="bolge" value={form.bolge} onChange={handleChange} placeholder="Bölge" />
+                            </div>
+
+                            <div className="form-row">
+                                <input name="arac_tip" value={form.arac_tip} onChange={handleChange} placeholder="Araç Tip" />
+                                <input name="dorse_tip" value={form.dorse_tip} onChange={handleChange} placeholder="Dorse Tip" />
+                                <input name="liftmaster" value={form.liftmaster} onChange={handleChange} placeholder="Liftmaster" />
+                            </div>
+
+                            <div className="form-row">
+                                <input name="gps_seri_no" value={form.gps_seri_no} onChange={handleChange} placeholder="GPS Seri No" />
+                                <input name="gps_sim_kart_no" value={form.gps_sim_kart_no} onChange={handleChange} placeholder="GPS Sim Kart No" />
+                                <input name="odak_k1" value={form.odak_k1} onChange={handleChange} placeholder="Odak K1" />
+                            </div>
+
                             <div className="modal-btnlar">
                                 <button type="submit">{editId ? 'Güncelle' : 'Kaydet'}</button>
                                 <button type="button" onClick={temizleVeKapat}>İptal</button>
                             </div>
                         </form>
+
+
+
                     </div>
                 </div>
             )}

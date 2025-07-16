@@ -36,6 +36,8 @@ function ReelAtananSeferler() {
     const [seferNoTipi, setSeferNoTipi] = useState(''); // '', 'BOS', 'SFR'
     const kullaniciAdi = localStorage.getItem('kullaniciAdi')?.toUpperCase();
     const senkronizeYetkili = kullaniciAdi === 'ADMIN' || kullaniciAdi === 'SELİN';
+    const [listeleAktif, setListeleAktif] = useState(false);
+
 
 
 
@@ -53,7 +55,14 @@ function ReelAtananSeferler() {
                 .single();
 
             if (!error && data?.gorunum) {
-                setColumns(data.gorunum);
+                const kullaniciGorunumu = [...data.gorunum];
+
+                // ❗ Eğer "statu" eksikse ekle
+                if (!kullaniciGorunumu.includes('statu')) {
+                    kullaniciGorunumu.push('statu');
+                }
+
+                setColumns(kullaniciGorunumu);
             }
         };
 
@@ -187,15 +196,40 @@ const aracStatuOptions = useMemo(() => {
 
 
 
-    const fetchFromDB = async () => {
-        if (!startDate || !endDate) return;
+    const fetchFromDB = async (start = startDate, end = endDate) => {
+        const today = new Date();
+        const lastWeek = new Date();
+        lastWeek.setDate(today.getDate() - 7);
+
+        const gecerliStart = start?.trim() ? start : lastWeek.toISOString().split('T')[0];
+        const gecerliEnd = end?.trim() ? end : today.toISOString().split('T')[0];
 
         let query = supabase
             .from('seferler')
-            .select('*, sefer_detaylari(*)')
-            .gte('sefer_tarihi', `${startDate}T00:00:00`)
-            .lte('sefer_tarihi', `${endDate}T23:59:59`)
+            .select(`
+    id,
+    sefer_no,
+    statu,
+    plaka,
+    musteri_adi,
+    proje_adi,
+    sefer_tarihi,
+    atama_yapan_kullanici,
+    reel_durum,
+    sefer_detaylari(
+        sefer_id,
+        nokta_sirasi,
+        yukleme_varis,
+        yukleme_cikis,
+        teslim_varis,
+        teslim_cikis
+    )
+`)
+
+            .gte('sefer_tarihi', `${gecerliStart}T00:00:00`)
+            .lte('sefer_tarihi', `${gecerliEnd}T23:59:59`)
             .order('sefer_tarihi', { ascending: false });
+
 
         if (secilenSeferler.length > 0) {
             const seferNoList = secilenSeferler.map(item => item.value.trim());
@@ -206,14 +240,13 @@ const aracStatuOptions = useMemo(() => {
 
         if (error) {
             console.error('Veri çekme hatası:', error);
-            return;
+            return [];
         }
 
         const birlesmis = data.map(sefer => {
             const detaylar = sefer.sefer_detaylari || [];
 
             const statuHesapla = () => {
-                // Eğer tüm noktalar tamamen doluysa, "SEFER TAMAMLANDI" yaz
                 const tumNoktalarTamam = detaylar.length > 0 && detaylar.every(d =>
                     d.yukleme_varis &&
                     d.yukleme_cikis &&
@@ -221,11 +254,8 @@ const aracStatuOptions = useMemo(() => {
                     d.teslim_cikis
                 );
 
-                if (tumNoktalarTamam) {
-                    return 'SEFER TAMAMLANDI';
-                }
+                if (tumNoktalarTamam) return 'SEFER TAMAMLANDI';
 
-                // Aksi halde nokta bazlı durumlar
                 return detaylar
                     .map((d, index) => {
                         const tamamenBos = !d.yukleme_varis && !d.yukleme_cikis && !d.teslim_varis && !d.teslim_cikis;
@@ -244,6 +274,7 @@ const aracStatuOptions = useMemo(() => {
 
             return {
                 ...sefer,
+                statu: sefer.statu, // <-- 🔧 Bu satır önemli
                 arac_statu: statuHesapla(),
                 nokta_sayisi: detaylar.filter(d =>
                     Object.values(d).some(v => v !== null && v !== '' && v !== '-')
@@ -255,11 +286,8 @@ const aracStatuOptions = useMemo(() => {
             };
         });
 
-
-
         setVeriler(birlesmis);
 
-        // 🔹 Kolon sıralamasını sadece Supabase görünümü gelmediyse uygula
         if (birlesmis.length > 0 && columns.length === 0) {
             const defaultCols = Object.keys(birlesmis[0])
                 .filter(key =>
@@ -268,18 +296,13 @@ const aracStatuOptions = useMemo(() => {
                     !['yukleme_varis', 'yukleme_cikis', 'teslim_varis', 'teslim_cikis'].includes(key)
                 );
 
+            // 🔧 statu'yu ekle (eklenmemişse)
+            if (!defaultCols.includes('statu')) defaultCols.push('statu');
+
             setColumns(defaultCols);
         }
-    }
 
-
-
-    const sayacBilgisi = (data) => {
-        const toplam = data.length;
-        const bosSayisi = data.filter(d => (d.sefer_no || '').toUpperCase().startsWith('BOS')).length;
-        const sfrSayisi = data.filter(d => (d.sefer_no || '').toUpperCase().startsWith('SFR')).length;
-
-        return { toplam, bosSayisi, sfrSayisi };
+        return birlesmis;
     };
 
 
@@ -315,24 +338,19 @@ const aracStatuOptions = useMemo(() => {
             });
 
             const json = await response.json();
-            console.log("🔍 Backend yanıtı:", json);
 
             if (!json || !Array.isArray(json.Data)) {
-                console.error('❌ API yanıtı beklenen formatta değil:', json);
+                console.error('❌ API yanıtı hatalı:', json);
                 setVeriler([]);
                 return;
             }
 
-            // 🔒 Null ve geçersiz kayıtları filtrele
             const gelen = json.Data.filter(item => item && typeof item === 'object');
+            const filtreli = gelen.filter(item => {
+                const tip = (item?.VehicleWorkingTypeName || '').toString().trim().toLocaleUpperCase('tr-TR');
+                return tip === 'FİLO' || tip === 'ÖZMAL';
+            });
 
-            const filtreli = gelen
-                .filter(item => {
-                    const tip = (item?.VehicleWorkingTypeName || '').toString().trim().toLocaleUpperCase('tr-TR');
-                    return tip === 'FİLO' || tip === 'ÖZMAL';
-                });
-
-            // 🔒 Güvenli ordersMap
             const ordersMap = (orders, field) => {
                 if (!Array.isArray(orders)) return '';
                 return orders
@@ -342,10 +360,8 @@ const aracStatuOptions = useMemo(() => {
                     .join('; ');
             };
 
-            const temizVeri = filtreli
-                .filter(sefer => sefer && typeof sefer === 'object') // 🔐 ek kontrol
-                .map(sefer => {
-                    const tmsOrders = Array.isArray(sefer.TMSOrders) ? sefer.TMSOrders : [];
+            const temizVeri = filtreli.map(sefer => {
+                const tmsOrders = Array.isArray(sefer.TMSOrders) ? sefer.TMSOrders : [];
                 return {
                     sefer_no: sefer?.DocumentNo ?? '',
                     arac_statu: sefer?.VehicleStatus ?? '',
@@ -373,34 +389,51 @@ const aracStatuOptions = useMemo(() => {
                 };
             });
 
-            const { data: mevcutVeri, error } = await supabase
+            // ✅ Supabase'teki mevcut seferler
+            const { data: mevcutVeri, error: mevcutError } = await supabase
                 .from('seferler')
                 .select('*')
                 .gte('sefer_tarihi', start)
                 .lte('sefer_tarihi', end);
 
-            if (error) {
-                console.error('Veritabanı veri çekme hatası:', error);
+            if (mevcutError) {
+                console.error('❌ Mevcut veriler alınamadı:', mevcutError);
                 return;
             }
 
-            if (!Array.isArray(mevcutVeri)) {
-                console.warn('mevcutVeri null veya dizi değil!');
-                return;
-            }
+            // ✅ Tamamlanmış sefer_no'ları al (iki tablodan birleştir)
+            const { data: tamamlananSeferler } = await supabase
+                .from('tamamlanan_seferler')
+                .select('sefer_no');
+
+            const { data: tamamlananDetaylar } = await supabase
+                .from('tamamlanan_detaylar')
+                .select('sefer_no');
+
+            const tamamlanmisSeferNoSet = new Set([
+                ...(tamamlananSeferler || []).map(s => s.sefer_no),
+                ...(tamamlananDetaylar || []).map(s => s.sefer_no)
+            ]);
 
             const dbMap = new Map(mevcutVeri.map(item => [item.sefer_no, item]));
-            const gelenSeferNos = new Set(temizVeri.map(v => v.sefer_no));
 
-            const yeniVeriler = temizVeri.map(item => ({
+            // ✅ Tamamlanmış olanları dışla
+            const filtrelenmisVeri = temizVeri.filter(item => {
+                const seferNo = item.sefer_no;
+                return !tamamlanmisSeferNoSet.has(seferNo);
+            });
+
+            const yeniVeriler = filtrelenmisVeri.map(item => ({
                 ...item,
                 reel_durum: dbMap.has(item.sefer_no) ? 'EŞLEŞTİ' : 'YENİ',
             }));
 
+            const gelenSeferNos = new Set(temizVeri.map(v => v.sefer_no));
             const eksikVeriler = mevcutVeri
                 .filter(item => !gelenSeferNos.has(item.sefer_no))
                 .map(item => ({ ...item, reel_durum: 'EŞLEŞME YOK' }));
 
+            // ✅ Supabase'e upsert
             const { data: upsertSonucu, error: upsertError } = await supabase
                 .from('seferler')
                 .upsert(yeniVeriler, {
@@ -409,7 +442,7 @@ const aracStatuOptions = useMemo(() => {
                 });
 
             if (upsertError) {
-                console.error('Supabase kayıt hatası:', upsertError);
+                console.error('❌ Supabase kayıt hatası:', upsertError);
             } else {
                 const guncellenmisVeriler = upsertSonucu.map(item => ({
                     ...item,
@@ -421,6 +454,12 @@ const aracStatuOptions = useMemo(() => {
                     .map(item => ({ ...item, reel_durum: 'EŞLEŞME YOK' }));
 
                 setVeriler([...guncellenmisVeriler, ...eksikVeriler]);
+
+                const atlanan = temizVeri.length - filtrelenmisVeri.length;
+                if (atlanan > 0) {
+                    console.warn(`⚠️ ${atlanan} tamamlanmış sefer senkronizasyona dahil edilmedi.`);
+                }
+
                 setSuccessCount(guncellenmisVeriler.length);
                 setShowSuccess(true);
                 setTimeout(() => setShowSuccess(false), 4000);
@@ -433,6 +472,9 @@ const aracStatuOptions = useMemo(() => {
             setIsLoading(false);
         }
     };
+
+
+
 
 
 
@@ -467,96 +509,97 @@ const aracStatuOptions = useMemo(() => {
 
 
 
-const detaylariKaydet = async () => {
-  setSaving(true);
+    const detaylariKaydet = async () => {
+        setSaving(true);
 
-  const normalizeTimestamp = (val) => (val && val !== '-' ? val : null);
+        const normalizeTimestamp = (val) => (val && val !== '-' ? val : null);
 
-  try {
-    const upsertList = [];
+        try {
+            const upsertList = [];
+            const tumSatirlar = [];
 
-    const tumSatirlar = [];
+            for (const sefer of veriler) {
+                const detayKeys = [
+                    'proje_adi', 'yukleme_noktasi', 'yukleme_ili', 'yukleme_ilcesi',
+                    'teslim_noktasi', 'teslim_ili', 'teslim_ilcesi',
+                    'yukleme_varis', 'yukleme_cikis', 'teslim_varis', 'teslim_cikis'
+                ];
 
-    for (const sefer of veriler) {
-      const detayKeys = [
-        'proje_adi', 'yukleme_noktasi', 'yukleme_ili', 'yukleme_ilcesi',
-        'teslim_noktasi', 'teslim_ili', 'teslim_ilcesi',
-        'yukleme_varis', 'yukleme_cikis', 'teslim_varis', 'teslim_cikis'
-      ];
+                const splitMap = {};
+                detayKeys.forEach((key) => {
+                    splitMap[key] = splitCell(sefer[key]);
+                });
 
-      const splitMap = {};
-      detayKeys.forEach((key) => {
-        splitMap[key] = splitCell(sefer[key]);
-      });
+                const maxLength = Math.max(...detayKeys.map(k => splitMap[k]?.length || 0));
 
-      const maxLength = Math.max(...detayKeys.map((k) => splitMap[k].length));
+                for (let index = 0; index < maxLength; index++) {
+                    const satirDoluMu = detayKeys.some(key => {
+                        const val = splitMap[key]?.[index];
+                        return val && val.trim() !== '' && val.trim() !== '-';
+                    });
 
-      for (let index = 0; index < maxLength; index++) {
-        const satirDoluMu = detayKeys.some(key => {
-          const val = splitMap[key]?.[index];
-          return val && val.trim() !== '' && val.trim() !== '-';
-        });
+                    if (!satirDoluMu) continue;
 
-        if (!satirDoluMu) continue;
+                    tumSatirlar.push({
+                        sefer_id: sefer.id,
+                        nokta_sirasi: index,
+                        arac_statu: sefer.arac_statu || null,
+                        proje_adi: splitMap['proje_adi'][index] || null,
+                        yukleme_noktasi: splitMap['yukleme_noktasi'][index] || null,
+                        yukleme_ili: splitMap['yukleme_ili'][index] || null,
+                        yukleme_ilcesi: splitMap['yukleme_ilcesi'][index] || null,
+                        teslim_noktasi: splitMap['teslim_noktasi'][index] || null,
+                        teslim_ili: splitMap['teslim_ili'][index] || null,
+                        teslim_ilcesi: splitMap['teslim_ilcesi'][index] || null,
+                        yukleme_varis: normalizeTimestamp(splitMap['yukleme_varis'][index]),
+                        yukleme_cikis: normalizeTimestamp(splitMap['yukleme_cikis'][index]),
+                        teslim_varis: normalizeTimestamp(splitMap['teslim_varis'][index]),
+                        teslim_cikis: normalizeTimestamp(splitMap['teslim_cikis'][index]),
+                    });
+                }
+            }
 
-        tumSatirlar.push({
-          sefer_id: sefer.id,
-          nokta_sirasi: index,
-          arac_statu: sefer.arac_statu || null,
-          proje_adi: splitMap['proje_adi'][index] || null,
-          yukleme_noktasi: splitMap['yukleme_noktasi'][index] || null,
-          yukleme_ili: splitMap['yukleme_ili'][index] || null,
-          yukleme_ilcesi: splitMap['yukleme_ilcesi'][index] || null,
-          teslim_noktasi: splitMap['teslim_noktasi'][index] || null,
-          teslim_ili: splitMap['teslim_ili'][index] || null,
-          teslim_ilcesi: splitMap['teslim_ilcesi'][index] || null,
-          yukleme_varis: normalizeTimestamp(splitMap['yukleme_varis'][index]),
-          yukleme_cikis: normalizeTimestamp(splitMap['yukleme_cikis'][index]),
-          teslim_varis: normalizeTimestamp(splitMap['teslim_varis'][index]),
-          teslim_cikis: normalizeTimestamp(splitMap['teslim_cikis'][index]),
-        });
-      }
-    }
+            // 🔍 Mevcut kayıtları al
+            const { data: mevcutlar, error: mevcutHata } = await supabase
+                .from('sefer_detaylari')
+                .select('sefer_id, nokta_sirasi, kayit_zamani');
 
-    // 🔍 Tüm mevcut kayıtları tek sorguda çek
-    const ids = tumSatirlar.map(row => `(${row.sefer_id}, ${row.nokta_sirasi})`);
-    const { data: mevcutlar, error: mevcutHata } = await supabase
-      .from('sefer_detaylari')
-      .select('sefer_id, nokta_sirasi, kayit_zamani');
+            if (mevcutHata) throw mevcutHata;
 
-    if (mevcutHata) throw mevcutHata;
+            const mevcutMap = new Map(
+                (mevcutlar || []).map(d => [`${d.sefer_id}_${d.nokta_sirasi}`, d.kayit_zamani])
+            );
 
-    const mevcutMap = new Map(
-      (mevcutlar || []).map(d => [`${d.sefer_id}_${d.nokta_sirasi}`, d.kayit_zamani])
-    );
+            for (const satir of tumSatirlar) {
+                const key = `${satir.sefer_id}_${satir.nokta_sirasi}`;
+                if (!mevcutMap.has(key)) {
+                    satir.kayit_zamani = new Date().toISOString();
+                }
+                upsertList.push(satir);
+            }
 
-    // ⏱ sadece yeni olanlara kayit_zamani ekle
-    for (const satir of tumSatirlar) {
-      const key = `${satir.sefer_id}_${satir.nokta_sirasi}`;
-      if (!mevcutMap.has(key)) {
-        satir.kayit_zamani = new Date().toISOString();
-      }
-      upsertList.push(satir);
-    }
+            // 🔁 Upsert işlemi
+            const { error: upsertHata } = await supabase
+                .from('sefer_detaylari')
+                .upsert(upsertList, {
+                    onConflict: ['sefer_id', 'nokta_sirasi'],
+                    returning: 'minimal',
+                });
 
-    // 🔁 Tek seferde upsert
-    const { error: upsertHata } = await supabase
-      .from('sefer_detaylari')
-      .upsert(upsertList, {
-        onConflict: ['sefer_id', 'nokta_sirasi'],
-        returning: 'minimal',
-      });
+            if (upsertHata) throw upsertHata;
 
-    if (upsertHata) throw upsertHata;
-
-    alert('🟢 Tüm detaylar başarıyla güncellendi.');
-  } catch (error) {
-    console.error('Detay kaydetme hatası:', error);
-    alert('🔴 Kayıt sırasında bir hata oluştu.');
-  } finally {
-    setSaving(false);
-  }
-};
+            // ✅ Kaydettikten sonra verileri güncelle (startDate, endDate'yi gönder)
+            const yeniVeriler = await fetchFromDB(startDate, endDate);
+            setVeriler(yeniVeriler);
+            setListeleAktif(false);  // gerekirse
+            alert('🟢 Tüm detaylar başarıyla güncellendi.');
+        } catch (error) {
+            console.error('Detay kaydetme hatası:', error);
+            alert('🔴 Kayıt sırasında bir hata oluştu.');
+        } finally {
+            setSaving(false);
+        }
+    };
 
 
     const formatDate = (d) => {
@@ -661,6 +704,14 @@ const detaylariKaydet = async () => {
                 return updated;
             });
         });
+    };
+
+    const sayacBilgisi = (data) => {
+        const toplam = data.length;
+        const bosSayisi = data.filter(d => (d.sefer_no || '').toUpperCase().startsWith('BOS')).length;
+        const sfrSayisi = data.filter(d => (d.sefer_no || '').toUpperCase().startsWith('SFR')).length;
+
+        return { toplam, bosSayisi, sfrSayisi };
     };
 
 
@@ -788,9 +839,16 @@ const splitCell = (value) => {
 
               <div className="filter-buttons">
   <div className="left-buttons">
-    <button className="btn btn-list" onClick={fetchFromDB}>
-      📥 Listele
-    </button>
+                        <button
+                            className="btn btn-list"
+                            onClick={() => {
+                                fetchFromDB(startDate, endDate);
+                                setListeleAktif(false); // Her tıklamadan sonra tekrar pasif olsun istiyorsan
+                            }}
+                            disabled={!listeleAktif}
+                        >
+                            📥 Listele
+                        </button>
                         {senkronizeYetkili && (
                             <button className="btn btn-sync" onClick={senkronizeEt}>
                                 🔄 Senkronize Et

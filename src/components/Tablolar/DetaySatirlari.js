@@ -186,4 +186,4 @@ function DetaySatirlari({ veri, handleDetailChange }) {
 
 export default DetaySatirlari;
 
-/*deneme    
+

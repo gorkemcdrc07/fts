@@ -22,18 +22,14 @@ function hucreFormatla(deger, kolon) {
     return deger ?? '';
 }
 
-// ✅ TESLİM NOKTASI'na göre nokta sayısını hesapla (esnek anahtar bulur)
+// ✅ TESLİM NOKTASI'na göre nokta sayısını hesapla
 function hesaplaNoktaSayisi(veri) {
     const entry = Object.entries(veri).find(
         ([key]) => key.toLowerCase().includes('teslim') && key.toLowerCase().includes('nokta')
     );
-
     if (!entry) return 1;
-
     const deger = entry[1];
-
     if (typeof deger !== 'string' || deger.trim() === '') return 1;
-
     return deger.split(';').length;
 }
 
@@ -47,13 +43,13 @@ function SeferTablosu({
     genisletilenSatirlar,
     setGenisletilenSatirlar,
     handleDetailChange,
+    degisenSeferler,
 }) {
     const kolonRefs = useRef({});
 
     const baslatResize = (e, key) => {
         e.preventDefault();
         e.stopPropagation();
-
         const th = kolonRefs.current[key];
         const startX = e.clientX;
         const startWidth = th.offsetWidth;
@@ -82,6 +78,22 @@ function SeferTablosu({
 
     return (
         <div className="reel-table-container">
+            {/* ✅ Sayaç sağ üstte */}
+            {filtrelenmisVeriler.length > 0 && (
+                <div className="sayac-ustte">
+                    {(() => {
+                        const { toplam, bos, sfr } = sayacBilgisi(filtrelenmisVeriler);
+                        return (
+                            <div className="sayac-icerik">
+                                🔢 Toplam: {toplam} satır |
+                                <span style={{ marginLeft: '12px' }}>🅱 BOS: {bos}</span> |
+                                <span style={{ marginLeft: '12px' }}>🆔 SFR: {sfr}</span>
+                            </div>
+                        );
+                    })()}
+                </div>
+            )}
+
             <table className="reel-table">
                 <thead>
                     <tr className="reel-tr">
@@ -109,58 +121,62 @@ function SeferTablosu({
                 </thead>
 
                 <tbody>
-                    {filtrelenmisVeriler.map((v) => {
-                        const genisletildi = genisletilenSatirlar?.has?.(v.sefer_no);
-                        return (
-                            <React.Fragment key={v.sefer_no}>
-                                <tr className="reel-tr">
-                                    <td
-                                        className="expand-toggle-cell"
-                                        onClick={() => satirTikla(v.sefer_no)}
-                                        aria-label={genisletildi ? 'Satırı kapat' : 'Satırı aç'}
-                                        role="button"
-                                        tabIndex={0}
-                                        onKeyDown={e => {
-                                            if (e.key === 'Enter' || e.key === ' ') satirTikla(v.sefer_no);
+                    {[...filtrelenmisVeriler]
+                        .sort((a, b) => new Date(a.sefer_tarihi) - new Date(b.sefer_tarihi))
+                        .map((v) => {
+                            const genisletildi = genisletilenSatirlar?.has?.(v.sefer_no);
+
+                            return (
+                                <React.Fragment key={v.sefer_no}>
+                                    <tr
+                                        className="reel-tr"
+                                        style={{
+                                            backgroundColor:
+                                                v.reel_durum === 'EŞLEŞME YOK'
+                                                    ? '#ffcccc'
+                                                    : degisenSeferler?.has?.(v.sefer_no)
+                                                        ? '#e6ffe6'
+                                                        : undefined,
+                                            color:
+                                                v.reel_durum === 'EŞLEŞME YOK'
+                                                    ? '#800000'
+                                                    : degisenSeferler?.has?.(v.sefer_no)
+                                                        ? 'black'
+                                                        : undefined,
                                         }}
                                     >
-                                        {genisletildi ? '−' : '+'}
-                                    </td>
-                                    <td><DurumEtiketi durum={v.reel_durum} /></td>
-                                    <td>{hesaplaNoktaSayisi(v)}</td>
-                                    {kolonlar.map(k => (
-                                        <td key={k} className="reel-td">
-                                            {hucreFormatla(v[k], k)}
+                                        <td
+                                            className="expand-toggle-cell"
+                                            onClick={() => satirTikla(v.sefer_no)}
+                                            aria-label={genisletildi ? 'Satırı kapat' : 'Satırı aç'}
+                                            role="button"
+                                            tabIndex={0}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter' || e.key === ' ') satirTikla(v.sefer_no);
+                                            }}
+                                        >
+                                            {genisletildi ? '−' : '+'}
                                         </td>
-                                    ))}
-                                </tr>
+                                        <td><DurumEtiketi durum={v.reel_durum} /></td>
+                                        <td>{hesaplaNoktaSayisi(v)}</td>
+                                        {kolonlar.map(k => (
+                                            <td key={k} className="reel-td">
+                                                {hucreFormatla(v[k], k)}
+                                            </td>
+                                        ))}
+                                    </tr>
 
-                                {genisletildi && (
-                                    <DetaySatirlari
-                                        veri={v}
-                                        handleDetailChange={handleDetailChange}
-                                    />
-                                )}
-                            </React.Fragment>
-                        );
-                    })}
+                                    {genisletildi && (
+                                        <DetaySatirlari
+                                            veri={v}
+                                            handleDetailChange={handleDetailChange}
+                                        />
+                                    )}
+                                </React.Fragment>
+                            );
+                        })}
                 </tbody>
             </table>
-
-            {filtrelenmisVeriler.length > 0 && (
-                <div className="sabit-sayac">
-                    {(() => {
-                        const { toplam, bos, sfr } = sayacBilgisi(filtrelenmisVeriler);
-                        return (
-                            <div className="sayac-icerik">
-                                🔢 Toplam: {toplam} satır |
-                                <span style={{ marginLeft: '12px' }}>🅱 BOS: {bos}</span> |
-                                <span style={{ marginLeft: '12px' }}>🆔 SFR: {sfr}</span>
-                            </div>
-                        );
-                    })()}
-                </div>
-            )}
         </div>
     );
 }

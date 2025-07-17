@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { hucreAyir } from '../../utils/veriYardimcilari';
 
 function DetaySatirlari({ veri, handleDetailChange }) {
@@ -19,82 +19,66 @@ function DetaySatirlari({ veri, handleDetailChange }) {
     const splitted = detayAlanlari.map((alan) => hucreAyir(veri[alan]));
     const maxSatir = Math.max(...splitted.map((dizi) => dizi.length));
 
-    const inputRefs = useRef({});
+    const handleAutoDateInput = (e, satirIndex, alan, sefer_no) => {
+        const input = e.target;
+        let val = input.value.trim();
 
-    const setInputRef = (satirIndex, alanIndex, el) => {
-        if (!inputRefs.current[satirIndex]) inputRefs.current[satirIndex] = {};
-        inputRefs.current[satirIndex][alanIndex] = el;
-    };
+        // Max 16 karakter (GG-AA-YYYY SS:dd)
+        if (val.length > 16) {
+            input.value = val.slice(0, 16);
+            return;
+        }
 
-    // GG-AA-YYYY formatında geçerlilik kontrolü
-    const isValidDate = (dateStr) => {
-        if (!/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) return false;
+        // GG → otomatik tarih tamamlama
+        const cleaned = val.replace(/[^\d]/g, '');
+        if (cleaned.length === 2) {
+            const now = new Date();
+            const gun = cleaned;
+            const ay = String(now.getMonth() + 1).padStart(2, '0');
+            const yil = now.getFullYear();
+            const yeni = `${gun}-${ay}-${yil} `;
+            input.value = yeni;
+            setTimeout(() => input.setSelectionRange(yeni.length, yeni.length), 0);
+            return;
+        }
 
-        const [dayStr, monthStr, yearStr] = dateStr.split('-');
-        const day = parseInt(dayStr, 10);
-        const month = parseInt(monthStr, 10);
-        const year = parseInt(yearStr, 10);
-
-        const date = new Date(year, month - 1, day);
-        return (
-            date.getFullYear() === year &&
-            date.getMonth() === month - 1 &&
-            date.getDate() === day
-        );
-    };
-
-    const handleDateChange = (e, satirIndex, alanIndex, alan, eskiCell, sefer_no) => {
-        let val = e.target.value;
-
-        // Sadece rakam ve '-' kabul et
-        val = val.replace(/[^0-9-]/g, '');
-
-        // Maksimum 10 karakter (GG-AA-YYYY)
-        if (val.length > 10) val = val.slice(0, 10);
-
-        const parts = val.split('-');
-
-        if (parts.length === 1 && parts[0].length <= 2) {
-            // Sadece gün yazılmış
-            const dayStr = parts[0];
-            if (dayStr.length === 2) {
-                const dayNum = parseInt(dayStr, 10);
-                if (dayNum >= 1 && dayNum <= 31) {
-                    // Gün geçerli, otomatik ay ve yıl ekle
-                    const currentDate = new Date();
-                    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-                    const year = currentDate.getFullYear();
-                    val = `${dayStr}-${month}-${year}`;
-                    e.target.value = val;
-
-                    const yeniDeger = `${year}-${month}-${dayStr}T${eskiCell?.split('T')[1] || '00:00'}`;
-                    handleDetailChange(sefer_no, satirIndex, alan, yeniDeger);
-
-                    // Saate focus yap
-                    const saatInput = inputRefs.current?.[satirIndex]?.[alanIndex];
-                    if (saatInput) {
-                        setTimeout(() => {
-                            saatInput.focus();
-                        }, 0);
-                    }
-                    return;
-                }
-            }
-        } else if (parts.length === 3) {
-            // GG-AA-YYYY formatında olabilir, kontrol et
-            if (isValidDate(val)) {
-                e.target.value = val;
-                const [day, month, year] = parts;
-                const yeniDeger = `${year}-${month}-${day}T${eskiCell?.split('T')[1] || '00:00'}`;
-                handleDetailChange(sefer_no, satirIndex, alan, yeniDeger);
+        // GG-AA-YYYY SS → otomatik ":" ekle
+        const saatRegex = /^(\d{2})-(\d{2})-(\d{4}) (\d{2})$/;
+        const matchSaat = val.match(saatRegex);
+        if (matchSaat) {
+            const [, gg, aa, yyyy, ss] = matchSaat;
+            const saatSayi = parseInt(ss, 10);
+            if (saatSayi >= 0 && saatSayi <= 23) {
+                const yeni = `${gg}-${aa}-${yyyy} ${ss}:`;
+                input.value = yeni;
+                setTimeout(() => input.setSelectionRange(yeni.length, yeni.length), 0);
                 return;
             }
         }
 
-        // Diğer durumlarda input güncellenir ama handleDetailChange boş gönderilir
-        e.target.value = val;
+        // GG-AA-YYYY SS:dd → saat ve dakika kontrolü
+        const fullRegex = /^(\d{2})-(\d{2})-(\d{4}) (\d{2}):(\d{2})$/;
+        const matchFull = val.match(fullRegex);
+        if (matchFull) {
+            const [, gg, aa, yyyy, ss, dd] = matchFull;
+            const saatSayi = parseInt(ss, 10);
+            const dakikaSayi = parseInt(dd, 10);
+
+            if (
+                saatSayi >= 0 && saatSayi <= 23 &&
+                dakikaSayi >= 0 && dakikaSayi <= 59
+            ) {
+                const iso = `${yyyy}-${aa}-${gg}T${ss}:${dd}`;
+                handleDetailChange(sefer_no, satirIndex, alan, iso);
+                return;
+            }
+        }
+
+        // Geçersizse temizle
         handleDetailChange(sefer_no, satirIndex, alan, '');
     };
+
+
 
     return (
         <tr className="detail-row">
@@ -121,6 +105,10 @@ function DetaySatirlari({ veri, handleDetailChange }) {
                                         'teslim_varis',
                                         'teslim_cikis',
                                     ].includes(alan);
+
+                                    const gosterim = cell
+                                        ? `${cell.substring(8, 10)}-${cell.substring(5, 7)}-${cell.substring(0, 4)} ${cell.substring(11, 16)}`
+                                        : '';
 
                                     return (
                                         <div
@@ -153,66 +141,33 @@ function DetaySatirlari({ veri, handleDetailChange }) {
 
                                             <div
                                                 className="detail-value"
-                                                style={{ fontSize: '20px', fontWeight: 'bold', color: '#cbd5e1' }}
+                                                style={{
+                                                    fontSize: '20px',
+                                                    fontWeight: 'bold',
+                                                    color: '#cbd5e1',
+                                                }}
                                             >
                                                 {saatli ? (
-                                                    <div
+                                                    <input
+                                                        type="text"
+                                                        placeholder="GG-AA-YYYY SS:dd"
+                                                        defaultValue={gosterim}
+                                                        maxLength={16}
+                                                        onChange={(e) =>
+                                                            handleAutoDateInput(e, satirIndex, alan, veri.sefer_no)
+                                                        }
                                                         style={{
-                                                            display: 'flex',
-                                                            gap: '8px',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'flex-start',
+                                                            flex: '1 1 auto',
+                                                            fontSize: '16px',
+                                                            padding: '6px 8px',
+                                                            backgroundColor: '#475569',
+                                                            color: '#e0e7ff',
+                                                            border: 'none',
+                                                            borderRadius: '4px',
                                                         }}
-                                                    >
-                                                        <input
-                                                            type="text"
-                                                            maxLength={10}
-                                                            placeholder="GG-AA-YYYY"
-                                                            defaultValue={
-                                                                cell
-                                                                    ? `${cell.substring(8, 10)}-${cell.substring(5, 7)}-${cell.substring(0, 4)}`
-                                                                    : ''
-                                                            }
-                                                            onChange={(e) =>
-                                                                handleDateChange(
-                                                                    e,
-                                                                    satirIndex,
-                                                                    alanIndex,
-                                                                    alan,
-                                                                    cell,
-                                                                    veri.sefer_no
-                                                                )
-                                                            }
-                                                            style={{
-                                                                flex: '1 1 auto',
-                                                                fontSize: '16px',
-                                                                padding: '6px 8px',
-                                                                backgroundColor: '#475569',
-                                                                color: '#e0e7ff',
-                                                                border: 'none',
-                                                                borderRadius: '4px',
-                                                            }}
-                                                        />
-                                                        <input
-                                                            ref={(el) => setInputRef(satirIndex, alanIndex, el)}
-                                                            type="time"
-                                                            value={cell ? cell.split('T')[1] || '00:00' : '00:00'}
-                                                            onChange={(e) => {
-                                                                const datePart = cell?.split('T')[0] || new Date().toISOString().split('T')[0];
-                                                                const newValue = `${datePart}T${e.target.value}`;
-                                                                handleDetailChange(veri.sefer_no, satirIndex, alan, newValue);
-                                                            }}
-                                                            style={{
-                                                                flex: '1 1 auto',
-                                                                fontSize: '16px',
-                                                                padding: '6px 8px',
-                                                                backgroundColor: '#475569',
-                                                                color: '#e0e7ff',
-                                                                border: 'none',
-                                                                borderRadius: '4px',
-                                                            }}
-                                                        />
-                                                    </div>
+                                                    />
+
+
                                                 ) : (
                                                     cell || '-'
                                                 )}

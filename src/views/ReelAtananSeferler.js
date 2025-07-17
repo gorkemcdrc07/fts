@@ -206,6 +206,8 @@ const ReelAtananSeferler = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [successCount, setSuccessCount] = useState(0);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [degisenSeferler, setDegisenSeferler] = useState(new Set());
+
 
     const navigate = useNavigate();
     const kullaniciAdi = localStorage.getItem('kullaniciAdi')?.toUpperCase();
@@ -224,6 +226,13 @@ const ReelAtananSeferler = () => {
                 };
             })
         );
+
+        // ✅ Satırı "yeşil" göstermek için ekle
+        setDegisenSeferler((prev) => {
+            const yeni = new Set(prev);
+            yeni.add(seferNo);
+            return yeni;
+        });
     };
 
     useEffect(() => {
@@ -591,6 +600,8 @@ const ReelAtananSeferler = () => {
                 genisletilenSatirlar={genisletilenSatirlar}
                 setGenisletilenSatirlar={setGenisletilenSatirlar}
                 handleDetailChange={handleDetailChange}
+                degisenSeferler={degisenSeferler}
+
             />
 
 

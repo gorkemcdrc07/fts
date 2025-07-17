@@ -65,7 +65,6 @@ export const veriListele = async (filtreler) => {
         return [];
     }
 
-    // ✅ TAMAMLANMIŞ SEFERLERİ ÇEK
     const { data: tamamlananSeferler } = await supabase
         .from('tamamlanan_seferler')
         .select('sefer_no');
@@ -74,38 +73,58 @@ export const veriListele = async (filtreler) => {
         .from('tamamlanan_detaylar')
         .select('sefer_no');
 
-    // ✅ TAMAMLANMIŞ SEFERLERİ TEK BİR SET'TE BİRLEŞTİR
     const tamamlanmisSeferNoSet = new Set([
         ...(tamamlananSeferler || []).map(s => s.sefer_no),
         ...(tamamlananDetaylar || []).map(s => s.sefer_no)
     ]);
 
-    // ✅ FİLTRELE: tamamlanmış olanları gösterme
     const temizVeri = (data || []).filter(sefer =>
         sefer?.id && !tamamlanmisSeferNoSet.has(sefer.sefer_no)
     );
 
-    // ✅ SEFER DURUMUNU HESAPLA
     const yeniVeri = temizVeri.map((sefer) => {
         const detaylar = sefer.sefer_detaylari || [];
 
         const statuHesapla = () => {
-            const tamam = detaylar.every((d) =>
+            if (detaylar.length === 0) return 'PLAKA ATANDI';
+
+            const tumuTamamlandi = detaylar.every(d =>
                 d.yukleme_varis && d.yukleme_cikis && d.teslim_varis && d.teslim_cikis
             );
-            if (detaylar.length > 0 && tamam) return 'SEFER TAMAMLANDI';
+            if (tumuTamamlandi) return 'SEFER TAMAMLANDI';
 
-            return detaylar
-                .map((d, i) => {
-                    if (d.teslim_cikis) return `${i + 1}.NOKTADA TAMAMLANDI`;
-                    if (d.teslim_varis) return `${i + 1}.NOKTADA BOŞALTMADA`;
-                    if (d.yukleme_cikis) return `${i + 1}.NOKTADA YOLDA`;
-                    if (d.yukleme_varis) return `${i + 1}.NOKTADA YÜKLEMEDE`;
-                    return `${i + 1}.NOKTADA PLAKA ATANDI`;
-                })
-                .filter(Boolean)
-                .join('; ');
+            const oncelik = ['teslim_cikis', 'teslim_varis', 'yukleme_cikis', 'yukleme_varis'];
+            const etiket = {
+                teslim_cikis: 'TAMAMLANDI',
+                teslim_varis: 'BOŞALTMADA',
+                yukleme_cikis: 'YOLDA',
+                yukleme_varis: 'YÜKLEMEDE'
+            };
+
+            const ilk = detaylar[0];
+            const ilkTamam = ilk.yukleme_varis && ilk.yukleme_cikis && ilk.teslim_varis && ilk.teslim_cikis;
+
+            if (!ilkTamam) {
+                for (const alan of oncelik) {
+                    if (ilk[alan]) return `1.NOKTADA ${etiket[alan]}`;
+                }
+                return '1.NOKTADA PLAKA ATANDI';
+            }
+
+            // Tüm noktalarda, en ileri olan alanı bul
+            for (let i = detaylar.length - 1; i >= 1; i--) {
+                const d = detaylar[i];
+                for (const alan of oncelik) {
+                    if (d[alan]) {
+                        return `${i + 1}.NOKTADA ${etiket[alan]}`;
+                    }
+                }
+            }
+
+            // Eğer sadece ilk nokta tamamlanmışsa ve diğerleri boşsa:
+            return '1.NOKTADA TAMAMLANDI';
         };
+
 
         return {
             ...sefer,
@@ -120,4 +139,3 @@ export const veriListele = async (filtreler) => {
 
     return yeniVeri;
 };
-

@@ -14,168 +14,166 @@ import { hucreAyir } from '../utils/veriYardimcilari';
 import { veriListele } from '../utils/supabaseYardimcilar';
 
 const senkronizeEt = async (
-    setVeriler,
-    setIsLoading,
-    setSuccessCount,
-    setShowSuccess,
-    startDate,
-    endDate
+  setVeriler,
+  setIsLoading,
+  setSuccessCount,
+  setShowSuccess,
+  startDate,
+  endDate
 ) => {
-    setIsLoading(true);
+  setIsLoading(true);
 
-    try {
-        const toDateString = (date) => date.toISOString().split('T')[0];
+  try {
+    const toDateString = (date) => date.toISOString().split('T')[0];
+    const start = startDate || toDateString(new Date(new Date().setDate(new Date().getDate() - 6)));
+    const end = endDate || toDateString(new Date());
 
-        const start = startDate
-            ? startDate
-            : toDateString(new Date(new Date().setDate(new Date().getDate() - 6)));
-        const end = endDate ? endDate : toDateString(new Date());
+    const body = {
+      startDate: `${start}T00:00:00`,
+      endDate: `${end}T23:59:59`,
+      userId: 1,
+    };
 
-        const body = {
-            startDate: `${start}T00:00:00`,
-            endDate: `${end}T23:59:59`,
-            userId: 1,
-        };
+    const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+    const response = await fetch(`${API_BASE_URL}/api/proxy/tmsdespatches`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
 
-        // Burada URL'yi sabit olarak değiştiriyoruz
-        const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000'; // ✅
-        const response = await fetch(`${API_BASE_URL}/api/proxy/tmsdespatches`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
-
-        if (!response.ok) {
-            throw new Error(`API Hatası: ${response.status} ${response.statusText}`);
-        }
-
-        const json = await response.json();
-
-        if (!json || !Array.isArray(json.Data)) {
-            setVeriler([]);
-            setIsLoading(false);
-            return;
-        }
-
-        const gelen = json.Data.filter((item) => item && typeof item === 'object');
-
-        const filtreli = gelen.filter((item) => {
-            const tip = (item?.VehicleWorkingTypeName || '').toString().trim().toUpperCase();
-            return tip === 'FİLO' || tip === 'ÖZMAL';
-        });
-
-        if (filtreli.length === 0) {
-            setVeriler([]);
-            setIsLoading(false);
-            return;
-        }
-
-        const ordersMap = (orders, field) => {
-            if (!Array.isArray(orders)) return '';
-            return orders
-                .filter((o) => o && typeof o === 'object')
-                .map((o) => o[field] ?? '')
-                .filter(Boolean)
-                .join('; ');
-        };
-
-        const temizVeri = filtreli.map((sefer) => {
-            const tmsOrders = Array.isArray(sefer.TMSOrders) ? sefer.TMSOrders : [];
-
-            const ordersMap = (orders, field) => {
-                if (!Array.isArray(orders)) return '';
-                return orders
-                    .filter((o) => o && typeof o === 'object')
-                    .map((o) => o[field] ?? '')
-                    .filter(Boolean)
-                    .join('; ');
-            };
-
-            return {
-                sefer_no: sefer?.DocumentNo ?? '',
-                plaka: sefer?.PlateNumber ?? '',
-                treyler: sefer?.TrailerPlateNumber ?? '',
-                surucu_ad_soyad: sefer?.FullName ?? '',
-                surucu_tckn: sefer?.CitizenNumber ?? '',
-                surucu_telefon: sefer?.PhoneNumber ?? '',
-                musteri_adi: sefer?.CustomerFullTitle ?? '',
-                musteri_siparis_no: sefer?.CustomerOrderNumber ?? '',
-                hizmet_adi: sefer?.ServiceName ?? '',
-                proje_adi: ordersMap(tmsOrders, 'ProjectName'),
-                yukleme_noktasi: ordersMap(tmsOrders, 'PickupAddressCode'),
-                yukleme_ili: ordersMap(tmsOrders, 'PickupCityName'),
-                yukleme_ilcesi: ordersMap(tmsOrders, 'PickupCountyName'),
-                teslim_alan_firma: ordersMap(tmsOrders, 'DeliveryCurrentAccountName'),
-                teslim_noktasi: ordersMap(tmsOrders, 'DeliveryAddressCode'),
-                teslim_ili: ordersMap(tmsOrders, 'DeliveryCityName'),
-                teslim_ilcesi: ordersMap(tmsOrders, 'DeliveryCountyName'),
-                irsaliye_no: sefer?.TMSDespatchWaybillNumber ?? '',
-                sefer_tarihi: sefer?.DespatchDate ?? null,
-                atama_yapan_kullanici: sefer?.TMSDespatchCreatedBy ?? '',
-                atama_tarihi: sefer?.TMSDespatchCreatedDate ?? null,
-                kayit_zamani: new Date().toISOString(),
-                arac_statu: sefer?.VehicleStatus ?? '',
-            };
-        });
-
-
-        const { data: mevcutVeri, error } = await supabase
-            .from('seferler')
-            .select('*')
-            .gte('sefer_tarihi', `${start}T00:00:00`)
-            .lte('sefer_tarihi', `${end}T23:59:59`);
-
-        if (error) {
-            setVeriler([]);
-            setIsLoading(false);
-            return;
-        }
-
-        const mevcutVeriSafe = mevcutVeri ?? [];
-        const dbMap = new Map(mevcutVeriSafe.map((item) => [item.sefer_no, item]));
-        const gelenSeferNos = new Set(temizVeri.map((v) => v.sefer_no));
-
-        const yeniVeriler = temizVeri.map((item) => ({
-            ...item,
-            reel_durum: dbMap.has(item.sefer_no) ? 'EŞLEŞTİ' : 'YENİ',
-        }));
-
-        const eksikVeriler = mevcutVeriSafe
-            .filter((item) => !gelenSeferNos.has(item.sefer_no))
-            .map((item) => ({ ...item, reel_durum: 'EŞLEŞME YOK' }));
-
-        const { data: upsertSonucu, error: upsertError } = await supabase
-            .from('seferler')
-            .upsert(yeniVeriler, {
-                onConflict: ['sefer_no'],
-                returning: 'representation',
-            });
-
-        if (upsertError) {
-            setVeriler([]);
-            setIsLoading(false);
-            return;
-        }
-
-        const upsertSonucuSafe = upsertSonucu ?? [];
-        const guncellenmisVeriler = upsertSonucuSafe.map((item) => ({
-            ...item,
-            reel_durum: dbMap.has(item.sefer_no) ? 'EŞLEŞTİ' : 'YENİ',
-        }));
-
-        const eksikVerilerFinal = mevcutVeriSafe
-            .filter((item) => !guncellenmisVeriler.some((v) => v.sefer_no === item.sefer_no))
-            .map((item) => ({ ...item, reel_durum: 'EŞLEŞME YOK' }));
-
-        setVeriler([...guncellenmisVeriler, ...eksikVerilerFinal]);
-        setSuccessCount(guncellenmisVeriler.length);
-        setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 4000);
-    } catch {
-        setVeriler([]);
-    } finally {
-        setIsLoading(false);
+    if (!response.ok) {
+      throw new Error(`API Hatası: ${response.status} ${response.statusText}`);
     }
+
+    const json = await response.json();
+    if (!json || !Array.isArray(json.Data)) {
+      setVeriler([]);
+      return;
+    }
+
+    const gelen = json.Data.filter((item) => item && typeof item === 'object');
+    const filtreli = gelen.filter((item) => {
+      const tip = (item?.VehicleWorkingTypeName || '').toString().trim().toUpperCase();
+      return tip === 'FİLO' || tip === 'ÖZMAL';
+    });
+
+    if (filtreli.length === 0) {
+      setVeriler([]);
+      return;
+    }
+
+    const ordersMap = (orders, field) => {
+      if (!Array.isArray(orders)) return '';
+      return orders
+        .filter((o) => o && typeof o === 'object')
+        .map((o) => o[field] ?? '')
+        .filter(Boolean)
+        .join('; ');
+    };
+
+    const temizVeri = filtreli.map((sefer) => {
+      const tmsOrders = Array.isArray(sefer.TMSOrders) ? sefer.TMSOrders : [];
+      return {
+        sefer_no: sefer?.DocumentNo?.trim() ?? '',
+        plaka: sefer?.PlateNumber ?? '',
+        treyler: sefer?.TrailerPlateNumber ?? '',
+        surucu_ad_soyad: sefer?.FullName ?? '',
+        surucu_tckn: sefer?.CitizenNumber ?? '',
+        surucu_telefon: sefer?.PhoneNumber ?? '',
+        musteri_adi: sefer?.CustomerFullTitle ?? '',
+        musteri_siparis_no: sefer?.CustomerOrderNumber ?? '',
+        hizmet_adi: sefer?.ServiceName ?? '',
+        proje_adi: ordersMap(tmsOrders, 'ProjectName'),
+        yukleme_noktasi: ordersMap(tmsOrders, 'PickupAddressCode'),
+        yukleme_ili: ordersMap(tmsOrders, 'PickupCityName'),
+        yukleme_ilcesi: ordersMap(tmsOrders, 'PickupCountyName'),
+        teslim_alan_firma: ordersMap(tmsOrders, 'DeliveryCurrentAccountName'),
+        teslim_noktasi: ordersMap(tmsOrders, 'DeliveryAddressCode'),
+        teslim_ili: ordersMap(tmsOrders, 'DeliveryCityName'),
+        teslim_ilcesi: ordersMap(tmsOrders, 'DeliveryCountyName'),
+        irsaliye_no: sefer?.TMSDespatchWaybillNumber ?? '',
+        sefer_tarihi: sefer?.DespatchDate ?? null,
+        atama_yapan_kullanici: sefer?.TMSDespatchCreatedBy ?? '',
+        atama_tarihi: sefer?.TMSDespatchCreatedDate ?? null,
+        kayit_zamani: new Date().toISOString(),
+        arac_statu: sefer?.VehicleStatus ?? '',
+      };
+    });
+
+    const { data: mevcutVeri, error } = await supabase
+      .from('seferler')
+      .select('*')
+      .gte('sefer_tarihi', `${start}T00:00:00`)
+      .lte('sefer_tarihi', `${end}T23:59:59`);
+
+    if (error) {
+      console.error('Supabase Hatası:', error);
+      setVeriler([]);
+      return;
+    }
+
+    const mevcutVeriSafe = mevcutVeri ?? [];
+    const dbMap = new Map(mevcutVeriSafe.map((item) => [item.sefer_no?.trim(), item]));
+    const gelenSeferNos = new Set(temizVeri.map((v) => v.sefer_no?.trim()).filter(Boolean));
+
+const upsertList = [];
+const yeniVeriler = [];
+
+for (const item of temizVeri) {
+    const eski = dbMap.get(item.sefer_no);
+
+    if (!eski) {
+        const yeni = { ...item, reel_durum: 'YENİ' };
+        yeniVeriler.push(yeni);
+        upsertList.push(yeni); // ✅ reel_durum dahil
+    } else {
+        const degistiMi = Object.keys(item).some((key) => item[key] !== eski[key]);
+        if (degistiMi) {
+            const guncellenmis = { ...item, reel_durum: 'GÜNCELLENDİ' };
+            yeniVeriler.push(guncellenmis);
+            upsertList.push(guncellenmis); // ✅ reel_durum dahil
+        } else {
+            const ayni = { ...eski, reel_durum: 'EŞLEŞTİ' };
+            yeniVeriler.push(ayni);
+            upsertList.push(ayni); // ✅ bunu da ekliyoruz ki Supabase'e yazılsın
+        }
+    }
+}
+
+    const yeniSeferNos = new Set(yeniVeriler.map((v) => v.sefer_no?.trim()));
+
+    const eksikVeriler = mevcutVeriSafe
+      .filter((item) => item.sefer_no && !gelenSeferNos.has(item.sefer_no.trim()))
+      .filter((item) => !yeniSeferNos.has(item.sefer_no.trim()))
+      .map((item) => ({ ...item, reel_durum: 'EŞLEŞME YOK' }));
+
+    const upsertEksikler = eksikVeriler.map(({ id, ...rest }) => ({
+      ...rest,
+      reel_durum: 'EŞLEŞME YOK',
+    }));
+
+    const upsertPayload = [...upsertList, ...upsertEksikler];
+
+    console.log('Yeni:', yeniVeriler.length);
+    console.log('Eksik:', eksikVeriler.length);
+    console.log('Upsert toplam:', upsertPayload.length);
+
+    if (upsertPayload.length > 0) {
+      await supabase.from('seferler').upsert(upsertPayload, {
+        onConflict: ['sefer_no'],
+      });
+    }
+
+    setVeriler([...yeniVeriler, ...eksikVeriler]);
+    setSuccessCount(upsertList.length);
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 4000);
+  } catch (err) {
+    console.error('Senkronizasyon hatası:', err);
+    setVeriler([]);
+  } finally {
+    setIsLoading(false);
+  }
 };
 
 const ReelAtananSeferler = () => {
@@ -327,33 +325,35 @@ const ReelAtananSeferler = () => {
         setVeriler(yeniVeri);
 
         if (yeniVeri.length > 0 && kolonlar.length === 0) {
-            const varsayilanKolonlar = [
-                'arac_statu',
-                'sefer_tarihi',
-                'sefer_no',
-                'plaka',
-                'treyler',
-                'surucu_ad_soyad',
-                'surucu_tckn',
-                'surucu_telefon',
-                'musteri_adi',
-                'musteri_siparis_no',
-                'hizmet_adi',
-                'proje_adi',
-                'yukleme_noktasi',
-                'yukleme_ili',
-                'yukleme_ilcesi',
-                'teslim_alan_firma',
-                'teslim_noktasi',
-                'teslim_ili',
-                'teslim_ilcesi',
-                'irsaliye_no',
-                'kayit_zamani',
-                'atama_yapan_kullanici',
-                'atama_tarihi',
-            ];
-            setKolonlar(varsayilanKolonlar);
-        }
+    const varsayilanKolonlar = [
+        'arac_statu',
+        'sefer_tarihi',
+        'sefer_no',
+        'plaka',
+        'treyler',
+        'surucu_ad_soyad',
+        'surucu_tckn',
+        'surucu_telefon',
+        'musteri_adi',
+        'musteri_siparis_no',
+        'hizmet_adi',
+        'proje_adi',
+        'yukleme_noktasi',
+        'yukleme_ili',
+        'yukleme_ilcesi',
+        'teslim_alan_firma',
+        'teslim_noktasi',
+        'teslim_ili',
+        'teslim_ilcesi',
+        'irsaliye_no',
+        'kayit_zamani',
+        'atama_yapan_kullanici',
+        'atama_tarihi',
+        'reel_durum' // ✅ EKLENDİ
+    ];
+    setKolonlar(varsayilanKolonlar);
+}
+
     };
 
 

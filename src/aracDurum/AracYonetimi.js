@@ -495,6 +495,7 @@ function AracYonetimi() {
                             <th>GPS Seri No</th>
                             <th>GPS Sim Kart</th>
                             <th>Odak K1</th>
+                            {(filtre === 'pasif' || filtre === 'tum') && <th>Silme Sebebi</th>}
                             <th>Statü</th>
                             <th>İşlem</th>
                         </tr>
@@ -503,7 +504,7 @@ function AracYonetimi() {
                     <tbody>
                         {araclar.length === 0 ? (
                             <tr key="bos">
-                                <td colSpan="23">Kayıtlı araç yok</td>
+<td colSpan={filtre === 'pasif' || filtre === 'tum' ? 24 : 23}>Kayıtlı araç yok</td>
                             </tr>
                         ) : (
                             araclar.map((arac, index) => (
@@ -528,8 +529,11 @@ function AracYonetimi() {
                                     <td>{arac.liftmaster}</td>
                                     <td>{arac.gps_seri_no}</td>
                                     <td>{arac.gps_sim_kart_no}</td>
-                                    <td>{arac.odak_k1}</td>
-                                    <td>{arac.statu || '-'}</td>
+<td>{arac.odak_k1}</td>
+{(filtre === 'pasif' || filtre === 'tum') && (
+  <td>{arac.silme_sebebi || '-'}</td>
+)}
+<td>{arac.statu || '-'}</td>
                                     <td>
                                         <button
                                             style={{ backgroundColor: '#17a2b8', color: 'white' }}

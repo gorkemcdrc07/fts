@@ -305,6 +305,25 @@ const aracStatuOptions = useMemo(() => {
         return birlesmis;
     };
 
+    const isDifferent = (apiData, dbData) => {
+  if (!dbData) return true;
+
+  const keysToCompare = [
+    'plaka', 'treyler', 'surucu_ad_soyad', 'surucu_tckn', 'surucu_telefon',
+    'musteri_adi', 'musteri_siparis_no', 'hizmet_adi', 'proje_adi',
+    'yukleme_noktasi', 'yukleme_ili', 'yukleme_ilcesi',
+    'teslim_alan_firma', 'teslim_noktasi', 'teslim_ili', 'teslim_ilcesi',
+    'irsaliye_no', 'sefer_tarihi', 'atama_yapan_kullanici', 'atama_tarihi'
+  ];
+
+  return keysToCompare.some(key => {
+    const a = (apiData[key] ?? '').toString().trim();
+    const b = (dbData[key] ?? '').toString().trim();
+    return a !== b;
+  });
+};
+
+
 
 
 
@@ -423,10 +442,18 @@ const aracStatuOptions = useMemo(() => {
                 return !tamamlanmisSeferNoSet.has(seferNo);
             });
 
-            const yeniVeriler = filtrelenmisVeri.map(item => ({
-                ...item,
-                reel_durum: dbMap.has(item.sefer_no) ? 'EŞLEŞTİ' : 'YENİ',
-            }));
+const yeniVeriler = filtrelenmisVeri.map(item => {
+  const dbItem = dbMap.get(item.sefer_no);
+
+  return {
+    ...item,
+    reel_durum: !dbItem
+      ? 'YENİ'
+      : isDifferent(item, dbItem)
+        ? 'GÜNCELLENDİ'
+        : 'EŞLEŞTİ',
+  };
+});
 
             const gelenSeferNos = new Set(temizVeri.map(v => v.sefer_no));
             const eksikVeriler = mevcutVeri
@@ -737,11 +764,12 @@ const aracStatuOptions = useMemo(() => {
 
   // Durum etiketi renkleri
   const durumEtiketi = (durum) => {
-    const renk = {
-      'EŞLEŞTİ': 'reel-durum-eslesti',
-      'YENİ': 'reel-durum-yeni',
-      'EŞLEŞME YOK': 'reel-durum-yok',
-    };
+const renk = {
+  'EŞLEŞTİ': 'reel-durum-eslesti',
+  'YENİ': 'reel-durum-yeni',
+  'EŞLEŞME YOK': 'reel-durum-yok',
+  'GÜNCELLENDİ': 'reel-durum-guncellendi', // ✅ Ekle
+};
     return <span className={`reel-durum-badge ${renk[durum] || 'reel-durum-default'}`}>{durum}</span>;
   };
 

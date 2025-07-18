@@ -13,7 +13,7 @@ function Planlama() {
     const inputRefs = useRef({});
 
     const alanlar = [
-        'sefer_no', 'sevk_no', 'plaka', 'ad_soyad', 'telefon', 'tc',
+        'sefer_no', 'sevk_no', 'tarih', 'plaka', 'ad_soyad', 'telefon', 'tc',
         'varis_tarihi', 'son_nokta', 'fatura_musterisi',
         'yukleme_noktasi', 'tahliye_noktasi', 'tahliye_il',
         'tonaj', 'bir_onceki_is', 'bolge'
@@ -156,7 +156,14 @@ function Planlama() {
     };
 
     const yeniSatirEkle = () => {
+        const today = new Date();
+        const formattedDate = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
+
         const bosSatir = Object.fromEntries(alanlar.map(a => [a, '']));
+        bosSatir['tarih'] = formattedDate;
+
+        console.log("Yeni satır eklendi:", bosSatir); // Test çıktısı
+
         setFilteredVeriler([bosSatir, ...filteredVeriler]);
     };
 

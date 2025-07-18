@@ -1,8 +1,7 @@
-/* Sayfa ve genel yapı */
+/* Sayfa ve pxnel yapı */
 .planlama-sayfasi {
     padding: 32px;
     background: #f4f6f8;
-    min-height: 100vh;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
@@ -68,11 +67,10 @@
 
 /* Tablo */
 .planlama-tablo {
+    table-layout: auto;
     width: 100%;
-    border-collapse: collapse;
-    font-size: 25px; /* ⬅️ default font büyütüldü */
-    min-width: 1200px;
 }
+
 
     /* Tablo başlığı */
     .planlama-tablo thead th {

@@ -170,6 +170,8 @@ function KesintiGirisi() {
                     <option value="Servis">Servis</option>
                     <option value="Arıza">Arıza</option>
                     <option value="Kaza">Kaza</option>
+                    <option value="Bölgede İş Yok">Bölgede İş Yok</option>
+
                 </select>
 
                 <label>Kesinti Nedeni</label>

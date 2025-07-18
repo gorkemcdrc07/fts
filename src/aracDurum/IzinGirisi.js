@@ -102,6 +102,7 @@ function IzinGirisi() {
     const handlePlakaSecimi = (e) => {
         const secim = e.target.value;
         const secilen = plakaListesi.find(p => `${p.plaka} - ${p.treyler}` === secim);
+
         if (secilen) {
             setForm(prev => ({
                 ...prev,
@@ -109,6 +110,15 @@ function IzinGirisi() {
                 surucu_adi: secilen.surucu_adi,
                 surucu_telefon: secilen.surucu_telefon,
                 surucu_tc: secilen.surucu_tc
+            }));
+        } else {
+            // Kullanıcı elle yazdıysa, sadece plaka_treyler'i set et
+            setForm(prev => ({
+                ...prev,
+                plaka_treyler: secim,
+                surucu_adi: '',
+                surucu_telefon: '',
+                surucu_tc: ''
             }));
         }
     };
@@ -315,13 +325,19 @@ function IzinGirisi() {
             <form onSubmit={handleSubmit} className="izin-form">
                 <h2>İzin Girişi</h2>
 
-                <label>Plaka - Treyler</label>
-                <select name="plaka_treyler" value={form.plaka_treyler} onChange={handlePlakaSecimi} required>
-                    <option value="">Seçin</option>
-                    {plakaListesi.map((p, idx) => (
-                        <option key={idx} value={`${p.plaka} - ${p.treyler}`}>{p.plaka} - {p.treyler}</option>
-                    ))}
-                </select>
+                    <label>Plaka - Treyler</label>
+                    <input
+                        list="plaka-treyler-listesi"
+                        name="plaka_treyler"
+                        value={form.plaka_treyler}
+                        onChange={handlePlakaSecimi}
+                        required
+                    />
+                    <datalist id="plaka-treyler-listesi">
+                        {plakaListesi.map((p, idx) => (
+                            <option key={idx} value={`${p.plaka} - ${p.treyler}`} />
+                        ))}
+                    </datalist>
 
                 <label>Sürücü Adı</label>
                 <input value={form.surucu_adi} readOnly />
@@ -504,18 +520,20 @@ function IzinGirisi() {
 
                             <div className="form-group">
                                 <label>Kesinti Türü</label>
-                                <select
-                                    value={kesintiBilgisi.tur}
-                                    onChange={(e) =>
-                                        setKesintiBilgisi((prev) => ({ ...prev, tur: e.target.value }))
-                                    }
-                                >
-                                    <option value="">Seçin</option>
-                                    <option value="Bakım">Bakım</option>
-                                    <option value="Servis">Servis</option>
-                                    <option value="Arıza">Arıza</option>
-                                    <option value="Kaza">Kaza</option>
-                                </select>
+                                    <select
+                                        value={kesintiBilgisi.tur}
+                                        onChange={(e) =>
+                                            setKesintiBilgisi((prev) => ({ ...prev, tur: e.target.value }))
+                                        }
+                                    >
+                                        <option value="">Seçin</option>
+                                        <option value="Bakım">Bakım</option>
+                                        <option value="Servis">Servis</option>
+                                        <option value="Arıza">Arıza</option>
+                                        <option value="Kaza">Kaza</option>
+                                        <option value="Bölgede İş Yok">Bölgede İş Yok</option>
+                                    </select>
+
                             </div>
 
                             <div className="form-group">

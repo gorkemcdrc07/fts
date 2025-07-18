@@ -1,4 +1,4 @@
-/* Sayfa ve pxnel yapı */
+/* Sayfa ve panel yapı */
 .planlama-sayfasi {
     padding: 32px;
     background: #f4f6f8;
@@ -67,68 +67,271 @@
 
 /* Tablo */
 .planlama-tablo {
-    table-layout: auto;
     width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
 }
 
-
-    /* Tablo başlığı */
-    .planlama-tablo thead th {
-        background-color: #1e293b;
-        color: white;
-        padding: 12px 10px;
-        text-align: center;
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        white-space: nowrap;
-        font-size: 17px; /* ⬅️ başlık font büyütüldü */
-    }
-
-    /* Tablo hücreleri */
+    .planlama-tablo th,
     .planlama-tablo td {
-        padding: 10px 8px;
-        font-size: 16px; /* ⬅️ hücre font büyütüldü */
-        border-bottom: 1px solid #e2e8f0;
+        padding: 12px 10px;
+        font-size: 15px;
+        border: 1px solid #e2e8f0;
         background-color: #fff;
         text-align: left;
         vertical-align: middle;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .planlama-tablo thead th {
+        background-color: #1e293b;
+        color: white;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        font-size: 16px;
+    }
+
+    /* Sütun genişlikleri (örnekler) */
+    .planlama-tablo th:nth-child(1),
+    .planlama-tablo td:nth-child(1) {
+        width: 100px;
+    }
+
+    .planlama-tablo th:nth-child(2),
+    .planlama-tablo td:nth-child(2) {
+        width: 120px;
+    }
+
+    .planlama-tablo th:nth-child(3),
+    .planlama-tablo td:nth-child(3) {
+        width: 100px;
+    }
+
+    .planlama-tablo th:nth-child(4),
+    .planlama-tablo td:nth-child(4) {
+        width: 140px;
+    }
+
+    .planlama-tablo th:nth-child(5),
+    .planlama-tablo td:nth-child(5) {
+        width: 160px;
+    }
+
+    .planlama-tablo th:nth-child(6),
+    .planlama-tablo td:nth-child(6) {
+        width: 150px;
+    }
+
+    .planlama-tablo th:nth-child(7),
+    .planlama-tablo td:nth-child(7) {
+        width: 140px;
+    }
+
+    .planlama-tablo th:nth-child(8),
+    .planlama-tablo td:nth-child(8) {
+        width: 130px;
+    }
+
+    .planlama-tablo th:nth-child(9),
+    .planlama-tablo td:nth-child(9) {
+        width: 150px;
+    }
+
+    .planlama-tablo th:nth-child(10),
+    .planlama-tablo td:nth-child(10) {
+        width: 180px;
+    }
+
+    .planlama-tablo th:nth-child(11),
+    .planlama-tablo td:nth-child(11) {
+        width: 180px;
+    }
+
+    .planlama-tablo th:nth-child(12),
+    .planlama-tablo td:nth-child(12) {
+        width: 180px;
+    }
+
+    .planlama-tablo th:nth-child(13),
+    .planlama-tablo td:nth-child(13) {
+        width: 150px;
+    }
+
+    .planlama-tablo th:nth-child(14),
+    .planlama-tablo td:nth-child(14) {
+        width: 100px;
+    }
+
+    .planlama-tablo th:nth-child(15),
+    .planlama-tablo td:nth-child(15) {
+        width: 300px;
+    }
+
+    .planlama-tablo th:nth-child(16),
+    .planlama-tablo td:nth-child(16) {
+        width: 150px;
+    }
+
+    /* Input alanları */
+    .planlama-tablo input {
+        width: 100%;
+        padding: 6px 8px;
+        font-size: 15px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        background-color: transparent;
+        transition: 0.2s ease;
+        font-family: inherit;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+        .planlama-tablo input:focus {
+            border-color: #2563eb;
+            background-color: #fff;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        }
+
+    .planlama-tablo td button {
+        background-color: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 14px;
+        font-weight: 500;
         cursor: pointer;
+        transition: all 0.25s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
-    /* Hücre içindeki inputlar */
-    .planlama-tablo input {
-        width: 100%;
-        padding: 8px 10px;
-        font-size: 30px; /* ⬅️ input font büyütüldü */
-        border: 1px solid transparent;
-        border-radius: 4px;
-        background-color: transparent;
-        transition: 0.2s ease;
-        font-family: inherit;
-    }
-
-        .planlama-tablo input:focus {
-            border-color: #2563eb;
-            background-color: #fff;
-            outline: none;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        .planlama-tablo td button:hover {
+            background-color: #2563eb;
+            transform: scale(1.05);
         }
-    .planlama-tablo input {
-        width: 100%;
-        padding: 5px 6px;
-        font-size: 20px;
-        border: 1px solid transparent;
-        border-radius: 4px;
-        background-color: transparent;
-        transition: 0.2s ease;
-        font-family: inherit;
+
+        .planlama-tablo td button:active {
+            transform: scale(0.97);
+            background-color: #1d4ed8;
+        }
+
+/* Kaydetme sırasında overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.spinner {
+    border: 6px solid #ddd;
+    border-top: 6px solid #333;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 10px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ✅ GÜNCELLE onay modali */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.modal-content {
+    background: white;
+    padding: 24px 32px;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    width: 90%;
+    max-width: 400px;
+}
+
+.modal-buttons {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+    .modal-buttons button {
+        flex: 1;
+        padding: 10px;
+        border: none;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.2s ease;
     }
 
-        .planlama-tablo input:focus {
-            border-color: #2563eb;
-            background-color: #fff;
-            outline: none;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        .modal-buttons button:first-child {
+            background-color: #2563eb;
+            color: white;
         }
+
+        .modal-buttons button:last-child {
+            background-color: #e5e7eb;
+            color: #1f2937;
+        }
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 999;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+    .modal-content input {
+        padding: 6px;
+        font-size: 14px;
+    }
+
+.modal-buttons {
+    display: flex;
+    justify-content: space-between;
+}
 

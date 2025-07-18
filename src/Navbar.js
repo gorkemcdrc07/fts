@@ -21,7 +21,6 @@ function Navbar() {
     };
 
     useEffect(() => {
-        // Burada body yerine html (documentElement) üzerine yazıyoruz
         document.documentElement.setAttribute("data-theme", tema);
     }, [tema]);
 
@@ -32,7 +31,9 @@ function Navbar() {
 
             {/* Kullanıcı bilgi alanı */}
             <div className="navbar-user">
-                👤 {kullanici?.toUpperCase()} ({rol?.toUpperCase()})
+                <span className="navbar-username">{kullanici?.toUpperCase()}</span>
+                <span className="navbar-separator">|</span>
+                <span className="navbar-role">{rol?.toUpperCase()}</span>
 
                 {/* Tema butonu */}
                 <div className="theme-toggle" onClick={temaDegistir}>

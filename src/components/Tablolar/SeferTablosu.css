@@ -1,11 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
 
+/* Genel tablo kapsayıcısı */
 .reel-table-container {
     width: 100%;
     max-height: 70vh;
     overflow-x: auto;
     overflow-y: auto;
-    background: #ffffff;
+    background: var(--background-color);
     border-radius: 12px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
     padding: 1rem;
@@ -13,6 +14,7 @@
     -webkit-overflow-scrolling: touch;
 }
 
+/* Tablo genel */
 .reel-table {
     width: max-content;
     min-width: 100%;
@@ -22,35 +24,39 @@
     font-size: 16px;
     line-height: 1.6;
 }
+
+    /* Başlıklar */
     .reel-table thead th {
         position: sticky;
         top: 0;
-        background-color: white;
+        background-color: var(--navbar-bg);
+        color: var(--navbar-text);
         z-index: 2;
     }
 
-
+/* Hücre ve başlık stili */
 .reel-th, .reel-td {
     padding: 16px 20px;
     text-align: left;
     vertical-align: middle;
-    background: #f9fafb;
+    background: var(--background-color);
+    color: var(--text-color);
     border-radius: 10px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--text-color);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition: background 0.25s ease, border-color 0.25s ease;
+    transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
 }
 
+/* Başlıklar için ekstra stil */
 .reel-th {
-    background: linear-gradient(to bottom, #f1f5f9, #e2e8f0);
-    color: #1e293b;
+    background: linear-gradient(to bottom, var(--sidebar-item-bg), var(--sidebar-item-hover));
     font-weight: 600;
     font-size: 17px;
     letter-spacing: 0.5px;
     text-transform: uppercase;
-    border-bottom: 2px solid #3b82f6;
+    border-bottom: 2px solid var(--sidebar-item-hover);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -59,41 +65,41 @@
 
 /* Zebra stil */
 .reel-tr:nth-child(even) .reel-td {
-    background: #f8fafc;
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .reel-tr:nth-child(odd) .reel-td {
-    background: #ffffff;
+    background: var(--background-color);
 }
 
-/* Hover */
+/* Hücre hover efekti */
 .reel-td:hover {
-    background: #e0f0ff;
-    border-color: #60a5fa;
+    background: rgba(96, 165, 250, 0.2);
+    border-color: var(--sidebar-item-hover);
 }
 
-/* Expand */
+/* Expand toggle hücresi */
 .expand-toggle-cell {
     cursor: pointer;
     text-align: center;
     font-weight: bold;
     font-size: 20px;
-    color: #3b82f6;
+    color: var(--sidebar-item-hover);
     user-select: none;
 }
 
-/* Scroll */
+/* Scrollbar stil */
 .reel-table-container::-webkit-scrollbar {
     height: 25px;
 }
 
 .reel-table-container::-webkit-scrollbar-thumb {
-    background-color: #3b82f6;
+    background-color: var(--sidebar-item-hover);
     border-radius: 6px;
-    border: 3px solid #ffffff;
+    border: 3px solid var(--background-color);
 }
 
-/* Responsive */
+/* Responsive ayarlar */
 @media (max-width: 900px) {
     .reel-th, .reel-td {
         font-size: 14px;
@@ -107,13 +113,13 @@
     }
 }
 
-/* 🔽 Sadece sağ kenardan sürüklenebilir */
+/* Sürükleme için kolon başlığı */
 .resizable-th {
     position: relative;
     min-width: 100px;
 }
 
-/* 🔽 İnce sürükleme alanı */
+/* Sürükleme alanı */
 .resize-handle {
     position: absolute;
     right: 0;
@@ -126,7 +132,48 @@
     background-color: transparent;
 }
 
-    /* 🔽 Hover görünürlüğü */
     .resize-handle:hover {
         background-color: rgba(0, 0, 0, 0.05);
     }
+
+/* Durum renkleri (tema uyumlu) */
+.durum-eslesme-yok {
+    background-color: var(--renk-eslesme-yok-bg);
+    color: var(--renk-eslesme-yok-text);
+}
+
+.durum-degisen {
+    background-color: var(--renk-degisen-bg);
+    color: var(--renk-degisen-text);
+}
+
+/* Tema renk değişkenleri (index.css veya benzeri) */
+:root[data-theme="dark"] {
+    --navbar-bg: #1f2937;
+    --navbar-text: white;
+    --sidebar-item-bg: #374151;
+    --sidebar-text: white;
+    --sidebar-item-hover: #4b5563;
+    --background-color: #121212;
+    --text-color: white;
+    /* Durum renkleri koyu tema için */
+    --renk-eslesme-yok-bg: #5a1a1a;
+    --renk-eslesme-yok-text: #ffb3b3;
+    --renk-degisen-bg: #1a5a1a;
+    --renk-degisen-text: #b3ffb3;
+}
+
+:root[data-theme="light"] {
+    --navbar-bg: #f3f4f6;
+    --navbar-text: #111827;
+    --sidebar-item-bg: #e5e7eb;
+    --sidebar-text: #111827;
+    --sidebar-item-hover: #d1d5db;
+    --background-color: white;
+    --text-color: black;
+    /* Durum renkleri açık tema için */
+    --renk-eslesme-yok-bg: #ffcccc;
+    --renk-eslesme-yok-text: #800000;
+    --renk-degisen-bg: #e6ffe6;
+    --renk-degisen-text: black;
+}

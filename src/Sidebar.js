@@ -1,16 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './Sidebar.css';
 
 function Sidebar() {
     const [acik, setAcik] = useState(true);
-    const [kullaniciMenuAcik, setKullaniciMenuAcik] = useState(true);
+    const [kullaniciMenuAcik, setKullaniciMenuAcik] = useState(false);
     const [raporMenuAcik, setRaporMenuAcik] = useState(false);
-    const navigate = useNavigate();
-    const location = useLocation();
     const [aracMenuAcik, setAracMenuAcik] = useState(false);
 
-
+    const navigate = useNavigate();
+    const location = useLocation();
 
     const kullaniciAltMenuler = [
         { ad: 'PLANLAMA', yol: '/planlama', ikon: '🗓️' },
@@ -19,14 +18,11 @@ function Sidebar() {
         { ad: 'TAMAMLANAN SEFERLER', yol: '/tamamlanan-seferler', ikon: '✅' },
     ];
 
-
-
     const aracAltMenuler = [
         { ad: 'Araç Yönetimi', yol: '/arac/yonetim', ikon: '🚗' },
         { ad: 'İzin Girişi', yol: '/arac/izin-girisi', ikon: '📅' },
         { ad: 'Kesinti Girişi', yol: '/arac/kesinti-girisi', ikon: '✂️' },
     ];
-
 
     const raporAltMenuler = [
         { ad: 'Kullanıcı KPI', yol: '/raporlar/kullanici-kpi', ikon: '📈' },
@@ -38,6 +34,10 @@ function Sidebar() {
         { ad: 'Sefer Süreleri', yol: '/raporlar/sefer-sureleri', ikon: '🚚' },
         { ad: 'Plaka Bazlı Raporlar', yol: '/raporlar/plaka-bazli', ikon: '🚛' },
     ];
+
+    useEffect(() => {
+        document.body.classList.toggle("sidebar-kapali", !acik);
+    }, [acik]);
 
     return (
         <div className={`sidebar ${acik ? 'acik' : 'kapali'}`}>
@@ -55,9 +55,13 @@ function Sidebar() {
                     {acik && <span>KULLANICI İŞLEMLERİ</span>}
                     {acik && <span className="arrow">{kullaniciMenuAcik ? '▾' : '▸'}</span>}
                 </div>
-                <div className={`sidebar-submenu ${kullaniciMenuAcik ? 'acik' : 'kapali'}`} style={{ maxHeight: kullaniciMenuAcik ? `${kullaniciAltMenuler.length * 48}px` : '0' }}>
+                <div
+                    key={`kullanici-${kullaniciMenuAcik ? 'open' : 'closed'}`}
+                    className={`sidebar-submenu ${kullaniciMenuAcik ? 'acik' : 'kapali'}`}
+                    style={{ maxHeight: kullaniciMenuAcik ? `${kullaniciAltMenuler.length * 48}px` : '0' }}
+                >
                     {kullaniciAltMenuler.map((m, i) => (
-                        <div key={i} className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`} onClick={() => navigate(m.yol)}>
+                        <div key={m.yol} className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`} onClick={() => navigate(m.yol)}>
                             <span className="ikon">{m.ikon}</span>
                             {acik && <span>{m.ad}</span>}
                         </div>
@@ -71,15 +75,12 @@ function Sidebar() {
                     {acik && <span className="arrow">{aracMenuAcik ? '▾' : '▸'}</span>}
                 </div>
                 <div
+                    key={`arac-${aracMenuAcik ? 'open' : 'closed'}`}
                     className={`sidebar-submenu ${aracMenuAcik ? 'acik' : 'kapali'}`}
                     style={{ maxHeight: aracMenuAcik ? `${aracAltMenuler.length * 48}px` : '0' }}
                 >
                     {aracAltMenuler.map((m, i) => (
-                        <div
-                            key={i}
-                            className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
-                            onClick={() => navigate(m.yol)}
-                        >
+                        <div key={m.yol} className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`} onClick={() => navigate(m.yol)}>
                             <span className="ikon">{m.ikon}</span>
                             {acik && <span>{m.ad}</span>}
                         </div>
@@ -92,9 +93,13 @@ function Sidebar() {
                     {acik && <span>RAPORLAR</span>}
                     {acik && <span className="arrow">{raporMenuAcik ? '▾' : '▸'}</span>}
                 </div>
-                <div className={`sidebar-submenu ${raporMenuAcik ? 'acik' : 'kapali'}`} style={{ maxHeight: raporMenuAcik ? `${raporAltMenuler.length * 48}px` : '0' }}>
+                <div
+                    key={`rapor-${raporMenuAcik ? 'open' : 'closed'}`}
+                    className={`sidebar-submenu ${raporMenuAcik ? 'acik' : 'kapali'}`}
+                    style={{ maxHeight: raporMenuAcik ? `${raporAltMenuler.length * 48}px` : '0' }}
+                >
                     {raporAltMenuler.map((m, i) => (
-                        <div key={i} className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`} onClick={() => navigate(m.yol)}>
+                        <div key={m.yol} className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`} onClick={() => navigate(m.yol)}>
                             <span className="ikon">{m.ikon}</span>
                             {acik && <span>{m.ad}</span>}
                         </div>

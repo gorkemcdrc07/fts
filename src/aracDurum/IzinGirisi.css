@@ -344,6 +344,337 @@ tr.eksik-yukleme td {
     .geri-buton:hover {
         background-color: #e0e0e0;
     }
+/* Açık mod renkleri */
+:root {
+    --bg-container: #f5f7fa;
+    --bg-form: #ffffff;
+    --bg-table-row-even: #fafbfc;
+    --bg-table-header: #f1f3f5;
+    --text-primary: #2c3e50;
+    --text-secondary: #34495e;
+    --text-table-header: #333;
+    --text-error: #c0392b;
+    --border-color: #ccd1d9;
+    --border-table: #e1e4e8;
+    --shadow-color: rgba(0, 0, 0, 0.06);
+    --button-primary-bg: linear-gradient(to right, #007bff, #3399ff);
+    --button-primary-bg-hover: linear-gradient(to right, #0056b3, #007bff);
+    --button-secondary-bg: #e0e0e0;
+    --button-secondary-bg-hover: #d1d1d1;
+    --button-danger-bg: #e74c3c;
+    --button-danger-bg-hover: #c0392b;
+    --modal-bg: #ffffff;
+    --tooltip-bg: #1f1f1f;
+    --tooltip-text-color: #fff;
+}
+
+    /* Koyu mod renkleri */
+    :root[data-theme="dark"] {
+        --bg-container: #121821;
+        --bg-form: #1e293b;
+        --bg-table-row-even: #273549;
+        --bg-table-header: #334155;
+        --text-primary: #e0e7ff;
+        --text-secondary: #94a3b8;
+        --text-table-header: #e0e7ff;
+        --text-error: #f87171;
+        --border-color: #475569;
+        --border-table: #475569;
+        --shadow-color: rgba(0, 0, 0, 0.9);
+        --button-primary-bg: linear-gradient(to right, #3b82f6, #2563eb);
+        --button-primary-bg-hover: linear-gradient(to right, #1d4ed8, #1e40af);
+        --button-secondary-bg: #475569;
+        --button-secondary-bg-hover: #64748b;
+        --button-danger-bg: #ef4444;
+        --button-danger-bg-hover: #b91c1c;
+        --modal-bg: #1e293b;
+        --tooltip-bg: #111827;
+        --tooltip-text-color: #e0e7ff;
+    }
+
+.izin-container {
+    display: flex;
+    flex-direction: row;
+    gap: 32px;
+    padding: 40px;
+    max-width: 100%;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    background-color: var(--bg-container);
+    box-sizing: border-box;
+}
+
+/* Form kutusu */
+.izin-form {
+    flex: 1;
+    background: var(--bg-form);
+    padding: 28px;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+    .izin-form h2 {
+        font-size: 22px;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .izin-form label {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+
+    .izin-form input,
+    .izin-form select,
+    .izin-form textarea {
+        padding: 10px 14px;
+        font-size: 14px;
+        border-radius: 10px;
+        border: 1px solid var(--border-color);
+        background-color: var(--bg-form);
+        color: var(--text-primary);
+        transition: all 0.2s ease;
+        box-sizing: border-box;
+    }
+
+        .izin-form input:focus,
+        .izin-form select:focus,
+        .izin-form textarea:focus {
+            outline: none;
+            border-color: #3b82f6; /* parlak mavi */
+            background-color: var(--bg-form);
+            color: var(--text-primary);
+        }
+
+    .izin-form button {
+        margin-top: 12px;
+        padding: 12px;
+        font-size: 16px;
+        font-weight: bold;
+        border-radius: 12px;
+        background: var(--button-primary-bg);
+        color: white;
+        border: none;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+        .izin-form button:hover {
+            background: var(--button-primary-bg-hover);
+        }
+
+/* Tablo kutusu */
+.izin-table-wrapper {
+    flex: 1.2;
+    background: var(--bg-form);
+    padding: 28px;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    overflow-x: auto;
+}
+
+    .izin-table-wrapper h3 {
+        margin-bottom: 20px;
+        font-size: 20px;
+        color: var(--text-primary);
+        text-align: center;
+    }
+
+/* Tablo */
+.izin-tablo {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: var(--bg-form);
+}
+
+    .izin-tablo th,
+    .izin-tablo td {
+        padding: 12px;
+        border: 1px solid var(--border-table);
+        text-align: center;
+        color: var(--text-primary);
+    }
+
+    .izin-tablo th {
+        background-color: var(--bg-table-header);
+        font-weight: 600;
+        color: var(--text-table-header);
+    }
+
+    .izin-tablo tr:nth-child(even) {
+        background-color: var(--bg-table-row-even);
+    }
+
+.eksik-yukleme {
+    background-color: #7f1d1d; /* koyu mod için koyu kırmızı */
+    color: var(--text-error);
+}
+
+.izin-tablo button {
+    padding: 6px 12px;
+    margin: 0 4px;
+    font-size: 13px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--text-primary);
+}
+
+    .izin-tablo button:hover {
+        background-color: #444b54; /* koyu hover */
+    }
+
+    .izin-tablo button:nth-child(1) {
+        background-color: var(--button-danger-bg);
+        color: var(--button-primary-bg-hover);
+    }
+
+        .izin-tablo button:nth-child(1):hover {
+            background-color: var(--button-danger-bg-hover);
+        }
+
+    .izin-tablo button:nth-child(2) {
+        background-color: var(--button-primary-bg);
+        color: var(--button-primary-bg-hover);
+    }
+
+        .izin-tablo button:nth-child(2):hover {
+            background-color: var(--button-primary-bg-hover);
+        }
+
+/* Responsive */
+@media (max-width: 900px) {
+    .izin-container {
+        flex-direction: column;
+        padding: 20px;
+    }
+
+    .izin-form,
+    .izin-table-wrapper {
+        width: 100%;
+    }
+}
+
+/* Modal arka plan */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+/* Modal panel */
+.modal-panel {
+    width: 500px;
+    max-width: 95%;
+    background: var(--modal-bg);
+    padding: 32px 28px;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    animation: fadeInUp 0.3s ease;
+    position: relative;
+}
+
+.modal-baslik {
+    font-size: 22px;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 10px;
+    color: var(--text-primary);
+}
+
+.modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+    .form-group label {
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 6px;
+        color: var(--text-secondary);
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        font-size: 14px;
+        background-color: var(--bg-form);
+        color: var(--text-primary);
+        transition: 0.2s ease;
+    }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background-color: var(--bg-form);
+            color: var(--text-primary);
+        }
+
+.panel-butons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+    .panel-butons button {
+        padding: 10px 16px;
+        border-radius: 10px;
+        border: none;
+        font-weight: 500;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+        color: var(--text-primary);
+    }
+
+        .panel-butons button:first-child {
+            background: var(--button-primary-bg);
+            color: var(--button-primary-bg-hover);
+        }
+
+            .panel-butons button:first-child:hover {
+                background: var(--button-primary-bg-hover);
+            }
+
+    .panel-butons .kapat-btn {
+        background-color: var(--button-secondary-bg);
+        color: var(--text-primary);
+    }
+
+        .panel-butons .kapat-btn:hover {
+            background-color: var(--button-secondary-bg-hover);
+        }
+
 
 
 

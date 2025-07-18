@@ -1,47 +1,45 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Login from './Login';
+import Layout from './Layout';
+
+
 
 // Sayfalar
-import Login from './Login';
 import Anasayfa from './Anasayfa';
-
-// Kullanıcı İşlemleri
 import ReelAtananSeferler from './views/ReelAtananSeferler';
 import Siparisler from './kullanıcıIslemleri/Siparisler';
 import Tamamlananlar from './kullanıcıIslemleri/Tamamlananlar';
 import PlakaOnerisi from './kullanıcıIslemleri/PlakaOnerisi';
-import Planlama from './kullanıcıIslemleri/Planlama'; // 👈 YENİ
+import Planlama from './kullanıcıIslemleri/Planlama';
 
 // Araç Durumları
 import AracYonetimi from './aracDurum/AracYonetimi';
 import IzinGirisi from './aracDurum/IzinGirisi';
 import KesintiGirisi from './aracDurum/KesintiGirisi';
 
-
 function App() {
     return (
         <Router>
             <Routes>
-                {/* Giriş */}
                 <Route path="/" element={<Login />} />
 
-                {/* Ana Sayfa */}
-                <Route path="/anasayfa" element={<Anasayfa />} />
-
-                {/* Kullanıcı İşlemleri */}
-                <Route path="/planlama" element={<Planlama />} /> {/* 👈 PLANLAMA ROUTE */}
-                <Route path="/plaka-onerisi" element={<PlakaOnerisi />} />
-                <Route path="/seferler" element={<ReelAtananSeferler />} />
-                <Route path="/siparisler" element={<Siparisler />} />
-                <Route path="/tamamlanan-seferler" element={<Tamamlananlar />} />
-
-                {/* Araç Durumları */}
-                <Route path="/arac/yonetim" element={<AracYonetimi />} />
-                <Route path="/arac/izin-girisi" element={<IzinGirisi />} />
-                <Route path="/arac/kesinti-girisi" element={<KesintiGirisi />} />
-
-                {/* Bilinmeyen rota */}
-                <Route path="*" element={<Navigate to="/anasayfa" replace />} />
+                <Route path="/*" element={
+                    <Layout>
+                        <Routes>
+                            <Route path="/anasayfa" element={<Anasayfa />} />
+                            <Route path="/planlama" element={<Planlama />} />
+                            <Route path="/plaka-onerisi" element={<PlakaOnerisi />} />
+                            <Route path="/seferler" element={<ReelAtananSeferler />} />
+                            <Route path="/siparisler" element={<Siparisler />} />
+                            <Route path="/tamamlanan-seferler" element={<Tamamlananlar />} />
+                            <Route path="/arac/yonetim" element={<AracYonetimi />} />
+                            <Route path="/arac/izin-girisi" element={<IzinGirisi />} />
+                            <Route path="/arac/kesinti-girisi" element={<KesintiGirisi />} />
+                            <Route path="*" element={<Navigate to="/anasayfa" replace />} />
+                        </Routes>
+                    </Layout>
+                } />
             </Routes>
         </Router>
     );

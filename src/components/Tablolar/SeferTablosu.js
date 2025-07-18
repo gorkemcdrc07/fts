@@ -126,25 +126,16 @@ function SeferTablosu({
                         .map((v) => {
                             const genisletildi = genisletilenSatirlar?.has?.(v.sefer_no);
 
+                            const durumSinifi =
+                                v.reel_durum === 'EŞLEŞME YOK'
+                                    ? 'durum-eslesme-yok'
+                                    : degisenSeferler?.has?.(v.sefer_no)
+                                        ? 'durum-degisen'
+                                        : '';
+
                             return (
                                 <React.Fragment key={v.sefer_no}>
-                                    <tr
-                                        className="reel-tr"
-                                        style={{
-                                            backgroundColor:
-                                                v.reel_durum === 'EŞLEŞME YOK'
-                                                    ? '#ffcccc'
-                                                    : degisenSeferler?.has?.(v.sefer_no)
-                                                        ? '#e6ffe6'
-                                                        : undefined,
-                                            color:
-                                                v.reel_durum === 'EŞLEŞME YOK'
-                                                    ? '#800000'
-                                                    : degisenSeferler?.has?.(v.sefer_no)
-                                                        ? 'black'
-                                                        : undefined,
-                                        }}
-                                    >
+                                    <tr className={`reel-tr ${durumSinifi}`}>
                                         <td
                                             className="expand-toggle-cell"
                                             onClick={() => satirTikla(v.sefer_no)}

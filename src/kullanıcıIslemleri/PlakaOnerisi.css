@@ -91,4 +91,142 @@
     .geri-buton:hover {
         background-color: #cbd5e1;
     }
+/* Temel değişkenler (light mode) */
+:root {
+    --bg-container: #f8f9fa;
+    --card-bg: #ffffff;
+    --card-shadow: rgba(0, 0, 0, 0.1);
+    --text-primary: #343a40;
+    --text-secondary: #6c757d;
+    --label-color: #495057;
+    --input-bg: #ffffff;
+    --input-border: #ced4da;
+    --input-focus-border: #007bff;
+    --button-bg: #007bff;
+    --button-bg-hover: #0056b3;
+    --button-color: #ffffff;
+    --btn-shadow: none;
+    --geri-btn-bg: #e2e8f0;
+    --geri-btn-bg-hover: #cbd5e1;
+    --geri-btn-color: #000000;
+}
+
+    /* Koyu mod renkleri */
+    :root[data-theme="dark"] {
+        --bg-container: #0f172a; /* koyu arkaplan */
+        --card-bg: #1e293b;
+        --card-shadow: rgba(0, 0, 0, 0.7);
+        --text-primary: #e0e7ff;
+        --text-secondary: #94a3b8;
+        --label-color: #cbd5e1;
+        --input-bg: #334155;
+        --input-border: #475569;
+        --input-focus-border: #3b82f6;
+        --button-bg: #2563eb;
+        --button-bg-hover: #1e40af;
+        --button-color: #e0e7ff;
+        --btn-shadow: 0 4px 8px rgba(37, 99, 235, 0.4);
+        --geri-btn-bg: #475569;
+        --geri-btn-bg-hover: #334155;
+        --geri-btn-color: #e0e7ff;
+    }
+
+.plaka-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 20px;
+    min-height: 100vh;
+    background-color: var(--bg-container);
+}
+
+.plaka-card {
+    background: var(--card-bg);
+    padding: 40px;
+    border-radius: 14px;
+    box-shadow: 0 10px 25px var(--card-shadow);
+    width: 100%;
+    max-width: 420px;
+}
+
+.plaka-title {
+    font-size: 26px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: var(--text-primary);
+}
+
+.plaka-desc {
+    font-size: 15px;
+    color: var(--text-secondary);
+    margin-bottom: 25px;
+}
+
+.plaka-input-group {
+    margin-bottom: 18px;
+    display: flex;
+    flex-direction: column;
+}
+
+    .plaka-input-group label {
+        font-weight: 600;
+        margin-bottom: 5px;
+        color: var(--label-color);
+    }
+
+    .plaka-input-group input {
+        padding: 10px;
+        font-size: 15px;
+        border: 1px solid var(--input-border);
+        border-radius: 8px;
+        outline: none;
+        transition: border-color 0.2s;
+        background-color: var(--input-bg);
+        color: var(--text-primary);
+    }
+
+        .plaka-input-group input:focus {
+            border-color: var(--input-focus-border);
+        }
+
+.plaka-button {
+    background-color: var(--button-bg);
+    color: var(--button-color);
+    font-size: 16px;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    width: 100%;
+    transition: background-color 0.3s;
+    box-shadow: var(--btn-shadow);
+}
+
+    .plaka-button:hover {
+        background-color: var(--button-bg-hover);
+    }
+
+.geri-buton-container {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+}
+
+.geri-buton {
+    background-color: var(--geri-btn-bg);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    color: var(--geri-btn-color);
+}
+
+    .geri-buton:hover {
+        background-color: var(--geri-btn-bg-hover);
+    }
+
 

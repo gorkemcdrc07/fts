@@ -1,20 +1,18 @@
-﻿.navbar {
+/* Navbar stilleri */
+.navbar {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     height: 50px;
-    background-color: #1f2937;
-    color: white;
+    background-color: var(--navbar-bg);
+    color: var(--navbar-text);
     z-index: 1000;
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 0 20px;
-}
-
-.navbar-title {
-    font-weight: bold;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .navbar-user {
@@ -24,6 +22,7 @@
     font-size: 14px;
 }
 
+/* Çıkış butonu */
 .logout-btn {
     background-color: transparent;
     color: #f87171;
@@ -32,10 +31,88 @@
     border-radius: 6px;
     cursor: pointer;
     font-size: 13px;
-    transition: 0.2s;
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
     .logout-btn:hover {
         background-color: #f87171;
         color: white;
     }
+
+/* Tema butonu */
+.theme-toggle {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: var(--sidebar-item-bg);
+    color: var(--sidebar-text);
+    transition: transform 0.3s ease, background-color 0.3s ease, color 0.3s ease;
+}
+
+    .theme-toggle:hover {
+        background-color: var(--sidebar-item-hover);
+        transform: rotate(20deg);
+    }
+
+.icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+/* Tema renk değişkenleri ve genel sayfa renkleri */
+:root[data-theme="dark"] {
+    --navbar-bg: #1f2937;
+    --navbar-text: white;
+    --sidebar-item-bg: #374151;
+    --sidebar-text: white;
+    --sidebar-item-hover: #4b5563;
+    --background-color: #121212;
+    --text-color: white;
+}
+
+:root[data-theme="light"] {
+    --navbar-bg: #f3f4f6;
+    --navbar-text: #111827;
+    --sidebar-item-bg: #e5e7eb;
+    --sidebar-text: #111827;
+    --sidebar-item-hover: #d1d5db;
+    --background-color: white;
+    --text-color: black;
+}
+
+/* Body ve genel metinler temaya göre renk alsın */
+body {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    margin: 0;
+    font-family: Arial, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Genel metinlerde temaya göre renk */
+p, h1, h2, h3, a, span, div {
+    color: var(--text-color);
+}
+
+/* Tablo ve hücrelerde de temaya göre renk */
+table, th, td {
+    color: var(--text-color);
+    border: 1px solid var(--text-color);
+    transition: color 0.3s ease;
+}
+
+table {
+    border-collapse: collapse;
+    background-color: transparent;
+}
+
+th, td {
+    padding: 6px 8px;
+}

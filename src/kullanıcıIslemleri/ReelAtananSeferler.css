@@ -7,6 +7,7 @@
     padding-top: 55px; /* Geri buton için boşluk bırakır */
 }
 
+
 /* 🔍 Filtre Alanı */
 .reel-filters {
     display: grid;
@@ -543,6 +544,30 @@
     .geri-buton:hover {
         background-color: #e2e8f0;
     }
+:root[data-theme="dark"] .advanced-filters {
+    background-color: var(--advanced-filter-bg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.9);
+}
+
+    :root[data-theme="dark"] .advanced-filters label {
+        color: var(--advanced-filter-label-color);
+    }
+
+    :root[data-theme="dark"] .advanced-filters input,
+    :root[data-theme="dark"] .advanced-filters select {
+        background-color: var(--advanced-filter-input-bg);
+        border: 1px solid var(--advanced-filter-input-border);
+        color: var(--advanced-filter-input-text);
+    }
+
+        :root[data-theme="dark"] .advanced-filters input:focus,
+        :root[data-theme="dark"] .advanced-filters select:focus {
+            border-color: #3b82f6; /* parlak mavi */
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+            outline: none;
+        }
+
+
 
 
 

@@ -159,3 +159,118 @@
         max-width: 100%;
     }
 }
+:root[data-theme="dark"] {
+    --bg-container: #121821;
+    --bg-form: #1e293b;
+    --bg-table: #273549;
+    --bg-table-header: #334155;
+    --text-primary: #e0e7ff;
+    --text-secondary: #94a3b8;
+    --border-color: #475569;
+    --button-primary-bg: #3b82f6;
+    --button-primary-bg-hover: #2563eb;
+    --button-danger-bg: #ef4444;
+    --button-danger-bg-hover: #b91c1c;
+    --button-success-bg: #22c55e;
+    --button-success-bg-hover: #15803d;
+}
+
+    :root[data-theme="dark"] .kesinti-container {
+        background: var(--bg-container);
+    }
+
+    :root[data-theme="dark"] .kesinti-form {
+        background: var(--bg-form);
+        color: var(--text-primary);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+    }
+
+        :root[data-theme="dark"] .kesinti-form h2 {
+            color: var(--text-primary);
+        }
+
+        :root[data-theme="dark"] .kesinti-form label {
+            color: var(--text-secondary);
+        }
+
+        :root[data-theme="dark"] .kesinti-form input,
+        :root[data-theme="dark"] .kesinti-form select,
+        :root[data-theme="dark"] .kesinti-form textarea {
+            background-color: var(--bg-form);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+            :root[data-theme="dark"] .kesinti-form input:focus,
+            :root[data-theme="dark"] .kesinti-form select:focus,
+            :root[data-theme="dark"] .kesinti-form textarea:focus {
+                border-color: var(--button-primary-bg);
+                background-color: var(--bg-form);
+                color: var(--text-primary);
+            }
+
+        :root[data-theme="dark"] .kesinti-form button {
+            background-color: var(--button-primary-bg);
+            color: white;
+        }
+
+            :root[data-theme="dark"] .kesinti-form button:hover {
+                background-color: var(--button-primary-bg-hover);
+            }
+
+    :root[data-theme="dark"] .kesinti-tablo-wrapper {
+        background: var(--bg-form);
+        border: 1px solid var(--border-color);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+    }
+
+        :root[data-theme="dark"] .kesinti-tablo-wrapper h3 {
+            color: var(--text-primary);
+        }
+
+    :root[data-theme="dark"] .kesinti-tablo {
+        background: var(--bg-table);
+        color: var(--text-primary);
+    }
+
+        :root[data-theme="dark"] .kesinti-tablo th {
+            background-color: var(--bg-table-header);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+
+        :root[data-theme="dark"] .kesinti-tablo td {
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        :root[data-theme="dark"] .kesinti-tablo button {
+            background-color: var(--button-danger-bg);
+            color: white;
+        }
+
+            :root[data-theme="dark"] .kesinti-tablo button:hover {
+                background-color: var(--button-danger-bg-hover);
+            }
+
+    :root[data-theme="dark"] .excel-btn-wrapper {
+        text-align: right;
+    }
+
+    :root[data-theme="dark"] .excel-btn {
+        background-color: var(--button-success-bg);
+        color: white;
+    }
+
+        :root[data-theme="dark"] .excel-btn:hover {
+            background-color: var(--button-success-bg-hover);
+        }
+
+    :root[data-theme="dark"] .geri-btn {
+        color: var(--button-primary-bg);
+    }
+
+        :root[data-theme="dark"] .geri-btn:hover {
+            color: var(--button-primary-bg-hover);
+        }
+

@@ -190,3 +190,248 @@
             width: 100%;
         }
 }
+/* Açık mod renk değişkenleri */
+:root {
+    --bg-wrapper: #f4f7fa;
+    --text-primary: #2c3e50;
+    --bg-panel: #ffffff;
+    --panel-shadow: rgba(0, 0, 0, 0.06);
+    --input-bg: #f8fafc;
+    --input-border: #d0d7de;
+    --input-focus-border: #3498db;
+    --btn-filtrele-bg: #3498db;
+    --btn-filtrele-bg-hover: #2471a3;
+    --btn-temizle-bg: #e74c3c;
+    --btn-temizle-bg-hover: #c0392b;
+    --btn-excel-bg: #27ae60;
+    --btn-excel-bg-hover: #1e8449;
+    --btn-color: white;
+    --table-bg: #fff;
+    --table-shadow: rgba(0, 0, 0, 0.08);
+    --table-header-bg: #2980b9;
+    --table-header-color: white;
+    --table-row-hover-bg: #f1f9ff;
+    --table-row-text: #2f3640;
+    --table-row-border: #ecf0f1;
+    --subtable-bg: #fbfbfb;
+    --subtable-border: #dfe6e9;
+    --subtable-shadow: rgba(0, 0, 0, 0.05);
+    --subtable-header-bg: #ecf0f1;
+    --subtable-header-color: #2c3e50;
+    --subtable-row-border: #eaeaea;
+}
+
+    /* Koyu mod renkleri */
+    :root[data-theme="dark"] {
+        --bg-wrapper: #121821;
+        --text-primary: #d1d5db;
+        --bg-panel: #1e293b;
+        --panel-shadow: rgba(0, 0, 0, 0.9);
+        --input-bg: #334155;
+        --input-border: #475569;
+        --input-focus-border: #3b82f6;
+        --btn-filtrele-bg: #2563eb;
+        --btn-filtrele-bg-hover: #1e40af;
+        --btn-temizle-bg: #dc2626;
+        --btn-temizle-bg-hover: #991b1b;
+        --btn-excel-bg: #16a34a;
+        --btn-excel-bg-hover: #14532d;
+        --btn-color: #e0e7ff;
+        --table-bg: #1e293b;
+        --table-shadow: rgba(0, 0, 0, 0.9);
+        --table-header-bg: #2563eb;
+        --table-header-color: #e0e7ff;
+        --table-row-hover-bg: #334155;
+        --table-row-text: #cbd5e1;
+        --table-row-border: #475569;
+        --subtable-bg: #334155;
+        --subtable-border: #475569;
+        --subtable-shadow: rgba(0, 0, 0, 0.8);
+        --subtable-header-bg: #475569;
+        --subtable-header-color: #e0e7ff;
+        --subtable-row-border: #64748b;
+    }
+
+.tamamlananlar-wrapper {
+    padding: 32px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-wrapper);
+    color: var(--text-primary);
+}
+
+    .tamamlananlar-wrapper h2 {
+        font-size: 1.8rem;
+        margin-bottom: 12px;
+        color: var(--text-primary);
+    }
+
+.filtre-panel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+    background-color: var(--bg-panel);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px var(--panel-shadow);
+    align-items: end;
+}
+
+    .filtre-panel input[type="text"],
+    .filtre-panel input[type="date"] {
+        padding: 10px 14px;
+        border: 1px solid var(--input-border);
+        border-radius: 8px;
+        font-size: 0.95rem;
+        background-color: var(--input-bg);
+        color: var(--text-primary);
+        transition: border-color 0.2s;
+    }
+
+    .filtre-panel input:focus {
+        outline: none;
+        border-color: var(--input-focus-border);
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    .filtre-panel button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background-color 0.2s ease, transform 0.1s ease;
+        color: var(--btn-color);
+    }
+
+    .filtre-panel .filtrele-btn {
+        background-color: var(--btn-filtrele-bg);
+    }
+
+        .filtre-panel .filtrele-btn:hover {
+            background-color: var(--btn-filtrele-bg-hover);
+        }
+
+    .filtre-panel .temizle-btn {
+        background-color: var(--btn-temizle-bg);
+    }
+
+        .filtre-panel .temizle-btn:hover {
+            background-color: var(--btn-temizle-bg-hover);
+        }
+
+    .filtre-panel .excel-btn {
+        background-color: var(--btn-excel-bg);
+    }
+
+        .filtre-panel .excel-btn:hover {
+            background-color: var(--btn-excel-bg-hover);
+        }
+
+    .filtre-panel button:active {
+        transform: scale(0.98);
+    }
+
+.tamamlananlar-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px var(--table-shadow);
+    background-color: var(--table-bg);
+    margin-top: 20px;
+}
+
+    .tamamlananlar-table th {
+        background-color: var(--table-header-bg);
+        color: var(--table-header-color);
+        text-align: left;
+        padding: 10px 14px;
+        font-size: 0.85rem;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .tamamlananlar-table td {
+        padding: 10px 14px;
+        font-size: 0.85rem;
+        color: var(--table-row-text);
+        border-bottom: 1px solid var(--table-row-border);
+    }
+
+    .tamamlananlar-table tr:hover {
+        background-color: var(--table-row-hover-bg);
+        transition: background-color 0.3s ease;
+    }
+
+    .tamamlananlar-table button {
+        background-color: var(--btn-filtrele-bg);
+        border: none;
+        color: var(--btn-color);
+        font-weight: bold;
+        padding: 4px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+        .tamamlananlar-table button:hover {
+            background-color: var(--btn-filtrele-bg-hover);
+        }
+
+.detaylar-subtable {
+    width: 100%;
+    background-color: var(--subtable-bg);
+    border-radius: 10px;
+    border: 1px solid var(--subtable-border);
+    margin-top: 10px;
+    box-shadow: inset 0 0 6px var(--subtable-shadow);
+}
+
+    .detaylar-subtable th {
+        background-color: var(--subtable-header-bg);
+        font-size: 0.8rem;
+        color: var(--subtable-header-color);
+        padding: 6px 10px;
+    }
+
+    .detaylar-subtable td {
+        font-size: 0.8rem;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--subtable-row-border);
+    }
+
+/* Responsive uyum */
+@media screen and (max-width: 768px) {
+    .tamamlananlar-table,
+    .detaylar-subtable {
+        font-size: 0.75rem;
+    }
+
+    .tamamlananlar-wrapper {
+        padding: 16px;
+    }
+
+    .tamamlananlar-table th,
+    .tamamlananlar-table td,
+    .detaylar-subtable th,
+    .detaylar-subtable td {
+        padding: 8px;
+    }
+
+    .filtre-panel {
+        grid-template-columns: 1fr;
+    }
+
+        .filtre-panel input,
+        .filtre-panel button {
+            width: 100%;
+        }
+}
+

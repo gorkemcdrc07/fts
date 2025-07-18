@@ -1,0 +1,10 @@
+.main-content {
+    margin-left: 240px;
+    margin-top: 50px;
+    padding: 24px;
+    transition: margin-left 0.3s ease;
+}
+
+body.sidebar-kapali .main-content {
+    margin-left: 60px;
+}

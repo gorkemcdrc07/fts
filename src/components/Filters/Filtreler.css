@@ -255,3 +255,106 @@
             grid-column: span 1;
         }
 }
+/* --- Koyu Mod Değişkenleri --- */
+:root {
+    --bg-filter-panel: #ffffff;
+    --color-filter-label: #495057;
+    --bg-filter-input: #fff;
+    --color-filter-input-text: #212529;
+    --border-filter-input: #ced4da;
+    --btn-clear-bg: #e53e3e;
+    --btn-clear-bg-hover: #c53030;
+    --btn-clear-color: #fff;
+    --btn-shadow: rgba(0, 0, 0, 0.08);
+    --box-shadow-filter: rgba(0, 0, 0, 0.04);
+    --box-shadow-advanced: rgba(0, 0, 0, 0.07);
+}
+
+    :root[data-theme="dark"] {
+        --bg-filter-panel: #1f2937; /* koyu gri-mavi */
+        --color-filter-label: #cbd5e1; /* açık gri-mavi */
+        --bg-filter-input: #334155; /* koyu input arkaplan */
+        --color-filter-input-text: #e0e7ff; /* açık yazı */
+        --border-filter-input: #475569; /* koyu border */
+        --btn-clear-bg: #ef4444;
+        --btn-clear-bg-hover: #b91c1c;
+        --btn-clear-color: #fff;
+        --btn-shadow: rgba(0, 0, 0, 0.5);
+        --box-shadow-filter: rgba(0, 0, 0, 0.9);
+        --box-shadow-advanced: rgba(0, 0, 0, 0.9);
+    }
+
+/* --- Filtre Paneli (Temel) --- */
+.reel-filters {
+    background-color: var(--bg-filter-panel);
+    box-shadow: 0 4px 16px var(--box-shadow-filter);
+}
+
+    .reel-filters label {
+        color: var(--color-filter-label);
+    }
+
+    .reel-filters input,
+    .reel-filters select {
+        background-color: var(--bg-filter-input);
+        color: var(--color-filter-input-text);
+        border: 1px solid var(--border-filter-input);
+        box-shadow: none;
+    }
+
+        .reel-filters input:focus,
+        .reel-filters select:focus {
+            border-color: #3b82f6; /* parlak mavi */
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+            outline: none;
+        }
+
+/* --- Gelişmiş Filtreler --- */
+.advanced-filters {
+    background-color: var(--bg-filter-panel);
+    box-shadow: 0 4px 20px var(--box-shadow-advanced);
+}
+
+    .advanced-filters label {
+        color: var(--color-filter-label);
+    }
+
+    .advanced-filters input,
+    .advanced-filters select {
+        background-color: var(--bg-filter-input);
+        color: var(--color-filter-input-text);
+        border: 1.5px solid var(--border-filter-input);
+        box-shadow: none;
+    }
+
+        .advanced-filters input:focus,
+        .advanced-filters select:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+            outline: none;
+        }
+
+/* --- Temizle Butonu --- */
+.btn-clear {
+    background-color: var(--btn-clear-bg);
+    color: var(--btn-clear-color);
+    box-shadow: 0 4px 10px var(--btn-shadow);
+}
+
+    .btn-clear:hover {
+        background-color: var(--btn-clear-bg-hover);
+        color: var(--btn-clear-color);
+    }
+
+/* React-Select custom styling (örnek) */
+.Select__control {
+    background-color: var(--bg-filter-input) !important;
+    color: var(--color-filter-input-text) !important;
+    border-color: var(--border-filter-input) !important;
+    box-shadow: none !important;
+}
+
+    .Select__control:hover {
+        border-color: #3b82f6 !important;
+    }
+

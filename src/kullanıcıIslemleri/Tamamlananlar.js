@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import './Tamamlananlar.css';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { Helmet } from 'react-helmet-async';
 
 const Tamamlananlar = () => {
     const [seferler, setSeferler] = useState([]);
@@ -239,6 +240,9 @@ const Tamamlananlar = () => {
 
     return (
         <div className="tamamlananlar-wrapper">
+            <Helmet>
+                <title>TAMAMLANAN SEFERLER</title>
+            </Helmet>
             {/* 🔍 Filtre Paneli */}
             <div className="filtre-panel">
                 <input

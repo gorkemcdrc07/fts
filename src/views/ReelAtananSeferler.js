@@ -12,6 +12,8 @@ import DetaySatirlari from '../components/Tablolar/DetaySatirlari';
 
 import { hucreAyir } from '../utils/veriYardimcilari';
 import { veriListele } from '../utils/supabaseYardimcilar';
+import { Helmet } from 'react-helmet-async';
+
 
 const senkronizeEt = async (
   setVeriler,
@@ -562,6 +564,9 @@ const ReelAtananSeferler = () => {
 
     return (
         <div className="reel-wrapper">
+            <Helmet>
+                <title>AKTİF SEFERLER</title>
+            </Helmet>
             <button className="geri-buton" onClick={() => navigate(-1)}>
                 ← Geri
             </button>

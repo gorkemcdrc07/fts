@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import './KesintiGirisi.css';
 import * as XLSX from 'xlsx'; // En üste ekle
+import { Helmet } from 'react-helmet-async';
+
 
 const BOS_FORM = {
     plaka_treyler: '',
@@ -148,6 +150,9 @@ function KesintiGirisi() {
 
     return (
         <div className="kesinti-container">
+            <Helmet>
+                <title>KESİNTİ GİRİŞLERİ</title>
+            </Helmet>
             <div className="geri-btn-kapsayici">
                 <button className="geri-btn" onClick={() => window.history.back()}>← Geri</button>
             </div>

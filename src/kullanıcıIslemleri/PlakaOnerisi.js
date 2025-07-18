@@ -3,6 +3,7 @@ import axios from 'axios';
 import HaritaPopupMulti from '../components/HaritaPopupMulti';
 import './PlakaOnerisi.css'; // CSS dosyası aşağıda
 import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 
 
 function PlakaOnerisi() {
@@ -105,6 +106,12 @@ function PlakaOnerisi() {
 
     return (
         <div className="plaka-container">
+
+            <Helmet>
+                <title>PLAKA ÖNERİSİ</title>
+            </Helmet>
+
+
             {/* Geri Butonu - Sol Üst */}
             <div className="geri-buton-container">
                 <button className="geri-buton" onClick={() => navigate(-1)}>

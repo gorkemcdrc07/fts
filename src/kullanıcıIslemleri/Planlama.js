@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import './Planlama.css';
+import { Helmet } from 'react-helmet-async';
+
 
 function Planlama() {
     const [veriler, setVeriler] = useState([]);
@@ -422,7 +424,11 @@ function Planlama() {
 
 
     return (
+
         <div className="planlama-sayfasi">
+            <Helmet>
+                <title>PLANLAMA</title>
+            </Helmet>
             <div className="butonlar">
                 <button onClick={handleKaydet}>KAYDET</button>
                 <button onClick={handleGuncelleClick}>GÜNCELLE</button>

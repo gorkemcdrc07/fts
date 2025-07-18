@@ -4,6 +4,8 @@ import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { Helmet } from 'react-helmet-async';
+
 
 
 
@@ -321,7 +323,11 @@ function IzinGirisi() {
 
 
 
-        <div className="izin-container">
+            <div className="izin-container">
+                <Helmet>
+                    <title>İZİN GİRİŞLERİ</title>
+                </Helmet>
+
             <form onSubmit={handleSubmit} className="izin-form">
                 <h2>İzin Girişi</h2>
 

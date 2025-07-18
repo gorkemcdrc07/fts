@@ -4,6 +4,8 @@ import './AracYonetimi.css';
 import { supabase } from '../supabaseClient';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { Helmet } from 'react-helmet-async';
+
 
 const BOS_FORM = {
     plaka: '',
@@ -275,6 +277,9 @@ function AracYonetimi() {
 
     return (
         <div className="arac-yonetim-container">
+            <Helmet>
+                <title>ARAÇ YÖNETİMİ</title>
+            </Helmet>
             <h2>Araç Yönetimi</h2>
 
             <div className="istatistikler">

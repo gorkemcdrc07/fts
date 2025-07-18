@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import './Sidebar.css';
 
 function Sidebar() {
@@ -8,7 +8,6 @@ function Sidebar() {
     const [raporMenuAcik, setRaporMenuAcik] = useState(false);
     const [aracMenuAcik, setAracMenuAcik] = useState(false);
 
-    const navigate = useNavigate();
     const location = useLocation();
 
     const kullaniciAltMenuler = [
@@ -39,6 +38,12 @@ function Sidebar() {
         document.body.classList.toggle("sidebar-kapali", !acik);
     }, [acik]);
 
+    // Yeni sekmede açmak için fonksiyon
+    const openInNewTab = (path) => {
+        const baseUrl = window.location.origin;
+        window.open(baseUrl + path, '_blank', 'noopener,noreferrer');
+    };
+
     return (
         <div className={`sidebar ${acik ? 'acik' : 'kapali'}`}>
             <div className="sidebar-header">
@@ -60,8 +65,12 @@ function Sidebar() {
                     className={`sidebar-submenu ${kullaniciMenuAcik ? 'acik' : 'kapali'}`}
                     style={{ maxHeight: kullaniciMenuAcik ? `${kullaniciAltMenuler.length * 48}px` : '0' }}
                 >
-                    {kullaniciAltMenuler.map((m, i) => (
-                        <div key={m.yol} className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`} onClick={() => navigate(m.yol)}>
+                    {kullaniciAltMenuler.map((m) => (
+                        <div
+                            key={m.yol}
+                            className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
+                            onClick={() => openInNewTab(m.yol)}
+                        >
                             <span className="ikon">{m.ikon}</span>
                             {acik && <span>{m.ad}</span>}
                         </div>
@@ -79,8 +88,12 @@ function Sidebar() {
                     className={`sidebar-submenu ${aracMenuAcik ? 'acik' : 'kapali'}`}
                     style={{ maxHeight: aracMenuAcik ? `${aracAltMenuler.length * 48}px` : '0' }}
                 >
-                    {aracAltMenuler.map((m, i) => (
-                        <div key={m.yol} className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`} onClick={() => navigate(m.yol)}>
+                    {aracAltMenuler.map((m) => (
+                        <div
+                            key={m.yol}
+                            className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
+                            onClick={() => openInNewTab(m.yol)}
+                        >
                             <span className="ikon">{m.ikon}</span>
                             {acik && <span>{m.ad}</span>}
                         </div>
@@ -98,8 +111,12 @@ function Sidebar() {
                     className={`sidebar-submenu ${raporMenuAcik ? 'acik' : 'kapali'}`}
                     style={{ maxHeight: raporMenuAcik ? `${raporAltMenuler.length * 48}px` : '0' }}
                 >
-                    {raporAltMenuler.map((m, i) => (
-                        <div key={m.yol} className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`} onClick={() => navigate(m.yol)}>
+                    {raporAltMenuler.map((m) => (
+                        <div
+                            key={m.yol}
+                            className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
+                            onClick={() => openInNewTab(m.yol)}
+                        >
                             <span className="ikon">{m.ikon}</span>
                             {acik && <span>{m.ad}</span>}
                         </div>

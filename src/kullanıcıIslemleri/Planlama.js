@@ -136,7 +136,7 @@ function Planlama() {
 
         if (!error) {
             const enriched = (data || []).map((v, index) => {
-                const il = (v.son_nokta || v.tahliye_il || '').toLocaleUpperCase('tr-TR').trim();
+                const il = (v.son_nokta || '').toLocaleUpperCase('tr-TR').trim();
                 const bolge = ilToBolgeMap[il] || v.bolge || ''; // 🔥 BURASI DEĞİŞTİ
                 const tarih = v.tarih || getToday();
                 const id = v.sefer_no || `tmp-${Date.now()}-${index}`;
@@ -295,7 +295,7 @@ function Planlama() {
             if (!veri.tarih) veri.tarih = today;
             if (!veri.varis_tarihi) veri.varis_tarihi = today;
 
-            const ilHam = veri.son_nokta || veri.tahliye_il || '';
+            const ilHam = veri.son_nokta || '';
             const il = ilHam.trim().toLocaleUpperCase('tr-TR');
             veri.bolge = ilToBolgeMap[il] || veri.bolge || null;
 

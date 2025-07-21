@@ -85,9 +85,9 @@ function SeferTablosu({
                         const { toplam, bos, sfr } = sayacBilgisi(filtrelenmisVeriler);
                         return (
                             <div className="sayac-icerik">
-                                🔢 Toplam: {toplam} satır |
-                                <span style={{ marginLeft: '12px' }}>🅱 BOS: {bos}</span> |
-                                <span style={{ marginLeft: '12px' }}>🆔 SFR: {sfr}</span>
+                                🔢 TOPLAM SEFER: {toplam} |
+                                <span style={{ marginLeft: '12px' }}>🅱 BOŞ SEFER: {bos}</span> |
+                                <span style={{ marginLeft: '12px' }}>🆔 DOLU SEFER: {sfr}</span>
                             </div>
                         );
                     })()}

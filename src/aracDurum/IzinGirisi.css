@@ -9,6 +9,27 @@
     background-color: #f5f7fa;
     box-sizing: border-box;
 }
+.geri-ve-ekle-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.izin-ekle-buton {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+    .izin-ekle-buton:hover {
+        background-color: #0056b3;
+    }
+
 
 /* Form kutusu */
 .izin-form {
@@ -80,7 +101,7 @@
     box-shadow: 0 4px 12px var(--shadow-color);
     overflow-x: auto;
     /* ✅ Yeni eklenenler */
-    max-height: 1200px; /* Uzunluğu sınırlıyoruz */
+    max-height: 1160px; /* Uzunluğu sınırlıyoruz */
     overflow-y: auto; /* Dikey scroll aktif */
 }
 
@@ -399,7 +420,7 @@ tr.eksik-yukleme td {
     display: flex;
     flex-direction: row;
     gap: 32px;
-    padding: 40px;
+    padding: 30px;
     max-width: 100%;
     font-family: 'Inter', 'Segoe UI', sans-serif;
     background-color: var(--bg-container);
@@ -410,12 +431,13 @@ tr.eksik-yukleme td {
 .izin-form {
     flex: 1;
     background: var(--bg-form);
-    padding: 28px;
+    padding: 18px;
     border-radius: 16px;
     box-shadow: 0 4px 12px var(--shadow-color);
     display: flex;
     flex-direction: column;
     gap: 16px;
+
 }
 
     .izin-form h2 {

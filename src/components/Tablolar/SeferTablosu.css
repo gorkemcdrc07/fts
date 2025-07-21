@@ -3,16 +3,34 @@
 /* Genel tablo kapsayıcısı */
 .reel-table-container {
     width: 100%;
+    max-width: 2700px;
+    margin: 0 auto;
     max-height: 70vh;
-    overflow-x: auto;
-    overflow-y: auto;
+    overflow: auto;
     background: var(--background-color);
     border-radius: 12px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
-    padding: 1rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
     font-family: 'Inter', sans-serif;
     -webkit-overflow-scrolling: touch;
 }
+.sayac-ustte {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background-color: #1e1e1e; /* Karanlık temaya uygun */
+    padding: 6px 12px;
+    border-bottom: 1px solid #444;
+}
+
+/* 🧷 Tablo başlığı da yapışkan olmalı */
+.reel-table thead tr {
+    position: sticky;
+    top: 38px; /* .sayac-ustte'nin yüksekliğine göre ayarla */
+    z-index: 10;
+    background-color: #121212; /* Arka planla kontrast */
+}
+
 
 /* Tablo genel */
 .reel-table {

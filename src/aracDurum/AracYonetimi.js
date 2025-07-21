@@ -31,6 +31,8 @@ const BOS_FORM = {
     odak_k1: '',
 };
 
+
+
 const getMevcutKullanici = () => localStorage.getItem('kullanici') || 'Bilinmeyen Kullanıcı';
 
 const tespitEtDegisenAlanlar = (eski, yeni) => {
@@ -61,6 +63,52 @@ function AracYonetimi() {
     const [bilgiArac, setBilgiArac] = useState(null);
     const [izinBilgisi, setIzinBilgisi] = useState(null);
     const [kesintiBilgisi, setKesintiBilgisi] = useState(null);
+    const [sutunFiltreleri, setSutunFiltreleri] = useState({
+        plaka: '',
+        treyler: '',
+        surucu_adi: '',
+        surucu_telefon: '',
+        surucu_tc: '',
+        ikamet_adresi: '',
+        cekici_ruhsat_no: '',
+        dorse_ruhsat_no: '',
+        tedarikci_isim: '',
+        cekici_muayene: '',
+        dorse_muayene: '',
+        trafik_sigorta: '',
+        arac_yil: '',
+        dorse_yil: '',
+        bolge: '',
+        arac_tip: '',
+        dorse_tip: '',
+        liftmaster: '',
+        gps_seri_no: '',
+        gps_sim_kart_no: '',
+        odak_k1: '',
+    });
+
+    useEffect(() => {
+        let filtrelenmis = tumAraclar;
+
+        if (filtre === 'aktif') {
+            filtrelenmis = filtrelenmis.filter(a => a.statu !== 'ÇIKARILDI');
+        } else if (filtre === 'pasif') {
+            filtrelenmis = filtrelenmis.filter(a => a.statu === 'ÇIKARILDI');
+        }
+
+        // Sütun bazlı filtreleme
+        filtrelenmis = filtrelenmis.filter((arac) =>
+            Object.entries(sutunFiltreleri).every(([key, value]) => {
+                if (!value) return true;
+                const hucre = arac[key]?.toString().toLowerCase() || '';
+                return hucre.includes(value.toLowerCase());
+            })
+        );
+
+        setAraclar(filtrelenmis);
+    }, [filtre, tumAraclar, sutunFiltreleri]);
+
+
 
 
 
@@ -474,6 +522,67 @@ function AracYonetimi() {
                     </div>
                 </div>
             )}
+            <div className="filtre-panel">
+                {Object.entries(sutunFiltreleri).map(([key, value]) => {
+                    const benzersizDegerler = [
+                        ...new Set(
+                            tumAraclar
+                                .map((item) => item[key])
+                                .filter((val) => val !== null && val !== undefined && val !== '')
+                        ),
+                    ];
+
+                    return (
+                        <div key={key} style={{ display: 'flex', flexDirection: 'column' }}>
+                            <input
+                                list={`${key}-liste`}
+                                placeholder={key.replace(/_/g, ' ').toUpperCase()}
+                                value={value}
+                                onChange={(e) =>
+                                    setSutunFiltreleri((prev) => ({
+                                        ...prev,
+                                        [key]: e.target.value,
+                                    }))
+                                }
+                                style={{
+                                    padding: '8px',
+                                    backgroundColor: '#1e1e2f',
+                                    color: '#ffffff',
+                                    border: '1px solid #444',
+                                    borderRadius: '6px',
+                                    fontSize: '14px',
+                                }}
+                            />
+                            <datalist id={`${key}-liste`}>
+                                {benzersizDegerler.map((val, i) => (
+                                    <option key={i} value={val} />
+                                ))}
+                            </datalist>
+                        </div>
+                    );
+                })}
+
+                <button
+                    style={{
+                        backgroundColor: '#dc3545',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '5px',
+                        padding: '8px 12px',
+                        marginTop: '4px',
+                        cursor: 'pointer',
+                        gridColumn: 'span 2',
+                    }}
+                    onClick={() =>
+                        setSutunFiltreleri(
+                            Object.fromEntries(Object.keys(sutunFiltreleri).map((key) => [key, '']))
+                        )
+                    }
+                >
+                    Filtreleri Temizle
+                </button>
+            </div>
+
 
             <div className="tablo-kapsayici">
                 <table className="arac-tablo">

@@ -44,7 +44,7 @@ function Navbar() {
 
                 {/* Çıkış */}
                 <button className="logout-btn" onClick={cikisYap}>
-                    🚪 Çıkış
+                    🚪 ÇIKIŞ
                 </button>
             </div>
         </div>

@@ -406,6 +406,12 @@
         padding: 6px 10px;
         border-bottom: 1px solid var(--subtable-row-border);
     }
+.tamamlananlar-table-wrapper {
+    max-height: 78vh;
+    overflow-y: auto;
+}
+
+
 
 /* Responsive uyum */
 @media screen and (max-width: 768px) {

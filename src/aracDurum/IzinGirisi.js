@@ -47,6 +47,8 @@ function IzinGirisi() {
     const [kesintiBilgisi, setKesintiBilgisi] = useState({ neden: '', tur: '' });
     const [formSubmitBekliyor, setFormSubmitBekliyor] = useState(false);
     const navigate = useNavigate(); // ⬅️ EKLE
+    const [formGorunur, setFormGorunur] = useState(false); // 👈 Form görünürlük kontrolü
+
 
 
 
@@ -315,65 +317,107 @@ function IzinGirisi() {
 
 
     return (
-
         <>
             <div className="geri-buton-kapsayici">
                 <button onClick={() => navigate(-1)} className="geri-buton">← Geri</button>
             </div>
-
-
 
             <div className="izin-container">
                 <Helmet>
                     <title>İZİN GİRİŞLERİ</title>
                 </Helmet>
 
-            <form onSubmit={handleSubmit} className="izin-form">
-                <h2>İzin Girişi</h2>
+                {!formGorunur && (
+                    <div style={{ marginBottom: "16px" }}>
+                        <button
+                            type="button"
+                            onClick={() => setFormGorunur(true)}
+                            style={{
+                                backgroundColor: "#007bff",
+                                color: "white",
+                                padding: "10px 16px",
+                                border: "none",
+                                borderRadius: "8px",
+                                fontWeight: "bold",
+                                cursor: "pointer"
+                            }}
+                        >
+                            + İzin Girişi Yap
+                        </button>
+                    </div>
+                )}
 
-                    <label>Plaka - Treyler</label>
-                    <input
-                        list="plaka-treyler-listesi"
-                        name="plaka_treyler"
-                        value={form.plaka_treyler}
-                        onChange={handlePlakaSecimi}
-                        required
-                    />
-                    <datalist id="plaka-treyler-listesi">
-                        {plakaListesi.map((p, idx) => (
-                            <option key={idx} value={`${p.plaka} - ${p.treyler}`} />
-                        ))}
-                    </datalist>
+                {formGorunur && (
+                    <form onSubmit={handleSubmit} className="izin-form">
+                        <h2>İzin Girişi</h2>
 
-                <label>Sürücü Adı</label>
-                <input value={form.surucu_adi} readOnly />
-                <label>Sürücü Telefon</label>
-                <input value={form.surucu_telefon} readOnly />
-                <label>Sürücü TC</label>
-                <input value={form.surucu_tc} readOnly />
+                        <label>Plaka - Treyler</label>
+                        <input
+                            list="plaka-treyler-listesi"
+                            name="plaka_treyler"
+                            value={form.plaka_treyler}
+                            onChange={handlePlakaSecimi}
+                            required
+                        />
+                        <datalist id="plaka-treyler-listesi">
+                            {plakaListesi.map((p, idx) => (
+                                <option key={idx} value={`${p.plaka} - ${p.treyler}`} />
+                            ))}
+                        </datalist>
 
-                <label>İzin Türü</label>
-                <select name="izin_turu" value={form.izin_turu} onChange={handleChange} required>
-                    <option value="">Seçin</option>
-                    <option value="İzin">İzin</option>
-                    <option value="Bakım İzni">Bakım İzni</option>
-                    <option value="Mazeret İzni">Mazeret İzni</option>
-                </select>
+                        <label>Sürücü Adı</label>
+                        <input value={form.surucu_adi} readOnly />
+                        <label>Sürücü Telefon</label>
+                        <input value={form.surucu_telefon} readOnly />
+                        <label>Sürücü TC</label>
+                        <input value={form.surucu_tc} readOnly />
 
-                <label>Başlangıç</label>
-                <input type="date" name="baslangic_tarihi" value={form.baslangic_tarihi} onChange={handleChange} required />
-                <label>Bitiş</label>
-                <input type="date" name="bitis_tarihi" value={form.bitis_tarihi} onChange={handleChange} required />
-                <label>İş Başı</label>
-                <input type="date" name="is_basi_tarihi" value={form.is_basi_tarihi} onChange={handleChange} />
-                <label>Yükleme</label>
-                <input type="date" name="yukleme_tarihi" value={form.yukleme_tarihi} onChange={handleChange} />
-                <label>Gün Sayısı</label>
-                <input value={form.gun_sayisi || ''} readOnly />
-                <label>Açıklama</label>
-                <textarea name="aciklama" value={form.aciklama} onChange={handleChange} />
-                <button type="submit">Kaydet</button>
-            </form>
+                        <label>İzin Türü</label>
+                        <select name="izin_turu" value={form.izin_turu} onChange={handleChange} required>
+                            <option value="">Seçin</option>
+                            <option value="İzin">İzin</option>
+                            <option value="Bakım İzni">Bakım İzni</option>
+                            <option value="Mazeret İzni">Mazeret İzni</option>
+                        </select>
+
+                        <label>Başlangıç</label>
+                        <input type="date" name="baslangic_tarihi" value={form.baslangic_tarihi} onChange={handleChange} required />
+                        <label>Bitiş</label>
+                        <input type="date" name="bitis_tarihi" value={form.bitis_tarihi} onChange={handleChange} required />
+                        <label>İş Başı</label>
+                        <input type="date" name="is_basi_tarihi" value={form.is_basi_tarihi} onChange={handleChange} />
+                        <label>Yükleme</label>
+                        <input type="date" name="yukleme_tarihi" value={form.yukleme_tarihi} onChange={handleChange} />
+                        <label>Gün Sayısı</label>
+                        <input value={form.gun_sayisi || ''} readOnly />
+                        <label>Açıklama</label>
+                        <textarea name="aciklama" value={form.aciklama} onChange={handleChange} />
+
+                        <div style={{ display: "flex", gap: "10px" }}>
+                            <button type="submit">Kaydet</button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setFormGorunur(false);
+                                    setForm(BOS_FORM);
+                                    setDuzenlemeId(null);
+                                }}
+                                style={{
+                                    backgroundColor: "#6c757d",
+                                    color: "white",
+                                    padding: "10px 16px",
+                                    border: "none",
+                                    borderRadius: "8px",
+                                    fontWeight: "bold",
+                                    cursor: "pointer"
+                                }}
+                            >
+                                Vazgeç
+                            </button>
+                        </div>
+                    </form>
+                )}
+
 
             <div className="izin-table-wrapper">
                     <h3>Mevcut İzinler</h3>

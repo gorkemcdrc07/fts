@@ -15,6 +15,7 @@ const BOS_FORM = {
     aciklama: '',
 };
 
+
 const getMevcutKullanici = () => localStorage.getItem('kullanici') || 'Bilinmeyen Kullanıcı';
 
 const hesaplaGun = (start, end) => {
@@ -30,6 +31,7 @@ function KesintiGirisi() {
     const [form, setForm] = useState(BOS_FORM);
     const [kesintiler, setKesintiler] = useState([]);
     const [plakalar, setPlakalar] = useState([]);
+    const [formGorunur, setFormGorunur] = useState(false); // ✅ BURASI EKLENDİ
 
     useEffect(() => {
         verileriGetir();
@@ -153,54 +155,81 @@ function KesintiGirisi() {
             <Helmet>
                 <title>KESİNTİ GİRİŞLERİ</title>
             </Helmet>
-            <div className="geri-btn-kapsayici">
+
+            {/* ÜSTTE: Geri ve + Kesinti Ekle Butonu */}
+            <div className="sayfa-ust-butonlar">
                 <button className="geri-btn" onClick={() => window.history.back()}>← Geri</button>
+
+                {!formGorunur && (
+                    <button
+                        type="button"
+                        className="ekle-btn"
+                        onClick={() => setFormGorunur(true)}
+                    >
+                        + Kesinti Girişi Yap
+                    </button>
+                )}
             </div>
 
-            <form onSubmit={handleSubmit} className="kesinti-form">
-                <h2>Kesinti Girişi</h2>
+            {/* FORM PANELİ */}
+            {formGorunur && (
+                <form onSubmit={handleSubmit} className="kesinti-form">
+                    <h2>Kesinti Girişi</h2>
 
-                <label>Plaka - Treyler</label>
-                <select name="plaka_treyler" value={form.plaka_treyler} onChange={handleChange} required>
-                    <option value="">Plaka Seçin</option>
-                    {plakalar.map((p, idx) => (
-                        <option key={idx} value={`${p.plaka} - ${p.treyler}`}>{p.plaka} - {p.treyler}</option>
-                    ))}
-                </select>
+                    <label>Plaka - Treyler</label>
+                    <select name="plaka_treyler" value={form.plaka_treyler} onChange={handleChange} required>
+                        <option value="">Plaka Seçin</option>
+                        {plakalar.map((p, idx) => (
+                            <option key={idx} value={`${p.plaka} - ${p.treyler}`}>{p.plaka} - {p.treyler}</option>
+                        ))}
+                    </select>
 
-                <label>Kesinti Türü</label>
-                <select name="kesinti_turu" value={form.kesinti_turu} onChange={handleChange} required>
-                    <option value="">Tür Seçin</option>
-                    <option value="Bakım">Bakım</option>
-                    <option value="Servis">Servis</option>
-                    <option value="Arıza">Arıza</option>
-                    <option value="Kaza">Kaza</option>
-                    <option value="Bölgede İş Yok">Bölgede İş Yok</option>
+                    <label>Kesinti Türü</label>
+                    <select name="kesinti_turu" value={form.kesinti_turu} onChange={handleChange} required>
+                        <option value="">Tür Seçin</option>
+                        <option value="Bakım">Bakım</option>
+                        <option value="Servis">Servis</option>
+                        <option value="Arıza">Arıza</option>
+                        <option value="Kaza">Kaza</option>
+                        <option value="Bölgede İş Yok">Bölgede İş Yok</option>
+                    </select>
 
-                </select>
+                    <label>Kesinti Nedeni</label>
+                    <select name="neden" value={form.neden} onChange={handleChange} required>
+                        <option value="">Neden Seçin</option>
+                        <option value="Tedarikçi Kaynaklı">Tedarikçi Kaynaklı</option>
+                        <option value="Odak Kaynaklı">Odak Kaynaklı</option>
+                    </select>
 
-                <label>Kesinti Nedeni</label>
-                <select name="neden" value={form.neden} onChange={handleChange} required>
-                    <option value="">Neden Seçin</option>
-                    <option value="Tedarikçi Kaynaklı">Tedarikçi Kaynaklı</option>
-                    <option value="Odak Kaynaklı">Odak Kaynaklı</option>
-                </select>
+                    <label>Başlangıç Tarihi</label>
+                    <input type="date" name="baslangic_tarihi" value={form.baslangic_tarihi} onChange={handleChange} required />
 
-                <label>Başlangıç Tarihi</label>
-                <input type="date" name="baslangic_tarihi" value={form.baslangic_tarihi} onChange={handleChange} required />
+                    <label>Bitiş Tarihi</label>
+                    <input type="date" name="bitis_tarihi" value={form.bitis_tarihi} onChange={handleChange} required />
 
-                <label>Bitiş Tarihi</label>
-                <input type="date" name="bitis_tarihi" value={form.bitis_tarihi} onChange={handleChange} required />
+                    <label>Toplam Gün</label>
+                    <input value={form.gun_sayisi} readOnly placeholder="Gün sayısı" />
 
-                <label>Toplam Gün</label>
-                <input value={form.gun_sayisi} readOnly placeholder="Gün sayısı" />
+                    <label>Açıklama</label>
+                    <textarea name="aciklama" value={form.aciklama} onChange={handleChange} />
 
-                <label>Açıklama</label>
-                <textarea name="aciklama" value={form.aciklama} onChange={handleChange} />
+                    <div className="form-butons">
+                        <button type="submit">Kaydet</button>
+                        <button
+                            type="button"
+                            className="vazgec-btn"
+                            onClick={() => {
+                                setFormGorunur(false);
+                                setForm(BOS_FORM);
+                            }}
+                        >
+                            Vazgeç
+                        </button>
+                    </div>
+                </form>
+            )}
 
-                <button type="submit">Kaydet</button>
-            </form>
-
+            {/* TABLO HER ZAMAN GÖRÜNÜR */}
             <div className="kesinti-tablo-wrapper">
                 <div className="excel-btn-wrapper">
                     <button className="excel-btn" onClick={handleExportExcel}>Excel'e Aktar</button>
@@ -243,9 +272,9 @@ function KesintiGirisi() {
                     </tbody>
                 </table>
             </div>
-
         </div>
     );
+
 }
 
 export default KesintiGirisi;

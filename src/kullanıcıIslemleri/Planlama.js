@@ -22,6 +22,57 @@ function Planlama() {
         telefon: '',
         tc: ''
     });
+    const [columns, setColumns] = useState([
+        'sefer_no', 'sevk_no', 'tarih', 'plaka', 'ad_soyad', 'telefon', 'tc',
+        'varis_tarihi', 'son_nokta', 'fatura_musterisi',
+        'yukleme_noktasi', 'tahliye_noktasi', 'tahliye_il',
+        'tonaj', 'bir_onceki_is', 'bolge'
+    ]);
+
+    const handleDragStart = (e, index) => {
+        e.dataTransfer.setData('dragIndex', index);
+    };
+
+    const handleDrop = (e, dropIndex) => {
+        e.preventDefault();
+        const dragIndex = e.dataTransfer.getData('dragIndex');
+        if (dragIndex === dropIndex) return;
+
+        const newCols = [...columns];
+        const [dragged] = newCols.splice(dragIndex, 1);
+        newCols.splice(dropIndex, 0, dragged);
+        setColumns(newCols);
+    };
+
+    const allowDrop = (e) => e.preventDefault();
+
+    const gorunumuKaydet = async () => {
+        const kullaniciId = parseInt(localStorage.getItem('kullaniciId'));
+        if (!kullaniciId) {
+            alert('❌ Kullanıcı bulunamadı!');
+            return;
+        }
+
+        const { error } = await supabase
+            .from('kullanici_planlama_gorunumleri')  // Tablo adınız bu mu, kontrol edin
+            .upsert(
+                {
+                    kullanici_id: kullaniciId,
+                    sayfa: 'planlama',
+                    gorunum: columns,
+                },
+                { onConflict: ['kullanici_id', 'sayfa'] }
+            );
+
+        if (error) {
+            console.error('Kaydetme hatası:', error);
+            alert('❌ Kaydetme hatası oluştu.');
+        } else {
+            alert('✅ Görünüm kaydedildi.');
+        }
+    };
+
+
 
 
 
@@ -424,7 +475,6 @@ function Planlama() {
 
 
     return (
-
         <div className="planlama-sayfasi">
             <Helmet>
                 <title>PLANLAMA</title>
@@ -432,6 +482,9 @@ function Planlama() {
             <div className="butonlar">
                 <button onClick={handleKaydet}>KAYDET</button>
                 <button onClick={handleGuncelleClick}>GÜNCELLE</button>
+                <button onClick={gorunumuKaydet} style={{ marginLeft: 8 }}>
+                    Görünümü Kaydet
+                </button>
             </div>
 
             <div className="filtre-alani">
@@ -442,12 +495,18 @@ function Planlama() {
                     onChange={(e) => setPlakaFilter(e.target.value)}
                 />
                 <datalist id="plaka-listesi">
-                    {plakalar.map((p, i) => <option key={i} value={p} />)}
+                    {plakalar.map((p, i) => (
+                        <option key={i} value={p} />
+                    ))}
                 </datalist>
 
                 <select value={bolgeFilter} onChange={(e) => setBolgeFilter(e.target.value)}>
                     <option value="">Tüm Bölgeler</option>
-                    {bolgeler.map((b, i) => <option key={i} value={b}>{b}</option>)}
+                    {bolgeler.map((b, i) => (
+                        <option key={i} value={b}>
+                            {b}
+                        </option>
+                    ))}
                 </select>
             </div>
 
@@ -455,17 +514,30 @@ function Planlama() {
                 <table className="planlama-tablo">
                     <thead>
                         <tr>
-                            {alanlar.map((a, i) => <th key={i}>{a.replace(/_/g, ' ').toUpperCase()}</th>)}
+                            {columns.map((col, i) => (
+                                <th
+                                    key={col}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, i)}
+                                    onDragOver={allowDrop}
+                                    onDrop={(e) => handleDrop(e, i)}
+                                    style={{ cursor: 'move' }}
+                                >
+                                    {col.replace(/_/g, ' ').toUpperCase()}
+                                </th>
+                            ))}
                             <th>İŞLEM</th>
                         </tr>
                     </thead>
                     <tbody>
                         {filteredVeriler.length === 0 ? (
-                            <tr><td colSpan={alanlar.length + 1}>Kayıt bulunamadı.</td></tr>
+                            <tr>
+                                <td colSpan={columns.length + 1}>Kayıt bulunamadı.</td>
+                            </tr>
                         ) : (
                             filteredVeriler.map((v, rowIndex) => (
                                 <tr key={rowIndex}>
-                                    {alanlar.map(field => renderCell(v, rowIndex, field))}
+                                    {columns.map((field) => renderCell(v, rowIndex, field))}
                                     <td>
                                         <button
                                             onClick={() =>
@@ -476,11 +548,13 @@ function Planlama() {
                                         >
                                             {duzenlemeModuSatirId === v._rowId ? '✔️ Bitir' : '✏️ Düzenle'}
                                         </button>
-                                        <button onClick={() => handleSil(v._rowId)} style={{ marginLeft: 6, color: 'red' }}>
+                                        <button
+                                            onClick={() => handleSil(v._rowId)}
+                                            style={{ marginLeft: 6, color: 'red' }}
+                                        >
                                             🗑️ Sil
                                         </button>
                                     </td>
-
                                 </tr>
                             ))
                         )}
@@ -495,6 +569,7 @@ function Planlama() {
                     <p>Kaydediliyor...</p>
                 </div>
             )}
+
             {showPlakaModal && (
                 <div className="modal-overlay">
                     <div className="modal-content">
@@ -530,7 +605,6 @@ function Planlama() {
                     </div>
                 </div>
             )}
-
 
             {/* ✅ GÜNCELLE onay modali */}
             {showGuncelleModal && (

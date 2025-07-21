@@ -16,6 +16,71 @@ const Tamamlananlar = () => {
         bitis: '',
     });
     const [filtreliSeferler, setFiltreliSeferler] = useState([]);
+    const [columns, setColumns] = useState([
+        { key: 'sefer_no', label: 'Sefer No' },
+        { key: 'plaka', label: 'Plaka' },
+        { key: 'treyler', label: 'Treyler' },
+        { key: 'surucu_ad_soyad', label: 'Şoför' },
+        { key: 'surucu_tckn', label: 'TCKN' },
+        { key: 'surucu_telefon', label: 'Tel' },
+        { key: 'musteri_adi', label: 'Müşteri' },
+        { key: 'musteri_siparis_no', label: 'Sipariş No' },
+        { key: 'hizmet_adi', label: 'Hizmet' },
+        { key: 'proje_adi', label: 'Proje' },
+        { key: 'yukleme_noktasi', label: 'Yükleme Noktası' },
+        { key: 'il_ilce', label: 'İl/İlçe' },
+        { key: 'teslim_noktasi', label: 'Teslim Noktası' },
+        { key: 'teslim_il_ilce', label: 'İl/İlçe' },
+        { key: 'irsaliye_no', label: 'İrsaliye' },
+        { key: 'atama_yapan_kullanici', label: 'Atayan' },
+        { key: 'atama_tarihi', label: 'Atama Tarihi' },
+        { key: 'sefer_tarihi', label: 'Sefer Tarihi' },
+        { key: 'arac_statu', label: 'Durum' },
+    ]);
+    const GORUNUM_SAYFA_ADI = 'tamamlananlar';
+
+    useEffect(() => {
+        const kullaniciId = parseInt(localStorage.getItem('kullaniciId'));
+        if (!kullaniciId) return;
+
+        supabase
+            .from('kullanici_tamamlanan_gorunumleri')  // BURADA TABLO ADINI DEĞİŞTİR
+            .select('gorunum')
+            .eq('kullanici_id', kullaniciId)
+            .eq('sayfa', GORUNUM_SAYFA_ADI)
+            .single()
+            .then(({ data }) => {
+                if (data?.gorunum) {
+                    setColumns(data.gorunum);
+                }
+            });
+    }, []);
+    const gorunumuKaydet = async () => {
+        const kullaniciId = parseInt(localStorage.getItem('kullaniciId'));
+        if (!kullaniciId) return alert('❌ Kullanıcı bulunamadı!');
+
+        const { error } = await supabase
+            .from('kullanici_tamamlanan_gorunumleri')  // BURADA TABLO ADINI DEĞİŞTİR
+            .upsert(
+                {
+                    kullanici_id: kullaniciId,
+                    sayfa: GORUNUM_SAYFA_ADI,
+                    gorunum: columns,
+                },
+                {
+                    onConflict: ['kullanici_id', 'sayfa'],
+                }
+            );
+
+        if (error) {
+            console.error('Kaydetme hatası:', error);
+            alert('❌ Kaydetme hatası oluştu.');
+        } else {
+            alert('✅ Görünüm kaydedildi.');
+        }
+    };
+
+
 
     useEffect(() => {
         const fetchData = async () => {
@@ -238,6 +303,23 @@ const Tamamlananlar = () => {
         return `${gun}.${ay}.${yil} ${saat}:${dakika}`;
     };
 
+    const handleDragStart = (e, index) => {
+        e.dataTransfer.setData('dragIndex', index);
+    };
+
+    const handleDrop = (e, dropIndex) => {
+        const dragIndex = e.dataTransfer.getData('dragIndex');
+        if (dragIndex === dropIndex) return;
+
+        const newCols = [...columns];
+        const [dragged] = newCols.splice(dragIndex, 1);
+        newCols.splice(dropIndex, 0, dragged);
+        setColumns(newCols);
+    };
+
+    const allowDrop = (e) => e.preventDefault();
+
+
     return (
         <div className="tamamlananlar-wrapper">
             <Helmet>
@@ -268,36 +350,39 @@ const Tamamlananlar = () => {
                     onChange={(e) => setFiltre({ ...filtre, plaka: e.target.value })}
                 />
                 <button className="filtrele-btn" onClick={handleFiltrele}>Filtrele</button>
+                <button
+                    onClick={gorunumuKaydet}
+                    style={{ marginLeft: 8, backgroundColor: 'red', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                    Görünümü Kaydet
+                </button>
+
+
                 <button className="temizle-btn" onClick={handleTemizle}>Temizle</button>
                 <button className="excel-btn" onClick={handleExcelExport}>Excel'e Aktar</button>
             </div>
 
             {/* 📋 Tablolar */}
+            <div className="tamamlananlar-table-wrapper">
             <table className="tamamlananlar-table">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th>Sefer No</th>
-                        <th>Plaka</th>
-                        <th>Treyler</th>
-                        <th>Şoför</th>
-                        <th>TCKN</th>
-                        <th>Tel</th>
-                        <th>Müşteri</th>
-                        <th>Sipariş No</th>
-                        <th>Hizmet</th>
-                        <th>Proje</th>
-                        <th>Yükleme Noktası</th>
-                        <th>İl/İlçe</th>
-                        <th>Teslim Noktası</th>
-                        <th>İl/İlçe</th>
-                        <th>İrsaliye</th>
-                        <th>Atayan</th>
-                        <th>Atama Tarihi</th>
-                        <th>Sefer Tarihi</th>
-                        <th>Durum</th>
-                    </tr>
-                </thead>
+                    <thead>
+                        <tr>
+                            <th></th>
+                            {columns.map((col, index) => (
+                                <th
+                                    key={col.key}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, index)}
+                                    onDragOver={allowDrop}
+                                    onDrop={(e) => handleDrop(e, index)}
+                                    style={{ cursor: 'move' }}
+                                >
+                                    {col.label}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+
                 <tbody>
                     {filtreliSeferler.map((sefer) => (
                         <React.Fragment key={sefer.sefer_no}>
@@ -307,25 +392,25 @@ const Tamamlananlar = () => {
                                         {expanded[sefer.sefer_no] ? '−' : '+'}
                                     </button>
                                 </td>
-                                <td>{sefer.sefer_no}</td>
-                                <td>{sefer.plaka}</td>
-                                <td>{sefer.treyler}</td>
-                                <td>{sefer.surucu_ad_soyad}</td>
-                                <td>{sefer.surucu_tckn}</td>
-                                <td>{sefer.surucu_telefon}</td>
-                                <td>{sefer.musteri_adi}</td>
-                                <td>{sefer.musteri_siparis_no}</td>
-                                <td>{sefer.hizmet_adi}</td>
-                                <td>{sefer.proje_adi}</td>
-                                <td>{sefer.yukleme_noktasi}</td>
-                                <td>{sefer.yukleme_ili} / {sefer.yukleme_ilcesi}</td>
-                                <td>{sefer.teslim_noktasi}</td>
-                                <td>{sefer.teslim_ili} / {sefer.teslim_ilcesi}</td>
-                                <td>{sefer.irsaliye_no}</td>
-                                <td>{sefer.atama_yapan_kullanici}</td>
-                                <td>{new Date(sefer.atama_tarihi).toLocaleString()}</td>
-                                <td>{new Date(sefer.sefer_tarihi).toLocaleDateString()}</td>
-                                <td>{sefer.arac_statu}</td>
+                                {columns.map((col) => {
+                                    let value = sefer[col.key];
+
+                                    if (col.key === 'il_ilce') {
+                                        value = `${sefer.yukleme_ili} / ${sefer.yukleme_ilcesi}`;
+                                    }
+                                    if (col.key === 'teslim_il_ilce') {
+                                        value = `${sefer.teslim_ili} / ${sefer.teslim_ilcesi}`;
+                                    }
+                                    if (col.key === 'atama_tarihi') {
+                                        value = new Date(sefer.atama_tarihi).toLocaleString();
+                                    }
+                                    if (col.key === 'sefer_tarihi') {
+                                        value = new Date(sefer.sefer_tarihi).toLocaleDateString();
+                                    }
+
+                                    return <td key={col.key}>{value}</td>;
+                                })}
+
                             </tr>
                             {expanded[sefer.sefer_no] && (
                                 <tr>
@@ -373,6 +458,7 @@ const Tamamlananlar = () => {
                     ))}
                 </tbody>
             </table>
+            </div>
         </div>
     );
 };

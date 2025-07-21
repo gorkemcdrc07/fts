@@ -74,11 +74,14 @@
 /* Tablo kutusu */
 .izin-table-wrapper {
     flex: 1.2;
-    background: #ffffff;
+    background: var(--bg-form);
     padding: 28px;
     border-radius: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 4px 12px var(--shadow-color);
     overflow-x: auto;
+    /* ✅ Yeni eklenenler */
+    max-height: 1200px; /* Uzunluğu sınırlıyoruz */
+    overflow-y: auto; /* Dikey scroll aktif */
 }
 
     .izin-table-wrapper h3 {

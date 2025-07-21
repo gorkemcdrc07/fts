@@ -1,54 +1,54 @@
-require('dotenv').config(); // dotenv'i en üstte yükle
+require('dotenv').config(); // .env dosyasını en üstte yükle
 const express = require('express');
 const fetch = require('node-fetch');
 const cors = require('cors');
-const path = require('path');  // Burayı ekliyoruz
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
 
+// CORS için izin verilen kaynaklar
 const allowedOrigins = [
     'https://fts-psi.vercel.app',
     'https://fts-git-main-gorkems-projects-f9c4a0e9.vercel.app',
     'https://fts-ya39ieb0j-gorkems-projects-f9c4a0e9.vercel.app',
     'https://fts-84mb.onrender.com',
-    'http://localhost:3000', // Geliştirme ortamı için
+    'http://localhost:3000'
 ];
 
 app.use(cors({
     origin: function (origin, callback) {
-        if (!origin) return callback(null, true); // Postman gibi araçlardan gelen isteklere izin ver
-        if (allowedOrigins.indexOf(origin) === -1) {
-            const msg = 'CORS policy does not allow this origin.';
-            return callback(new Error(msg), false);
-        }
-        return callback(null, true);
+        if (!origin) return callback(null, true); // Postman gibi araçlara izin
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        return callback(new Error('CORS policy does not allow this origin.'), false);
     }
 }));
 
 app.use(express.json());
 
-// **React build klasörünü statik dosya olarak sunuyoruz**
+// React'ın build klasörünü statik olarak sun
 app.use(express.static(path.join(__dirname, 'build')));
 
+// Proxy ayarları
 const API_URL = 'https://api.odaklojistik.com.tr/api/tmsdespatches/getall';
-const API_TOKEN = process.env.API_TOKEN;  // Token ortam değişkeninden geliyor
+const API_TOKEN = process.env.API_TOKEN;
 
-// GET test endpoint
+// Test endpoint
 app.get('/api/proxy/tmsdespatches', (req, res) => {
     res.send('GET isteği başarılı');
 });
 
+// Proxy POST endpoint
 app.post('/api/proxy/tmsdespatches', async (req, res) => {
     console.log('Proxyye gelen body:', req.body);
-
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${API_TOKEN}`,
+                Authorization: `Bearer ${API_TOKEN}`
             },
-            body: JSON.stringify(req.body),
+            body: JSON.stringify(req.body)
         });
 
         const responseText = await response.text();
@@ -74,12 +74,25 @@ app.post('/api/proxy/tmsdespatches', async (req, res) => {
     }
 });
 
-// **React Router ile frontend routing için**
+// Fallback: React Router için
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'build', 'index.html'));
+    const indexPath = path.join(__dirname, 'build', 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        console.error('index.html bulunamadı!');
+        res.status(404).send('index.html bulunamadı!');
+    }
 });
 
+// Global hata yakalayıcı (loglamak için)
+app.use((err, req, res, next) => {
+    console.error('💥 Express hata:', err.stack || err.message);
+    res.status(500).send('Sunucu hatası');
+});
+
+// Sunucuyu başlat
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Proxy server ${PORT} portunda çalışıyor.`));
-
-
+app.listen(PORT, () => {
+    console.log(`✅ Server ${PORT} portunda çalışıyor`);
+});

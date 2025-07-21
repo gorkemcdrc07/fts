@@ -229,7 +229,7 @@ const ReelAtananSeferler = () => {
             })
         );
 
-        // ✅ Satırı "yeşil" göstermek için ekle
+        // ✅ Satırı "yeşil" göstermek için ekle deneme
         setDegisenSeferler((prev) => {
             const yeni = new Set(prev);
             yeni.add(seferNo);

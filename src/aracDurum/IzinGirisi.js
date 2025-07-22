@@ -5,6 +5,9 @@ import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { Helmet } from 'react-helmet-async';
+import Select from 'react-select';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 
 
@@ -48,6 +51,46 @@ function IzinGirisi() {
     const [formSubmitBekliyor, setFormSubmitBekliyor] = useState(false);
     const navigate = useNavigate(); // ⬅️ EKLE
     const [formGorunur, setFormGorunur] = useState(false); // 👈 Form görünürlük kontrolü
+    const [filtreler, setFiltreler] = useState({
+        plaka_treyler: '',
+        surucu_adi: '',
+        izin_turu: '',
+        baslangic_tarihi: '',
+        bitis_tarihi: '',
+        is_basi_tarihi: '',
+        yukleme_tarihi: '',
+        gun_sayisi: '',
+        aciklama: '',
+        ekleyen_kullanici: '',
+        eklenme_tarihi: ''
+    });
+    const [mevcutAylar, setMevcutAylar] = useState([]);
+
+    useEffect(() => {
+        const aylarıHazırla = () => {
+            const unique = new Set(
+                izinler
+                    .filter(i => i.baslangic_tarihi)
+                    .map(i => {
+                        const d = new Date(i.baslangic_tarihi);
+                        return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`; // 2024-07
+                    })
+            );
+
+            const ayListesi = Array.from(unique).map(item => {
+                const [yil, ay] = item.split("-");
+                const tarih = new Date(Number(yil), Number(ay) - 1);
+                const ayAdi = tarih.toLocaleDateString('tr-TR', { year: 'numeric', month: 'long' });
+                return { value: item, label: ayAdi };
+            });
+
+            setMevcutAylar(ayListesi);
+        };
+
+        aylarıHazırla();
+    }, [izinler]);
+
+
 
 
 
@@ -313,14 +356,16 @@ function IzinGirisi() {
         const blob = new Blob([excelBuffer], { type: "application/octet-stream" });
         saveAs(blob, "izin_kayitlari.xlsx");
     };
+    const filtrelenmisIzinler = izinler.filter((item) =>
+        Object.entries(filtreler).every(([key, deger]) =>
+            deger === '' || String(item[key] || '').toLowerCase().includes(deger.toLowerCase())
+        )
+    );
 
 
 
     return (
         <>
-            <div className="geri-buton-kapsayici">
-                <button onClick={() => navigate(-1)} className="geri-buton">← Geri</button>
-            </div>
 
             <div className="izin-container">
                 <Helmet>
@@ -342,7 +387,7 @@ function IzinGirisi() {
                                 cursor: "pointer"
                             }}
                         >
-                            + İzin Girişi Yap
+                            + EKLE
                         </button>
                     </div>
                 )}
@@ -417,6 +462,172 @@ function IzinGirisi() {
                         </div>
                     </form>
                 )}
+                {!formGorunur && (
+                    <div className="filtre-paneli-modern">
+                        <div className="filtre-baslik">
+                            <h3>Filtreler</h3>
+                            <button
+                                className="temizle-btn"
+                                onClick={() =>
+                                    setFiltreler({
+                                        plaka_treyler: '',
+                                        surucu_adi: '',
+                                        izin_turu: '',
+                                        baslangic_tarihi: '',
+                                        bitis_tarihi: '',
+                                        is_basi_tarihi: '',
+                                        yukleme_tarihi: '',
+                                        gun_sayisi: '',
+                                        aciklama: '',
+                                        ekleyen_kullanici: '',
+                                        eklenme_tarihi: ''
+                                    })
+                                }
+                            >
+                                Temizle
+                            </button>
+                        </div>
+
+                        <div className="filtre-grid">
+                            {/* PLAKA */}
+                            <div className="filtre-grup">
+                                <label>Plaka - Treyler</label>
+                                <input
+                                    list="filtre-plaka-listesi"
+                                    type="text"
+                                    placeholder="Plaka ara"
+                                    value={filtreler.plaka_treyler}
+                                    onChange={(e) => setFiltreler((prev) => ({ ...prev, plaka_treyler: e.target.value }))}
+                                />
+                                <datalist id="filtre-plaka-listesi">
+                                    {plakaListesi.map((p, idx) => (
+                                        <option key={idx} value={`${p.plaka} - ${p.treyler}`} />
+                                    ))}
+                                </datalist>
+                            </div>
+
+                            {/* SÜRÜCÜ */}
+                            <div className="filtre-grup">
+                                <label>Sürücü</label>
+                                <input
+                                    list="filtre-surucu-listesi"
+                                    type="text"
+                                    placeholder="Sürücü ara"
+                                    value={filtreler.surucu_adi}
+                                    onChange={(e) => setFiltreler((prev) => ({ ...prev, surucu_adi: e.target.value }))}
+                                />
+                                <datalist id="filtre-surucu-listesi">
+                                    {[...new Set(izinler.map(i => i.surucu_adi))].map((adi, idx) => (
+                                        <option key={idx} value={adi} />
+                                    ))}
+                                </datalist>
+                            </div>
+
+                            {/* İZİN TÜRÜ */}
+                            <div className="filtre-grup">
+                                <label>İzin Türü</label>
+                                <input
+                                    list="filtre-izin-turu"
+                                    type="text"
+                                    placeholder="İzin türü"
+                                    value={filtreler.izin_turu}
+                                    onChange={(e) => setFiltreler((prev) => ({ ...prev, izin_turu: e.target.value }))}
+                                />
+                                <datalist id="filtre-izin-turu">
+                                    <option value="İzin" />
+                                    <option value="Bakım İzni" />
+                                    <option value="Mazeret İzni" />
+                                </datalist>
+                            </div>
+
+                            {/* TARİHLER */}
+                            {[
+                                { label: 'Başlangıç (Ay)', field: 'baslangic_tarihi', picker: 'month' },
+                                { label: 'Bitiş Tarihi', field: 'bitis_tarihi' },
+                                { label: 'İş Başı Tarihi', field: 'is_basi_tarihi' },
+                                { label: 'Yükleme Tarihi', field: 'yukleme_tarihi' },
+                                { label: 'İzin Verilen Tarih', field: 'eklenme_tarihi' },
+                            ].map(({ label, field, picker }) => (
+                                <div className="filtre-grup" key={field}>
+                                    <label>{label}</label>
+
+                                    {field === 'baslangic_tarihi' ? (
+                                        <select
+                                            value={filtreler.baslangic_tarihi}
+                                            onChange={(e) =>
+                                                setFiltreler((prev) => ({
+                                                    ...prev,
+                                                    baslangic_tarihi: e.target.value
+                                                }))
+                                            }
+                                        >
+                                            <option value="">Seçin</option>
+                                            {mevcutAylar
+                                                .sort((a, b) => a.value.localeCompare(b.value))
+                                                .map((ay, idx) => (
+                                                    <option key={idx} value={ay.value}>{ay.label}</option>
+                                                ))}
+                                        </select>
+                                    ) : (
+                                        <DatePicker
+                                            selected={filtreler[field] ? new Date(filtreler[field]) : null}
+                                            onChange={(date) =>
+                                                setFiltreler((prev) => ({
+                                                    ...prev,
+                                                    [field]: date ? date.toISOString().split('T')[0] : ''
+                                                }))
+                                            }
+                                            dateFormat="dd.MM.yyyy"
+                                            placeholderText="Seçin"
+                                            isClearable
+                                        />
+                                    )}
+                                </div>
+                            ))}
+
+
+                            {/* GÜN SAYISI */}
+                            <div className="filtre-grup">
+                                <label>Toplam Gün</label>
+                                <input
+                                    type="number"
+                                    placeholder="Gün"
+                                    value={filtreler.gun_sayisi}
+                                    onChange={(e) => setFiltreler((prev) => ({ ...prev, gun_sayisi: e.target.value }))}
+                                />
+                            </div>
+
+                            {/* AÇIKLAMA */}
+                            <div className="filtre-grup">
+                                <label>Açıklama</label>
+                                <input
+                                    type="text"
+                                    placeholder="Açıklama"
+                                    value={filtreler.aciklama}
+                                    onChange={(e) => setFiltreler((prev) => ({ ...prev, aciklama: e.target.value }))}
+                                />
+                            </div>
+
+                            {/* EKLEYEN */}
+                            <div className="filtre-grup">
+                                <label>İzin Veren</label>
+                                <input
+                                    list="filtre-kullanici-listesi"
+                                    type="text"
+                                    placeholder="İzin veren"
+                                    value={filtreler.ekleyen_kullanici}
+                                    onChange={(e) => setFiltreler((prev) => ({ ...prev, ekleyen_kullanici: e.target.value }))}
+                                />
+                                <datalist id="filtre-kullanici-listesi">
+                                    {[...new Set(izinler.map(i => i.ekleyen_kullanici))].map((k, idx) => (
+                                        <option key={idx} value={k} />
+                                    ))}
+                                </datalist>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
 
 
             <div className="izin-table-wrapper">
@@ -437,65 +648,65 @@ function IzinGirisi() {
 
                 {yukleniyor ? <p>Yükleniyor...</p> : (
                     <table className="izin-tablo">
-                        <thead>
-                            <tr>
-                                <th>PLAKA</th>
-                                <th>SÜRÜCÜ</th>
-                                <th>İZİN TÜRÜ</th>
-                                <th>BAŞLANGIÇ</th>
-                                <th>BİTİŞ</th>
-                                <th>İŞ BAŞI TARİHİ</th>
-                                <th>YÜKLEME TARİHİ</th>
-                                <th>TOPLAM GÜN</th>
-                                <th>AÇIKLAMA</th>
-                                <th>İZİN VEREN</th>
-                                <th>İZİN VERİLEN TARİH</th>
-                                <th>İŞLEMLER</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {izinler.length === 0 && (
+                            <thead>
                                 <tr>
-                                    <td colSpan="12">Kayıt yok</td>
+                                    <th>PLAKA</th>
+                                    <th>SÜRÜCÜ</th>
+                                    <th>İZİN TÜRÜ</th>
+                                    <th>BAŞLANGIÇ</th>
+                                    <th>BİTİŞ</th>
+                                    <th>İŞ BAŞI TARİHİ</th>
+                                    <th>YÜKLEME TARİHİ</th>
+                                    <th>TOPLAM GÜN</th>
+                                    <th>AÇIKLAMA</th>
+                                    <th>İZİN VEREN</th>
+                                    <th>İZİN VERİLEN TARİH</th>
+                                    <th></th>
                                 </tr>
-                            )}
+                            </thead>
 
-                            {izinler.length > 0 &&
-                                izinler.map((i) => {
-                                    const eksikAlanlar = [];
-                                    if (!i.yukleme_tarihi) eksikAlanlar.push("Yükleme Tarihi");
-                                    if (!i.is_basi_tarihi) eksikAlanlar.push("İş Başı Tarihi");
+                            <tbody>
+                                {filtrelenmisIzinler.length > 0 ? (
+                                    filtrelenmisIzinler.map((i) => {
+                                        const eksikAlanlar = [];
+                                        if (!i.yukleme_tarihi) eksikAlanlar.push("Yükleme Tarihi");
+                                        if (!i.is_basi_tarihi) eksikAlanlar.push("İş Başı Tarihi");
 
-                                    const tooltipText = eksikAlanlar.join(", ");
-                                    const eksikClass = eksikAlanlar.length > 0 ? "eksik-yukleme" : "";
+                                        const tooltipText = eksikAlanlar.join(", ");
+                                        const eksikClass = eksikAlanlar.length > 0 ? "eksik-yukleme" : "";
 
-                                    return (
-                                        <tr key={i.id} className={`izin-satiri ${eksikClass}`}>
-                                            <td className="tooltip-cell">
-                                                {i.plaka_treyler}
-                                                {eksikAlanlar.length > 0 && (
-                                                    <div className="tooltip-text">Eksik: {tooltipText}</div>
-                                                )}
-                                            </td>
-                                            <td>{i.surucu_adi}</td>
-                                            <td>{i.izin_turu}</td>
-                                            <td>{i.baslangic_tarihi ? new Date(i.baslangic_tarihi).toLocaleDateString("tr-TR") : "-"}</td>
-                                            <td>{i.bitis_tarihi ? new Date(i.bitis_tarihi).toLocaleDateString("tr-TR") : "-"}</td>
-                                            <td>{i.is_basi_tarihi ? new Date(i.is_basi_tarihi).toLocaleDateString("tr-TR") : "-"}</td>
-                                            <td>{i.yukleme_tarihi ? new Date(i.yukleme_tarihi).toLocaleDateString("tr-TR") : "-"}</td>
-                                            <td>{i.gun_sayisi}</td>
-                                            <td>{i.aciklama}</td>
-                                            <td>{i.ekleyen_kullanici}</td>
-                                            <td>{new Date(i.eklenme_tarihi).toLocaleDateString("tr-TR")}</td>
-                                            <td>
-                                                <button onClick={() => handleSil(i.id)}>Sil</button>
-                                                <button onClick={() => handleDuzenle(i)}>Düzenle</button>
-                                            </td>
-                                        </tr>
+                                        return (
+                                            <tr key={i.id} className={`izin-satiri ${eksikClass}`}>
+                                                <td className="tooltip-cell">
+                                                    {i.plaka_treyler}
+                                                    {eksikAlanlar.length > 0 && (
+                                                        <div className="tooltip-text">Eksik: {tooltipText}</div>
+                                                    )}
+                                                </td>
+                                                <td>{i.surucu_adi}</td>
+                                                <td>{i.izin_turu}</td>
+                                                <td>{i.baslangic_tarihi ? new Date(i.baslangic_tarihi).toLocaleDateString("tr-TR") : "-"}</td>
+                                                <td>{i.bitis_tarihi ? new Date(i.bitis_tarihi).toLocaleDateString("tr-TR") : "-"}</td>
+                                                <td>{i.is_basi_tarihi ? new Date(i.is_basi_tarihi).toLocaleDateString("tr-TR") : "-"}</td>
+                                                <td>{i.yukleme_tarihi ? new Date(i.yukleme_tarihi).toLocaleDateString("tr-TR") : "-"}</td>
+                                                <td>{i.gun_sayisi}</td>
+                                                <td>{i.aciklama}</td>
+                                                <td>{i.ekleyen_kullanici}</td>
+                                                <td>{new Date(i.eklenme_tarihi).toLocaleDateString("tr-TR")}</td>
+                                                <td>
+                                                    <button onClick={() => handleSil(i.id)}>Sil</button>
+                                                    <button onClick={() => handleDuzenle(i)}>Düzenle</button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                ) : (
+                                    <tr>
+                                        <td colSpan="12">Eşleşen kayıt bulunamadı.</td>
+                                    </tr>
+                                )}
+                            </tbody>
 
-                                    );
-                                })}
-                        </tbody>
 
                     </table>
                 )}

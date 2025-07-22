@@ -65,16 +65,31 @@ function Sidebar() {
                     className={`sidebar-submenu ${kullaniciMenuAcik ? 'acik' : 'kapali'}`}
                     style={{ maxHeight: kullaniciMenuAcik ? `${kullaniciAltMenuler.length * 48}px` : '0' }}
                 >
-                    {kullaniciAltMenuler.map((m) => (
-                        <div
-                            key={m.yol}
-                            className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
-                            onClick={() => openInNewTab(m.yol)}
-                        >
-                            <span className="ikon">{m.ikon}</span>
-                            {acik && <span>{m.ad}</span>}
-                        </div>
-                    ))}
+                    {kullaniciAltMenuler.map((m) => {
+                        const sadeceYeniSekmede = ['/seferler', '/tamamlanan-seferler'].includes(m.yol);
+
+                        const handleClick = () => {
+                            if (sadeceYeniSekmede) {
+                                const baseUrl = window.location.origin;
+                                window.open(baseUrl + m.yol, '_blank', 'noopener,noreferrer'); // yeni sekmede aç
+                            } else {
+                                window.location.href = m.yol; // aynı sekmede aç
+                            }
+                        };
+
+                        return (
+                            <div
+                                key={m.yol}
+                                className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
+                                onClick={handleClick}
+                            >
+                                <span className="ikon">{m.ikon}</span>
+                                {acik && <span>{m.ad}</span>}
+                            </div>
+                        );
+                    })}
+
+
                 </div>
 
                 {/* Araç Durumu */}
@@ -92,12 +107,13 @@ function Sidebar() {
                         <div
                             key={m.yol}
                             className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
-                            onClick={() => openInNewTab(m.yol)}
+                            onClick={() => window.location.href = m.yol} // aynı sekmede aç
                         >
                             <span className="ikon">{m.ikon}</span>
                             {acik && <span>{m.ad}</span>}
                         </div>
                     ))}
+
                 </div>
 
                 {/* Raporlar */}
@@ -115,12 +131,13 @@ function Sidebar() {
                         <div
                             key={m.yol}
                             className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
-                            onClick={() => openInNewTab(m.yol)}
+                            onClick={() => window.location.href = m.yol} // aynı sekmede aç
                         >
                             <span className="ikon">{m.ikon}</span>
                             {acik && <span>{m.ad}</span>}
                         </div>
                     ))}
+
                 </div>
             </div>
         </div>

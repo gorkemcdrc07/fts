@@ -700,6 +700,105 @@ tr.eksik-yukleme td {
             background-color: var(--button-secondary-bg-hover);
         }
 
+.react-datepicker__header {
+    background-color: #1f2937; /* Dark header */
+    border-bottom: 1px solid #374151;
+}
+
+.react-datepicker {
+    background-color: #111827; /* Full dark background */
+    border: 1px solid #374151;
+    color: #f9fafb;
+}
+
+.react-datepicker__day,
+.react-datepicker__month-text,
+.react-datepicker__quarter-text,
+.react-datepicker__year-text {
+    color: #f9fafb; /* Normal text */
+}
+
+    .react-datepicker__day:hover,
+    .react-datepicker__month-text:hover {
+        background-color: #2563eb;
+        color: white;
+    }
+
+.react-datepicker__day--selected,
+.react-datepicker__month-text--selected {
+    background-color: #2563eb !important;
+    color: white !important;
+}
+
+.react-datepicker__current-month,
+.react-datepicker-time__header,
+.react-datepicker-year-header {
+    color: #f9fafb;
+}
+.filtre-paneli-modern {
+    background-color: #1f2937;
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    color: #f9fafb;
+    border: 1px solid #374151;
+}
+
+.filtre-baslik {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+    .filtre-baslik h3 {
+        margin: 0;
+        font-size: 18px;
+    }
+
+.temizle-btn {
+    background-color: #ef4444;
+    border: none;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.filtre-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.filtre-grup {
+    display: flex;
+    flex-direction: column;
+}
+
+    .filtre-grup label {
+        font-size: 13px;
+        margin-bottom: 4px;
+        color: #d1d5db;
+    }
+
+    .filtre-grup input,
+    .filtre-grup select,
+    .filtre-grup .react-datepicker-wrapper {
+        background-color: #111827;
+        color: #f9fafb;
+        padding: 8px;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        font-size: 14px;
+    }
+
+        .filtre-grup input::placeholder {
+            color: #9ca3af;
+        }
+
+
 
 
 

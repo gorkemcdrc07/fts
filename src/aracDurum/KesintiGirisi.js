@@ -32,6 +32,25 @@ function KesintiGirisi() {
     const [kesintiler, setKesintiler] = useState([]);
     const [plakalar, setPlakalar] = useState([]);
     const [formGorunur, setFormGorunur] = useState(false); // ✅ BURASI EKLENDİ
+    const [filtreler, setFiltreler] = useState({
+        plaka_treyler: '',
+        kesinti_turu: '',
+        neden: '',
+        baslangic_tarihi: '',
+        bitis_tarihi: '',
+        gun_sayisi: '',
+        aciklama: '',
+        ekleyen_kullanici: ''
+    });
+
+    const filtrelenmisKesintiler = kesintiler.filter((k) =>
+        Object.entries(filtreler).every(([key, deger]) => {
+            if (!deger) return true;
+            return String(k[key] || '').toLowerCase().includes(deger.toLowerCase());
+        })
+    );
+
+
 
     useEffect(() => {
         verileriGetir();
@@ -158,15 +177,13 @@ function KesintiGirisi() {
 
             {/* ÜSTTE: Geri ve + Kesinti Ekle Butonu */}
             <div className="sayfa-ust-butonlar">
-                <button className="geri-btn" onClick={() => window.history.back()}>← Geri</button>
+                <button className="geri-btn" onClick={() => window.history.back()}>
+                    ← Geri
+                </button>
 
                 {!formGorunur && (
-                    <button
-                        type="button"
-                        className="ekle-btn"
-                        onClick={() => setFormGorunur(true)}
-                    >
-                        + Kesinti Girişi Yap
+                    <button type="button" className="ekle-btn" onClick={() => setFormGorunur(true)}>
+                        + EKLE
                     </button>
                 )}
             </div>
@@ -180,7 +197,9 @@ function KesintiGirisi() {
                     <select name="plaka_treyler" value={form.plaka_treyler} onChange={handleChange} required>
                         <option value="">Plaka Seçin</option>
                         {plakalar.map((p, idx) => (
-                            <option key={idx} value={`${p.plaka} - ${p.treyler}`}>{p.plaka} - {p.treyler}</option>
+                            <option key={idx} value={`${p.plaka} - ${p.treyler}`}>
+                                {p.plaka} - {p.treyler}
+                            </option>
                         ))}
                     </select>
 
@@ -202,10 +221,22 @@ function KesintiGirisi() {
                     </select>
 
                     <label>Başlangıç Tarihi</label>
-                    <input type="date" name="baslangic_tarihi" value={form.baslangic_tarihi} onChange={handleChange} required />
+                    <input
+                        type="date"
+                        name="baslangic_tarihi"
+                        value={form.baslangic_tarihi}
+                        onChange={handleChange}
+                        required
+                    />
 
                     <label>Bitiş Tarihi</label>
-                    <input type="date" name="bitis_tarihi" value={form.bitis_tarihi} onChange={handleChange} required />
+                    <input
+                        type="date"
+                        name="bitis_tarihi"
+                        value={form.bitis_tarihi}
+                        onChange={handleChange}
+                        required
+                    />
 
                     <label>Toplam Gün</label>
                     <input value={form.gun_sayisi} readOnly placeholder="Gün sayısı" />
@@ -229,10 +260,138 @@ function KesintiGirisi() {
                 </form>
             )}
 
-            {/* TABLO HER ZAMAN GÖRÜNÜR */}
+            {/* FİLTRE PANELİ: Sadece form kapalıyken göster */}
+            {!formGorunur && (
+                <div className="filtre-paneli-modern">
+                    <div className="filtre-baslik">
+                        <h3>Filtreler</h3>
+                        <button
+                            className="temizle-btn"
+                            onClick={() =>
+                                setFiltreler({
+                                    plaka_treyler: '',
+                                    kesinti_turu: '',
+                                    neden: '',
+                                    baslangic_tarihi: '',
+                                    bitis_tarihi: '',
+                                    gun_sayisi: '',
+                                    aciklama: '',
+                                    ekleyen_kullanici: ''
+                                })
+                            }
+                        >
+                            Temizle
+                        </button>
+                    </div>
+
+                    <div className="filtre-grid">
+                        {/* Dropdown + yazılabilir filtreler */}
+                        <div className="filtre-grup">
+                            <label>Plaka</label>
+                            <input
+                                list="plaka-list"
+                                value={filtreler.plaka_treyler}
+                                onChange={(e) => setFiltreler((prev) => ({ ...prev, plaka_treyler: e.target.value }))}
+                                placeholder="Plaka ara/seç"
+                            />
+                            <datalist id="plaka-list">
+                                {plakalar.map((p, idx) => (
+                                    <option key={idx} value={`${p.plaka} - ${p.treyler}`} />
+                                ))}
+                            </datalist>
+                        </div>
+
+                        <div className="filtre-grup">
+                            <label>Tür</label>
+                            <input
+                                list="tur-list"
+                                value={filtreler.kesinti_turu}
+                                onChange={(e) => setFiltreler((prev) => ({ ...prev, kesinti_turu: e.target.value }))}
+                                placeholder="Tür ara/seç"
+                            />
+                            <datalist id="tur-list">
+                                <option value="Bakım" />
+                                <option value="Servis" />
+                                <option value="Arıza" />
+                                <option value="Kaza" />
+                                <option value="Bölgede İş Yok" />
+                            </datalist>
+                        </div>
+
+                        <div className="filtre-grup">
+                            <label>Neden</label>
+                            <input
+                                list="neden-list"
+                                value={filtreler.neden}
+                                onChange={(e) => setFiltreler((prev) => ({ ...prev, neden: e.target.value }))}
+                                placeholder="Neden ara/seç"
+                            />
+                            <datalist id="neden-list">
+                                <option value="Tedarikçi Kaynaklı" />
+                                <option value="Odak Kaynaklı" />
+                            </datalist>
+                        </div>
+
+                        {/* Açıklama ve Ekleyen metin filtreleri */}
+                        <div className="filtre-grup">
+                            <label>Açıklama</label>
+                            <input
+                                type="text"
+                                value={filtreler.aciklama}
+                                onChange={(e) => setFiltreler((prev) => ({ ...prev, aciklama: e.target.value }))}
+                                placeholder="Açıklama ara"
+                            />
+                        </div>
+
+                        <div className="filtre-grup">
+                            <label>Ekleyen</label>
+                            <input
+                                type="text"
+                                value={filtreler.ekleyen_kullanici}
+                                onChange={(e) => setFiltreler((prev) => ({ ...prev, ekleyen_kullanici: e.target.value }))}
+                                placeholder="Ekleyen ara"
+                            />
+                        </div>
+
+                        {/* Tarih filtreleri */}
+                        <div className="filtre-grup">
+                            <label>Başlangıç</label>
+                            <input
+                                type="date"
+                                value={filtreler.baslangic_tarihi}
+                                onChange={(e) => setFiltreler((prev) => ({ ...prev, baslangic_tarihi: e.target.value }))}
+                            />
+                        </div>
+
+                        <div className="filtre-grup">
+                            <label>Bitiş</label>
+                            <input
+                                type="date"
+                                value={filtreler.bitis_tarihi}
+                                onChange={(e) => setFiltreler((prev) => ({ ...prev, bitis_tarihi: e.target.value }))}
+                            />
+                        </div>
+
+                        {/* Gün */}
+                        <div className="filtre-grup">
+                            <label>Gün</label>
+                            <input
+                                type="number"
+                                value={filtreler.gun_sayisi}
+                                onChange={(e) => setFiltreler((prev) => ({ ...prev, gun_sayisi: e.target.value }))}
+                                placeholder="Gün sayısı"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* TABLO */}
             <div className="kesinti-tablo-wrapper">
                 <div className="excel-btn-wrapper">
-                    <button className="excel-btn" onClick={handleExportExcel}>Excel'e Aktar</button>
+                    <button className="excel-btn" onClick={handleExportExcel}>
+                        Excel'e Aktar
+                    </button>
                 </div>
 
                 <h3>Kesinti Kayıtları</h3>
@@ -252,10 +411,12 @@ function KesintiGirisi() {
                         </tr>
                     </thead>
                     <tbody>
-                        {kesintiler.length === 0 ? (
-                            <tr><td colSpan="9">Kayıt bulunamadı.</td></tr>
+                        {filtrelenmisKesintiler.length === 0 ? (
+                            <tr>
+                                <td colSpan="9">Kayıt bulunamadı.</td>
+                            </tr>
                         ) : (
-                            kesintiler.map((k) => (
+                            filtrelenmisKesintiler.map((k) => (
                                 <tr key={k.id}>
                                     <td>{k.plaka_treyler}</td>
                                     <td>{k.kesinti_turu}</td>
@@ -265,7 +426,9 @@ function KesintiGirisi() {
                                     <td>{k.gun_sayisi}</td>
                                     <td>{k.aciklama}</td>
                                     <td>{k.ekleyen_kullanici}</td>
-                                    <td><button onClick={() => handleSil(k.id)}>Sil</button></td>
+                                    <td>
+                                        <button onClick={() => handleSil(k.id)}>Sil</button>
+                                    </td>
                                 </tr>
                             ))
                         )}
@@ -274,6 +437,7 @@ function KesintiGirisi() {
             </div>
         </div>
     );
+
 
 }
 

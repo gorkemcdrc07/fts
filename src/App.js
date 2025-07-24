@@ -18,6 +18,11 @@ import AracYonetimi from './aracDurum/AracYonetimi';
 import IzinGirisi from './aracDurum/IzinGirisi';
 import KesintiGirisi from './aracDurum/KesintiGirisi';
 
+// 🔽 Görev Sayfaları (yeni eklenenler)
+import GorevAta from './views/Gorevler/GorevAta';
+import BenimGorevlerim from './views/Gorevler/BenimGorevlerim';
+import TumGorevler from './views/Gorevler/TumGorevler';
+
 function App() {
     return (
         <HelmetProvider>
@@ -39,6 +44,13 @@ function App() {
                                     <Route path="/arac/yonetim" element={<AracYonetimi />} />
                                     <Route path="/arac/izin-girisi" element={<IzinGirisi />} />
                                     <Route path="/arac/kesinti-girisi" element={<KesintiGirisi />} />
+
+                                    {/* 🆕 Görevler */}
+                                    <Route path="/gorevler/ata" element={<GorevAta />} />
+                                    <Route path="/gorevler/benim" element={<BenimGorevlerim />} />
+                                    <Route path="/gorevler/tum" element={<TumGorevler />} />
+
+                                    {/* Varsayılan yönlendirme */}
                                     <Route path="*" element={<Navigate to="/anasayfa" replace />} />
                                 </Routes>
                             </Layout>

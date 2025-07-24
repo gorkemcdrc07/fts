@@ -1,0 +1,63 @@
+.container {
+    max-width: 600px;
+    margin: 30px auto;
+    padding: 20px;
+    background: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+}
+
+    .container h2 {
+        margin-bottom: 20px;
+        text-align: center;
+        color: #444;
+    }
+
+ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.gorev-item {
+    background: #f1f1f1;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.05);
+    position: relative;
+}
+
+.tamamla-btn {
+    margin-top: 10px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+    .tamamla-btn:hover {
+        background-color: #218838;
+    }
+
+.durum {
+    font-weight: bold;
+    color: #555;
+}
+    .durum.beklemede {
+        background: #f0ad4e;
+        color: white;
+    }
+
+    .durum.i̇şlemde {
+        background: #5bc0de;
+        color: white;
+    }
+
+    .durum.tamamlandı {
+        background: #5cb85c;
+        color: white;
+    }
+

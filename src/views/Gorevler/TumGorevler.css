@@ -1,0 +1,79 @@
+:root {
+    --kart-bg-light: #f9f9f9;
+    --kart-bg-dark: #2a2d34;
+    --text-light: #222;
+    --text-dark: #f1f1f1;
+    --border-light: #007bff;
+    --border-dark: #3399ff;
+    --info-light: #888;
+    --info-dark: #bbb;
+}
+
+/* Ortak */
+.gorev-karti {
+    border-left: 5px solid var(--border-light);
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.06);
+    transition: background 0.3s, color 0.3s;
+}
+
+.gorev-ust {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.durum {
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    background: #ddd;
+}
+
+    .durum.beklemede {
+        background: #f0ad4e;
+        color: white;
+    }
+
+    .durum.tamamlandi {
+        background: #5cb85c;
+        color: white;
+    }
+
+.info-text {
+    text-align: center;
+    margin-top: 20px;
+}
+
+/* 🌞 Açık tema */
+@media (prefers-color-scheme: light) {
+    .gorev-karti {
+        background-color: var(--kart-bg-light);
+        color: var(--text-light);
+        border-left-color: var(--border-light);
+    }
+
+    .info-text {
+        color: var(--info-light);
+    }
+}
+
+/* 🌙 Koyu tema */
+@media (prefers-color-scheme: dark) {
+    .gorev-karti {
+        background-color: var(--kart-bg-dark);
+        color: var(--text-dark);
+        border-left-color: var(--border-dark);
+    }
+
+    .info-text {
+        color: var(--info-dark);
+    }
+
+    .durum {
+        background: #444;
+        color: #fff;
+    }
+}

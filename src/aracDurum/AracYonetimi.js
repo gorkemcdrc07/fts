@@ -86,6 +86,8 @@ function AracYonetimi() {
         gps_sim_kart_no: '',
         odak_k1: '',
     });
+    const [filtrePanelGorunur, setFiltrePanelGorunur] = useState(false);
+
 
     useEffect(() => {
         let filtrelenmis = tumAraclar;
@@ -359,6 +361,22 @@ function AracYonetimi() {
 
                 <button className="ekle-btn" onClick={handleYeniEkle}>+ Yeni Araç Ekle</button>
                 <button className="ekle-btn" style={{ backgroundColor: '#28a745' }} onClick={excelAktar}>Excel'e Aktar</button>
+                <button
+                    onClick={() => setFiltrePanelGorunur(prev => !prev)}
+                    style={{
+                        padding: '10px 16px',
+                        fontSize: '15px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: 'white',
+                        backgroundColor: '#6c757d',
+                        fontWeight: 600
+                    }}
+                >
+                    {filtrePanelGorunur ? 'Filtreyi Gizle' : 'Filtrele'}
+                </button>
+
             </div>
 
             {modalAcik && (

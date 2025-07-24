@@ -13,7 +13,6 @@ function BenimGorevlerim() {
     useEffect(() => {
         if (!kullaniciId) return;
 
-        // Görevleri çek
         const fetchGorevler = async () => {
             setLoading(true);
             const { data, error } = await supabase
@@ -31,7 +30,6 @@ function BenimGorevlerim() {
             setLoading(false);
         };
 
-        // Okunmamış görevleri okundu olarak işaretle
         const isaretleOkundu = async () => {
             await supabase
                 .from('gorevler')
@@ -43,21 +41,29 @@ function BenimGorevlerim() {
         fetchGorevler();
         isaretleOkundu();
 
-        // Realtime bildirim aboneliği
-        const subscription = supabase
-            .from(`bildirimler:kullanici_id=eq.${kullaniciId}`)
-            .on('INSERT', payload => {
-                setBildirimler(prev => [...prev, payload.new]);
-                alert(`Yeni Bildirim: ${payload.new.mesaj}`);
-            })
+        // Supabase Realtime V2 - Doğru Kullanım
+        const kanal = supabase
+            .channel('bildirim-kanali')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'bildirimler',
+                    filter: `kullanici_id=eq.${kullaniciId}`,
+                },
+                (payload) => {
+                    setBildirimler(prev => [...prev, payload.new]);
+                    alert(`Yeni Bildirim: ${payload.new.mesaj}`);
+                }
+            )
             .subscribe();
 
         return () => {
-            supabase.removeSubscription(subscription);
+            supabase.removeChannel(kanal);
         };
     }, [kullaniciId]);
 
-    // Tarih saat formatlama fonksiyonu
     function formatTarihSaat(tarihStr, saatFarki = 0, saatSifirla = false) {
         if (!tarihStr) return '-';
 

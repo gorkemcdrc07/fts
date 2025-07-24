@@ -9,47 +9,61 @@ function BenimGorevlerim() {
     const girisYapan = JSON.parse(localStorage.getItem('girisYapanKullanici'));
     const kullaniciId = girisYapan?.id;
 
-useEffect(() => {
-    if (!kullaniciId) return;
+    useEffect(() => {
+        if (!kullaniciId) return;
 
-    const fetchGorevler = async () => {
-        setLoading(true);
+        const fetchGorevler = async () => {
+            setLoading(true);
 
-        const { data, error } = await supabase
-            .from('gorevler')
-            .select('*')
-            .eq('atananid', kullaniciId)
-            .neq('durum', 'Tamamlandı')
-            .order('duedate', { ascending: true });
+            const { data, error } = await supabase
+                .from('gorevler')
+                .select('*')
+                .eq('atananid', kullaniciId)
+                .neq('durum', 'Tamamlandı')
+                .order('duedate', { ascending: true });
 
-        if (error) {
-            console.error('Görev alınamadı:', error.message);
-        } else {
-            setGorevler(data || []);
-        }
+            if (error) {
+                console.error('Görev alınamadı:', error.message);
+            } else {
+                setGorevler(data || []);
+            }
 
-        setLoading(false);
-    };
+            setLoading(false);
+        };
 
-    const isaretleOkundu = async () => {
-        await supabase
-            .from('gorevler')
-            .update({ okundu: true })
-            .eq('atananid', kullaniciId)
-            .eq('okundu', false);
-    };
+        const isaretleOkundu = async () => {
+            await supabase
+                .from('gorevler')
+                .update({ okundu: true })
+                .eq('atananid', kullaniciId)
+                .eq('okundu', false);
+        };
 
-    fetchGorevler();
-    isaretleOkundu();
-}, [kullaniciId]);
+        fetchGorevler();
+        isaretleOkundu();
+    }, [kullaniciId]);
 
     const guncelleDurum = async (id, yeniDurum) => {
         const updateData = { durum: yeniDurum };
+        const simdi = new Date().toISOString();
 
-        // Eğer tamamlandıysa teslim_tarihi ekle
+        if (yeniDurum === 'İşleme Alındı') {
+            updateData.gorev_kabul_tarih = simdi;
+
+            // 🔔 Bildirim gönder
+            const gorev = gorevler.find(g => g.id === id);
+            if (gorev) {
+                await supabase.from('bildirimler').insert([
+                    {
+                        kullanici_id: gorev.atayanid,
+                        mesaj: `${girisYapan.kullaniciAdi} "${gorev.baslik}" görevini kabul etti.`,
+                    }
+                ]);
+            }
+        }
+
         if (yeniDurum === 'Tamamlandı') {
-            const bugun = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-            updateData.teslim_tarihi = bugun;
+            updateData.teslim_tarihi = simdi;
         }
 
         const { error } = await supabase
@@ -58,12 +72,11 @@ useEffect(() => {
             .eq('id', id);
 
         if (!error) {
-            // Görev listesi güncelle
             if (yeniDurum === 'Tamamlandı') {
                 setGorevler(prev => prev.filter(g => g.id !== id));
             } else {
                 setGorevler(prev =>
-                    prev.map(g => g.id === id ? { ...g, durum: yeniDurum } : g)
+                    prev.map(g => g.id === id ? { ...g, durum: yeniDurum, ...updateData } : g)
                 );
             }
         } else {
@@ -93,7 +106,7 @@ useEffect(() => {
 
                                 {g.durum === 'Beklemede' && (
                                     <button className="tamamla-btn" onClick={() => guncelleDurum(g.id, 'İşleme Alındı')}>
-                                        İşe Başla
+                                        Kabul Et
                                     </button>
                                 )}
 

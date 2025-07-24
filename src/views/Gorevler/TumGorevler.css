@@ -46,6 +46,26 @@
     text-align: center;
     margin-top: 20px;
 }
+.kullanici-aciklama {
+    background-color: #fef3c7; /* Açık sarı */
+    border-left: 4px solid #f59e0b; /* Turuncuya yakın vurgulu kenar */
+    padding: 10px;
+    margin-top: 8px;
+    border-radius: 4px;
+    font-style: italic;
+    color: #92400e;
+}
+
+.tamamlanma-tarihi {
+    background-color: #dcfce7; /* Açık yeşil */
+    border-left: 4px solid #22c55e; /* Dikkat çeken yeşil şerit */
+    padding: 10px;
+    margin-top: 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    color: #166534;
+}
+
 
 /* 🌞 Açık tema */
 @media (prefers-color-scheme: light) {

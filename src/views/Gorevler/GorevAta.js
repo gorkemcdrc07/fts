@@ -37,17 +37,19 @@ function GorevAta() {
             return;
         }
 
-const { error } = await supabase.from('gorevler').insert([
-    {
-        baslik,
-        aciklama,
-        duedate,
-        atayanid,
-        atananid: Number(atananid),
-        durum: 'Beklemede',
-        okundu: false, // 🔴 Bu satırı EKLE
-    }
-]);
+        const tarih = new Date(duedate);
+        const tarihUTC = new Date(Date.UTC(tarih.getFullYear(), tarih.getMonth(), tarih.getDate()));
+        const duzgunTarihStr = tarihUTC.toISOString();
+
+        const { error } = await supabase.from('gorevler').insert([{
+            baslik,
+            aciklama,
+            duedate: duzgunTarihStr,
+            atayanid,
+            atananid: Number(atananid),
+            durum: 'Beklemede',
+            okundu: false,
+        }]);
 
         if (error) {
             console.error(error.message);

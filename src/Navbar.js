@@ -30,28 +30,54 @@ function Navbar() {
         document.documentElement.setAttribute("data-theme", tema);
     }, [tema]);
 
-    useEffect(() => {
-        const fetchOkunmamisGorevler = async () => {
-            if (!kullaniciId) return;
+    // 🔁 Görevleri kontrol eden fonksiyon
+    const fetchOkunmamisGorevler = async () => {
+        if (!kullaniciId) return;
 
-            const { data, error } = await supabase
-                .from("gorevler")
-                .select("id")
-                .eq("atananid", kullaniciId)
-                .eq("okundu", false)
-                .neq("durum", "Tamamlandı");
+        const { data, error } = await supabase
+            .from("gorevler")
+            .select("id")
+            .eq("atananid", kullaniciId)
+            .eq("okundu", false)
+            .neq("durum", "Tamamlandı");
 
-            if (!error && data.length > 0) {
-                setOkunmamisGorevSayisi(data.length);
+        if (!error) {
+            setOkunmamisGorevSayisi(data.length);
+            if (data.length > 0) {
                 setBildirimGoster(true);
-
-                setTimeout(() => {
-                    setBildirimGoster(false);
-                }, 5000);
+                setTimeout(() => setBildirimGoster(false), 5000);
             }
-        };
+        }
+    };
 
+    // ✅ Sayfa yüklendiğinde bir kez çalışır
+    useEffect(() => {
         fetchOkunmamisGorevler();
+    }, [kullaniciId]);
+
+    // ✅ Supabase Realtime ile canlı dinleme
+    useEffect(() => {
+        if (!kullaniciId) return;
+
+        const kanal = supabase
+            .channel("gorev-bildirim-kanali")
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "gorevler",
+                    filter: `atananid=eq.${kullaniciId}`
+                },
+                () => {
+                    fetchOkunmamisGorevler();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(kanal);
+        };
     }, [kullaniciId]);
 
     const cikisYap = () => {
@@ -120,7 +146,6 @@ function Navbar() {
 
     return (
         <>
-            {/* ✅ Bilgilendirme Bildirimi */}
             {bildirimGoster && (
                 <div className="gorev-bildirimi">
                     📝 Size atanmış {okunmamisGorevSayisi} yeni göreviniz var!
@@ -170,7 +195,9 @@ function Navbar() {
                                     {profilResim ? (
                                         <img src={profilResim} alt="Profil" />
                                     ) : (
-                                        <span className="avatar-initial">{kullanici[0].toUpperCase()}</span>
+                                        <span className="avatar-initial">
+                                            {kullanici[0].toUpperCase()}
+                                        </span>
                                     )}
                                 </div>
                             </label>

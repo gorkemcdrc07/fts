@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import './Sidebar.css';
-import { supabase } from './supabaseClient';
+import { supabase } from "./supabaseClient";
 
 function Sidebar() {
     const [acik, setAcik] = useState(true);
@@ -14,7 +14,6 @@ function Sidebar() {
     const [okunmamisGorevSayisi, setOkunmamisGorevSayisi] = useState(0);
     const kullaniciId = parseInt(localStorage.getItem('kullaniciId'));
     const kullaniciRol = localStorage.getItem('rol') || '';
-    const kanalSuffix = `-${kullaniciId || Date.now()}`;
 
     const kullaniciAltMenuler = [
         { ad: 'PLANLAMA', yol: '/planlama', ikon: '🗓️' },
@@ -47,72 +46,40 @@ function Sidebar() {
     ];
 
     useEffect(() => {
-        document.body.classList.toggle('sidebar-kapali', !acik);
+        document.body.classList.toggle("sidebar-kapali", !acik);
     }, [acik]);
 
+    // 🔔 Sayfa yüklendiğinde okunmamış görevleri al
     useEffect(() => {
-        const fetchOkunmamis = async () => {
-            if (!kullaniciId) return;
-
-            try {
-                let query;
-
-                if (kullaniciRol === 'YÖNETİCİ') {
-                    query = supabase
-                        .from('gorevler')
-                        .select('id')
-                        .eq('okundu', false)
-                        .eq('durum', 'Tamamlandı');
-                } else {
-                    query = supabase
-                        .from('gorevler')
-                        .select('id')
-                        .eq('atananid', kullaniciId)
-                        .eq('okundu', false)
-                        .neq('durum', 'Tamamlandı');
-                }
-
-                const { data, error } = await query;
-                if (error) throw error;
-
-                setOkunmamisGorevSayisi(data.length);
-            } catch (error) {
-                console.error('❌ Okunmamış görevler alınamadı:', error.message);
-            }
-        };
-
-        fetchOkunmamis();
-    }, [kullaniciId, kullaniciRol]);
-
-    useEffect(() => {
-        if (kullaniciRol !== 'YÖNETİCİ') return;
-
         const channel = supabase
-            .channel(`gorev-tamamlandi${kanalSuffix}`)
+            .channel('realtime:gorevler')
             .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
-                table: 'gorevler'
+                table: 'gorevler',
             }, async (payload) => {
-                const yeniGorev = payload.new;
+                const g = payload.new;
+                const benimId = parseInt(localStorage.getItem('kullaniciId'));
 
-                if (yeniGorev.durum === 'Tamamlandı' && !yeniGorev.okundu) {
-                    let kullaniciAd = 'Bir kullanıcı';
+                if (
+                    g.durum === "Kabul Edildi" &&
+                    parseInt(g.atayanid) === benimId
+                ) {
+                    let kabulEdenAdi = 'Bir kullanıcı';
 
-                    if (yeniGorev.tamamlayanid) {
+                    if (g.tamamlayanid) {  // veya kabul edenin id'si başka bir kolon ise onu kullan
                         const { data, error } = await supabase
-                            .from('kullanicilar')
-                            .select('ad')
-                            .eq('id', yeniGorev.tamamlayanid)
+                            .from('login')
+                            .select('kullaniciAdi')
+                            .eq('id', g.tamamlayanid)
                             .single();
 
-                        if (!error && data?.ad) {
-                            kullaniciAd = data.ad;
+                        if (!error && data?.kullaniciAdi) {
+                            kabulEdenAdi = data.kullaniciAdi;
                         }
                     }
 
-                    showPopup(`${kullaniciAd} görevi tamamladı.`);
-                    setOkunmamisGorevSayisi(prev => prev + 1);
+                    showPopup(`📬 ${kabulEdenAdi} görevi kabul etti!`);
                 }
             })
             .subscribe();
@@ -120,20 +87,73 @@ function Sidebar() {
         return () => {
             channel.unsubscribe();
         };
-    }, [kullaniciId, kullaniciRol]);
+    }, [kullaniciId]);
 
+    // 🔄 Realtime güncellemesi ile dinleme
     useEffect(() => {
+        const rol = localStorage.getItem('rol');
+        if (rol !== 'YÖNETİCİ') return;
+
         const channel = supabase
-            .channel(`gorev-kabul${kanalSuffix}`)
+            .channel('realtime:gorevler')
             .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
                 table: 'gorevler'
+            }, async (payload) => {
+                console.log("🟢 GÖREV GÜNCELLENDİ:", payload);
+
+                const yeniGorev = payload.new;
+
+                if (yeniGorev.durum === "Tamamlandı" && !yeniGorev.okundu) {
+                    let kullaniciAd = 'Bir kullanıcı';
+
+                    if (yeniGorev.tamamlayanid) {
+                        const { data, error } = await supabase
+                            .from('login')
+                            .select('kullaniciAdi')
+                            .eq('id', yeniGorev.tamamlayanid)
+                            .single();
+
+                        if (!error && data?.kullaniciAdi) {
+                            kullaniciAd = data.kullaniciAdi;
+                        }
+                    }
+
+                    showPopup(`${kullaniciAd} görevi tamamladı.`);
+                    setOkunmamisGorevSayisi(prev => prev + 1);
+                }
+            })
+            .subscribe((status) => {
+                console.log("📡 Kanal durumu:", status); // SUBSCRIBED beklenir
+            });
+
+        return () => {
+            channel.unsubscribe();
+        };
+    }, []);
+
+    // 🔄 Görev kabul edildiğinde atayana bildirim gönder
+    useEffect(() => {
+        const channel = supabase
+            .channel('realtime:gorevler')
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'gorevler',
             }, (payload) => {
                 const g = payload.new;
                 const benimId = parseInt(localStorage.getItem('kullaniciId'));
 
-                if (g.durum === 'Kabul Edildi' && parseInt(g.atayanid) === benimId) {
+                console.log("📦 GÜNCELLENEN GÖREV:", g);
+                console.log("👤 BENİM ID:", benimId);
+                console.log("🎯 GÖREVİN ATAYANI:", g.atayanid);
+
+                if (
+                    g.durum === "Kabul Edildi" &&
+                    parseInt(g.atayanid) === benimId
+                ) {
+                    console.log("✅ BİLDİRİM GÖSTERİLİYOR");
                     showPopup('📬 Atadığınız görev kabul edildi!');
                 }
             })
@@ -144,12 +164,47 @@ function Sidebar() {
         };
     }, [kullaniciId]);
 
+    // 📡 Yeni bildirimleri yakala ve popup göster
+    useEffect(() => {
+        const kullaniciId = parseInt(localStorage.getItem('kullaniciId'));
+        // const girisYapan = JSON.parse(localStorage.getItem('girisYapanKullanici')); // Eğer gerekliyse
+
+        if (!kullaniciId) return;
+
+        const kanal = supabase
+            .channel('realtime:bildirimler')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'bildirimler',
+                filter: `kullanici_id=eq.${kullaniciId}`,
+            }, (payload) => {
+                const mesaj = payload.new?.mesaj;
+                if (mesaj) {
+                    showPopup(mesaj);
+                    setOkunmamisGorevSayisi(prev => prev + 1);
+                }
+            })
+            .subscribe((status) => {
+                console.log("📡 Bildirim kanalı durumu:", status); // ✅ Burada SUBSCRIBED görmelisin
+            });
+
+        return () => {
+            supabase.removeChannel(kanal);
+        };
+    }, []);
+
+
+
+    // 🔔 Popup kutusu
     const showPopup = (mesaj) => {
         const popup = document.createElement('div');
         popup.className = 'popup-bildirim';
         popup.innerText = mesaj;
         document.body.appendChild(popup);
-        setTimeout(() => popup.classList.add('show'), 10);
+        setTimeout(() => {
+            popup.classList.add('show');
+        }, 10);
         setTimeout(() => {
             popup.classList.remove('show');
             setTimeout(() => popup.remove(), 300);
@@ -171,6 +226,7 @@ function Sidebar() {
             </div>
 
             <div className="sidebar-menu">
+
                 {/* Kullanıcı İşlemleri */}
                 <div className="sidebar-category" onClick={() => setKullaniciMenuAcik(!kullaniciMenuAcik)}>
                     <span className="ikon">👥</span>
@@ -288,17 +344,18 @@ function Sidebar() {
                                 {acik && (
                                     <span>
                                         {m.ad}
-                                        {m.ad === 'Benim Görevlerim' && okunmamisGorevSayisi > 0 && (
+                                        {m.ad === 'Tüm Görevler' && okunmamisGorevSayisi > 0 && (
                                             <span className="badge">{okunmamisGorevSayisi}</span>
                                         )}
                                     </span>
                                 )}
                             </div>
                         ))}
+
                 </div>
             </div>
         </div>
     );
-}
+};
 
 export default Sidebar;

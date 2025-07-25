@@ -16,10 +16,10 @@ function TumGorevler() {
             const sorgu = supabase
                 .from('gorevler')
                 .select(`
-                    *,
-                    atayan:login!fk_atayan(kullaniciAdi),
-                    atanan:login!fk_atanan(kullaniciAdi)
-                `)
+            *,
+            atayan:login!gorevler_atayanid_fkey(kullaniciAdi),
+            atanan:login!gorevler_atananid_fkey(kullaniciAdi)
+        `)
                 .order('created_at', { ascending: false });
 
             if (kullaniciRol !== 'YÖNETİCİ') {

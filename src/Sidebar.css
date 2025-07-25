@@ -146,24 +146,24 @@
 /* Popup Bildirim (Sağ altta çıkan kutu) */
 .popup-bildirim {
     position: fixed;
-    bottom: 24px;
-    right: 24px;
-    background-color: #1e293b;
+    bottom: 40px; /* Ekranın altından biraz yukarı */
+    right: 40px; /* Sağdan biraz içeri */
+    background-color: #333;
     color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    padding: 20px 30px; /* Daha geniş ve yüksek padding */
+    font-size: 18px; /* Yazı tipi büyüklüğü */
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     opacity: 0;
-    transform: translateY(20px);
     transition: opacity 0.3s ease, transform 0.3s ease;
     z-index: 9999;
-    font-size: 14px;
-    pointer-events: none;
+    max-width: 350px; /* Maksimum genişlik */
+    font-weight: 600;
 }
 
     .popup-bildirim.show {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(-10px);
     }
 
 /* Koyu tema */

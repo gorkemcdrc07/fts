@@ -166,7 +166,6 @@
         transform: translateY(0);
     }
 
-
 /* Koyu tema */
 :root[data-theme="dark"] .sidebar {
     background-color: #1f2937;

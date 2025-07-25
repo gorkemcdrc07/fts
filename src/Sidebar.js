@@ -50,38 +50,48 @@ function Sidebar() {
     }, [acik]);
 
     useEffect(() => {
-        const fetchOkunmamis = async () => {
-            if (!kullaniciId) return;
+        const rol = localStorage.getItem('rol');
+        if (rol !== 'YÖNETİCİ') return;
 
-            let query;
+        const channel = supabase
+            .channel('gorev-tamamlandi')
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'gorevler'
+            }, async (payload) => {
+                console.log("🟢 GÜNCELLEME YAKALANDI:", payload);
 
-            if (kullaniciRol === "YÖNETİCİ") {
-                query = supabase
-                    .from("gorevler")
-                    .select("id")
-                    .eq("okundu", false)
-                    .eq("durum", "Tamamlandı")
-                    .neq("tamamlayanid", kullaniciId);
-            } else {
-                query = supabase
-                    .from("gorevler")
-                    .select("id")
-                    .eq("atananid", kullaniciId)
-                    .eq("okundu", false)
-                    .neq("durum", "Tamamlandı");
-            }
+                const yeniGorev = payload.new;
 
-            const { data, error } = await query;
+                if (yeniGorev.durum === "Tamamlandı" && !yeniGorev.okundu) {
+                    let kullaniciAd = 'Bir kullanıcı';
 
-            if (!error) {
-                setOkunmamisGorevSayisi(data.length);
-            } else {
-                console.error("Okunmamış görevler alınamadı:", error.message);
-            }
+                    if (yeniGorev.tamamlayanid) {
+                        const { data, error } = await supabase
+                            .from('kullanicilar')
+                            .select('ad')
+                            .eq('id', yeniGorev.tamamlayanid)
+                            .single();
+
+                        if (!error && data?.ad) {
+                            kullaniciAd = data.ad;
+                        }
+                    }
+
+                    showPopup(`${kullaniciAd} görevi tamamladı.`);
+                    setOkunmamisGorevSayisi(prev => prev + 1);
+                }
+            })
+            .subscribe((status) => {
+                console.log("📡 Kanal durumu:", status); // SUBSCRIBED beklenir
+            });
+
+        return () => {
+            channel.unsubscribe(); // 👈 doğru kanal temizleme yöntemi
         };
+    }, []); // boş bağımlılık listesi
 
-        fetchOkunmamis();
-    }, [kullaniciId, kullaniciRol]);
 
     useEffect(() => {
         if (kullaniciRol !== 'YÖNETİCİ') return;

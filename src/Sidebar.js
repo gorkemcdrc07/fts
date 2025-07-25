@@ -13,6 +13,8 @@ function Sidebar() {
     const location = useLocation();
     const [okunmamisGorevSayisi, setOkunmamisGorevSayisi] = useState(0);
     const kullaniciId = parseInt(localStorage.getItem('kullaniciId'));
+    const kanalSuffix = `-${kullaniciId || Date.now()}`;
+
     const kullaniciRol = localStorage.getItem('rol') || '';
 
     const kullaniciAltMenuler = [
@@ -90,7 +92,7 @@ function Sidebar() {
         if (rol !== 'YÖNETİCİ') return;
 
         const channel = supabase
-            .channel('gorev-tamamlandi')
+            .channel(`gorev-tamamlandi${kanalSuffix}`)
             .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
@@ -119,8 +121,12 @@ function Sidebar() {
                     setOkunmamisGorevSayisi(prev => prev + 1);
                 }
             })
-            .subscribe((status) => {
-                console.log("📡 Kanal durumu:", status); // SUBSCRIBED beklenir
+            .subscribe()
+            .then((status) => {
+                console.log("📡 Kanal durumu (tamamlandı):", status);
+            })
+            .catch((err) => {
+                console.error("❌ Kanal hatası (tamamlandı):", err);
             });
 
         return () => {
@@ -131,7 +137,7 @@ function Sidebar() {
     // 🔄 Görev kabul edildiğinde atayana bildirim gönder
     useEffect(() => {
         const channel = supabase
-            .channel('gorev-kabul')
+            .channel(`gorev-kabul${kanalSuffix}`)
             .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
@@ -152,7 +158,13 @@ function Sidebar() {
                     showPopup('📬 Atadığınız görev kabul edildi!');
                 }
             })
-            .subscribe();
+            .subscribe()
+            .then((status) => {
+                console.log("📡 Kanal durumu (kabul):", status);
+            })
+            .catch((err) => {
+                console.error("❌ Kanal hatası (kabul):", err);
+            });
 
         return () => {
             channel.unsubscribe();

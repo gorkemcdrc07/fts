@@ -83,7 +83,6 @@ function Sidebar() {
         fetchOkunmamis();
     }, [kullaniciId, kullaniciRol]);
 
-    // Realtime bildirim: Yönetici için popup & bildirim sayısı güncelleme
     useEffect(() => {
         if (kullaniciRol !== 'YÖNETİCİ') return;
 
@@ -92,13 +91,25 @@ function Sidebar() {
             .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
-                table: 'gorevler',
-                filter: 'durum=eq.Tamamlandı'
-            }, payload => {
+                table: 'gorevler'
+            }, async (payload) => {
                 const yeniGorev = payload.new;
 
-                if (!yeniGorev.okundu) {
-                    const kullaniciAd = yeniGorev.tamamlayanad || 'Bir kullanıcı';
+                if (yeniGorev.durum === "Tamamlandı" && !yeniGorev.okundu) {
+                    let kullaniciAd = 'Bir kullanıcı';
+
+                    if (yeniGorev.tamamlayanid) {
+                        const { data, error } = await supabase
+                            .from('kullanicilar')
+                            .select('ad')
+                            .eq('id', yeniGorev.tamamlayanid)
+                            .single();
+
+                        if (!error && data?.ad) {
+                            kullaniciAd = data.ad;
+                        }
+                    }
+
                     showPopup(`${kullaniciAd} görevi tamamladı.`);
                     setOkunmamisGorevSayisi(prev => prev + 1);
                 }
@@ -109,6 +120,7 @@ function Sidebar() {
             supabase.removeChannel(channel);
         };
     }, [kullaniciRol]);
+
 
     // Popup gösterim fonksiyonu
     const showPopup = (mesaj) => {
@@ -269,5 +281,4 @@ function Sidebar() {
         </div>
     );
 }
-
 export default Sidebar;

@@ -143,6 +143,29 @@
     display: inline-block;
     vertical-align: middle;
 }
+/* Popup Bildirim (Sağ altta çıkan kutu) */
+.popup-bildirim {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background-color: #1e293b;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 9999;
+    font-size: 14px;
+    pointer-events: none;
+}
+
+    .popup-bildirim.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
 
 /* Koyu tema */
 :root[data-theme="dark"] .sidebar {
@@ -215,3 +238,8 @@
     background-color: #ef4444;
     color: white;
 }
+:root[data-theme="dark"] .popup-bildirim {
+    background-color: #334155; /* daha açık koyu tonu */
+    color: #f8fafc;
+}
+

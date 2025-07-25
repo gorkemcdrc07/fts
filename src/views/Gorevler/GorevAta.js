@@ -18,7 +18,7 @@ function GorevAta() {
         const fetchKullanicilar = async () => {
             const { data, error } = await supabase
                 .from('login')
-                .select('id, kullaniciAdi, rol');
+                .select('id, kullanici, rol');
             if (!error) setKullanicilar(data);
             else console.error('Kullanıcılar alınamadı:', error.message);
         };
@@ -89,7 +89,7 @@ function GorevAta() {
                     <option value="">Kullanıcı Seç</option>
                     {kullanicilar.map(k => (
                         <option key={k.id} value={k.id}>
-                            {k.kullaniciAdi} ({k.rol})
+                            {k.kullanici} ({k.rol})
                         </option>
                     ))}
                 </select>

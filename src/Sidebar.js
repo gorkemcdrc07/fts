@@ -11,10 +11,8 @@ function Sidebar() {
     const [gorevMenuAcik, setGorevMenuAcik] = useState(false);
 
     const location = useLocation();
-    const [okunmamisGorevSayisi, setOkunmamisGorevSayisi] = useState(0); // ← GEREKLİ EKLEME
+    const [okunmamisGorevSayisi, setOkunmamisGorevSayisi] = useState(0);
     const kullaniciId = localStorage.getItem('kullaniciId');
-
-    // 🔐 Giriş yapan kullanıcının rolü
     const kullaniciRol = localStorage.getItem('rol') || '';
 
     const kullaniciAltMenuler = [
@@ -51,26 +49,81 @@ function Sidebar() {
         document.body.classList.toggle("sidebar-kapali", !acik);
     }, [acik]);
 
-useEffect(() => {
-    const fetchOkunmamis = async () => {
-        if (!kullaniciId) return;
+    useEffect(() => {
+        const fetchOkunmamis = async () => {
+            if (!kullaniciId) return;
 
-        const { data, error } = await supabase
-            .from("gorevler")
-            .select("id")
-            .eq("atananid", kullaniciId)
-            .eq("okundu", false)
-            .neq("durum", "Tamamlandı");
+            let query;
 
-        if (!error) {
-            setOkunmamisGorevSayisi(data.length);
-        } else {
-            console.error("Okunmamış görevler alınamadı:", error.message);
-        }
+            if (kullaniciRol === "YÖNETİCİ") {
+                query = supabase
+                    .from("gorevler")
+                    .select("id")
+                    .eq("okundu", false)
+                    .eq("durum", "Tamamlandı")
+                    .neq("tamamlayanid", kullaniciId);
+            } else {
+                query = supabase
+                    .from("gorevler")
+                    .select("id")
+                    .eq("atananid", kullaniciId)
+                    .eq("okundu", false)
+                    .neq("durum", "Tamamlandı");
+            }
+
+            const { data, error } = await query;
+
+            if (!error) {
+                setOkunmamisGorevSayisi(data.length);
+            } else {
+                console.error("Okunmamış görevler alınamadı:", error.message);
+            }
+        };
+
+        fetchOkunmamis();
+    }, [kullaniciId, kullaniciRol]);
+
+    // Realtime bildirim: Yönetici için popup & bildirim sayısı güncelleme
+    useEffect(() => {
+        if (kullaniciRol !== 'YÖNETİCİ') return;
+
+        const channel = supabase
+            .channel('gorev-tamamlandi')
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'gorevler',
+                filter: 'durum=eq.Tamamlandı'
+            }, payload => {
+                const yeniGorev = payload.new;
+
+                if (!yeniGorev.okundu) {
+                    const kullaniciAd = yeniGorev.tamamlayanad || 'Bir kullanıcı';
+                    showPopup(`${kullaniciAd} görevi tamamladı.`);
+                    setOkunmamisGorevSayisi(prev => prev + 1);
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [kullaniciRol]);
+
+    // Popup gösterim fonksiyonu
+    const showPopup = (mesaj) => {
+        const popup = document.createElement('div');
+        popup.className = 'popup-bildirim';
+        popup.innerText = mesaj;
+        document.body.appendChild(popup);
+        setTimeout(() => {
+            popup.classList.add('show');
+        }, 10);
+        setTimeout(() => {
+            popup.classList.remove('show');
+            setTimeout(() => popup.remove(), 300);
+        }, 5000);
     };
-
-    fetchOkunmamis();
-}, [kullaniciId]);
 
     const openInNewTab = (path) => {
         const baseUrl = window.location.origin;
@@ -163,31 +216,31 @@ useEffect(() => {
                 </div>
 
                 {/* Görevler */}
-<div className="sidebar-category" onClick={() => setGorevMenuAcik(!gorevMenuAcik)}>
-    <span className="ikon">📝</span>
-    {acik && (
-        <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            GÖREVLER
-            {okunmamisGorevSayisi > 0 && (
-                <span
-                    style={{
-                        backgroundColor: "#dc2626",
-                        color: "white",
-                        borderRadius: "12px",
-                        padding: "2px 8px",
-                        fontSize: "12px",
-                        fontWeight: "bold",
-                        minWidth: "20px",
-                        textAlign: "center"
-                    }}
-                >
-                    {okunmamisGorevSayisi}
-                </span>
-            )}
-        </span>
-    )}
-    {acik && <span className="arrow">{gorevMenuAcik ? '▾' : '▸'}</span>}
-</div>
+                <div className="sidebar-category" onClick={() => setGorevMenuAcik(!gorevMenuAcik)}>
+                    <span className="ikon">📝</span>
+                    {acik && (
+                        <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            GÖREVLER
+                            {okunmamisGorevSayisi > 0 && (
+                                <span
+                                    style={{
+                                        backgroundColor: "#dc2626",
+                                        color: "white",
+                                        borderRadius: "12px",
+                                        padding: "2px 8px",
+                                        fontSize: "12px",
+                                        fontWeight: "bold",
+                                        minWidth: "20px",
+                                        textAlign: "center"
+                                    }}
+                                >
+                                    {okunmamisGorevSayisi}
+                                </span>
+                            )}
+                        </span>
+                    )}
+                    {acik && <span className="arrow">{gorevMenuAcik ? '▾' : '▸'}</span>}
+                </div>
                 <div
                     className={`sidebar-submenu ${gorevMenuAcik ? 'acik' : 'kapali'}`}
                     style={{ maxHeight: gorevMenuAcik ? `${gorevAltMenuler.length * 48}px` : '0' }}

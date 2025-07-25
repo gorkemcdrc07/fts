@@ -12,7 +12,7 @@ function Sidebar() {
 
     const location = useLocation();
     const [okunmamisGorevSayisi, setOkunmamisGorevSayisi] = useState(0);
-    const kullaniciId = localStorage.getItem('kullaniciId');
+    const kullaniciId = parseInt(localStorage.getItem('kullaniciId'));
     const kullaniciRol = localStorage.getItem('rol') || '';
 
     const kullaniciAltMenuler = [
@@ -49,6 +49,42 @@ function Sidebar() {
         document.body.classList.toggle("sidebar-kapali", !acik);
     }, [acik]);
 
+    // 🔔 Sayfa yüklendiğinde okunmamış görevleri al
+    useEffect(() => {
+        const fetchOkunmamis = async () => {
+            if (!kullaniciId) return;
+
+            try {
+                let query;
+
+                if (kullaniciRol === "YÖNETİCİ") {
+                    query = supabase
+                        .from("gorevler")
+                        .select("id")
+                        .eq("okundu", false)
+                        .eq("durum", "Tamamlandı");
+                } else {
+                    query = supabase
+                        .from("gorevler")
+                        .select("id")
+                        .eq("atananid", kullaniciId)
+                        .eq("okundu", false)
+                        .neq("durum", "Tamamlandı");
+                }
+
+                const { data, error } = await query;
+
+                if (error) throw error;
+                setOkunmamisGorevSayisi(data.length);
+            } catch (error) {
+                console.error("❌ Okunmamış görevler alınamadı:", error.message);
+            }
+        };
+
+        fetchOkunmamis();
+    }, [kullaniciId, kullaniciRol]);
+
+    // 🔄 Realtime güncellemesi ile dinleme
     useEffect(() => {
         const rol = localStorage.getItem('rol');
         if (rol !== 'YÖNETİCİ') return;
@@ -60,7 +96,7 @@ function Sidebar() {
                 schema: 'public',
                 table: 'gorevler'
             }, async (payload) => {
-                console.log("🟢 GÜNCELLEME YAKALANDI:", payload);
+                console.log("🟢 GÖREV GÜNCELLENDİ:", payload);
 
                 const yeniGorev = payload.new;
 
@@ -88,51 +124,42 @@ function Sidebar() {
             });
 
         return () => {
-            channel.unsubscribe(); // 👈 doğru kanal temizleme yöntemi
+            channel.unsubscribe();
         };
-    }, []); // boş bağımlılık listesi
+    }, []);
 
-
+    // 🔄 Görev kabul edildiğinde atayana bildirim gönder
     useEffect(() => {
-        if (kullaniciRol !== 'YÖNETİCİ') return;
-
         const channel = supabase
-            .channel('gorev-tamamlandi')
+            .channel('gorev-kabul')
             .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
-                table: 'gorevler'
-            }, async (payload) => {
-                const yeniGorev = payload.new;
+                table: 'gorevler',
+            }, (payload) => {
+                const g = payload.new;
+                const benimId = parseInt(localStorage.getItem('kullaniciId'));
 
-                if (yeniGorev.durum === "Tamamlandı" && !yeniGorev.okundu) {
-                    let kullaniciAd = 'Bir kullanıcı';
+                console.log("📦 GÜNCELLENEN GÖREV:", g);
+                console.log("👤 BENİM ID:", benimId);
+                console.log("🎯 GÖREVİN ATAYANI:", g.atayanid);
 
-                    if (yeniGorev.tamamlayanid) {
-                        const { data, error } = await supabase
-                            .from('kullanicilar')
-                            .select('ad')
-                            .eq('id', yeniGorev.tamamlayanid)
-                            .single();
-
-                        if (!error && data?.ad) {
-                            kullaniciAd = data.ad;
-                        }
-                    }
-
-                    showPopup(`${kullaniciAd} görevi tamamladı.`);
-                    setOkunmamisGorevSayisi(prev => prev + 1);
+                if (
+                    g.durum === "Kabul Edildi" &&
+                    parseInt(g.atayanid) === benimId
+                ) {
+                    console.log("✅ BİLDİRİM GÖSTERİLİYOR");
+                    showPopup('📬 Atadığınız görev kabul edildi!');
                 }
             })
             .subscribe();
 
         return () => {
-            supabase.removeChannel(channel);
+            channel.unsubscribe();
         };
-    }, [kullaniciRol]);
+    }, [kullaniciId]);
 
-
-    // Popup gösterim fonksiyonu
+    // 🔔 Popup kutusu
     const showPopup = (mesaj) => {
         const popup = document.createElement('div');
         popup.className = 'popup-bildirim';
@@ -291,4 +318,5 @@ function Sidebar() {
         </div>
     );
 }
+
 export default Sidebar;

@@ -16,10 +16,10 @@ function TumGorevler() {
             const sorgu = supabase
                 .from('gorevler')
                 .select(`
-            *,
-            atayan:login!gorevler_atayanid_fkey(kullaniciAdi),
-            atanan:login!gorevler_atananid_fkey(kullaniciAdi)
-        `)
+  *,
+  atayan:login!gorevler_atayanid_fkey(kullanici),
+  atanan:login!gorevler_atananid_fkey(kullanici)
+`)
                 .order('created_at', { ascending: false });
 
             if (kullaniciRol !== 'YÖNETİCİ') {
@@ -106,22 +106,22 @@ function TumGorevler() {
                                 <span className={`durum ${g.durum.toLowerCase()}`}>{g.durum}</span>
                             </div>
                             <div className="gorev-detay">
-                                <p><b>Görev Veren:</b> {g.atayan?.kullaniciAdi || '-'}</p>
-                                <p><b>Görev Verilen Tarih:</b> {formatTarihSaat(g.gorev_verilen_tarih)}</p>
+                                <p><b>GÖREV VEREN :</b> {g.atayan?.kullanici || '-'}</p>
+                                <p><b>GÖREV VERİLEN TARİH :</b> {formatTarihSaat(g.gorev_verilen_tarih)}</p>
 
-                                <p><b>Görev Alan:</b> {g.atanan?.kullaniciAdi || '-'}</p>
-                                {g.aciklama && <p><b>Açıklama:</b> {g.aciklama}</p>}
+                                <p><b>GÖREV ALAN :</b> {g.atanan?.kullanici || '-'}</p>
+                                {g.aciklama && <p><b>AÇIKLAMA  :</b> {g.aciklama}</p>}
 
-                                <p><b>Son Teslim Tarihi:</b> {formatTarihSaat(g.duedate)}</p>
-                                <p><b>Görev Kabul Tarihi:</b> {formatTarihSaat(g.gorev_kabul_tarih, -3)}</p>
+                                <p><b>SON TESLİM TARİHİ :</b> {formatTarihSaat(g.duedate)}</p>
+                                <p><b>GÖREV KABUL :</b> {formatTarihSaat(g.gorev_kabul_tarih, -3)}</p>
 
                                 <p className="tamamlanma-tarihi">
-                                    <b>Tamamlanma Tarihi:</b> {formatTarihSaat(g.teslim_tarihi, +3)}
+                                    <b>TAMAMLANMA :</b> {formatTarihSaat(g.teslim_tarihi, +3)}
                                 </p>
 
                                 {g.kullanici_aciklama && (
                                     <p className="kullanici-aciklama">
-                                        <b>Kullanıcı Açıklaması:</b> {g.kullanici_aciklama}
+                                        <b>AÇIKLAMA :</b> {g.kullanici_aciklama}
                                     </p>
                                 )}
                             </div>

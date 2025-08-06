@@ -29,6 +29,7 @@ function Login() {
             localStorage.setItem('rol', data.rol);
             localStorage.setItem('kullaniciId', data.id); // 🔥 GÖRÜNÜM İÇİN GEREKLİ
             localStorage.setItem('girisYapanKullanici', JSON.stringify(data)); // (İsteğe bağlı)
+            localStorage.setItem("profilFotograf", data.profil_fotograf || ""); // BURAYA EKLEDİK
 
             navigate('/anasayfa');
         }

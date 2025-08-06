@@ -23,6 +23,9 @@ import GorevAta from './views/Gorevler/GorevAta';
 import BenimGorevlerim from './views/Gorevler/BenimGorevlerim';
 import TumGorevler from './views/Gorevler/TumGorevler';
 
+import TedarikciMasraf from './Hakedisler/TedarikciMasraf';
+
+
 function App() {
     return (
         <HelmetProvider>
@@ -45,14 +48,18 @@ function App() {
                                     <Route path="/arac/izin-girisi" element={<IzinGirisi />} />
                                     <Route path="/arac/kesinti-girisi" element={<KesintiGirisi />} />
 
-                                    {/* 🆕 Görevler */}
+                                    {/* Görevler */}
                                     <Route path="/gorevler/ata" element={<GorevAta />} />
                                     <Route path="/gorevler/benim" element={<BenimGorevlerim />} />
                                     <Route path="/gorevler/tum" element={<TumGorevler />} />
 
-                                    {/* Varsayılan yönlendirme */}
+                                    {/* Hakedis */}
+                                    <Route path="/hakedis/tedarikci-masraf" element={<TedarikciMasraf />} />
+
+                                    {/* Varsayılan */}
                                     <Route path="*" element={<Navigate to="/anasayfa" replace />} />
                                 </Routes>
+
                             </Layout>
                         }
                     />

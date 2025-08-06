@@ -44,6 +44,29 @@ function Sidebar() {
         { ad: 'Görev Ata', yol: '/gorevler/ata', ikon: '➕', sadeceRol: 'YÖNETİCİ' },
         { ad: 'Benim Görevlerim', yol: '/gorevler/benim', ikon: '📌' },
     ];
+    const [afyonMenuAcik, setAfyonMenuAcik] = useState(false);
+
+    const afyonAltMenuler = [
+        { ad: 'Seferler', yol: '/afyon/seferler', ikon: '🚌' },
+        { ad: 'Araçlar', yol: '/afyon/araclar', ikon: '🚐' },
+    ];
+    const [hakedisMenuAcik, setHakedisMenuAcik] = useState(false);
+
+    const hakedisAltMenuler = [
+        { ad: 'Tedarikçi Masraf', yol: '/hakedis/tedarikci-masraf', ikon: '💰' },
+    ];
+    const [bildirimSayisi, setBildirimSayisi] = useState(0);
+    const [kullaniciIdState, setKullaniciIdState] = useState(null);
+
+
+    useEffect(() => {
+        const id = parseInt(localStorage.getItem("kullaniciId"));
+        if (id) {
+            setKullaniciIdState(id);
+        }
+    }, []);
+
+
 
     useEffect(() => {
         document.body.classList.toggle("sidebar-kapali", !acik);
@@ -68,15 +91,13 @@ function Sidebar() {
                     let kabulEdenAdi = 'Bir kullanıcı';
 
                     if (g.tamamlayanid) {  // veya kabul edenin id'si başka bir kolon ise onu kullan
-                        const { data, error } = await supabase
-                            .from('login')
-                            .select('kullaniciAdi')
-                            .eq('id', g.tamamlayanid)
-                            .single();
+                        const { count, error } = await supabase
+                            .from('bildirimler')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('kullanici_id', kullaniciId)
+                            .eq('okundu', false)
+                            .eq('baslik', 'Masraf Onayı');  // ✅ sadece hakediş bildirimi
 
-                        if (!error && data?.kullaniciAdi) {
-                            kabulEdenAdi = data.kullaniciAdi;
-                        }
                     }
 
                     showPopup(`📬 ${kabulEdenAdi} görevi kabul etti!`);
@@ -121,7 +142,9 @@ function Sidebar() {
                     }
 
                     showPopup(`${kullaniciAd} görevi tamamladı.`);
-                    setOkunmamisGorevSayisi(prev => prev + 1);
+                    if (payload.new?.baslik === 'Masraf Onayı') {
+                        setBildirimSayisi(prev => prev + 1); // ✅ sadece hakedis sayacını artır
+                    }
                 }
             })
             .subscribe((status) => {
@@ -166,10 +189,7 @@ function Sidebar() {
 
     // 📡 Yeni bildirimleri yakala ve popup göster
     useEffect(() => {
-        const kullaniciId = parseInt(localStorage.getItem('kullaniciId'));
-        // const girisYapan = JSON.parse(localStorage.getItem('girisYapanKullanici')); // Eğer gerekliyse
-
-        if (!kullaniciId) return;
+        if (!kullaniciIdState) return;
 
         const kanal = supabase
             .channel('realtime:bildirimler')
@@ -177,22 +197,51 @@ function Sidebar() {
                 event: 'INSERT',
                 schema: 'public',
                 table: 'bildirimler',
-                filter: `kullanici_id=eq.${kullaniciId}`,
             }, (payload) => {
-                const mesaj = payload.new?.mesaj;
+                const yeni = payload.new;
+                if (!yeni) return;
+
+                if (yeni.kullanici_id !== kullaniciIdState) return; // 👈 manuel filtre
+
+                const mesaj = yeni.mesaj;
+                const baslik = yeni.baslik;
+
                 if (mesaj) {
                     showPopup(mesaj);
-                    setOkunmamisGorevSayisi(prev => prev + 1);
+                    if (baslik === 'Masraf Onayı') {
+                        setBildirimSayisi(prev => prev + 1);
+                    }
                 }
             })
             .subscribe((status) => {
-                console.log("📡 Bildirim kanalı durumu:", status); // ✅ Burada SUBSCRIBED görmelisin
+                console.log("📡 Bildirim kanalı durumu:", status);
             });
+
 
         return () => {
             supabase.removeChannel(kanal);
         };
-    }, []);
+    }, [kullaniciIdState]); // ✅ sadece kullaniciIdState’e bağlı
+
+
+    useEffect(() => {
+        if (!kullaniciIdState) return;
+
+        const bildirimiCek = async () => {
+            const { count, error } = await supabase
+                .from('bildirimler')
+                .select('*', { count: 'exact', head: true })
+                .eq('kullanici_id', kullaniciIdState)
+                .eq('okundu', false)
+                .eq('baslik', 'Masraf Onayı');
+
+            if (!error && typeof count === 'number') {
+                setBildirimSayisi(count);
+            }
+        };
+
+        bildirimiCek();
+    }, [kullaniciIdState]); // 👈 doğru zamanda çalışması için!
 
 
 
@@ -302,6 +351,49 @@ function Sidebar() {
                     ))}
                 </div>
 
+                {/* Hakedis Menüsü */}
+                <div className="sidebar-category" onClick={() => setHakedisMenuAcik(!hakedisMenuAcik)}>
+                    <span className="ikon">💼</span>
+                    {acik && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            HAKEDİŞLER
+                            {bildirimSayisi > 0 && (
+                                <span
+                                    style={{
+                                        backgroundColor: 'red',
+                                        color: 'white',
+                                        borderRadius: '12px',
+                                        padding: '2px 8px',
+                                        fontSize: '12px',
+                                        fontWeight: 'bold',
+                                        minWidth: '20px',
+                                        textAlign: 'center'
+                                    }}
+                                >
+                                    {bildirimSayisi}
+                                </span>
+                            )}
+                        </span>
+                    )}
+                    {acik && <span className="arrow">{hakedisMenuAcik ? '▾' : '▸'}</span>}
+                </div>
+                <div
+                    className={`sidebar-submenu ${hakedisMenuAcik ? 'acik' : 'kapali'}`}
+                    style={{ maxHeight: hakedisMenuAcik ? `${hakedisAltMenuler.length * 48}px` : '0' }}
+                >
+                    {hakedisAltMenuler.map((m) => (
+                        <div
+                            key={m.yol}
+                            className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
+                            onClick={() => window.location.href = m.yol}
+                        >
+                            <span className="ikon">{m.ikon}</span>
+                            {acik && <span>{m.ad}</span>}
+                        </div>
+                    ))}
+                </div>
+
+
                 {/* Görevler */}
                 <div className="sidebar-category" onClick={() => setGorevMenuAcik(!gorevMenuAcik)}>
                     <span className="ikon">📝</span>
@@ -328,6 +420,28 @@ function Sidebar() {
                     )}
                     {acik && <span className="arrow">{gorevMenuAcik ? '▾' : '▸'}</span>}
                 </div>
+                {/* AFYON MENÜSÜ */}
+                <div className="sidebar-category" onClick={() => setAfyonMenuAcik(!afyonMenuAcik)}>
+                    <span className="ikon">🏞️</span>
+                    {acik && <span>AFYON</span>}
+                    {acik && <span className="arrow">{afyonMenuAcik ? '▾' : '▸'}</span>}
+                </div>
+                <div
+                    className={`sidebar-submenu ${afyonMenuAcik ? 'acik' : 'kapali'}`}
+                    style={{ maxHeight: afyonMenuAcik ? `${afyonAltMenuler.length * 48}px` : '0' }}
+                >
+                    {afyonAltMenuler.map((m) => (
+                        <div
+                            key={m.yol}
+                            className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
+                            onClick={() => window.location.href = m.yol}
+                        >
+                            <span className="ikon">{m.ikon}</span>
+                            {acik && <span>{m.ad}</span>}
+                        </div>
+                    ))}
+                </div>
+
                 <div
                     className={`sidebar-submenu ${gorevMenuAcik ? 'acik' : 'kapali'}`}
                     style={{ maxHeight: gorevMenuAcik ? `${gorevAltMenuler.length * 48}px` : '0' }}

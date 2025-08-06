@@ -6,12 +6,18 @@ import { supabase } from "./supabaseClient";
 function Navbar() {
     const kullanici = localStorage.getItem("kullanici") || "Kullanıcı";
     const rol = localStorage.getItem("rol") || "Rol";
-    const kullaniciId = localStorage.getItem("kullaniciId");
+    const kullaniciIdRaw = localStorage.getItem("kullaniciId");
+    const kullaniciId = kullaniciIdRaw ? Number(kullaniciIdRaw) : null;
     const navigate = useNavigate();
 
     const [tema, setTema] = useState(localStorage.getItem("tema") || "dark");
     const [profilModalAcik, setProfilModalAcik] = useState(false);
-    const [profilResim, setProfilResim] = useState(null);
+    // Profil resmi URL'si veya boş
+    const [profilResim, setProfilResim] = useState(localStorage.getItem("profilFotograf") || null);
+
+    // Yeni seçilen dosya (File objesi)
+    const [selectedFile, setSelectedFile] = useState(null);
+
     const [email, setEmail] = useState("");
     const [sifrePanelAcik, setSifrePanelAcik] = useState(false);
     const [kullaniciAdi, setKullaniciAdi] = useState("");
@@ -30,7 +36,17 @@ function Navbar() {
         document.documentElement.setAttribute("data-theme", tema);
     }, [tema]);
 
-    // 🔁 Görevleri kontrol eden fonksiyon
+    // Modal açıldığında e-posta ve kullanıcı adı bilgilerini set et
+    useEffect(() => {
+        if (profilModalAcik) {
+            const storedEmail = localStorage.getItem("email") || "";
+            const storedKullaniciAdi = localStorage.getItem("kullaniciAdi") || "";
+            setEmail(storedEmail);
+            setKullaniciAdi(storedKullaniciAdi);
+        }
+    }, [profilModalAcik]);
+
+    // Görevleri kontrol eden fonksiyon
     const fetchOkunmamisGorevler = async () => {
         if (!kullaniciId) return;
 
@@ -50,12 +66,11 @@ function Navbar() {
         }
     };
 
-    // ✅ Sayfa yüklendiğinde bir kez çalışır
     useEffect(() => {
         fetchOkunmamisGorevler();
     }, [kullaniciId]);
 
-    // ✅ Supabase Realtime ile canlı dinleme
+    // Supabase Realtime bildirim kanalı
     useEffect(() => {
         if (!kullaniciId) return;
 
@@ -67,7 +82,7 @@ function Navbar() {
                     event: "*",
                     schema: "public",
                     table: "gorevler",
-                    filter: `atananid=eq.${kullaniciId}`
+                    filter: `atananid=eq.${kullaniciId}`,
                 },
                 () => {
                     fetchOkunmamisGorevler();
@@ -85,61 +100,87 @@ function Navbar() {
         navigate("/");
     };
 
+    // Fotoğraf seçildiğinde File objesini al ve state'e kaydet
     const handleResimSec = (e) => {
         const file = e.target.files[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => setProfilResim(reader.result);
-            reader.readAsDataURL(file);
+            setSelectedFile(file);
+            // Önizleme için URL oluştur ve state'e kaydet
+            const previewUrl = URL.createObjectURL(file);
+            setProfilResim(previewUrl);
         }
     };
 
+    // Profil kaydetme fonksiyonu
     const handleProfilKaydet = async () => {
         try {
-            const {
-                data: { user },
-                error: userError
-            } = await supabase.auth.getUser();
+            if (!kullaniciId) throw new Error("Kullanıcı oturumu bulunamadı.");
 
-            if (userError || !user) throw new Error("Supabase oturumu bulunamadı.");
+            let fotoUrl = profilResim; // Varsayılan olarak mevcut URL
 
-            const userId = user.id;
-            let fotoUrl = null;
+            const path = `${kullaniciId}/profil.jpg`;
 
-            if (profilResim) {
-                const blob = await (await fetch(profilResim)).blob();
-                const path = `${userId}/profil.jpg`;
-
+            if (selectedFile) {
+                // Dosya varsa Storage'a yükle
                 const { error: uploadError } = await supabase.storage
                     .from("profil-fotograflari")
-                    .upload(path, blob, { upsert: true });
+                    .upload(path, selectedFile, { upsert: true });
 
-                if (uploadError) throw uploadError;
+                if (uploadError) {
+                    console.error("Storage upload error:", uploadError);
+                    alert("Fotoğraf yükleme hatası: " + uploadError.message);
+                    return;
+                }
 
-                fotoUrl = supabase.storage
+                // Public URL al
+                const { data: publicUrlData, error: publicUrlError } = supabase.storage
                     .from("profil-fotograflari")
-                    .getPublicUrl(path).data.publicUrl;
+                    .getPublicUrl(path);
+
+                if (publicUrlError) {
+                    console.error("Public URL alma hatası:", publicUrlError);
+                    alert("Fotoğraf URL alınırken hata oluştu.");
+                    return;
+                }
+
+                fotoUrl = publicUrlData.publicUrl;
             }
 
-            await supabase.from("kullanicilar").upsert({
-                id: userId,
-                email,
-                profil_fotograf: fotoUrl
-            });
+            // Veritabanını güncelle
+            const { error: updateError } = await supabase
+                .from("login")
+                .update({ profil_fotograf: fotoUrl, email })
+                .eq("id", kullaniciId);
 
+            if (updateError) {
+                console.error("Veritabanı güncelleme hatası:", updateError);
+                alert("Profil güncelleme hatası: " + updateError.message);
+                return;
+            }
+
+            localStorage.setItem("profilFotograf", fotoUrl);
+            localStorage.setItem("email", email);
+            localStorage.setItem("kullaniciAdi", kullaniciAdi);
+
+            // Şifre değişikliği varsa
             if (yeniSifre && kullaniciAdi === kullanici) {
                 const { error: sifreGuncelleHatasi } = await supabase
                     .from("login")
                     .update({ sifre: yeniSifre })
                     .eq("kullaniciAdi", kullaniciAdi);
 
-                if (sifreGuncelleHatasi) throw sifreGuncelleHatasi;
+                if (sifreGuncelleHatasi) {
+                    console.error("Şifre güncelleme hatası:", sifreGuncelleHatasi);
+                    alert("Şifre güncelleme hatası: " + sifreGuncelleHatasi.message);
+                    return;
+                }
             }
 
             alert("Profil güncellendi.");
             setProfilModalAcik(false);
+            setSelectedFile(null);
         } catch (err) {
-            console.error(err);
+            console.error("handleProfilKaydet hata:", err);
             alert("Hata: " + err.message);
         }
     };
@@ -195,9 +236,7 @@ function Navbar() {
                                     {profilResim ? (
                                         <img src={profilResim} alt="Profil" />
                                     ) : (
-                                        <span className="avatar-initial">
-                                            {kullanici[0].toUpperCase()}
-                                        </span>
+                                        <span className="avatar-initial">{kullanici[0].toUpperCase()}</span>
                                     )}
                                 </div>
                             </label>
@@ -251,7 +290,10 @@ function Navbar() {
                         )}
 
                         <div className="modal-buttons">
-                            <button onClick={() => setProfilModalAcik(false)} className="kapat-btn">
+                            <button
+                                onClick={() => setProfilModalAcik(false)}
+                                className="kapat-btn"
+                            >
                                 Kapat
                             </button>
                             <button onClick={handleProfilKaydet} className="kaydet-btn">

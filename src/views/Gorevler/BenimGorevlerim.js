@@ -144,7 +144,7 @@ function BenimGorevlerim() {
 
     return (
         <div className="container">
-            <h2>Benim Aktif Görevlerim</h2>
+            <h2>Aktif Görevlerim</h2>
 
             {loading ? (
                 <p>Yükleniyor...</p>

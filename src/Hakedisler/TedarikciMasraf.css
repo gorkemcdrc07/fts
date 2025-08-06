@@ -1,0 +1,136 @@
+.masraf-modern-container {
+    padding: 20px;
+    color: #fff;
+    font-family: 'Segoe UI', sans-serif;
+    background-color: #0d1117;
+    min-height: 100vh;
+}
+
+.masraf-header {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.ekle-btn,
+.excel-btn {
+    background-color: #238636;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.excel-btn {
+    background-color: #1f6feb;
+}
+
+.filtre-input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #444c56;
+    border-radius: 4px;
+    background-color: #161b22;
+    color: #c9d1d9;
+}
+
+.masraf-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background-color: #161b22;
+    padding: 20px;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    max-width: 400px;
+}
+
+    .masraf-form input,
+    .masraf-form textarea {
+        padding: 8px;
+        border: 1px solid #30363d;
+        border-radius: 4px;
+        background-color: #0d1117;
+        color: #c9d1d9;
+    }
+
+    .masraf-form label {
+        font-weight: bold;
+        margin-top: 5px;
+    }
+
+.form-btns {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+    .form-btns button {
+        flex: 1;
+        padding: 8px;
+        border: none;
+        border-radius: 4px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+        .form-btns button[type="submit"] {
+            background-color: #238636;
+            color: white;
+        }
+
+.iptal-btn {
+    background-color: #6e7681;
+    color: white;
+}
+
+.masraf-table-wrapper {
+    overflow-x: auto;
+}
+
+.masraf-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #161b22;
+    color: #c9d1d9;
+    font-size: 14px;
+}
+
+    .masraf-table th,
+    .masraf-table td {
+        border: 1px solid #30363d;
+        padding: 10px;
+        text-align: left;
+    }
+
+    .masraf-table th {
+        background-color: #21262d;
+        font-weight: bold;
+    }
+
+    .masraf-table td button {
+        margin-right: 5px;
+        padding: 5px 10px;
+        font-size: 12px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+    }
+
+        .masraf-table td button:nth-child(1) {
+            background-color: #1f6feb; /* Düzenle */
+            color: white;
+        }
+
+        .masraf-table td button:nth-child(2) {
+            background-color: #d73a49; /* Sil */
+            color: white;
+        }
+
+        .masraf-table td button:nth-child(3) {
+            background-color: #238636; /* Onayla */
+            color: white;
+        }

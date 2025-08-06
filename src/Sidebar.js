@@ -392,7 +392,27 @@ function Sidebar() {
                         </div>
                     ))}
                 </div>
-
+                {/* AFYON MENÜSÜ */}
+                <div className="sidebar-category" onClick={() => setAfyonMenuAcik(!afyonMenuAcik)}>
+                    <span className="ikon">🏞️</span>
+                    {acik && <span>AFYON</span>}
+                    {acik && <span className="arrow">{afyonMenuAcik ? '▾' : '▸'}</span>}
+                </div>
+                <div
+                    className={`sidebar-submenu ${afyonMenuAcik ? 'acik' : 'kapali'}`}
+                    style={{ maxHeight: afyonMenuAcik ? `${afyonAltMenuler.length * 48}px` : '0' }}
+                >
+                    {afyonAltMenuler.map((m) => (
+                        <div
+                            key={m.yol}
+                            className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
+                            onClick={() => window.location.href = m.yol}
+                        >
+                            <span className="ikon">{m.ikon}</span>
+                            {acik && <span>{m.ad}</span>}
+                        </div>
+                    ))}
+                </div>
 
                 {/* Görevler */}
                 <div className="sidebar-category" onClick={() => setGorevMenuAcik(!gorevMenuAcik)}>
@@ -420,27 +440,7 @@ function Sidebar() {
                     )}
                     {acik && <span className="arrow">{gorevMenuAcik ? '▾' : '▸'}</span>}
                 </div>
-                {/* AFYON MENÜSÜ */}
-                <div className="sidebar-category" onClick={() => setAfyonMenuAcik(!afyonMenuAcik)}>
-                    <span className="ikon">🏞️</span>
-                    {acik && <span>AFYON</span>}
-                    {acik && <span className="arrow">{afyonMenuAcik ? '▾' : '▸'}</span>}
-                </div>
-                <div
-                    className={`sidebar-submenu ${afyonMenuAcik ? 'acik' : 'kapali'}`}
-                    style={{ maxHeight: afyonMenuAcik ? `${afyonAltMenuler.length * 48}px` : '0' }}
-                >
-                    {afyonAltMenuler.map((m) => (
-                        <div
-                            key={m.yol}
-                            className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
-                            onClick={() => window.location.href = m.yol}
-                        >
-                            <span className="ikon">{m.ikon}</span>
-                            {acik && <span>{m.ad}</span>}
-                        </div>
-                    ))}
-                </div>
+               
 
                 <div
                     className={`sidebar-submenu ${gorevMenuAcik ? 'acik' : 'kapali'}`}

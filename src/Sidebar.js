@@ -57,6 +57,9 @@ function Sidebar() {
     ];
     const [bildirimSayisi, setBildirimSayisi] = useState(0);
     const [kullaniciIdState, setKullaniciIdState] = useState(null);
+    const [gorevBildirimSayisi, setGorevBildirimSayisi] = useState(0); // 🔧 Eklenen satır
+
+
 
 
     useEffect(() => {
@@ -210,6 +213,8 @@ function Sidebar() {
                     showPopup(mesaj);
                     if (baslik === 'Masraf Onayı') {
                         setBildirimSayisi(prev => prev + 1);
+                    } else if (baslik === 'Görev Bildirimi') {
+                        setGorevBildirimSayisi(prev => prev + 1);
                     }
                 }
             })
@@ -228,20 +233,30 @@ function Sidebar() {
         if (!kullaniciIdState) return;
 
         const bildirimiCek = async () => {
-            const { count, error } = await supabase
+            // Masraf Onayı
+            const { count: masrafCount } = await supabase
                 .from('bildirimler')
                 .select('*', { count: 'exact', head: true })
                 .eq('kullanici_id', kullaniciIdState)
                 .eq('okundu', false)
                 .eq('baslik', 'Masraf Onayı');
 
-            if (!error && typeof count === 'number') {
-                setBildirimSayisi(count);
-            }
+            setBildirimSayisi(masrafCount || 0);
+
+            // Görev Bildirimi
+            const { count: gorevCount } = await supabase
+                .from('bildirimler')
+                .select('*', { count: 'exact', head: true })
+                .eq('kullanici_id', kullaniciIdState)
+                .eq('okundu', false)
+                .eq('baslik', 'Görev Bildirimi');
+
+            setGorevBildirimSayisi(gorevCount || 0);
         };
 
         bildirimiCek();
-    }, [kullaniciIdState]); // 👈 doğru zamanda çalışması için!
+    }, [kullaniciIdState]);
+
 
 
 
@@ -458,13 +473,14 @@ function Sidebar() {
                                 {acik && (
                                     <span>
                                         {m.ad}
-                                        {m.ad === 'Tüm Görevler' && okunmamisGorevSayisi > 0 && (
-                                            <span className="badge">{okunmamisGorevSayisi}</span>
+                                        {m.ad === 'Tüm Görevler' && gorevBildirimSayisi > 0 && (
+                                            <span className="badge">{gorevBildirimSayisi}</span>
                                         )}
                                     </span>
                                 )}
                             </div>
                         ))}
+
 
                 </div>
             </div>

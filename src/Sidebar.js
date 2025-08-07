@@ -196,37 +196,43 @@ function Sidebar() {
 
         const kanal = supabase
             .channel('realtime:bildirimler')
-            .on('postgres_changes', {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'bildirimler',
-            }, (payload) => {
-                const yeni = payload.new;
-                if (!yeni) return;
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'bildirimler',
+                },
+                (payload) => {
+                    const yeni = payload.new;
+                    if (!yeni) return;
 
-                if (yeni.kullanici_id !== kullaniciIdState) return; // 👈 manuel filtre
+                    if (yeni.kullanici_id !== kullaniciIdState) return;
 
-                const mesaj = yeni.mesaj;
-                const baslik = yeni.baslik;
+                    const mesaj = yeni.mesaj;
+                    const baslik = yeni.baslik;
 
-                if (baslik === 'Masraf Onayı') {
-                    setBildirimSayisi(prev => prev + 1);
-                } else if (baslik === 'Görev Bildirimi') {
-                    setGorevBildirimSayisi(prev => prev + 1);
-                    setOkunmamisGorevSayisi(prev => prev + 1); // ✅ BU SATIR
+                    if (baslik === 'Masraf Onayı') {
+                        setBildirimSayisi((prev) => prev + 1);
+                    } else if (baslik === 'Görev Bildirimi') {
+                        setGorevBildirimSayisi((prev) => prev + 1);
+                        setOkunmamisGorevSayisi((prev) => prev + 1);
+                    }
+
+                    if (mesaj) {
+                        showPopup(mesaj);
+                    }
                 }
-
-                }
-            })
+            )
             .subscribe((status) => {
                 console.log("📡 Bildirim kanalı durumu:", status);
             });
 
-
         return () => {
             supabase.removeChannel(kanal);
         };
-    }, [kullaniciIdState]); // ✅ sadece kullaniciIdState’e bağlı
+    }, [kullaniciIdState]);
+
 
 
     useEffect(() => {

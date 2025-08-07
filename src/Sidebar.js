@@ -209,13 +209,13 @@ function Sidebar() {
                 const mesaj = yeni.mesaj;
                 const baslik = yeni.baslik;
 
-                if (mesaj) {
-                    showPopup(mesaj);
-                    if (baslik === 'Masraf Onayı') {
-                        setBildirimSayisi(prev => prev + 1);
-                    } else if (baslik === 'Görev Bildirimi') {
-                        setGorevBildirimSayisi(prev => prev + 1);
-                    }
+                if (baslik === 'Masraf Onayı') {
+                    setBildirimSayisi(prev => prev + 1);
+                } else if (baslik === 'Görev Bildirimi') {
+                    setGorevBildirimSayisi(prev => prev + 1);
+                    setOkunmamisGorevSayisi(prev => prev + 1); // ✅ BU SATIR
+                }
+
                 }
             })
             .subscribe((status) => {
@@ -244,6 +244,7 @@ function Sidebar() {
             setBildirimSayisi(masrafCount || 0);
 
             // Görev Bildirimi
+            // Görev Bildirimi
             const { count: gorevCount } = await supabase
                 .from('bildirimler')
                 .select('*', { count: 'exact', head: true })
@@ -252,6 +253,8 @@ function Sidebar() {
                 .eq('baslik', 'Görev Bildirimi');
 
             setGorevBildirimSayisi(gorevCount || 0);
+            setOkunmamisGorevSayisi(gorevCount || 0); // ✅ BU SATIR
+
         };
 
         bildirimiCek();
@@ -279,6 +282,26 @@ function Sidebar() {
         const baseUrl = window.location.origin;
         window.open(baseUrl + path, '_blank', 'noopener,noreferrer');
     };
+
+const bildirimiOkunduYap = async (baslik) => {
+    if (!kullaniciIdState || !baslik) return;
+
+    await supabase
+        .from('bildirimler')
+        .update({ okundu: true })
+        .eq('kullanici_id', kullaniciIdState)
+        .eq('baslik', baslik)
+        .eq('okundu', false);
+
+    // Rozetleri sıfırla
+    if (baslik === 'Görev Bildirimi') {
+        setOkunmamisGorevSayisi(0);
+        setGorevBildirimSayisi(0);
+    } else if (baslik === 'Masraf Onayı') {
+        setBildirimSayisi(0);
+    }
+};
+
 
     return (
         <div className={`sidebar ${acik ? 'acik' : 'kapali'}`}>
@@ -336,7 +359,12 @@ function Sidebar() {
                         <div
                             key={m.yol}
                             className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
-                            onClick={() => window.location.href = m.yol}
+                            onClick={() => {
+                                if (m.ad === 'Tüm Görevler') {
+                                    bildirimiOkunduYap('Görev Bildirimi');
+                                }
+                                window.location.href = m.yol;
+                            }}
                         >
                             <span className="ikon">{m.ikon}</span>
                             {acik && <span>{m.ad}</span>}
@@ -358,7 +386,10 @@ function Sidebar() {
                         <div
                             key={m.yol}
                             className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
-                            onClick={() => window.location.href = m.yol}
+                            onClick={() => {
+                                bildirimiOkunduYap('Masraf Onayı');
+                                window.location.href = m.yol;
+                            }}
                         >
                             <span className="ikon">{m.ikon}</span>
                             {acik && <span>{m.ad}</span>}
@@ -400,7 +431,10 @@ function Sidebar() {
                         <div
                             key={m.yol}
                             className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
-                            onClick={() => window.location.href = m.yol}
+                            onClick={() => {
+                                bildirimiOkunduYap('Masraf Onayı');
+                                window.location.href = m.yol;
+                            }}
                         >
                             <span className="ikon">{m.ikon}</span>
                             {acik && <span>{m.ad}</span>}
@@ -467,7 +501,12 @@ function Sidebar() {
                             <div
                                 key={m.yol}
                                 className={`sidebar-item ${location.pathname === m.yol ? 'aktif' : ''}`}
-                                onClick={() => window.location.href = m.yol}
+                                onClick={() => {
+                                    if (m.ad === 'Tüm Görevler') {
+                                        bildirimiOkunduYap('Görev Bildirimi');
+                                    }
+                                    window.location.href = m.yol;
+                                }}
                             >
                                 <span className="ikon">{m.ikon}</span>
                                 {acik && (

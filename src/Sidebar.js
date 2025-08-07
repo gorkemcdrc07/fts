@@ -307,6 +307,36 @@ const bildirimiOkunduYap = async (baslik) => {
         setBildirimSayisi(0);
     }
 };
+    // ✅ GÖREV ATANDIĞINDA GÖREVLI KULLANICIYA BİLDİRİM
+    useEffect(() => {
+        if (!kullaniciIdState) return;
+
+        const kanal = supabase
+            .channel('realtime:gorevler')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'gorevler',
+            }, (payload) => {
+                const yeniGorev = payload.new;
+                if (!yeniGorev) return;
+
+                // Eğer görev bana atandıysa popup göster
+                if (parseInt(yeniGorev.gorevliid) === kullaniciIdState) {
+                    showPopup("📌 Size yeni bir görev atandı!");
+
+                    // Bildirim sayacı artır
+                    setGorevBildirimSayisi(prev => prev + 1);
+                    setOkunmamisGorevSayisi(prev => prev + 1);
+                }
+            })
+            .subscribe();
+
+        return () => {
+            kanal.unsubscribe();
+        };
+    }, [kullaniciIdState]);
+
 
 
     return (

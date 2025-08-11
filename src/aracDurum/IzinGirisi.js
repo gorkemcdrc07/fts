@@ -118,9 +118,14 @@ function IzinGirisi() {
     };
 
     const plakalariGetir = async () => {
-        const { data, error } = await supabase.from('plakalar').select('*');
+        const { data, error } = await supabase
+            .from('plakalar')
+            .select('*')
+            .or('statu.is.null,statu.neq.ÇIKARILDI'); // "ÇIKARILDI" olanları dışla, NULL olanları dahil et
+
         if (!error && data) setPlakaListesi(data);
     };
+
 
     const handleChange = (e) => {
         const { name, value } = e.target;

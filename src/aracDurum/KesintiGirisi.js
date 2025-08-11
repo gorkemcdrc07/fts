@@ -63,9 +63,14 @@ function KesintiGirisi() {
     };
 
     const plakalarGetir = async () => {
-        const { data } = await supabase.from('plakalar').select('plaka, treyler');
-        if (data) setPlakalar(data);
+        const { data, error } = await supabase
+            .from('plakalar')
+            .select('plaka, treyler') // sadece ihtiyacın olan kolonlar
+            .or('statu.is.null,statu.neq.ÇIKARILDI') // "ÇIKARILDI" olanları liste dışı bırak
+
+        if (!error && data) setPlakalar(data);
     };
+
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -194,14 +199,20 @@ function KesintiGirisi() {
                     <h2>Kesinti Girişi</h2>
 
                     <label>Plaka - Treyler</label>
-                    <select name="plaka_treyler" value={form.plaka_treyler} onChange={handleChange} required>
-                        <option value="">Plaka Seçin</option>
+                    <input
+                        list="plaka-treyler-list"
+                        name="plaka_treyler"
+                        value={form.plaka_treyler}
+                        onChange={handleChange}
+                        placeholder="Örn: 34 ABC 123 - T123"
+                        required
+                    />
+                    <datalist id="plaka-treyler-list">
                         {plakalar.map((p, idx) => (
-                            <option key={idx} value={`${p.plaka} - ${p.treyler}`}>
-                                {p.plaka} - {p.treyler}
-                            </option>
+                            <option key={idx} value={`${p.plaka} - ${p.treyler}`} />
                         ))}
-                    </select>
+                    </datalist>
+
 
                     <label>Kesinti Türü</label>
                     <select name="kesinti_turu" value={form.kesinti_turu} onChange={handleChange} required>

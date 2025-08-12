@@ -11,7 +11,8 @@ const BOS_FORM = {
     tarih: '',
     neden: '',
     bedel: '',
-    aciklama: ''
+    aciklama: '',
+    sefer_no: '' // 🔹 Yeni alan
 };
 
 function TedarikciMasraf() {
@@ -24,6 +25,9 @@ function TedarikciMasraf() {
     const [formGorunur, setFormGorunur] = useState(false);
     const [duzenlemeId, setDuzenlemeId] = useState(null);
 
+    // ✅ REEL'e İşlendi checkbox'ları için geçici UI state
+    const [reelDurum, setReelDurum] = useState({}); // { [id]: boolean }
+
     useEffect(() => {
         veriGetir();
     }, []);
@@ -33,7 +37,7 @@ function TedarikciMasraf() {
             .from('tedarikci_masraflar')
             .select('*')
             .order('tarih', { ascending: false });
-        if (!error) setMasraflar(data);
+        if (!error) setMasraflar(data || []);
     };
 
     const handleChange = (e) => {
@@ -47,6 +51,7 @@ function TedarikciMasraf() {
             ...form,
             bedel: parseFloat(form.bedel),
             statu: 'ONAY BEKLİYOR',
+            reel_islendi: false, // ✅ yeni alanı başlangıçta false
         };
 
         if (isNaN(kayit.bedel)) return alert('Geçerli bir bedel giriniz.');
@@ -86,11 +91,23 @@ function TedarikciMasraf() {
     };
 
     const handleSil = async (id) => {
+        if (kullaniciRol !== 'YÖNETİCİ') {
+            toast.error('❌ Silme yetkiniz yok.');
+            return;
+        }
+
         if (!window.confirm("Silmek istiyor musunuz?")) return;
-        const { error } = await supabase.from('tedarikci_masraflar').delete().eq('id', id);
+
+        const { error } = await supabase
+            .from('tedarikci_masraflar')
+            .delete()
+            .eq('id', id);
+
         if (!error) {
             veriGetir();
             toast.info("🗑️ Masraf silindi.");
+        } else {
+            toast.error("❌ Silme işlemi başarısız.");
         }
     };
 
@@ -111,14 +128,45 @@ function TedarikciMasraf() {
         }
     };
 
+    // ✅ REEL'e İşlendi: checkbox işaretleme
+    const handleReelTick = (id, checked) => {
+        setReelDurum(prev => ({ ...prev, [id]: checked }));
+    };
+
+    // ✅ REEL'e İşlendi: kaydet
+    const handleReelKaydet = async (id) => {
+        if (!reelDurum[id]) {
+            toast.warn('Önce kutucuğu işaretleyin.');
+            return;
+        }
+        const { error } = await supabase
+            .from('tedarikci_masraflar')
+            .update({ reel_islendi: true })
+            .eq('id', id);
+
+        if (!error) {
+            setReelDurum(prev => {
+                const kopya = { ...prev };
+                delete kopya[id];
+                return kopya;
+            });
+            await veriGetir();
+            toast.success('📌 REEL’e işlendi olarak kaydedildi.');
+        } else {
+            toast.error('❌ Kaydedilemedi.');
+        }
+    };
+
     const exportToExcel = () => {
         const excelData = masraflar.map((m) => ({
+            'Sefer No': m.sefer_no, // 🔹 Yeni sütun
             'Tedarikçi': m.tedarikci,
             'Tarih': m.tarih,
             'Masraf Nedeni': m.neden,
             'Bedel': m.bedel,
             'Açıklama': m.aciklama,
-            'Statu': m.statu
+            'Statu': m.statu,
+            "REEL'e İşlendi": m.reel_islendi ? 'Evet' : 'Hayır', // ✅ Excel'e ekle
         }));
 
         const sheet = XLSX.utils.json_to_sheet(excelData);
@@ -130,10 +178,15 @@ function TedarikciMasraf() {
         saveAs(blob, 'tedarikci_masraflari.xlsx');
     };
 
-    const filtrelenmis = masraflar.filter(m =>
-        m.tedarikci.toLowerCase().includes(filtre.toLowerCase()) ||
-        m.neden.toLowerCase().includes(filtre.toLowerCase())
-    );
+    // ✅ Filtreye sefer_no'yu da dahil ettik ve null güvenli yaptık
+    const filtrelenmis = masraflar.filter(m => {
+        const f = (filtre || '').toLowerCase();
+        return (
+            (m.tedarikci || '').toLowerCase().includes(f) ||
+            (m.neden || '').toLowerCase().includes(f) ||
+            (m.sefer_no || '').toLowerCase().includes(f)
+        );
+    });
 
     const onayVerebilir =
         kullaniciRol === 'YÖNETİCİ' &&
@@ -147,7 +200,7 @@ function TedarikciMasraf() {
                         <button className="ekle-btn" onClick={() => setFormGorunur(true)}>+ EKLE</button>
                         <input
                             className="filtre-input"
-                            placeholder="Tedarikçi / Neden filtrele"
+                            placeholder="Tedarikçi / Neden / Sefer No filtrele"
                             value={filtre}
                             onChange={(e) => setFiltre(e.target.value)}
                         />
@@ -159,6 +212,13 @@ function TedarikciMasraf() {
             {formGorunur && (
                 <form onSubmit={handleSubmit} className="masraf-form">
                     <h2>{duzenlemeId ? 'Masraf Düzenle' : 'Yeni Masraf Girişi'}</h2>
+
+                    <label>Sefer No</label>
+                    <input
+                        name="sefer_no"
+                        value={form.sefer_no}
+                        onChange={handleChange}
+                    />
 
                     <label>Tedarikçi</label>
                     <input name="tedarikci" value={form.tedarikci} onChange={handleChange} required />
@@ -177,11 +237,17 @@ function TedarikciMasraf() {
 
                     <div className="form-btns">
                         <button type="submit">Kaydet</button>
-                        <button type="button" className="iptal-btn" onClick={() => {
-                            setForm(BOS_FORM);
-                            setDuzenlemeId(null);
-                            setFormGorunur(false);
-                        }}>Vazgeç</button>
+                        <button
+                            type="button"
+                            className="iptal-btn"
+                            onClick={() => {
+                                setForm(BOS_FORM);
+                                setDuzenlemeId(null);
+                                setFormGorunur(false);
+                            }}
+                        >
+                            Vazgeç
+                        </button>
                     </div>
                 </form>
             )}
@@ -191,6 +257,7 @@ function TedarikciMasraf() {
                     <table className="masraf-table">
                         <thead>
                             <tr>
+                                <th>Sefer No</th>
                                 <th>Tedarikçi</th>
                                 <th>Tarih</th>
                                 <th>Neden</th>
@@ -198,11 +265,13 @@ function TedarikciMasraf() {
                                 <th>Açıklama</th>
                                 <th>Statu</th>
                                 <th>İşlem</th>
+                                <th>REEL’e İşlendi</th> {/* ✅ yeni sütun en sonda */}
                             </tr>
                         </thead>
                         <tbody>
                             {filtrelenmis.map((m) => (
                                 <tr key={m.id}>
+                                    <td>{m.sefer_no}</td>
                                     <td>{m.tedarikci}</td>
                                     <td>{m.tarih}</td>
                                     <td>{m.neden}</td>
@@ -211,15 +280,42 @@ function TedarikciMasraf() {
                                     <td>{m.statu}</td>
                                     <td>
                                         <button onClick={() => handleDuzenle(m)}>Düzenle</button>
-                                        <button onClick={() => handleSil(m.id)}>Sil</button>
+
+                                        {(kullaniciRol === 'YÖNETİCİ') && (
+                                            <button onClick={() => handleSil(m.id)}>Sil</button>
+                                        )}
+
                                         {m.statu?.toUpperCase() === 'ONAY BEKLİYOR' && onayVerebilir && (
                                             <button onClick={() => handleOnayla(m.id)}>Onayla</button>
                                         )}
                                     </td>
+
+                                    {/* ✅ REEL'e İşlendi hücresi */}
+                                    <td>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={reelDurum[m.id] ?? !!m.reel_islendi}
+                                                onChange={(e) => handleReelTick(m.id, e.target.checked)}
+                                                disabled={!!m.reel_islendi} // kaydedilmişse kilitli
+                                            />
+                                            {(!m.reel_islendi && (reelDurum[m.id] ?? false)) && (
+                                                <button onClick={() => handleReelKaydet(m.id)}>
+                                                    Kaydet
+                                                </button>
+                                            )}
+                                            {m.reel_islendi && <span>✔️</span>}
+                                        </label>
+                                    </td>
                                 </tr>
                             ))}
                             {filtrelenmis.length === 0 && (
-                                <tr><td colSpan="7">Kayıt bulunamadı</td></tr>
+                                <>
+                                    {/* 9 sütun */}
+                                    <tr>
+                                        <td colSpan="9">Kayıt bulunamadı</td>
+                                    </tr>
+                                </>
                             )}
                         </tbody>
                     </table>

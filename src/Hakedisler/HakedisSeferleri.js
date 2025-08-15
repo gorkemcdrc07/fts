@@ -33,9 +33,12 @@ const DISPLAY_HEADERS = [
     "Çalışma Günü"
 ];
 
-const PROXY_BASE = process.env.NODE_ENV === "production" ? "/api/reel-api" : "/reel-api";
-const TMS_LOGIN_URL = `${PROXY_BASE}/api/auth/login`;
-const TMS_ADD_EXPENSE_URL = `${PROXY_BASE}/api/tmsdespatchincomeexpenses/addexpense`;
+// URL sabitleri (HakedisSeferleri.js)
+const IS_PROD = process.env.NODE_ENV === "production";
+const PROXY_BASE = IS_PROD ? "/api" : "/reel-api";
+
+const TMS_LOGIN_URL = `${PROXY_BASE}${IS_PROD ? "/reel-auth/login" : "/api/auth/login"}`;
+const TMS_ADD_EXPENSE_URL = `${PROXY_BASE}${IS_PROD ? "/tmsdespatchincomeexpenses/addexpense" : "/api/tmsdespatchincomeexpenses/addexpense"}`;
 /** Yardımcılar */
 /** Yardımcılar */
 const normalize = (s) => String(s ?? "").replace(/\s+/g, " ").trim().toLowerCase();

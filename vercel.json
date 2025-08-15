@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/reel-api/(.*)",
+      "destination": "https://fts-psi.vercel.app/"
+    }
+  ]
+}

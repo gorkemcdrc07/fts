@@ -54,6 +54,11 @@ function Sidebar() {
 
     const hakedisAltMenuler = [
         { ad: 'Tedarikçi Masraf', yol: '/hakedis/tedarikci-masraf', ikon: '💰' },
+        // EKLE →
+        { ad: 'Araç Cari & Fiyat', yol: '/hakedis/arac-cari-ve-fiyat', ikon: '💳' },
+
+        { ad: 'Hakediş Seferleri', yol: '/hakedis/hakedis-seferleri', ikon: '💳' },
+
     ];
     const [bildirimSayisi, setBildirimSayisi] = useState(0);
     const [kullaniciIdState, setKullaniciIdState] = useState(null);

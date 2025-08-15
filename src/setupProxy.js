@@ -1,13 +1,19 @@
-// setupProxy.js
-const { createProxyMiddleware } = require('http-proxy-middleware');
+// src/setupProxy.js
+const { createProxyMiddleware } = require("http-proxy-middleware");
 
 module.exports = function (app) {
     app.use(
-        '/api',
+        "/reel-api",
         createProxyMiddleware({
-            target: 'https://api.odaklojistik.com.tr',
+            target: "https://tms.odaklojistik.com.tr",
             changeOrigin: true,
-            secure: false
+            secure: true,              // TMS sertifikası geçerliyse true
+            logLevel: "debug",
+            pathRewrite: { "^/reel-api": "" }, // /reel-api/api/... -> https://tms.../api/...
+            onProxyReq(proxyReq) {
+                // Bazı servisler origin kontrol edebilir
+                proxyReq.setHeader("origin", "https://tms.odaklojistik.com.tr");
+            },
         })
     );
 };

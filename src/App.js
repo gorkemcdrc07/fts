@@ -24,6 +24,9 @@ import BenimGorevlerim from './views/Gorevler/BenimGorevlerim';
 import TumGorevler from './views/Gorevler/TumGorevler';
 
 import TedarikciMasraf from './Hakedisler/TedarikciMasraf';
+import AracCariVeFiyat from './Hakedisler/AracCariVeFiyat';
+import HakedisSeferleri from './Hakedisler/HakedisSeferleri';
+
 
 
 function App() {
@@ -55,6 +58,9 @@ function App() {
 
                                     {/* Hakedis */}
                                     <Route path="/hakedis/tedarikci-masraf" element={<TedarikciMasraf />} />
+                                    <Route path="/hakedis/arac-cari-ve-fiyat" element={<AracCariVeFiyat />} />  {/* ← yeni */}
+                                    <Route path="/hakedis/hakedis-seferleri" element={<HakedisSeferleri />} />  {/* ← yeni */}
+
 
                                     {/* Varsayılan */}
                                     <Route path="*" element={<Navigate to="/anasayfa" replace />} />

@@ -24,24 +24,34 @@ function Login() {
         if (error || !data) {
             setHata('Kullanıcı adı veya şifre hatalı.');
         } else {
-            localStorage.setItem('kullaniciAdi', data.kullaniciAdi);
-            localStorage.setItem('kullanici', data.kullanici);
-            localStorage.setItem('rol', data.rol);
-            localStorage.setItem('kullaniciId', data.id); // 🔥 GÖRÜNÜM İÇİN GEREKLİ
+            // REEL alanlarını güvenli şekilde oku (büyük/küçük isim farkına dayanıklı)
+            const reelUserCol = (data.Reel_kullanici ?? data.reel_kullanici ?? '').toString().trim();
+            const reelPassCol = (data.Reel_sifre ?? data.reel_sifre ?? '').toString().trim();
+
+            // Boşsa giriş formundaki bilgileri kullan
+            const reelUserToSave = reelUserCol || (kullaniciAdi || '').trim();
+            const reelPassToSave = reelPassCol || (sifre || '');
+
+            // Oturum bilgileri
+            localStorage.setItem('kullaniciAdi', data.kullaniciAdi || '');
+            localStorage.setItem('kullanici', data.kullanici || '');
+            localStorage.setItem('rol', data.rol || '');
+            localStorage.setItem('kullaniciId', String(data.id ?? '')); // 🔥 GÖRÜNÜM İÇİN GEREKLİ
             localStorage.setItem('girisYapanKullanici', JSON.stringify(data)); // (İsteğe bağlı)
-            localStorage.setItem("profilFotograf", data.profil_fotograf || ""); // BURAYA EKLEDİK
+            localStorage.setItem('profilFotograf', data.profil_fotograf || '');
+
+            // ✅ REEL bilgilerini kaydet
+            localStorage.setItem('Reel-kullanici', reelUserToSave);
+            localStorage.setItem('Reel-sifre', reelPassToSave);
 
             navigate('/anasayfa');
         }
-
     };
 
     return (
         <div
             className="login-bg"
-            style={{
-                backgroundImage: `url(${bg})`,
-            }}
+            style={{ backgroundImage: `url(${bg})` }}
         >
             <div className="login-panel">
                 <h2>Giriş Yap</h2>
@@ -51,6 +61,7 @@ function Login() {
                         placeholder="Kullanıcı Adı"
                         value={kullaniciAdi}
                         onChange={(e) => setKullaniciAdi(e.target.value)}
+                        autoComplete="username"
                         required
                     />
                     <input
@@ -58,6 +69,7 @@ function Login() {
                         placeholder="Şifre"
                         value={sifre}
                         onChange={(e) => setSifre(e.target.value)}
+                        autoComplete="current-password"
                         required
                     />
                     {hata && <p style={{ color: 'red', fontSize: '13px' }}>{hata}</p>}

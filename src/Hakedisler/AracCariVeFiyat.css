@@ -1,28 +1,21 @@
-/* ===================== GLOBAL SCROLL KİLİDİ ===================== */
-/* Tarayıcı ve genel ekran scroll'u kapat; sadece tablo-wrap scroll alır */
-html, body, #root {
-    height: 100%;
-    overflow: hidden;
-}
+/* ===================== DÜZ & MODERN TABLO TASARIMI ===================== */
+/* Bu dosyayı AracCariVeFiyat.css olarak tamamen değiştirin. */
+/* Zebra yok; tek renk satır + hafif hover, sticky başlık, dark-mode desteği. */
 
-.layout, .app, .content, .main, .page { /* Layout kapsayıcıların varsa burada tut */
-    height: 100%;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-/* ===================== TEMA DEĞİŞKENLERİ ===================== */
 :root {
-    --bg: #f5f7fb;
+    --bg: #f3f4f6;
     --card: #ffffff;
-    --text: #0f172a;
+    --text: #111827;
     --muted: #6b7280;
     --border: #e5e7eb;
     --accent: #2563eb;
-    --accent-weak: #dbeafe;
+    --accent-weak: #eef2ff;
+    --row: #ffffff; /* tüm satırların rengi */
+    --row-hover: #f8fafc; /* hover rengi */
+    --head-bg: #f7f7fb; /* thead arka planı */
+
     --radius: 12px;
-    --shadow: 0 10px 30px rgba(2,6,23,.08);
+    --shadow: 0 6px 20px rgba(0,0,0,.06);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -31,39 +24,37 @@ html, body, #root {
         --card: #0f172a;
         --text: #e5e7eb;
         --muted: #94a3b8;
-        --border: #1e293b;
+        --border: #1f2937;
         --accent: #60a5fa;
-        --accent-weak: #0b1b37;
-        --shadow: 0 12px 30px rgba(0,0,0,.45);
+        --accent-weak: rgba(96,165,250,.14);
+        --row: #0f172a;
+        --row-hover: #111827;
+        --head-bg: #111827;
+        --shadow: 0 10px 28px rgba(0,0,0,.42);
     }
 }
 
-body[data-theme="dark"] {
-    --bg: #0b1220;
-    --card: #0f172a;
-    --text: #e5e7eb;
-    --muted: #94a3b8;
-    --border: #1e293b;
-    --accent: #60a5fa;
-    --accent-weak: #0b1b37;
-    --shadow: 0 12px 30px rgba(0,0,0,.45);
+/* Global: sayfa scroll'unu kilitle, yalnızca tablo-wrap scroll alsın */
+html, body, #root {
+    height: 100%;
+    overflow: hidden;
 }
 
-/* ===================== SAYFA / KART ===================== */
+/* ============ Sayfa / Kart ============ */
 .acf-page {
     height: 100%;
-    min-height: 0; /* çocuk elemanların overflow yapabilmesi için şart */
-    padding: 24px;
+    min-height: 0;
+    padding: 20px;
     background: var(--bg);
     color: var(--text);
-    overflow: hidden; /* sayfa scroll yok */
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 .acf-card {
-    flex: 1; /* tüm alanı kapla */
-    min-height: 0; /* sadece tablo-wrap scroll alabilsin */
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     background: var(--card);
@@ -73,15 +64,14 @@ body[data-theme="dark"] {
     padding: 16px;
 }
 
-/* ===================== ÜST ÇUBUK ===================== */
+/* ============ Üst Çubuk ============ */
 .acf-title {
-    font-size: 20px;
-    font-weight: 800;
-    margin: 4px 0 8px 0;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 10px;
 }
 
 .acf-toolbar {
-    flex: 0 0 auto;
     display: flex;
     gap: 12px;
     align-items: center;
@@ -89,15 +79,22 @@ body[data-theme="dark"] {
     margin-bottom: 12px;
 }
 
+.acf-meta {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+/* Arama */
 .acf-search {
     padding: 10px 12px;
     min-width: 280px;
     border: 1px solid var(--border);
-    background: transparent;
     border-radius: 10px;
+    background: var(--card);
     color: var(--text);
     outline: none;
-    transition: border-color .2s, box-shadow .2s;
+    transition: border-color .15s, box-shadow .15s;
 }
 
     .acf-search::placeholder {
@@ -109,30 +106,22 @@ body[data-theme="dark"] {
         box-shadow: 0 0 0 4px var(--accent-weak);
     }
 
-.acf-meta {
-    margin-left: auto;
-    color: var(--muted);
-    font-size: 14px;
-}
-
-/* ===================== TABLO KABI (YALNIZCA DİKEY SCROLL) ===================== */
+/* ============ Tablo Alanı (sadece burası kayar) ============ */
 .acf-table-wrap {
-    /* sadece tablonun içinde scroll */
-    flex: 0 0 auto; /* sabit bir alan kaplasın */
-    height: clamp(340px, 45vh, 520px); /* ← tablo yüksekliğini buradan kontrol et */
-    max-height: 520px;
-    min-height: 0;
-    overflow-y: auto; /* ↑↓ scroll açık */
-    overflow-x: hidden; /* →← scroll kapalı */
+    flex: 0 0 auto;
+    height: clamp(420px, 60vh, 720px);
+    overflow-y: auto;
+    overflow-x: hidden;
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: transparent;
+    background: var(--card);
     -webkit-overflow-scrolling: touch;
 }
+
     /* scrollbar dokunuşu */
     .acf-table-wrap::-webkit-scrollbar {
-        height: 10px;
         width: 10px;
+        height: 10px;
     }
 
     .acf-table-wrap::-webkit-scrollbar-thumb {
@@ -148,28 +137,47 @@ body[data-theme="dark"] .acf-table-wrap:hover::-webkit-scrollbar-thumb {
     background: #334155;
 }
 
-/* ===================== TABLO ===================== */
+/* ============ Tablo ============ */
 .acf-table {
-    width: 100%; /* ekrana sığdır */
-    table-layout: fixed; /* sütunları sabitle, yatay scroll’u engelle */
-    border-collapse: separate;
-    border-spacing: 0;
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse; /* düz çizgiler */
     color: var(--text);
 }
 
+    /* Başlık */
     .acf-table thead th {
         position: sticky;
         top: 0;
         z-index: 2;
-        background: var(--card);
+        background: var(--head-bg);
         border-bottom: 1px solid var(--border);
         text-align: left;
-        padding: 8px 10px; /* biraz daha kompakt */
-        font-weight: 700;
+        padding: 10px 12px;
+        font-weight: 600;
         white-space: nowrap;
         user-select: none;
     }
 
+    /* Satırlar (ZEBRA YOK) */
+    .acf-table tbody tr {
+        background: var(--row);
+    }
+
+        .acf-table tbody tr:hover {
+            background: var(--row-hover);
+        }
+
+    .acf-table tbody td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+/* Sıralanabilir başlık ipucu */
 .acf-th-sortable {
     cursor: pointer;
 }
@@ -178,43 +186,7 @@ body[data-theme="dark"] .acf-table-wrap:hover::-webkit-scrollbar-thumb {
         color: var(--accent);
     }
 
-.acf-table tbody td {
-    padding: 8px 10px; /* satır yüksekliğini kısalt */
-    border-bottom: 1px solid var(--border);
-    vertical-align: middle;
-    white-space: nowrap; /* satır kırılmasın */
-    overflow: hidden;
-    text-overflow: ellipsis; /* taşanları … */
-}
-
-.acf-table tbody tr {
-    transition: background .15s;
-}
-
-    .acf-table tbody tr:nth-child(odd) {
-        background: rgba(2,6,23,.02);
-    }
-
-body[data-theme="dark"] .acf-table tbody tr:nth-child(odd) {
-    background: rgba(255,255,255,.02);
-}
-
-.acf-table tbody tr:hover {
-    background: rgba(37,99,235,.08);
-}
-
-body[data-theme="dark"] .acf-table tbody tr:hover {
-    background: rgba(96,165,250,.12);
-}
-
-/* Metin kısaltma yardımcıları */
-.acf-ellipsis {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* Hizalamalar */
+/* Hizalama yardımcıları */
 .acf-num {
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -223,23 +195,46 @@ body[data-theme="dark"] .acf-table tbody tr:hover {
 .acf-center {
     text-align: center;
 }
-/* ===================== TABLO KABI (YALNIZCA DİKEY SCROLL) ===================== */
-.acf-table-wrap {
-    /* daha uzun tablo alanı */
-    flex: 0 0 auto; /* sabit alan */
-    height: clamp(520px, 65vh, 880px); /* ← önce 340px/45vh/520px idi */
-    max-height: 880px;
-    min-height: 0;
-    overflow-y: auto; /* ↑↓ scroll açık */
-    overflow-x: hidden; /* →← scroll kapalı */
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: transparent;
-    -webkit-overflow-scrolling: touch;
+
+.acf-ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
+/* Checkbox’lar */
+.acf-table input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+}
 
-/* ===================== MOBİL ===================== */
+/* Butonlar (satır içi) */
+.acf-table td button {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #f3f4f6;
+    color: #111827;
+    font-weight: 600;
+}
+
+    .acf-table td button:hover {
+        filter: brightness(0.97);
+    }
+
+    .acf-table td button[disabled] {
+        opacity: .6;
+        cursor: not-allowed;
+    }
+
+body[data-theme="dark"] .acf-table td button {
+    background: #111827;
+    color: #e5e7eb;
+    border-color: #374151;
+}
+
+/* Mobil */
 @media (max-width: 768px) {
     .acf-search {
         min-width: 180px;

@@ -215,13 +215,20 @@ function KesintiGirisi() {
 
 
                     <label>Kesinti Türü</label>
-                    <select name="kesinti_turu" value={form.kesinti_turu} onChange={handleChange} required>
+                    <select
+                        name="kesinti_turu"
+                        value={form.kesinti_turu}
+                        onChange={handleChange}
+                        required
+                    >
                         <option value="">Tür Seçin</option>
                         <option value="Bakım">Bakım</option>
                         <option value="Servis">Servis</option>
                         <option value="Arıza">Arıza</option>
                         <option value="Kaza">Kaza</option>
                         <option value="Bölgede İş Yok">Bölgede İş Yok</option>
+                        <option value="İş Başı">İş Başı</option>   {/* ✅ Yeni */}
+                        <option value="İş Sonu">İş Sonu</option>   {/* ✅ Yeni */}
                     </select>
 
                     <label>Kesinti Nedeni</label>

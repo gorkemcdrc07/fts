@@ -579,12 +579,16 @@ export default function HakedisSeferleri({ onFileReady }) {
             }
         }
 
+        // ... for (let i = 0; i < rows.length; i++) { ... } biter
+
         const msg =
-            `✅ İşlem tamam: ${sent} kayıt gönderildi, ${skipped} atlandı, ${failed} hata.` +
+            `✅ İşlem tamam: ${sent} kayıt gönderildi, ${skipped} atlandı(Sefer Sürücü Maliyetinde Tutar Yok), ${failed} hata.(Sefer Kira Maliyetinde ve Sefer Sürücü Maliyetinde Tutar Yok)` +
             (firstError ? ` İlk hata: ${firstError}` : "");
+
+        // ⬇️ EKSİK OLANLAR
         setExportMsg(msg);
         setExporting(false);
-    };
+    }; // <-- handleExportReel burada kapanıyor
 
 
     return (

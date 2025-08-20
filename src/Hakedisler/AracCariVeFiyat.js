@@ -114,18 +114,16 @@ export default function AracCariVeFiyat() {
     // Kaydet (yalnızca düzenle modunda)
     const saveEdit = async () => {
         const payload = {
-            // plaka değişmez (istenirse, edit alanı vermedik)
-            cari_id: toNumberOrNull(editData.cari_id),
+            cari_id: parseTLToNumber(editData.cari_id),
             cari_adi: editData.cari_adi ?? null,
-            aylik_kira: toNumberOrNull(editData.aylik_kira),
-            aylik_surucu: toNumberOrNull(editData.aylik_surucu),
-            calisma_gunu: toNumberOrNull(editData.calisma_gunu),
+            aylik_kira: parseTLToNumber(editData.aylik_kira),      // <<< güncellendi
+            aylik_surucu: parseTLToNumber(editData.aylik_surucu),  // <<< güncellendi
+            calisma_gunu: parseTLToNumber(editData.calisma_gunu),
             pasif: !!editData.pasif,
             aciklama: editData.aciklama ?? null,
-            duzenleme_yapan_kullanici: "Admin",            // TODO: oturumdaki kullanıcı adıyla değiştir
+            duzenleme_yapan_kullanici: "Admin",
             duzenleme_yapilan_tarih: new Date().toISOString(),
         };
-
         setSavingId(editingId);
         const { error } = await supabase
             .from("arac_cari_ve_fiyat")
@@ -148,6 +146,40 @@ export default function AracCariVeFiyat() {
         }
         setSavingId(null);
     };
+    // "₺12.345,67" gibi metni Number'a çevirir
+    function parseTLToNumber(v) {
+        if (v === "" || v === null || v === undefined) return null;
+        const s = String(v)
+            .replace(/[^\d,.-]/g, "") // rakam, virgül, nokta, eksi dışını at
+            .replace(/\./g, "")       // binlik noktaları at
+            .replace(",", ".");       // ondalığı '.' yap
+        const n = Number(s);
+        return Number.isNaN(n) ? null : n;
+    }
+
+    // Yazarken input'u "12.345,67" şeklinde canlı formatlar
+    function formatTLForTyping(input) {
+        if (input === "" || input === null || input === undefined) return "";
+        // yalnızca rakam ve virgüle izin ver (eksi istenirse eklenebilir)
+        let s = String(input).replace(/[^\d,]/g, "");
+
+        // birden fazla virgül varsa ilkini koru
+        const firstComma = s.indexOf(",");
+        if (firstComma !== -1) {
+            const before = s.slice(0, firstComma);
+            const after = s.slice(firstComma + 1).replace(/,/g, "");
+            return addThousandDots(before) + "," + after;
+        }
+        return addThousandDots(s);
+    }
+
+    // Binlik noktaları ekler (sadece tam kısmı alır)
+    function addThousandDots(intStr) {
+        // baştaki sıfırları sadeleştir (tek sıfırı koru)
+        const normalized = intStr.replace(/^0+(?=\d)/, "");
+        return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    }
+
 
     return (
         <div className="acf-page">
@@ -172,17 +204,17 @@ export default function AracCariVeFiyat() {
                     <table className="acf-table">
                         <thead>
                             <tr>
-                                <th onClick={() => toggleSort("plaka")}>Plaka</th>
-                                <th onClick={() => toggleSort("cari_id")}>Cari ID</th>
-                                <th onClick={() => toggleSort("cari_adi")}>Cari Adı</th>
-                                <th onClick={() => toggleSort("aylik_kira")}>Aylık Kira</th>
-                                <th onClick={() => toggleSort("aylik_surucu")}>Aylık Sürücü</th>
-                                <th onClick={() => toggleSort("calisma_gunu")}>Çalışma Günü</th>
-                                <th onClick={() => toggleSort("pasif")}>Pasif</th>
-                                <th onClick={() => toggleSort("aciklama")}>Açıklama</th>
+                                <th className="acf-th-sortable" onClick={() => toggleSort("plaka")}>Plaka</th>
+                                <th className="acf-th-sortable" onClick={() => toggleSort("cari_id")}>Cari ID</th>
+                                <th className="acf-th-sortable" onClick={() => toggleSort("cari_adi")}>Cari Adı</th>
+                                <th className="acf-th-sortable" onClick={() => toggleSort("aylik_kira")}>Aylık Kira</th>
+                                <th className="acf-th-sortable" onClick={() => toggleSort("aylik_surucu")}>Aylık Sürücü</th>
+                                <th className="acf-th-sortable" onClick={() => toggleSort("calisma_gunu")}>Çalışma Günü</th>
+                                <th className="acf-th-sortable" onClick={() => toggleSort("pasif")}>Pasif</th>
+                                <th className="acf-th-sortable" onClick={() => toggleSort("aciklama")}>Açıklama</th>
                                 <th>Düzenle</th>
-                                <th onClick={() => toggleSort("duzenleme_yapan_kullanici")}>Düzenleyen</th>
-                                <th onClick={() => toggleSort("duzenleme_yapilan_tarih")}>Düzenleme Tarihi</th>
+                                <th className="acf-th-sortable" onClick={() => toggleSort("duzenleme_yapan_kullanici")}>Düzenleyen</th>
+                                <th className="acf-th-sortable" onClick={() => toggleSort("duzenleme_yapilan_tarih")}>Düzenleme Tarihi</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -222,27 +254,38 @@ export default function AracCariVeFiyat() {
                                         </td>
 
                                         {/* aylik_kira */}
+                                        {/* aylik_kira */}
                                         <td className="acf-num" title={String(r.aylik_kira ?? "")}>
                                             {isEditing ? (
                                                 <input
                                                     value={editData.aylik_kira ?? ""}
                                                     onChange={(e) =>
-                                                        setEditData((prev) => ({ ...prev, aylik_kira: e.target.value }))
+                                                        setEditData((prev) => ({
+                                                            ...prev,
+                                                            aylik_kira: formatTLForTyping(e.target.value),
+                                                        }))
                                                     }
+                                                    inputMode="decimal"
+                                                    placeholder="0,00"
                                                 />
                                             ) : (
                                                 formatTL(r.aylik_kira)
                                             )}
                                         </td>
-
                                         {/* aylik_surucu */}
                                         <td className="acf-num" title={String(r.aylik_surucu ?? "")}>
                                             {isEditing ? (
                                                 <input
                                                     value={editData.aylik_surucu ?? ""}
                                                     onChange={(e) =>
-                                                        setEditData((prev) => ({ ...prev, aylik_surucu: e.target.value }))
+                                                        setEditData((prev) => ({
+                                                            ...prev,
+                                                            // yazdıkça TL formatına çevir
+                                                            aylik_surucu: formatTLForTyping(e.target.value),
+                                                        }))
                                                     }
+                                                    inputMode="decimal"
+                                                    placeholder="0,00"
                                                 />
                                             ) : (
                                                 formatTL(r.aylik_surucu)

@@ -25,6 +25,15 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 /* ---------------- helpers ---------------- */
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const daysAgoISO = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+// Senkronizasyon sırasında hariç tutulacak plakalar
+const EXCLUDED_PLAKAS = new Set([
+    "34NHF579", "34NHF636", "34NHF705", "34NHF757",
+    "34NHF811", "34NHF868", "34NHF916", "34NHF964", "34NHG120",
+]);
+
+// Plakayı normalize et (boşluk/çizgi sil, büyük harf)
+const normalizePlate = (s) => (s ?? "").toString().toUpperCase().replace(/[\s-]/g, "");
+
 
 const splitCell = (v) =>
     (v ?? "").toString().split(";").map((x) => x.trim()).filter((x) => x !== "");
@@ -219,17 +228,32 @@ export default function ReelAtananSeferler() {
     const listData = useCallback(async () => {
         setLoading(true);
         try {
-            const min = (startDate || daysAgoISO(6)) + "T00:00:00";
-            const max = (endDate || todayISO()) + "T23:59:59";
+            // Bu aralık, tamamlananları da süzmek için kullanılacak
+            const rangeMin = (startDate || daysAgoISO(6)) + "T00:00:00";
+            const rangeMax = (endDate || todayISO()) + "T23:59:59";
             const { data, error } = await supabase
                 .from("seferler")
                 .select("*")
-                .gte("sefer_tarihi", min)
-                .lte("sefer_tarihi", max)
+                .gte("sefer_tarihi", rangeMin)
+                .lte("sefer_tarihi", rangeMax)
                 .order("sefer_tarihi", { ascending: false });
             if (error) throw error;
 
-            const enriched = (data || []).map((s, idx) => {
+            // Aynı aralıkta tamamlanan sefer_no'ları çek
+            const { data: tamamlananNos } = await supabase
+                .from("tamamlanan_seferler")
+                .select("sefer_no")
+                .gte("sefer_tarihi", rangeMin)
+                .lte("sefer_tarihi", rangeMax)
+
+            const COMPLETED_NOS = new Set((tamamlananNos || []).map(x => (x.sefer_no ?? "").trim()));
+
+            // Ekrana hiç getirme
+            const onlyActive = (data || []).filter(
+                s => !COMPLETED_NOS.has((s.sefer_no ?? "").toString().trim())
+            );
+
+            const enriched = onlyActive.map((s, idx) => {
                 const maxLen = Math.max(0, ...detailFields.map((k) => splitCell(s[k]).length));
                 return {
                     ...s,
@@ -255,6 +279,9 @@ export default function ReelAtananSeferler() {
             const start = (startDate || daysAgoISO(6)) + "T00:00:00";
             const end = (endDate || todayISO()) + "T23:59:59";
             const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000";
+            // Bu aralık, tamamlananları da süzmek için kullanılacak
+            const min = (startDate || daysAgoISO(6)) + "T00:00:00";
+            const max = (endDate || todayISO()) + "T23:59:59";
 
             const res = await fetch(`${API_BASE_URL}/api/proxy/tmsdespatches`, {
                 method: "POST",
@@ -269,11 +296,23 @@ export default function ReelAtananSeferler() {
                 return;
             }
 
+            // Bu aralıkta daha önce tamamlanan sefer_no'ları çek
+            const { data: tamamlananNos } = await supabase
+                .from("tamamlanan_seferler")
+                .select("sefer_no")
+                .gte("sefer_tarihi", min)
+                .lte("sefer_tarihi", max)
+            const COMPLETED_NOS = new Set((tamamlananNos || []).map(x => (x.sefer_no ?? "").trim()));
+
             const gelen = json.Data.filter((x) => x && typeof x === "object");
-            const filtreli = gelen.filter((item) => {
-                const tip = (item?.VehicleWorkingTypeName || "").toString().trim().toUpperCase();
-                return tip === "FİLO" || tip === "ÖZMAL";
-            });
+            const filtreli = gelen
+                .filter((item) => {
+                    const tip = (item?.VehicleWorkingTypeName || "").toString().trim().toUpperCase();
+                    return tip === "FİLO" || tip === "ÖZMAL";
+                })
+                .filter((item) => !EXCLUDED_PLAKAS.has(normalizePlate(item?.PlateNumber)))
+                // TMS DocumentNo (sefer_no) tamamlananlarda varsa dahil etme
+                .filter((item) => !COMPLETED_NOS.has((item?.DocumentNo ?? "").toString().trim()));
 
             const mapOrders = (orders, field) =>
                 Array.isArray(orders)
@@ -314,8 +353,6 @@ export default function ReelAtananSeferler() {
                 };
             });
 
-            const min = (startDate || daysAgoISO(6)) + "T00:00:00";
-            const max = (endDate || todayISO()) + "T23:59:59";
             const { data: mevcut } = await supabase
                 .from("seferler")
                 .select("*")
@@ -327,32 +364,21 @@ export default function ReelAtananSeferler() {
             const upsert = [];
 
             for (const item of temiz) {
-                const eski = mapDb.get(item.sefer_no);
+                const eski = mapDb.get(item.sefer_no?.trim());
                 if (!eski) {
                     const yeni = { ...item, reel_durum: "YENİ" };
                     seenNew.push(yeni);
                     upsert.push(yeni);
                 } else {
                     const changed = Object.keys(item).some((k) => (item[k] ?? null) !== (eski[k] ?? null));
-                    if (changed) {
-                        const guncel = { ...item, reel_durum: "GÜNCELLENDİ" };
-                        seenNew.push(guncel);
-                        upsert.push(guncel);
-                    } else {
-                        const same = { ...eski, reel_durum: "EŞLEŞTİ" };
-                        seenNew.push(same);
-                        upsert.push(same);
-                    }
+                    const merged = changed ? { ...item } : { ...eski }; // değiştiyse taze değerleri yaz
+                    const eskiKayit = { ...merged, reel_durum: "ESKİ" };
+                    seenNew.push(eskiKayit);
+                    upsert.push(eskiKayit);
                 }
             }
 
-            const setYeni = new Set(seenNew.map((v) => v.sefer_no?.trim()));
-            const gelenNos = new Set(temiz.map((v) => v.sefer_no?.trim()));
-            const eksikler = (mevcut || [])
-                .filter((r) => r.sefer_no && !gelenNos.has(r.sefer_no.trim()) && !setYeni.has(r.sefer_no.trim()))
-                .map((r) => ({ ...r, reel_durum: "EŞLEŞME YOK" }));
-
-            const payload = [...upsert, ...eksikler];
+            const payload = [...upsert]; // EŞLEŞME YOK eklenmez
             if (payload.length) {
                 await supabase.from("seferler").upsert(payload, { onConflict: ["sefer_no"] });
             }
@@ -361,7 +387,7 @@ export default function ReelAtananSeferler() {
             setShowSuccess(true);
             setTimeout(() => setShowSuccess(false), 3500);
 
-            const enriched = [...seenNew, ...eksikler].map((s, idx) => {
+            const enriched = [...seenNew].map((s, idx) => {
                 const maxLen = Math.max(0, ...detailFields.map((k) => splitCell(s[k]).length));
                 return {
                     ...s,
@@ -384,9 +410,10 @@ export default function ReelAtananSeferler() {
         listData();
     }, [listData]);
 
+
     /* filtrelenmiş */
     const filtered = useMemo(() => {
-        let r = [...rows];
+        let r = [...rows].filter(x => (x.reel_durum || "") !== "EŞLEŞME YOK");
         if (seferNoTipi) r = r.filter((x) => (x.sefer_no || "").toUpperCase().startsWith(seferNoTipi));
         if (plaka) r = r.filter((x) => (x.plaka || "").toLowerCase().includes(plaka.toLowerCase()));
         if (musteri) r = r.filter((x) => (x.musteri_adi || "").toLowerCase().includes(musteri.toLowerCase()));
@@ -400,10 +427,22 @@ export default function ReelAtananSeferler() {
         }
         if (quick) {
             const q = quick.toLowerCase();
-            r = r.filter((x) => Object.values(x).some((v) => String(v ?? "").toLowerCase().includes(q)));
+            r = r.filter((x) =>
+                Object.values(x).some((v) => String(v ?? "").toLowerCase().includes(q))
+            );
         }
         return r;
     }, [rows, seferNoTipi, plaka, musteri, proje, yuklemeIl, teslimIl, aracStatu, noktaSayisi, quick]);
+
+    /* SFR sayacı */
+    const sfrCount = useMemo(
+        () =>
+            filtered.reduce(
+                (n, x) => n + ((x.sefer_no || "").toUpperCase().startsWith("SFR") ? 1 : 0),
+                0
+            ),
+        [filtered]
+    );
 
     /* list grid columns */
     const columns = useMemo(() => {
@@ -436,12 +475,9 @@ export default function ReelAtananSeferler() {
                 headerName: "REEL DURUM",
                 width: 150,
                 renderCell: (p) => {
-                    const v = p.row.reel_durum || "-";
-                    const color =
-                        v === "EŞLEŞTİ" ? "success" :
-                            v === "YENİ" ? "info" :
-                                v === "EŞLEŞME YOK" ? "warning" :
-                                    v === "GÜNCELLENDİ" ? "secondary" : "default";
+                    const raw = p.row.reel_durum || "-";
+                    const v = (raw === "EŞLEŞTİ" || raw === "GÜNCELLENDİ") ? "ESKİ" : raw;
+                    const color = v === "YENİ" ? "info" : "default";
                     return <Chip label={v} size="small" color={color} sx={{ fontWeight: 700 }} />;
                 },
             },
@@ -710,22 +746,54 @@ export default function ReelAtananSeferler() {
             <Helmet><title>AKTİF SEFERLER</title></Helmet>
 
             {/* Başlık + aksiyonlar */}
-            <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }}>
+            {/* Başlık + aksiyonlar */}
+            <Stack
+                direction={{ xs: "column", md: "row" }}
+                justifyContent="space-between"
+                alignItems={{ xs: "flex-start", md: "center" }}
+            >
                 <Stack spacing={0.25}>
-                    <Typography variant="h5" fontWeight={900}
-                        sx={{ lineHeight: 1.1, background: "linear-gradient(90deg,#F472B6,#38BDF8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                    <Typography
+                        variant="h5"
+                        fontWeight={900}
+                        sx={{
+                            lineHeight: 1.1,
+                            background: "linear-gradient(90deg,#F472B6,#38BDF8)",
+                            WebkitBackgroundClip: "text",
+                            WebkitTextFillColor: "transparent",
+                        }}
+                    >
                         Aktif Seferler
                     </Typography>
                     <Typography variant="caption" sx={{ color: COLORS.textMuted }}>
                         Net, okunabilir ve hızlı veri girişi için optimize edildi
                     </Typography>
                 </Stack>
+
                 <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
-                    <FormControlLabel control={<Switch checked={dense} onChange={() => setDense((v) => !v)} size="small" />} label="Sıkı satırlar" sx={{ color: COLORS.textMuted }} />
-                    <Button variant="outlined" startIcon={<VisibilityIcon />} onClick={listData}>Listele</Button>
-                    <Button variant="contained" startIcon={<SyncIcon />} onClick={syncData} disabled={!canSync}>Senkronize Et</Button>
+                    <FormControlLabel
+                        control={<Switch checked={dense} onChange={() => setDense(v => !v)} size="small" />}
+                        label="Sıkı satırlar"
+                        sx={{ color: COLORS.textMuted }}
+                    />
+
+                    {/* SFR sayacı */}
+                    <Chip
+                        label={`SFR: ${sfrCount}`}
+                        size="small"
+                        color="info"
+                        sx={{ fontWeight: 800 }}
+                    />
+
+                    <Button variant="outlined" startIcon={<VisibilityIcon />} onClick={listData}>
+                        Listele
+                    </Button>
+                    <Button variant="contained" startIcon={<SyncIcon />} onClick={syncData} disabled={!canSync}>
+                        Senkronize Et
+                    </Button>
                 </Stack>
             </Stack>
+
 
             {/* Filtreler */}
             <Paper sx={{

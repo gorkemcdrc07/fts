@@ -26,13 +26,17 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const daysAgoISO = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
 // Senkronizasyon sırasında hariç tutulacak plakalar
+// Senkronizasyon sırasında hariç tutulacak plakalar
 const EXCLUDED_PLAKAS = new Set([
     "34NHF579", "34NHF636", "34NHF705", "34NHF757",
     "34NHF811", "34NHF868", "34NHF916", "34NHF964", "34NHG120",
 ]);
 
-// Plakayı normalize et (boşluk/çizgi sil, büyük harf)
+// Plaka normalize et (boşluk/çizgi sil, büyük harf)
 const normalizePlate = (s) => (s ?? "").toString().toUpperCase().replace(/[\s-]/g, "");
+
+// Bu plakalar hariç tutulacak mı?
+const isExcludedPlate = (p) => EXCLUDED_PLAKAS.has(normalizePlate(p));
 
 
 const splitCell = (v) =>
@@ -228,7 +232,6 @@ export default function ReelAtananSeferler() {
     const listData = useCallback(async () => {
         setLoading(true);
         try {
-            // Bu aralık, tamamlananları da süzmek için kullanılacak
             const rangeMin = (startDate || daysAgoISO(6)) + "T00:00:00";
             const rangeMax = (endDate || todayISO()) + "T23:59:59";
             const { data, error } = await supabase
@@ -239,21 +242,21 @@ export default function ReelAtananSeferler() {
                 .order("sefer_tarihi", { ascending: false });
             if (error) throw error;
 
-            // Aynı aralıkta tamamlanan sefer_no'ları çek
             const { data: tamamlananNos } = await supabase
                 .from("tamamlanan_seferler")
                 .select("sefer_no")
                 .gte("sefer_tarihi", rangeMin)
-                .lte("sefer_tarihi", rangeMax)
+                .lte("sefer_tarihi", rangeMax);
 
             const COMPLETED_NOS = new Set((tamamlananNos || []).map(x => (x.sefer_no ?? "").trim()));
 
-            // Ekrana hiç getirme
-            const onlyActive = (data || []).filter(
-                s => !COMPLETED_NOS.has((s.sefer_no ?? "").toString().trim())
-            );
+            // 1) tamamlananları at
+            // 2) EXCLUDED_PLAKAS içindeki plakaları tamamen gösterme
+            const visible = (data || [])
+                .filter(s => !COMPLETED_NOS.has((s.sefer_no ?? "").toString().trim()))
+                .filter(s => !isExcludedPlate(s.plaka));
 
-            const enriched = onlyActive.map((s, idx) => {
+            const enriched = visible.map((s, idx) => {
                 const maxLen = Math.max(0, ...detailFields.map((k) => splitCell(s[k]).length));
                 return {
                     ...s,
@@ -262,6 +265,7 @@ export default function ReelAtananSeferler() {
                     reel_durum: s.reel_durum || "-",
                 };
             });
+
             setRows(enriched);
         } catch (e) {
             console.error(e);

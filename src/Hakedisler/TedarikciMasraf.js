@@ -1,330 +1,876 @@
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
-import './TedarikciMasraf.css';
-import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+// src/Hakedisler/TedarikciMasraf.js (geniş panel + görünür Tarih & Bedel)
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { supabase } from "../supabaseClient";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
+// Animation
+import { motion } from "framer-motion";
+
+// Date & locale
+import dayjs from "dayjs";
+import "dayjs/locale/tr";
+
+// MUI
+import {
+    Box,
+    Container,
+    Paper,
+    Typography,
+    Stack,
+    Chip,
+    CircularProgress,
+    IconButton,
+    Tooltip,
+    TextField,
+    InputAdornment,
+    Button,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Divider,
+    Grid,
+    useMediaQuery,
+    useTheme,
+    Checkbox,
+    Card,
+    CardContent,
+} from "@mui/material";
+import {
+    DataGrid,
+    GridToolbarContainer,
+    GridToolbarQuickFilter,
+    GridToolbarDensitySelector,
+    GridToolbarExport,
+} from "@mui/x-data-grid";
+import { trTR as trGrid } from "@mui/x-data-grid/locales";
+import {
+    Add as AddIcon,
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+    Check as CheckIcon,
+    Close as CloseIcon,
+    Search as SearchIcon,
+    Download as DownloadIcon,
+    TaskAlt as TaskAltIcon,
+    DoneAll as DoneAllIcon,
+    ErrorOutline as ErrorOutlineIcon,
+} from "@mui/icons-material";
+
+/* ---------- Helpers ---------- */
 const BOS_FORM = {
-    tedarikci: '',
-    tarih: '',
-    neden: '',
-    bedel: '',
-    aciklama: '',
-    sefer_no: '' // 🔹 Yeni alan
+    tedarikci: "",
+    tarih: "",
+    neden: "",
+    bedel: "",
+    aciklama: "",
+    sefer_no: "",
 };
 
-function TedarikciMasraf() {
-    const kullanici = localStorage.getItem('kullanici') || '';
-    const kullaniciRol = localStorage.getItem('rol') || '';
+const TL = new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency: "TRY",
+    maximumFractionDigits: 2,
+});
+const formatTL = (v) => {
+    if (v === null || v === undefined || v === "") return "";
+    const n = Number(v);
+    return Number.isNaN(n) ? v : TL.format(n);
+};
+const formatDateTR = (v) => {
+    if (!v) return "";
+    const d = dayjs(v);
+    return d.isValid() ? d.locale("tr").format("DD.MM.YYYY") : v;
+};
+
+// small debounce
+function useDebounced(value, delay = 350) {
+    const [v, setV] = useState(value);
+    useEffect(() => {
+        const id = setTimeout(() => setV(value), delay);
+        return () => clearTimeout(id);
+    }, [value, delay]);
+    return v;
+}
+
+/* ---------- Reusable ---------- */
+function Toolbar({ onExcel }) {
+    return (
+        <GridToolbarContainer
+            sx={{
+                p: 1.25,
+                gap: 1.25,
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+            }}
+        >
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1 }}>
+                <GridToolbarQuickFilter
+                    placeholder="Grid içinde ara…"
+                    quickFilterParser={(v) => v.split(/\s+/).filter(Boolean)}
+                />
+            </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+                <GridToolbarDensitySelector />
+                <GridToolbarExport printOptions={{ disableToolbarButton: true }} />
+                <Button size="small" startIcon={<DownloadIcon />} onClick={onExcel} variant="outlined">
+                    Excel
+                </Button>
+            </Stack>
+        </GridToolbarContainer>
+    );
+}
+
+function ConfirmDialog({ open, title, subtitle, onCancel, onConfirm, loading }) {
+    return (
+        <Dialog open={open} onClose={onCancel} maxWidth="xs" fullWidth>
+            <DialogTitle sx={{ fontWeight: 800 }}>{title}</DialogTitle>
+            <DialogContent dividers>
+                <Typography>{subtitle}</Typography>
+            </DialogContent>
+            <DialogActions sx={{ p: 2 }}>
+                <Button startIcon={<CloseIcon />} onClick={onCancel} disabled={loading}>
+                    Vazgeç
+                </Button>
+                <Button
+                    startIcon={<DeleteIcon />}
+                    onClick={onConfirm}
+                    color="error"
+                    variant="contained"
+                    disabled={loading}
+                >
+                    Sil
+                </Button>
+            </DialogActions>
+        </Dialog>
+    );
+}
+
+function EmptyState({ onCreate }) {
+    return (
+        <Stack alignItems="center" justifyContent="center" sx={{ height: "52vh", py: 6 }} spacing={2}>
+            <ErrorOutlineIcon sx={{ fontSize: 56, opacity: 0.6 }} />
+            <Typography variant="h6" fontWeight={700} sx={{ opacity: 0.8 }}>
+                Henüz kayıt yok
+            </Typography>
+            <Typography sx={{ opacity: 0.7 }}>Yeni bir masraf ekleyerek başlayın.</Typography>
+            <Button startIcon={<AddIcon />} variant="contained" onClick={onCreate}>
+                Yeni Masraf
+            </Button>
+        </Stack>
+    );
+}
+
+/* ---------- Component ---------- */
+export default function TedarikciMasraf() {
+    const theme = useTheme();
+    const downSm = useMediaQuery(theme.breakpoints.down("sm"));
+    dayjs.locale("tr");
+
+    const kullanici = localStorage.getItem("kullanici") || "";
+    const kullaniciRol = localStorage.getItem("rol") || "";
 
     const [form, setForm] = useState(BOS_FORM);
     const [masraflar, setMasraflar] = useState([]);
-    const [filtre, setFiltre] = useState('');
+    const [filtre, setFiltre] = useState("");
+    const filtreDebounced = useDebounced(filtre);
     const [formGorunur, setFormGorunur] = useState(false);
     const [duzenlemeId, setDuzenlemeId] = useState(null);
 
-    // ✅ REEL'e İşlendi checkbox'ları için geçici UI state
-    const [reelDurum, setReelDurum] = useState({}); // { [id]: boolean }
+    const [reelDurum, setReelDurum] = useState({});
+    const [yukleniyor, setYukleniyor] = useState(true);
+    const [hata, setHata] = useState(null);
+    const [silDialog, setSilDialog] = useState({ open: false, id: null, loading: false });
+
+    const veriGetir = useCallback(async () => {
+        setYukleniyor(true);
+        setHata(null);
+        const { data, error } = await supabase
+            .from("tedarikci_masraflar")
+            .select("*")
+            .order("tarih", { ascending: false });
+        if (error) setHata(error.message || "Veri çekilemedi");
+        else setMasraflar(data || []);
+        setYukleniyor(false);
+    }, []);
 
     useEffect(() => {
         veriGetir();
-    }, []);
+    }, [veriGetir]);
 
-    const veriGetir = async () => {
-        const { data, error } = await supabase
-            .from('tedarikci_masraflar')
-            .select('*')
-            .order('tarih', { ascending: false });
-        if (!error) setMasraflar(data || []);
+    const onayVerebilir =
+        kullaniciRol === "YÖNETİCİ" && (kullanici || "").trim().toUpperCase() === "BEKİR AKCAGÖZ";
+
+    const handleOpenYeni = () => {
+        setForm(BOS_FORM);
+        setDuzenlemeId(null);
+        setFormGorunur(true);
     };
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setForm({ ...form, [name]: value });
+    const handleCloseForm = () => {
+        setForm(BOS_FORM);
+        setDuzenlemeId(null);
+        setFormGorunur(false);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        const bedelParsed = parseFloat(String(form.bedel).replace(",", "."));
+        if (Number.isNaN(bedelParsed)) {
+            toast.error("Geçerli bir bedel giriniz.");
+            return;
+        }
         const kayit = {
             ...form,
-            bedel: parseFloat(form.bedel),
-            statu: 'ONAY BEKLİYOR',
-            reel_islendi: false, // ✅ yeni alanı başlangıçta false
+            bedel: bedelParsed,
+            statu: "ONAY BEKLİYOR",
+            reel_islendi: false,
         };
-
-        if (isNaN(kayit.bedel)) return alert('Geçerli bir bedel giriniz.');
 
         let sonuc;
         if (duzenlemeId) {
-            sonuc = await supabase.from('tedarikci_masraflar').update(kayit).eq('id', duzenlemeId);
+            sonuc = await supabase.from("tedarikci_masraflar").update(kayit).eq("id", duzenlemeId);
         } else {
-            sonuc = await supabase.from('tedarikci_masraflar').insert([kayit]);
+            sonuc = await supabase.from("tedarikci_masraflar").insert([kayit]);
 
-            // Bildirim gönder
-            const bekir = await supabase
-                .from('login')
-                .select('id')
-                .eq('kullanici', 'BEKİR AKCAGÖZ')
-                .single();
-
-            if (bekir.data?.id) {
-                await supabase.from('bildirimler').insert([{
-                    kullanici_id: bekir.data.id,
-                    mesaj: `Yeni masraf: ${form.tedarikci} - ${form.neden}`,
-                    okundu: false,
-                    baslik: 'Masraf Onayı'
-                }]);
+            try {
+                const bekir = await supabase
+                    .from("login")
+                    .select("id")
+                    .eq("kullanici", "BEKİR AKCAGÖZ")
+                    .single();
+                if (bekir.data?.id) {
+                    await supabase.from("bildirimler").insert([
+                        {
+                            kullanici_id: bekir.data.id,
+                            mesaj: `Yeni masraf: ${form.tedarikci} - ${form.neden}`,
+                            okundu: false,
+                            baslik: "Masraf Onayı",
+                        },
+                    ]);
+                }
+            } catch {
+                /* silent */
             }
         }
 
         if (!sonuc.error) {
-            setForm(BOS_FORM);
-            setDuzenlemeId(null);
-            setFormGorunur(false);
-            veriGetir();
-            toast.success("✅ Masraf başarıyla eklendi!");
+            handleCloseForm();
+            await veriGetir();
+            toast.success("✅ Masraf kaydedildi.");
         } else {
             toast.error("❌ Masraf kaydedilemedi.");
         }
     };
 
-    const handleSil = async (id) => {
-        if (kullaniciRol !== 'YÖNETİCİ') {
-            toast.error('❌ Silme yetkiniz yok.');
-            return;
+    const confirmSil = (id) => setSilDialog({ open: true, id, loading: false });
+
+    const handleSil = async () => {
+        const { id } = silDialog;
+        if (!id) return setSilDialog({ open: false, id: null, loading: false });
+        if (kullaniciRol !== "YÖNETİCİ") {
+            toast.error("❌ Silme yetkiniz yok.");
+            return setSilDialog({ open: false, id: null, loading: false });
         }
-
-        if (!window.confirm("Silmek istiyor musunuz?")) return;
-
-        const { error } = await supabase
-            .from('tedarikci_masraflar')
-            .delete()
-            .eq('id', id);
-
+        setSilDialog((p) => ({ ...p, loading: true }));
+        const { error } = await supabase.from("tedarikci_masraflar").delete().eq("id", id);
         if (!error) {
-            veriGetir();
+            await veriGetir();
             toast.info("🗑️ Masraf silindi.");
         } else {
             toast.error("❌ Silme işlemi başarısız.");
         }
+        setSilDialog({ open: false, id: null, loading: false });
     };
 
     const handleDuzenle = (kayit) => {
-        setForm(kayit);
+        setForm({
+            id: kayit.id,
+            sefer_no: kayit.sefer_no || "",
+            tedarikci: kayit.tedarikci || "",
+            tarih: kayit.tarih || "",
+            neden: kayit.neden || "",
+            bedel: kayit.bedel ?? "",
+            aciklama: kayit.aciklama || "",
+        });
         setDuzenlemeId(kayit.id);
         setFormGorunur(true);
     };
 
     const handleOnayla = async (id) => {
         const { error } = await supabase
-            .from('tedarikci_masraflar')
-            .update({ statu: 'ONAYLANDI' })
-            .eq('id', id);
+            .from("tedarikci_masraflar")
+            .update({ statu: "ONAYLANDI" })
+            .eq("id", id);
         if (!error) {
-            veriGetir();
+            await veriGetir();
             toast.success("✔️ Masraf onaylandı.");
         }
     };
 
-    // ✅ REEL'e İşlendi: checkbox işaretleme
     const handleReelTick = (id, checked) => {
-        setReelDurum(prev => ({ ...prev, [id]: checked }));
+        setReelDurum((prev) => ({ ...prev, [id]: checked }));
     };
-
-    // ✅ REEL'e İşlendi: kaydet
     const handleReelKaydet = async (id) => {
         if (!reelDurum[id]) {
-            toast.warn('Önce kutucuğu işaretleyin.');
+            toast.warn("Önce kutucuğu işaretleyin.");
             return;
         }
         const { error } = await supabase
-            .from('tedarikci_masraflar')
+            .from("tedarikci_masraflar")
             .update({ reel_islendi: true })
-            .eq('id', id);
-
+            .eq("id", id);
         if (!error) {
-            setReelDurum(prev => {
-                const kopya = { ...prev };
-                delete kopya[id];
-                return kopya;
+            setReelDurum((prev) => {
+                const k = { ...prev };
+                delete k[id];
+                return k;
             });
             await veriGetir();
-            toast.success('📌 REEL’e işlendi olarak kaydedildi.');
+            toast.success("📌 REEL’e işlendi olarak kaydedildi.");
         } else {
-            toast.error('❌ Kaydedilemedi.');
+            toast.error("❌ Kaydedilemedi.");
         }
     };
 
-    const exportToExcel = () => {
-        const excelData = masraflar.map((m) => ({
-            'Sefer No': m.sefer_no, // 🔹 Yeni sütun
-            'Tedarikçi': m.tedarikci,
-            'Tarih': m.tarih,
-            'Masraf Nedeni': m.neden,
-            'Bedel': m.bedel,
-            'Açıklama': m.aciklama,
-            'Statu': m.statu,
-            "REEL'e İşlendi": m.reel_islendi ? 'Evet' : 'Hayır', // ✅ Excel'e ekle
-        }));
+    // Dış filtre
+    const filtrelenmis = useMemo(() => {
+        const f = (filtreDebounced || "").toLowerCase();
+        if (!f) return masraflar;
+        return (masraflar || []).filter((m) => {
+            const t1 = (m.tedarikci || "").toLowerCase();
+            const t2 = (m.neden || "").toLowerCase();
+            const t3 = (m.sefer_no || "").toLowerCase();
+            return t1.includes(f) || t2.includes(f) || t3.includes(f);
+        });
+    }, [masraflar, filtreDebounced]);
 
+    const toplamBedel = useMemo(
+        () =>
+            filtrelenmis.reduce((acc, m) => {
+                const n = Number(m?.bedel ?? 0);
+                return acc + (Number.isFinite(n) ? n : 0);
+            }, 0),
+        [filtrelenmis]
+    );
+
+    const sayilar = useMemo(() => {
+        const toplam = filtrelenmis.length;
+        const onayBekleyen = filtrelenmis.filter(
+            (m) => (m.statu || "").toUpperCase() === "ONAY BEKLİYOR"
+        ).length;
+        const onaylanan = filtrelenmis.filter(
+            (m) => (m.statu || "").toUpperCase() === "ONAYLANDI"
+        ).length;
+        const reel = filtrelenmis.filter((m) => !!m.reel_islendi).length;
+        return { toplam, onayBekleyen, onaylanan, reel };
+    }, [filtrelenmis]);
+
+    const gridRows = useMemo(
+        () => (filtrelenmis || []).map((m, i) => ({ id: m.id ?? `row-${i}`, ...m })),
+        [filtrelenmis]
+    );
+
+    const exportToExcel = () => {
+        const excelData = (filtrelenmis || []).map((m) => ({
+            "Sefer No": m.sefer_no,
+            Tedarikçi: m.tedarikci,
+            Tarih: formatDateTR(m.tarih),
+            "Masraf Nedeni": m.neden,
+            Bedel: Number(m.bedel ?? 0),
+            Açıklama: m.aciklama,
+            Statu: m.statu,
+            "REEL'e İşlendi": m.reel_islendi ? "Evet" : "Hayır",
+        }));
         const sheet = XLSX.utils.json_to_sheet(excelData);
+
+        // Autofit
+        const cols = Object.keys(excelData[0] || {}).map((k) => ({ wch: Math.max(12, k.length + 2) }));
+        const rowsAuto = excelData.map((row) =>
+            Object.values(row).map((v) => (v ? String(v).length + 2 : 10))
+        );
+        if (rowsAuto.length) {
+            rowsAuto[0].forEach((_, i) => {
+                cols[i].wch = Math.max(
+                    cols[i].wch,
+                    Math.min(40, Math.max(...rowsAuto.map((r) => r[i] || 10)))
+                );
+            });
+        }
+        sheet["!cols"] = cols;
+
+        // Currency format for Bedel (index 4 — zero-based)
+        const range = XLSX.utils.decode_range(sheet["!ref"] || "A1:A1");
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+            const C = 4;
+            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+            const cell = sheet[cellRef];
+            if (cell && typeof cell.v === "number") {
+                cell.t = "n";
+                cell.z = "#,##0.00 [$₺-tr-TR]";
+            }
+        }
+
         const book = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(book, sheet, "Masraflar");
-
-        const excelBuffer = XLSX.write(book, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-        saveAs(blob, 'tedarikci_masraflari.xlsx');
+        const excelBuffer = XLSX.write(book, { bookType: "xlsx", type: "array" });
+        const blob = new Blob([excelBuffer], { type: "application/octet-stream" });
+        saveAs(blob, `tedarikci_masraflari_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
     };
 
-    // ✅ Filtreye sefer_no'yu da dahil ettik ve null güvenli yaptık
-    const filtrelenmis = masraflar.filter(m => {
-        const f = (filtre || '').toLowerCase();
-        return (
-            (m.tedarikci || '').toLowerCase().includes(f) ||
-            (m.neden || '').toLowerCase().includes(f) ||
-            (m.sefer_no || '').toLowerCase().includes(f)
-        );
-    });
+    const columns = useMemo(
+        () => [
+            { field: "sefer_no", headerName: "Sefer No", minWidth: 140, flex: 0.7 },
+            { field: "tedarikci", headerName: "Tedarikçi", minWidth: 200, flex: 1.1 },
+            {
+                field: "tarih",
+                headerName: "Tarih",
+                minWidth: 140,
+                flex: 0.7,
+                // Bazı kurulumlarda DataGrid 'date' stringlerini boş gösterebiliyor; kendimiz render edelim.
+                renderCell: (params) => (
+                    <Typography title={formatDateTR(params.row?.tarih)}>
+                        {formatDateTR(params.row?.tarih)}
+                    </Typography>
+                ),
+            },
+            { field: "neden", headerName: "Neden", minWidth: 200, flex: 1.1 },
+            {
+                field: "bedel",
+                headerName: "Bedel",
+                minWidth: 140,
+                flex: 0.8,
+                align: "right",
+                headerAlign: "right",
+                renderCell: (params) => (
+                    <Typography
+                        title={formatTL(params.row?.bedel)}
+                        sx={{ width: "100%", textAlign: "right" }}
+                    >
+                        {formatTL(params.row?.bedel)}
+                    </Typography>
+                ),
+            },
+            {
+                field: "aciklama",
+                headerName: "Açıklama",
+                minWidth: 260,
+                flex: 1.4,
+                renderCell: (params) => (
+                    <Typography noWrap title={params.value ?? ""}>
+                        {params.value}
+                    </Typography>
+                ),
+            },
+            {
+                field: "statu",
+                headerName: "Statu",
+                minWidth: 170,
+                flex: 0.8,
+                renderCell: (params) => {
+                    const v = (params.value || "").toString().toUpperCase();
+                    const color =
+                        v === "ONAYLANDI" ? "success" : v === "ONAY BEKLİYOR" ? "warning" : "default";
+                    return (
+                        <Chip
+                            size="small"
+                            color={color}
+                            variant="outlined"
+                            icon={v === "ONAYLANDI" ? <TaskAltIcon /> : undefined}
+                            label={params.value}
+                        />
+                    );
+                },
+            },
+            {
+                field: "reel_islendi",
+                headerName: "REEL’e İşlendi",
+                minWidth: 220,
+                flex: 0.9,
+                sortable: false,
+                renderCell: (params) => {
+                    const already = !!params.value;
+                    const id = params.row.id;
+                    const checked = already ? true : !!reelDurum[id];
+                    return (
+                        <Stack direction="row" spacing={1.25} alignItems="center">
+                            <Checkbox
+                                size="small"
+                                checked={checked}
+                                onChange={(e) => handleReelTick(id, e.target.checked)}
+                                disabled={already}
+                            />
+                            {!already && checked ? (
+                                <Button size="small" variant="contained" onClick={() => handleReelKaydet(id)}>
+                                    Kaydet
+                                </Button>
+                            ) : already ? (
+                                <Chip size="small" color="success" variant="outlined" label="İşlendi" />
+                            ) : null}
+                        </Stack>
+                    );
+                },
+            },
+            {
+                field: "actions",
+                headerName: "İşlem",
+                minWidth: 220,
+                flex: 0.9,
+                sortable: false,
+                renderCell: (params) => {
+                    const row = params.row;
+                    const gosterOnay =
+                        (row.statu || "").toString().toUpperCase() === "ONAY BEKLİYOR" && onayVerebilir;
+                    return (
+                        <Stack direction="row" spacing={1}>
+                            <Tooltip title="Düzenle">
+                                <IconButton size="small" onClick={() => handleDuzenle(row)}>
+                                    <EditIcon />
+                                </IconButton>
+                            </Tooltip>
 
-    const onayVerebilir =
-        kullaniciRol === 'YÖNETİCİ' &&
-        kullanici?.trim().toUpperCase() === 'BEKİR AKCAGÖZ';
+                            {kullaniciRol === "YÖNETİCİ" && (
+                                <Tooltip title="Sil">
+                                    <IconButton size="small" color="error" onClick={() => confirmSil(row.id)}>
+                                        <DeleteIcon />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+
+                            {gosterOnay && (
+                                <Tooltip title="Onayla">
+                                    <IconButton size="small" color="primary" onClick={() => handleOnayla(row.id)}>
+                                        <CheckIcon />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+                        </Stack>
+                    );
+                },
+            },
+        ],
+        [kullaniciRol, onayVerebilir, reelDurum]
+    );
 
     return (
-        <div className="masraf-modern-container">
-            <div className="masraf-header">
-                {!formGorunur && (
-                    <>
-                        <button className="ekle-btn" onClick={() => setFormGorunur(true)}>+ EKLE</button>
-                        <input
-                            className="filtre-input"
+        <Box
+            component={motion.div}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            sx={{
+                minHeight: "100dvh",
+                py: { xs: 2, md: 4 },
+                background: (t) =>
+                    t.palette.mode === "dark"
+                        ? "linear-gradient(180deg,#0b1020,#0e1428)"
+                        : "linear-gradient(180deg,#f6f9ff,#f4f7ff)",
+            }}
+        >
+            {/* 🔑 Geniş panel: Container büyütüldü */}
+            <Container
+                maxWidth={false}
+                sx={{
+                    maxWidth: "1680px",
+                    px: { xs: 2, md: 4 },
+                }}
+            >
+                <Paper
+                    elevation={6}
+                    sx={{
+                        mx: "auto",
+                        width: "100%",
+                        borderRadius: 4,
+                        overflow: "hidden",
+                        backdropFilter: "saturate(140%) blur(10px)",
+                        bgcolor: (t) =>
+                            t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.9)",
+                        border: (t) =>
+                            `1px solid ${t.palette.mode === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"
+                            }`,
+                    }}
+                >
+                    {/* Üst şerit */}
+                    <Box
+                        sx={{
+                            px: { xs: 2, md: 3 },
+                            py: { xs: 1.5, md: 2.25 },
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                        }}
+                    >
+                        <Typography variant="h6" fontWeight={800}>
+                            Tedarikçi Masrafları
+                        </Typography>
+
+                        <Stack direction="row" spacing={1.25} alignItems="center">
+                            {yukleniyor && (
+                                <Chip
+                                    label="Yükleniyor…"
+                                    color="info"
+                                    variant="outlined"
+                                    icon={<CircularProgress size={14} />}
+                                />
+                            )}
+                            {hata && <Chip label={`Hata: ${hata}`} color="error" variant="outlined" />}
+                            {!yukleniyor && !hata && (
+                                <>
+                                    <Chip variant="outlined" label={`Kayıt: ${filtrelenmis.length}`} />
+                                    <Chip variant="outlined" label={`Toplam: ${formatTL(toplamBedel)}`} />
+                                </>
+                            )}
+                            <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={handleOpenYeni}>
+                                Yeni
+                            </Button>
+                        </Stack>
+                    </Box>
+
+                    {/* Hızlı istatistikler */}
+                    <Box sx={{ px: { xs: 2, md: 3 }, pb: 2 }}>
+                        <Grid container spacing={1.5}>
+                            <Grid item xs={12} sm={6} md={3}>
+                                <Card variant="outlined" sx={{ borderRadius: 3 }}>
+                                    <CardContent>
+                                        <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                                            Toplam Kayıt
+                                        </Typography>
+                                        <Typography variant="h5" fontWeight={800}>
+                                            {sayilar.toplam}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                            <Grid item xs={12} sm={6} md={3}>
+                                <Card variant="outlined" sx={{ borderRadius: 3 }}>
+                                    <CardContent>
+                                        <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                                            Onay Bekleyen
+                                        </Typography>
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            <Typography variant="h5" fontWeight={800}>
+                                                {sayilar.onayBekleyen}
+                                            </Typography>
+                                            <Chip size="small" color="warning" label="Bekliyor" />
+                                        </Stack>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                            <Grid item xs={12} sm={6} md={3}>
+                                <Card variant="outlined" sx={{ borderRadius: 3 }}>
+                                    <CardContent>
+                                        <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                                            Onaylanan
+                                        </Typography>
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            <Typography variant="h5" fontWeight={800}>
+                                                {sayilar.onaylanan}
+                                            </Typography>
+                                            <Chip size="small" color="success" icon={<DoneAllIcon />} label="Onaylandı" />
+                                        </Stack>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                            <Grid item xs={12} sm={6} md={3}>
+                                <Card variant="outlined" sx={{ borderRadius: 3 }}>
+                                    <CardContent>
+                                        <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                                            REEL'e İşlenen
+                                        </Typography>
+                                        <Typography variant="h5" fontWeight={800}>
+                                            {sayilar.reel}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        </Grid>
+                    </Box>
+
+                    {/* Dış arama + Export */}
+                    <Box
+                        sx={{
+                            px: { xs: 2, md: 3 },
+                            pb: { xs: 1.5, md: 2 },
+                            display: "flex",
+                            gap: 1.5,
+                            flexWrap: "wrap",
+                        }}
+                    >
+                        <TextField
                             placeholder="Tedarikçi / Neden / Sefer No filtrele"
                             value={filtre}
                             onChange={(e) => setFiltre(e.target.value)}
-                        />
-                        <button className="excel-btn" onClick={exportToExcel}>Excel'e Aktar</button>
-                    </>
-                )}
-            </div>
-
-            {formGorunur && (
-                <form onSubmit={handleSubmit} className="masraf-form">
-                    <h2>{duzenlemeId ? 'Masraf Düzenle' : 'Yeni Masraf Girişi'}</h2>
-
-                    <label>Sefer No</label>
-                    <input
-                        name="sefer_no"
-                        value={form.sefer_no}
-                        onChange={handleChange}
-                    />
-
-                    <label>Tedarikçi</label>
-                    <input name="tedarikci" value={form.tedarikci} onChange={handleChange} required />
-
-                    <label>Tarih</label>
-                    <input type="date" name="tarih" value={form.tarih} onChange={handleChange} required />
-
-                    <label>Masraf Nedeni</label>
-                    <input name="neden" value={form.neden} onChange={handleChange} required />
-
-                    <label>Bedel</label>
-                    <input type="number" name="bedel" value={form.bedel} onChange={handleChange} required />
-
-                    <label>Açıklama</label>
-                    <textarea name="aciklama" value={form.aciklama} onChange={handleChange} />
-
-                    <div className="form-btns">
-                        <button type="submit">Kaydet</button>
-                        <button
-                            type="button"
-                            className="iptal-btn"
-                            onClick={() => {
-                                setForm(BOS_FORM);
-                                setDuzenlemeId(null);
-                                setFormGorunur(false);
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon sx={{ opacity: 0.7 }} />
+                                    </InputAdornment>
+                                ),
                             }}
-                        >
+                            sx={{ flex: "1 1 520px" }}
+                            size="medium"
+                        />
+                        <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportToExcel}>
+                            Excel'e Aktar
+                        </Button>
+                    </Box>
+
+                    <Divider />
+
+                    {/* GRID */}
+                    <Box sx={{ height: "68vh", width: "100%" }}>
+                        {gridRows.length === 0 && !yukleniyor ? (
+                            <EmptyState onCreate={handleOpenYeni} />
+                        ) : (
+                            <DataGrid
+                                rows={gridRows}
+                                columns={columns}
+                                disableColumnMenu
+                                disableRowSelectionOnClick
+                                loading={yukleniyor}
+                                slots={{ toolbar: () => <Toolbar onExcel={exportToExcel} /> }}
+                                initialState={{
+                                    pagination: { paginationModel: { page: 0, pageSize: 25 } },
+                                    density: "standard",
+                                }}
+                                pageSizeOptions={[10, 25, 50, 100]}
+                                rowHeight={48}
+                                columnHeaderHeight={52}
+                                localeText={trGrid.components.MuiDataGrid.defaultProps.localeText}
+                                sx={{
+                                    border: 0,
+                                    "& .MuiDataGrid-columnHeaders": {
+                                        position: "sticky",
+                                        top: 0,
+                                        background: (t) =>
+                                            t.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.9)",
+                                        backdropFilter: "blur(6px)",
+                                    },
+                                    "& .MuiDataGrid-cell": { py: 1.25, fontSize: 14.5 },
+                                }}
+                            />
+                        )}
+                    </Box>
+                </Paper>
+            </Container>
+
+            {/* Form Dialog — ferah, 2 sütun, responsive */}
+            <Dialog
+                open={formGorunur}
+                onClose={handleCloseForm}
+                maxWidth="md"
+                fullWidth
+                fullScreen={downSm}
+                PaperProps={{ sx: { borderRadius: { xs: 0, sm: 3 } } }}
+            >
+                <form onSubmit={handleSubmit}>
+                    <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
+                        {duzenlemeId ? "Masraf Düzenle" : "Yeni Masraf Girişi"}
+                    </DialogTitle>
+                    <DialogContent dividers sx={{ pt: 2 }}>
+                        <Grid container spacing={2.5}>
+                            <Grid item xs={12} md={6}>
+                                <TextField
+                                    label="Sefer No"
+                                    name="sefer_no"
+                                    value={form.sefer_no}
+                                    onChange={(e) => setForm((p) => ({ ...p, sefer_no: e.target.value }))}
+                                    fullWidth
+                                    size="medium"
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={6}>
+                                <TextField
+                                    label="Tedarikçi"
+                                    name="tedarikci"
+                                    value={form.tedarikci}
+                                    onChange={(e) => setForm((p) => ({ ...p, tedarikci: e.target.value }))}
+                                    fullWidth
+                                    required
+                                    size="medium"
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} md={6}>
+                                <TextField
+                                    label="Tarih"
+                                    type="date"
+                                    name="tarih"
+                                    value={form.tarih}
+                                    onChange={(e) => setForm((p) => ({ ...p, tarih: e.target.value }))}
+                                    InputLabelProps={{ shrink: true }}
+                                    fullWidth
+                                    required
+                                    size="medium"
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={6}>
+                                <TextField
+                                    label="Masraf Nedeni"
+                                    name="neden"
+                                    value={form.neden}
+                                    onChange={(e) => setForm((p) => ({ ...p, neden: e.target.value }))}
+                                    fullWidth
+                                    required
+                                    size="medium"
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} md={6}>
+                                <TextField
+                                    label="Bedel"
+                                    type="number"
+                                    name="bedel"
+                                    value={form.bedel}
+                                    onChange={(e) => setForm((p) => ({ ...p, bedel: e.target.value }))}
+                                    fullWidth
+                                    required
+                                    inputProps={{ step: "0.01" }}
+                                    size="medium"
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} md={12}>
+                                <TextField
+                                    label="Açıklama"
+                                    name="aciklama"
+                                    value={form.aciklama}
+                                    onChange={(e) => setForm((p) => ({ ...p, aciklama: e.target.value }))}
+                                    fullWidth
+                                    multiline
+                                    minRows={3}
+                                    size="medium"
+                                />
+                            </Grid>
+                        </Grid>
+                    </DialogContent>
+
+                    <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
+                        <Button startIcon={<CloseIcon />} onClick={handleCloseForm} variant="text">
                             Vazgeç
-                        </button>
-                    </div>
+                        </Button>
+                        <Button type="submit" startIcon={<CheckIcon />} variant="contained">
+                            Kaydet
+                        </Button>
+                    </DialogActions>
                 </form>
-            )}
+            </Dialog>
 
-            {!formGorunur && (
-                <div className="masraf-table-wrapper">
-                    <table className="masraf-table">
-                        <thead>
-                            <tr>
-                                <th>Sefer No</th>
-                                <th>Tedarikçi</th>
-                                <th>Tarih</th>
-                                <th>Neden</th>
-                                <th>Bedel</th>
-                                <th>Açıklama</th>
-                                <th>Statu</th>
-                                <th>İşlem</th>
-                                <th>REEL’e İşlendi</th> {/* ✅ yeni sütun en sonda */}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtrelenmis.map((m) => (
-                                <tr key={m.id}>
-                                    <td>{m.sefer_no}</td>
-                                    <td>{m.tedarikci}</td>
-                                    <td>{m.tarih}</td>
-                                    <td>{m.neden}</td>
-                                    <td>{m.bedel}</td>
-                                    <td>{m.aciklama}</td>
-                                    <td>{m.statu}</td>
-                                    <td>
-                                        <button onClick={() => handleDuzenle(m)}>Düzenle</button>
-
-                                        {(kullaniciRol === 'YÖNETİCİ') && (
-                                            <button onClick={() => handleSil(m.id)}>Sil</button>
-                                        )}
-
-                                        {m.statu?.toUpperCase() === 'ONAY BEKLİYOR' && onayVerebilir && (
-                                            <button onClick={() => handleOnayla(m.id)}>Onayla</button>
-                                        )}
-                                    </td>
-
-                                    {/* ✅ REEL'e İşlendi hücresi */}
-                                    <td>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={reelDurum[m.id] ?? !!m.reel_islendi}
-                                                onChange={(e) => handleReelTick(m.id, e.target.checked)}
-                                                disabled={!!m.reel_islendi} // kaydedilmişse kilitli
-                                            />
-                                            {(!m.reel_islendi && (reelDurum[m.id] ?? false)) && (
-                                                <button onClick={() => handleReelKaydet(m.id)}>
-                                                    Kaydet
-                                                </button>
-                                            )}
-                                            {m.reel_islendi && <span>✔️</span>}
-                                        </label>
-                                    </td>
-                                </tr>
-                            ))}
-                            {filtrelenmis.length === 0 && (
-                                <>
-                                    {/* 9 sütun */}
-                                    <tr>
-                                        <td colSpan="9">Kayıt bulunamadı</td>
-                                    </tr>
-                                </>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+            {/* Silme onayı */}
+            <ConfirmDialog
+                open={silDialog.open}
+                title="Silme Onayı"
+                subtitle="Bu masrafı silmek istediğinize emin misiniz?"
+                onCancel={() => setSilDialog({ open: false, id: null, loading: false })}
+                onConfirm={handleSil}
+                loading={silDialog.loading}
+            />
 
             <ToastContainer position="bottom-right" autoClose={4000} />
-        </div>
+        </Box>
     );
 }
-
-export default TedarikciMasraf;

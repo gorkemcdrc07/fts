@@ -1,16 +1,46 @@
+/* ---- Layout değişkenleri ---- */
+:root {
+    --navbar-h: 64px; /* üst çubuk yüksekliği */
+    --sidebar-open-w: 240px; /* sidebar açık genişlik */
+    --sidebar-closed-w: 60px; /* sidebar kapalı genişlik */
+}
+
+/* default: açık */
 body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background-color: #f4f4f4;
+    --sidebar-w: var(--sidebar-open-w);
 }
 
-.container {
-    max-width: 1000px;
-    margin: 0 auto;
-    padding: 16px;
+    /* Sidebar kapalı olduğunda */
+    body.sidebar-kapali {
+        --sidebar-w: var(--sidebar-closed-w);
+    }
+
+/* Navbar sabit ve üstte */
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--navbar-h);
+    z-index: 1100; /* sidebar’dan büyük */
 }
 
-input, button {
-    padding: 8px;
-    margin: 4px;
+/* Sidebar: navbar’ın altından başlar */
+.sidebar {
+    position: fixed;
+    top: var(--navbar-h);
+    left: 0;
+    width: var(--sidebar-w);
+    height: calc(100dvh - var(--navbar-h));
+    z-index: 1000;
+    transition: width .25s ease;
+}
+
+/* Sayfa içeriği sarmalayıcısı */
+.app-shell {
+    padding-top: var(--navbar-h);
+    padding-left: var(--sidebar-w);
+    min-height: 100dvh;
+    box-sizing: border-box;
+    transition: padding-left .25s ease;
 }

@@ -1,7 +1,39 @@
 // src/Hakedisler/AracCariVeFiyat.js
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
-import "./AracCariVeFiyat.css";
+
+// MUI
+import {
+    Box,
+    Container,
+    Paper,
+    Typography,
+    TextField,
+    InputAdornment,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableRow,
+    TableContainer,
+    IconButton,
+    Tooltip,
+    Chip,
+    Stack,
+    Checkbox,
+    CircularProgress,
+    Divider,
+    Button,
+} from "@mui/material";
+import {
+    ArrowUpward,
+    ArrowDownward,
+    ImportExport,
+    Edit as EditIcon,
+    Check as CheckIcon,
+    Close as CloseIcon,
+    Search as SearchIcon,
+} from "@mui/icons-material";
 
 function formatTL(value) {
     if (value === null || value === undefined || value === "") return "";
@@ -19,7 +51,7 @@ function formatDate(value) {
     if (isNaN(d.getTime())) return value;
     return d.toLocaleString("tr-TR");
 }
-// yardımcı: sayı alanlarını normalize et
+// yardımcı
 const toNumberOrNull = (v) => {
     if (v === "" || v === null || v === undefined) return null;
     const n = Number(v);
@@ -32,8 +64,8 @@ export default function AracCariVeFiyat() {
     const [err, setErr] = useState(null);
     const [savingId, setSavingId] = useState(null);
 
-    const [editingId, setEditingId] = useState(null);       // "PLAKA-CARIID" string
-    const [editingKey, setEditingKey] = useState(null);     // { plaka, cari_id } — eski anahtar
+    const [editingId, setEditingId] = useState(null); // "PLAKA-CARIID"
+    const [editingKey, setEditingKey] = useState(null); // { plaka, cari_id }
     const [editData, setEditData] = useState({});
 
     const [query, setQuery] = useState("");
@@ -44,9 +76,7 @@ export default function AracCariVeFiyat() {
         const fetchData = async () => {
             setLoading(true);
             setErr(null);
-            const { data, error } = await supabase
-                .from("arac_cari_ve_fiyat")
-                .select("*");
+            const { data, error } = await supabase.from("arac_cari_ve_fiyat").select("*");
             if (!ignore) {
                 if (error) setErr(error.message || "Veri çekilemedi");
                 else setRows(data || []);
@@ -54,7 +84,9 @@ export default function AracCariVeFiyat() {
             }
         };
         fetchData();
-        return () => { ignore = true; };
+        return () => {
+            ignore = true;
+        };
     }, []);
 
     const filtered = useMemo(() => {
@@ -98,10 +130,9 @@ export default function AracCariVeFiyat() {
         setSortBy((prev) => (prev.key !== key ? { key, dir: "asc" } : { key, dir: prev.dir === "asc" ? "desc" : "asc" }));
     };
 
-    // Düzenlemeyi başlat
     const startEdit = (row) => {
         setEditingId(`${row.plaka}-${row.cari_id}`);
-        setEditingKey({ plaka: row.plaka, cari_id: row.cari_id }); // eski anahtar tutulur
+        setEditingKey({ plaka: row.plaka, cari_id: row.cari_id });
         setEditData({ ...row });
     };
 
@@ -111,13 +142,12 @@ export default function AracCariVeFiyat() {
         setEditData({});
     };
 
-    // Kaydet (yalnızca düzenle modunda)
     const saveEdit = async () => {
         const payload = {
             cari_id: parseTLToNumber(editData.cari_id),
             cari_adi: editData.cari_adi ?? null,
-            aylik_kira: parseTLToNumber(editData.aylik_kira),      // <<< güncellendi
-            aylik_surucu: parseTLToNumber(editData.aylik_surucu),  // <<< güncellendi
+            aylik_kira: parseTLToNumber(editData.aylik_kira),
+            aylik_surucu: parseTLToNumber(editData.aylik_surucu),
             calisma_gunu: parseTLToNumber(editData.calisma_gunu),
             pasif: !!editData.pasif,
             aciklama: editData.aciklama ?? null,
@@ -128,42 +158,32 @@ export default function AracCariVeFiyat() {
         const { error } = await supabase
             .from("arac_cari_ve_fiyat")
             .update(payload)
-            .eq("plaka", editingKey.plaka)        // eski anahtara göre hedefle
+            .eq("plaka", editingKey.plaka)
             .eq("cari_id", editingKey.cari_id);
 
         if (error) {
             alert("Kaydetme hatası: " + error.message);
         } else {
-            // State'i güncelle — yeni değerlerle
             setRows((prev) =>
                 prev.map((r) =>
-                    r.plaka === editingKey.plaka && r.cari_id === editingKey.cari_id
-                        ? { ...r, ...payload, plaka: r.plaka } // plaka sabit
-                        : r
+                    r.plaka === editingKey.plaka && r.cari_id === editingKey.cari_id ? { ...r, ...payload, plaka: r.plaka } : r
                 )
             );
             cancelEdit();
         }
         setSavingId(null);
     };
-    // "₺12.345,67" gibi metni Number'a çevirir
+
     function parseTLToNumber(v) {
         if (v === "" || v === null || v === undefined) return null;
-        const s = String(v)
-            .replace(/[^\d,.-]/g, "") // rakam, virgül, nokta, eksi dışını at
-            .replace(/\./g, "")       // binlik noktaları at
-            .replace(",", ".");       // ondalığı '.' yap
+        const s = String(v).replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
         const n = Number(s);
         return Number.isNaN(n) ? null : n;
     }
 
-    // Yazarken input'u "12.345,67" şeklinde canlı formatlar
     function formatTLForTyping(input) {
         if (input === "" || input === null || input === undefined) return "";
-        // yalnızca rakam ve virgüle izin ver (eksi istenirse eklenebilir)
         let s = String(input).replace(/[^\d,]/g, "");
-
-        // birden fazla virgül varsa ilkini koru
         const firstComma = s.indexOf(",");
         if (firstComma !== -1) {
             const before = s.slice(0, firstComma);
@@ -172,200 +192,276 @@ export default function AracCariVeFiyat() {
         }
         return addThousandDots(s);
     }
-
-    // Binlik noktaları ekler (sadece tam kısmı alır)
     function addThousandDots(intStr) {
-        // baştaki sıfırları sadeleştir (tek sıfırı koru)
         const normalized = intStr.replace(/^0+(?=\d)/, "");
         return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
     }
 
+    const SortIcon = ({ col }) => {
+        if (sortBy.key !== col) return <ImportExport fontSize="inherit" sx={{ opacity: 0.6 }} />;
+        return sortBy.dir === "asc" ? <ArrowUpward fontSize="inherit" /> : <ArrowDownward fontSize="inherit" />;
+    };
+
+    const headerCell = (label, key) => (
+        <TableCell
+            sx={{ whiteSpace: "nowrap", fontWeight: 700, cursor: "pointer" }}
+            onClick={() => toggleSort(key)}
+            title={`${label} - sırala`}
+        >
+            <Stack direction="row" spacing={1} alignItems="center">
+                <span>{label}</span>
+                <SortIcon col={key} />
+            </Stack>
+        </TableCell>
+    );
 
     return (
-        <div className="acf-page">
-            <div className="acf-card">
-                <h1 className="acf-title">Araç Cari & Fiyat</h1>
+        <Box sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "background.default" : "#f7f9fc", minHeight: "100dvh", py: 3 }}>
+            <Container maxWidth="xl">
+                <Paper elevation={6} sx={{ borderRadius: 3, overflow: "hidden" }}>
+                    <Box sx={{ p: 2.5, pb: 1.5 }}>
+                        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }} justifyContent="space-between">
+                            <Typography variant="h6" fontWeight={800}>Araç Cari & Fiyat</Typography>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                {loading && <Chip label="Yükleniyor…" color="info" variant="outlined" icon={<CircularProgress size={14} />} />}
+                                {err && <Chip label={`Hata: ${err}`} color="error" variant="outlined" />}
+                                {!loading && !err && <Chip label={`Toplam: ${sorted.length}`} variant="outlined" />}
+                            </Stack>
+                        </Stack>
 
-                <div className="acf-toolbar">
-                    <input
-                        className="acf-search"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Plaka, Cari Adı veya Cari ID ara…"
-                    />
-                    <div className="acf-meta">
-                        {loading && "Yükleniyor…"}
-                        {err && <span style={{ color: "crimson" }}>Hata: {err}</span>}
-                        {!loading && !err && `Toplam: ${sorted.length}`}
-                    </div>
-                </div>
+                        <Box sx={{ mt: 2 }}>
+                            <TextField
+                                fullWidth
+                                placeholder="Plaka, Cari Adı veya Cari ID ara…"
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <SearchIcon sx={{ opacity: 0.7 }} />
+                                        </InputAdornment>
+                                    ),
+                                }}
+                            />
+                        </Box>
+                    </Box>
 
-                <div className="acf-table-wrap">
-                    <table className="acf-table">
-                        <thead>
-                            <tr>
-                                <th className="acf-th-sortable" onClick={() => toggleSort("plaka")}>Plaka</th>
-                                <th className="acf-th-sortable" onClick={() => toggleSort("cari_id")}>Cari ID</th>
-                                <th className="acf-th-sortable" onClick={() => toggleSort("cari_adi")}>Cari Adı</th>
-                                <th className="acf-th-sortable" onClick={() => toggleSort("aylik_kira")}>Aylık Kira</th>
-                                <th className="acf-th-sortable" onClick={() => toggleSort("aylik_surucu")}>Aylık Sürücü</th>
-                                <th className="acf-th-sortable" onClick={() => toggleSort("calisma_gunu")}>Çalışma Günü</th>
-                                <th className="acf-th-sortable" onClick={() => toggleSort("pasif")}>Pasif</th>
-                                <th className="acf-th-sortable" onClick={() => toggleSort("aciklama")}>Açıklama</th>
-                                <th>Düzenle</th>
-                                <th className="acf-th-sortable" onClick={() => toggleSort("duzenleme_yapan_kullanici")}>Düzenleyen</th>
-                                <th className="acf-th-sortable" onClick={() => toggleSort("duzenleme_yapilan_tarih")}>Düzenleme Tarihi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sorted.map((r, i) => {
-                                const isEditing = editingId === `${r.plaka}-${r.cari_id}`;
-                                return (
-                                    <tr key={`${r.plaka}-${r.cari_id}-${i}`}>
-                                        {/* plaka sabit */}
-                                        <td title={r.plaka}>{r.plaka}</td>
+                    <Divider />
 
-                                        {/* cari_id */}
-                                        <td>
-                                            {isEditing ? (
-                                                <input
-                                                    value={editData.cari_id ?? ""}
-                                                    onChange={(e) =>
-                                                        setEditData((prev) => ({ ...prev, cari_id: e.target.value }))
-                                                    }
+                    <TableContainer sx={{ maxHeight: "70vh" }}>
+                        <Table stickyHeader size="small">
+                            <TableHead>
+                                <TableRow>
+                                    {headerCell("Plaka", "plaka")}
+                                    {headerCell("Cari ID", "cari_id")}
+                                    {headerCell("Cari Adı", "cari_adi")}
+                                    {headerCell("Aylık Kira", "aylik_kira")}
+                                    {headerCell("Aylık Sürücü", "aylik_surucu")}
+                                    {headerCell("Çalışma Günü", "calisma_gunu")}
+                                    {headerCell("Pasif", "pasif")}
+                                    {headerCell("Açıklama", "aciklama")}
+                                    <TableCell>İşlem</TableCell>
+                                    {headerCell("Düzenleyen", "duzenleme_yapan_kullanici")}
+                                    {headerCell("Düzenleme Tarihi", "duzenleme_yapilan_tarih")}
+                                </TableRow>
+                            </TableHead>
+
+                            <TableBody>
+                                {sorted.map((r, i) => {
+                                    const isEditing = editingId === `${r.plaka}-${r.cari_id}`;
+                                    const rowKey = `${r.plaka}-${r.cari_id}-${i}`;
+
+                                    return (
+                                        <TableRow
+                                            key={rowKey}
+                                            hover
+                                            selected={isEditing}
+                                            sx={{
+                                                "&.Mui-selected": {
+                                                    backgroundColor: (t) => t.palette.action.selected,
+                                                },
+                                            }}
+                                        >
+                                            {/* plaka */}
+                                            <TableCell title={r.plaka} sx={{ fontWeight: 600 }}>
+                                                {r.plaka}
+                                            </TableCell>
+
+                                            {/* cari_id */}
+                                            <TableCell>
+                                                {isEditing ? (
+                                                    <TextField
+                                                        value={editData.cari_id ?? ""}
+                                                        onChange={(e) => setEditData((prev) => ({ ...prev, cari_id: e.target.value }))}
+                                                        size="small"
+                                                    />
+                                                ) : (
+                                                    r.cari_id
+                                                )}
+                                            </TableCell>
+
+                                            {/* cari_adi */}
+                                            <TableCell title={r.cari_adi} sx={{ maxWidth: 320 }}>
+                                                {isEditing ? (
+                                                    <TextField
+                                                        value={editData.cari_adi ?? ""}
+                                                        onChange={(e) => setEditData((prev) => ({ ...prev, cari_adi: e.target.value }))}
+                                                        size="small"
+                                                    />
+                                                ) : (
+                                                    <Typography noWrap>{r.cari_adi}</Typography>
+                                                )}
+                                            </TableCell>
+
+                                            {/* aylik_kira */}
+                                            <TableCell align="right" title={String(r.aylik_kira ?? "")}>
+                                                {isEditing ? (
+                                                    <TextField
+                                                        value={editData.aylik_kira ?? ""}
+                                                        onChange={(e) =>
+                                                            setEditData((prev) => ({
+                                                                ...prev,
+                                                                aylik_kira: formatTLForTyping(e.target.value),
+                                                            }))
+                                                        }
+                                                        inputMode="decimal"
+                                                        placeholder="0,00"
+                                                        size="small"
+                                                    />
+                                                ) : (
+                                                    formatTL(r.aylik_kira)
+                                                )}
+                                            </TableCell>
+
+                                            {/* aylik_surucu */}
+                                            <TableCell align="right" title={String(r.aylik_surucu ?? "")}>
+                                                {isEditing ? (
+                                                    <TextField
+                                                        value={editData.aylik_surucu ?? ""}
+                                                        onChange={(e) =>
+                                                            setEditData((prev) => ({
+                                                                ...prev,
+                                                                aylik_surucu: formatTLForTyping(e.target.value),
+                                                            }))
+                                                        }
+                                                        inputMode="decimal"
+                                                        placeholder="0,00"
+                                                        size="small"
+                                                    />
+                                                ) : (
+                                                    formatTL(r.aylik_surucu)
+                                                )}
+                                            </TableCell>
+
+                                            {/* calisma_gunu */}
+                                            <TableCell align="center" title={String(r.calisma_gunu ?? "")}>
+                                                {isEditing ? (
+                                                    <TextField
+                                                        value={editData.calisma_gunu ?? ""}
+                                                        onChange={(e) => setEditData((prev) => ({ ...prev, calisma_gunu: e.target.value }))}
+                                                        size="small"
+                                                    />
+                                                ) : (
+                                                    r.calisma_gunu ?? ""
+                                                )}
+                                            </TableCell>
+
+                                            {/* pasif */}
+                                            <TableCell align="center">
+                                                <Checkbox
+                                                    checked={isEditing ? !!editData.pasif : !!r.pasif}
+                                                    onChange={(e) => isEditing && setEditData((prev) => ({ ...prev, pasif: e.target.checked }))}
+                                                    disabled={!isEditing || savingId === `${r.plaka}-${r.cari_id}`}
                                                 />
-                                            ) : (
-                                                r.cari_id
-                                            )}
-                                        </td>
+                                            </TableCell>
 
-                                        {/* cari_adi */}
-                                        <td className="acf-ellipsis" title={r.cari_adi}>
-                                            {isEditing ? (
-                                                <input
-                                                    value={editData.cari_adi ?? ""}
-                                                    onChange={(e) =>
-                                                        setEditData((prev) => ({ ...prev, cari_adi: e.target.value }))
-                                                    }
-                                                />
-                                            ) : (
-                                                r.cari_adi
-                                            )}
-                                        </td>
+                                            {/* aciklama */}
+                                            <TableCell title={r.aciklama ?? ""} sx={{ maxWidth: 340 }}>
+                                                {isEditing ? (
+                                                    <TextField
+                                                        value={editData.aciklama ?? ""}
+                                                        onChange={(e) => setEditData((prev) => ({ ...prev, aciklama: e.target.value }))}
+                                                        size="small"
+                                                    />
+                                                ) : (
+                                                    <Typography noWrap>{r.aciklama}</Typography>
+                                                )}
+                                            </TableCell>
 
-                                        {/* aylik_kira */}
-                                        {/* aylik_kira */}
-                                        <td className="acf-num" title={String(r.aylik_kira ?? "")}>
-                                            {isEditing ? (
-                                                <input
-                                                    value={editData.aylik_kira ?? ""}
-                                                    onChange={(e) =>
-                                                        setEditData((prev) => ({
-                                                            ...prev,
-                                                            aylik_kira: formatTLForTyping(e.target.value),
-                                                        }))
-                                                    }
-                                                    inputMode="decimal"
-                                                    placeholder="0,00"
-                                                />
-                                            ) : (
-                                                formatTL(r.aylik_kira)
-                                            )}
-                                        </td>
-                                        {/* aylik_surucu */}
-                                        <td className="acf-num" title={String(r.aylik_surucu ?? "")}>
-                                            {isEditing ? (
-                                                <input
-                                                    value={editData.aylik_surucu ?? ""}
-                                                    onChange={(e) =>
-                                                        setEditData((prev) => ({
-                                                            ...prev,
-                                                            // yazdıkça TL formatına çevir
-                                                            aylik_surucu: formatTLForTyping(e.target.value),
-                                                        }))
-                                                    }
-                                                    inputMode="decimal"
-                                                    placeholder="0,00"
-                                                />
-                                            ) : (
-                                                formatTL(r.aylik_surucu)
-                                            )}
-                                        </td>
+                                            {/* işlem */}
+                                            <TableCell>
+                                                {isEditing ? (
+                                                    <Stack direction="row" spacing={1}>
+                                                        <Tooltip title="Kaydet">
+                                                            <span>
+                                                                <IconButton
+                                                                    color="primary"
+                                                                    onClick={saveEdit}
+                                                                    disabled={savingId === editingId}
+                                                                    size="small"
+                                                                >
+                                                                    <CheckIcon />
+                                                                </IconButton>
+                                                            </span>
+                                                        </Tooltip>
+                                                        <Tooltip title="İptal">
+                                                            <span>
+                                                                <IconButton
+                                                                    color="inherit"
+                                                                    onClick={cancelEdit}
+                                                                    disabled={savingId === editingId}
+                                                                    size="small"
+                                                                >
+                                                                    <CloseIcon />
+                                                                </IconButton>
+                                                            </span>
+                                                        </Tooltip>
+                                                    </Stack>
+                                                ) : (
+                                                    <Tooltip title="Düzenle">
+                                                        <IconButton onClick={() => startEdit(r)} size="small">
+                                                            <EditIcon />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                )}
+                                            </TableCell>
 
-                                        {/* calisma_gunu */}
-                                        <td className="acf-center" title={String(r.calisma_gunu ?? "")}>
-                                            {isEditing ? (
-                                                <input
-                                                    value={editData.calisma_gunu ?? ""}
-                                                    onChange={(e) =>
-                                                        setEditData((prev) => ({ ...prev, calisma_gunu: e.target.value }))
-                                                    }
-                                                />
-                                            ) : (
-                                                r.calisma_gunu ?? ""
-                                            )}
-                                        </td>
+                                            {/* düzenleyen / tarih */}
+                                            <TableCell title={r.duzenleme_yapan_kullanici ?? ""}>
+                                                {r.duzenleme_yapan_kullanici}
+                                            </TableCell>
+                                            <TableCell title={formatDate(r.duzenleme_yapilan_tarih)}>
+                                                {formatDate(r.duzenleme_yapilan_tarih)}
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
 
-                                        {/* pasif — SADECE DÜZENLE MODUNDA DEĞİŞTİRİLEBİLİR */}
-                                        <td className="acf-center">
-                                            <input
-                                                type="checkbox"
-                                                checked={isEditing ? !!editData.pasif : !!r.pasif}
-                                                onChange={(e) =>
-                                                    isEditing &&
-                                                    setEditData((prev) => ({ ...prev, pasif: e.target.checked }))
-                                                }
-                                                disabled={!isEditing || savingId === `${r.plaka}-${r.cari_id}`}
-                                            />
-                                        </td>
+                                {!loading && !err && sorted.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={11} align="center" sx={{ py: 4, color: "text.secondary" }}>
+                                            Kayıt bulunamadı.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
 
-                                        {/* aciklama */}
-                                        <td className="acf-ellipsis" title={r.aciklama ?? ""}>
-                                            {isEditing ? (
-                                                <input
-                                                    value={editData.aciklama ?? ""}
-                                                    onChange={(e) =>
-                                                        setEditData((prev) => ({ ...prev, aciklama: e.target.value }))
-                                                    }
-                                                />
-                                            ) : (
-                                                r.aciklama
-                                            )}
-                                        </td>
-
-                                        {/* düzenle / kaydet-iptal */}
-                                        <td>
-                                            {isEditing ? (
-                                                <>
-                                                    <button onClick={saveEdit} disabled={savingId === editingId}>✅</button>
-                                                    <button onClick={cancelEdit} disabled={savingId === editingId}>❌</button>
-                                                </>
-                                            ) : (
-                                                <button onClick={() => startEdit(r)}>Düzenle</button>
-                                            )}
-                                        </td>
-
-                                        {/* düzenleyen / tarih (salt-okunur) */}
-                                        <td title={r.duzenleme_yapan_kullanici ?? ""}>
-                                            {r.duzenleme_yapan_kullanici}
-                                        </td>
-                                        <td title={formatDate(r.duzenleme_yapilan_tarih)}>
-                                            {formatDate(r.duzenleme_yapilan_tarih)}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {!loading && !err && sorted.length === 0 && (
-                                <tr>
-                                    <td colSpan={11} style={{ padding: 16, textAlign: "center" }}>
-                                        Kayıt bulunamadı.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+                    {/* Alt bar: hızlı ek aksiyon örneği (opsiyonel) */}
+                    <Box sx={{ p: 1.5, display: "flex", justifyContent: "flex-end", gap: 1 }}>
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => {
+                                setQuery("");
+                            }}
+                        >
+                            Filtreyi Temizle
+                        </Button>
+                    </Box>
+                </Paper>
+            </Container>
+        </Box>
     );
 }

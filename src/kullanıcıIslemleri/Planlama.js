@@ -1,628 +1,688 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { supabase } from '../supabaseClient';
-import './Planlama.css';
-import { Helmet } from 'react-helmet-async';
+// src/kullanıcıIslemleri/Planlama.jsx
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { supabase } from "../supabaseClient";
+import { Helmet } from "react-helmet-async";
 
+// MUI
+import {
+    Box,
+    Stack,
+    Paper,
+    Button,
+    Typography,
+    TextField,
+    MenuItem,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Snackbar,
+    Alert,
+    IconButton,
+    Tooltip,
+    Backdrop,
+    CircularProgress,
+} from "@mui/material";
+import { alpha } from "@mui/material/styles";
+import { DataGrid } from "@mui/x-data-grid";
+import AddIcon from "@mui/icons-material/PlaylistAdd";
+import SaveIcon from "@mui/icons-material/Save";
+import TuneIcon from "@mui/icons-material/Tune";
+import DownloadIcon from "@mui/icons-material/Download";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import DeleteIcon from "@mui/icons-material/Delete";
 
-function Planlama() {
-    const [veriler, setVeriler] = useState([]);
-    const [filteredVeriler, setFilteredVeriler] = useState([]);
-    const [plakaFilter, setPlakaFilter] = useState('');
-    const [bolgeFilter, setBolgeFilter] = useState('');
+// XLSX
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
+
+/* ---------------- helpers ---------------- */
+const getTodayISO = () => new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+const toUpperTr = (s) => (s || "").toLocaleUpperCase("tr-TR").trim();
+
+const ilToBolgeMap = {
+    ADANA: "Doğu Bölgesi", ADIYAMAN: "Doğu Bölgesi", AFYON: "İç Anadolu Bölgesi",
+    AĞRI: "Doğu Bölgesi", AMASYA: "Karadeniz Bölgesi", ANKARA: "İç Anadolu Bölgesi",
+    ANTALYA: "Ege Bölgesi", ARTVİN: "Karadeniz Bölgesi", AYDIN: "Ege Bölgesi",
+    BALIKESİR: "Ege Bölgesi", BARTIN: "Karadeniz Bölgesi", BATMAN: "Doğu Bölgesi",
+    BAYBURT: "Karadeniz Bölgesi", BİLECİK: "İç Anadolu Bölgesi", BİNGÖL: "Doğu Bölgesi",
+    BİTLİS: "Doğu Bölgesi", BOLU: "Karadeniz Bölgesi", BURDUR: "Ege Bölgesi",
+    BURSA: "Ege Bölgesi", ÇANAKKALE: "Trakya Bölgesi", ÇANKIRI: "İç Anadolu Bölgesi",
+    ÇORUM: "İç Anadolu Bölgesi", DENİZLİ: "Ege Bölgesi", DİYARBAKIR: "Doğu Bölgesi",
+    DÜZCE: "Karadeniz Bölgesi", EDİRNE: "Trakya Bölgesi", ELAZIĞ: "Doğu Bölgesi",
+    ERZİNCAN: "Doğu Bölgesi", ERZURUM: "Doğu Bölgesi", ESKİŞEHİR: "İç Anadolu Bölgesi",
+    GAZİANTEP: "Doğu Bölgesi", GİRESUN: "Karadeniz Bölgesi", GÜMÜŞHANE: "Karadeniz Bölgesi",
+    HAKKARİ: "Doğu Bölgesi", HATAY: "Doğu Bölgesi", ISPARTA: "Ege Bölgesi",
+    MERSİN: "Doğu Bölgesi", İSTANBUL: "Marmara Bölgesi", İZMİR: "Ege Bölgesi",
+    KAHRAMANMARAŞ: "Doğu Bölgesi", KARABÜK: "Karadeniz Bölgesi", KARAMAN: "İç Anadolu Bölgesi",
+    KARS: "Doğu Bölgesi", KASTAMONU: "Karadeniz Bölgesi", KAYSERİ: "İç Anadolu Bölgesi",
+    KİLİS: "Doğu Bölgesi", KIRIKKALE: "İç Anadolu Bölgesi", KIRKLARELİ: "Trakya Bölgesi",
+    KIRŞEHİR: "İç Anadolu Bölgesi", KOCAELİ: "Kocaeli Bölgesi", KONYA: "İç Anadolu Bölgesi",
+    KÜTAHYA: "İç Anadolu Bölgesi", MALATYA: "Doğu Bölgesi", MANİSA: "Ege Bölgesi",
+    MARDİN: "Doğu Bölgesi", MUĞLA: "Ege Bölgesi", MUŞ: "Doğu Bölgesi",
+    NEVŞEHİR: "İç Anadolu Bölgesi", NİĞDE: "İç Anadolu Bölgesi", ORDU: "Karadeniz Bölgesi",
+    OSMANİYE: "Doğu Bölgesi", RİZE: "Karadeniz Bölgesi", SAKARYA: "Kocaeli Bölgesi",
+    SAMSUN: "Karadeniz Bölgesi", SİİRT: "Doğu Bölgesi", SİNOP: "Karadeniz Bölgesi",
+    SİVAS: "İç Anadolu Bölgesi", ŞANLIURFA: "Doğu Bölgesi", ŞIRNAK: "Doğu Bölgesi",
+    TEKİRDAĞ: "Trakya Bölgesi", TOKAT: "Karadeniz Bölgesi", TRABZON: "Karadeniz Bölgesi",
+    TUNCELİ: "Doğu Bölgesi", UŞAK: "Ege Bölgesi", VAN: "Doğu Bölgesi",
+    YALOVA: "Ege Bölgesi", YOZGAT: "İç Anadolu Bölgesi", ZONGULDAK: "Karadeniz Bölgesi",
+    ADALAR: "Kocaeli Bölgesi", ATAŞEHİR: "Kocaeli Bölgesi", BEYKOZ: "Kocaeli Bölgesi",
+    ÖMERLİ: "Kocaeli Bölgesi", KADIKÖY: "Kocaeli Bölgesi", KARTAL: "Kocaeli Bölgesi",
+    MALTEPE: "Kocaeli Bölgesi", PENDİK: "Kocaeli Bölgesi", SANCAKTEPE: "Kocaeli Bölgesi",
+    SULTANBEYLİ: "Kocaeli Bölgesi", ŞİLE: "Kocaeli Bölgesi", TUZLA: "Kocaeli Bölgesi",
+    ÜMRANİYE: "Kocaeli Bölgesi", ÜSKÜDAR: "Kocaeli Bölgesi",
+    ARNAVUTKÖY: "Marmara Bölgesi", AVCILAR: "Marmara Bölgesi", BAĞCILAR: "Marmara Bölgesi",
+    BAHÇELİEVLER: "Marmara Bölgesi", BAKIRKÖY: "Marmara Bölgesi", BAŞAKŞEHİR: "Marmara Bölgesi",
+    BAYRAMPAŞA: "Marmara Bölgesi", BEŞİKTAŞ: "Marmara Bölgesi", BEYLİKDÜZÜ: "Marmara Bölgesi",
+    BEYOĞLU: "Marmara Bölgesi", BÜYÜKÇEKMECE: "Marmara Bölgesi", ÇATALCA: "Marmara Bölgesi",
+    ESENLER: "Marmara Bölgesi", ESENYURT: "Marmara Bölgesi", EYÜP: "Marmara Bölgesi",
+    FATİH: "Marmara Bölgesi", GAZİOSMANPAŞA: "Marmara Bölgesi", GÜNGÖREN: "Marmara Bölgesi",
+    KAĞITHANE: "Marmara Bölgesi", KÜÇÜKÇEKMECE: "Marmara Bölgesi", SARIYER: "Marmara Bölgesi",
+    SİLİVRİ: "Marmara Bölgesi", SULTANGAZİ: "Marmara Bölgesi", ŞİŞLİ: "Marmara Bölgesi",
+    ZEYTİNBURNU: "Marmara Bölgesi",
+};
+
+// Grid alanları
+const alanlar = [
+    "sefer_no", "sevk_no", "tarih", "plaka", "ad_soyad", "telefon", "tc",
+    "varis_tarihi", "son_nokta", "fatura_musterisi",
+    "yukleme_noktasi", "tahliye_noktasi", "tahliye_il",
+    "tonaj", "bir_onceki_is", "bolge",
+];
+
+export default function Planlama() {
+    /* ---------- state ---------- */
+    const [rows, setRows] = useState([]);
+    const [filteredRows, setFilteredRows] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    // filtreler
     const [plakalar, setPlakalar] = useState([]);
     const [bolgeler, setBolgeler] = useState([]);
-    const inputRefs = useRef({});
-    const [duzenlemeModuSatirId, setDuzenlemeModuSatirId] = useState(null);
-    const [isSaving, setIsSaving] = useState(false);
-    const [showGuncelleModal, setShowGuncelleModal] = useState(false);
-    const [showPlakaModal, setShowPlakaModal] = useState(false);
-    const [yeniPlaka, setYeniPlaka] = useState({
-        plaka: '',
-        ad_soyad: '',
-        telefon: '',
-        tc: ''
-    });
-    const [columns, setColumns] = useState([
-        'sefer_no', 'sevk_no', 'tarih', 'plaka', 'ad_soyad', 'telefon', 'tc',
-        'varis_tarihi', 'son_nokta', 'fatura_musterisi',
-        'yukleme_noktasi', 'tahliye_noktasi', 'tahliye_il',
-        'tonaj', 'bir_onceki_is', 'bolge'
-    ]);
+    const [plakaFilter, setPlakaFilter] = useState("");
+    const [bolgeFilter, setBolgeFilter] = useState("");
+    const [search, setSearch] = useState("");
 
-    const handleDragStart = (e, index) => {
-        e.dataTransfer.setData('dragIndex', index);
-    };
+    // görünüm (kolon sırası)
+    const [columnOrder, setColumnOrder] = useState([...alanlar]);
 
-    const handleDrop = (e, dropIndex) => {
-        e.preventDefault();
-        const dragIndex = e.dataTransfer.getData('dragIndex');
-        if (dragIndex === dropIndex) return;
+    // snackbar
+    const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
 
-        const newCols = [...columns];
-        const [dragged] = newCols.splice(dragIndex, 1);
-        newCols.splice(dropIndex, 0, dragged);
-        setColumns(newCols);
-    };
+    // dialog: yeni plaka
+    const [plakaDialogOpen, setPlakaDialogOpen] = useState(false);
+    const [yeniPlaka, setYeniPlaka] = useState({ plaka: "", ad_soyad: "", telefon: "", tc: "" });
 
-    const allowDrop = (e) => e.preventDefault();
+    // dialog: toplu güncelle onayı
+    const [guncelleDialogOpen, setGuncelleDialogOpen] = useState(false);
 
-    const gorunumuKaydet = async () => {
-        const kullaniciId = parseInt(localStorage.getItem('kullaniciId'));
-        if (!kullaniciId) {
-            alert('❌ Kullanıcı bulunamadı!');
+    /* ---------- data fetch ---------- */
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from("planlama")
+            .select("*")
+            .order("sefer_no", { ascending: false });
+
+        if (error) {
+            console.error(error);
+            setSnack({ open: true, msg: "Veri çekilirken hata oluştu.", severity: "error" });
+            setLoading(false);
             return;
         }
 
-        const { error } = await supabase
-            .from('kullanici_planlama_gorunumleri')  // Tablo adınız bu mu, kontrol edin
-            .upsert(
-                {
-                    kullanici_id: kullaniciId,
-                    sayfa: 'planlama',
-                    gorunum: columns,
-                },
-                { onConflict: ['kullanici_id', 'sayfa'] }
-            );
+        const enriched = (data || []).map((v, index) => {
+            const ilUpper = toUpperTr(v.son_nokta);
+            const bolge = ilToBolgeMap[ilUpper] || v.bolge || "";
+            const tarih = v.tarih || getTodayISO();
+            const _rowId = v.id ?? v.sefer_no ?? `tmp-${Date.now()}-${index}`;
+            return { ...v, bolge, tarih, _rowId };
+        });
 
-        if (error) {
-            console.error('Kaydetme hatası:', error);
-            alert('❌ Kaydetme hatası oluştu.');
-        } else {
-            alert('✅ Görünüm kaydedildi.');
+        setRows(enriched);
+        setFilteredRows(enriched);
+        setBolgeler([...new Set(enriched.map((r) => r.bolge).filter(Boolean))]);
+        setLoading(false);
+
+        const { data: plakaData } = await supabase.from("plakalar").select("plaka");
+        if (plakaData) setPlakalar(plakaData.map((d) => d.plaka));
+    }, []);
+
+    const loadView = useCallback(async () => {
+        const kullaniciId = parseInt(localStorage.getItem("kullaniciId"));
+        if (!kullaniciId) return;
+        const { data } = await supabase
+            .from("kullanici_planlama_gorunumleri")
+            .select("gorunum")
+            .eq("kullanici_id", kullaniciId)
+            .eq("sayfa", "planlama")
+            .maybeSingle();
+
+        if (data?.gorunum && Array.isArray(data.gorunum) && data.gorunum.length) {
+            const valid = data.gorunum.filter((c) => alanlar.includes(c));
+            if (valid.length) setColumnOrder(valid);
         }
-    };
-
-
-
-
-
-
-
-    const alanlar = [
-        'sefer_no', 'sevk_no', 'tarih', 'plaka', 'ad_soyad', 'telefon', 'tc',
-        'varis_tarihi', 'son_nokta', 'fatura_musterisi',
-        'yukleme_noktasi', 'tahliye_noktasi', 'tahliye_il',
-        'tonaj', 'bir_onceki_is', 'bolge'
-    ];
-
-    const ilToBolgeMap = {
-        ADANA: "Doğu Bölgesi", ADIYAMAN: "Doğu Bölgesi", AFYON: "İç Anadolu Bölgesi",
-        AĞRI: "Doğu Bölgesi", AMASYA: "Karadeniz Bölgesi", ANKARA: "İç Anadolu Bölgesi",
-        ANTALYA: "Ege Bölgesi", ARTVİN: "Karadeniz Bölgesi", AYDIN: "Ege Bölgesi",
-        BALIKESİR: "Ege Bölgesi", BARTIN: "Karadeniz Bölgesi", BATMAN: "Doğu Bölgesi",
-        BAYBURT: "Karadeniz Bölgesi", BİLECİK: "İç Anadolu Bölgesi", BİNGÖL: "Doğu Bölgesi",
-        BİTLİS: "Doğu Bölgesi", BOLU: "Karadeniz Bölgesi", BURDUR: "Ege Bölgesi",
-        BURSA: "Ege Bölgesi", ÇANAKKALE: "Trakya Bölgesi", ÇANKIRI: "İç Anadolu Bölgesi",
-        ÇORUM: "İç Anadolu Bölgesi", DENİZLİ: "Ege Bölgesi", DİYARBAKIR: "Doğu Bölgesi",
-        DÜZCE: "Karadeniz Bölgesi", EDİRNE: "Trakya Bölgesi", ELAZIĞ: "Doğu Bölgesi",
-        ERZİNCAN: "Doğu Bölgesi", ERZURUM: "Doğu Bölgesi", ESKİŞEHİR: "İç Anadolu Bölgesi",
-        GAZİANTEP: "Doğu Bölgesi", GİRESUN: "Karadeniz Bölgesi", GÜMÜŞHANE: "Karadeniz Bölgesi",
-        HAKKARİ: "Doğu Bölgesi", HATAY: "Doğu Bölgesi", ISPARTA: "Ege Bölgesi",
-        MERSİN: "Doğu Bölgesi", İSTANBUL: "Marmara Bölgesi", İZMİR: "Ege Bölgesi",
-        KAHRAMANMARAŞ: "Doğu Bölgesi", KARABÜK: "Karadeniz Bölgesi", KARAMAN: "İç Anadolu Bölgesi",
-        KARS: "Doğu Bölgesi", KASTAMONU: "Karadeniz Bölgesi", KAYSERİ: "İç Anadolu Bölgesi",
-        KİLİS: "Doğu Bölgesi", KIRIKKALE: "İç Anadolu Bölgesi", KIRKLARELİ: "Trakya Bölgesi",
-        KIRŞEHİR: "İç Anadolu Bölgesi", KOCAELİ: "Kocaeli Bölgesi", KONYA: "İç Anadolu Bölgesi",
-        KÜTAHYA: "İç Anadolu Bölgesi", MALATYA: "Doğu Bölgesi", MANİSA: "Ege Bölgesi",
-        MARDİN: "Doğu Bölgesi", MUĞLA: "Ege Bölgesi", MUŞ: "Doğu Bölgesi",
-        NEVŞEHİR: "İç Anadolu Bölgesi", NİĞDE: "İç Anadolu Bölgesi", ORDU: "Karadeniz Bölgesi",
-        OSMANİYE: "Doğu Bölgesi", RİZE: "Karadeniz Bölgesi", SAKARYA: "Kocaeli Bölgesi",
-        SAMSUN: "Karadeniz Bölgesi", SİİRT: "Doğu Bölgesi", SİNOP: "Karadeniz Bölgesi",
-        SİVAS: "İç Anadolu Bölgesi", ŞANLIURFA: "Doğu Bölgesi", ŞIRNAK: "Doğu Bölgesi",
-        TEKİRDAĞ: "Trakya Bölgesi", TOKAT: "Karadeniz Bölgesi", TRABZON: "Karadeniz Bölgesi",
-        TUNCELİ: "Doğu Bölgesi", UŞAK: "Ege Bölgesi", VAN: "Doğu Bölgesi",
-        YALOVA: "Ege Bölgesi", YOZGAT: "İç Anadolu Bölgesi", ZONGULDAK: "Karadeniz Bölgesi", ADALAR: "Kocaeli Bölgesi",
-        ATAŞEHİR: "Kocaeli Bölgesi",
-        BEYKOZ: "Kocaeli Bölgesi",
-        ÖMERLİ: "Kocaeli Bölgesi",
-        KADIKÖY: "Kocaeli Bölgesi",
-        KARTAL: "Kocaeli Bölgesi",
-        MALTEPE: "Kocaeli Bölgesi",
-        PENDİK: "Kocaeli Bölgesi",
-        SANCAKTEPE: "Kocaeli Bölgesi",
-        SULTANBEYLİ: "Kocaeli Bölgesi",
-        ŞİLE: "Kocaeli Bölgesi",
-        TUZLA: "Kocaeli Bölgesi",
-        ÜMRANİYE: "Kocaeli Bölgesi",
-        ÜSKÜDAR: "Kocaeli Bölgesi",
-        ARNAVUTKÖY: "Marmara Bölgesi",
-        AVCILAR: "Marmara Bölgesi",
-        BAĞCILAR: "Marmara Bölgesi",
-        BAHÇELİEVLER: "Marmara Bölgesi",
-        BAKIRKÖY: "Marmara Bölgesi",
-        BAŞAKŞEHİR: "Marmara Bölgesi",
-        BAYRAMPAŞA: "Marmara Bölgesi",
-        BEŞİKTAŞ: "Marmara Bölgesi",
-        BEYLİKDÜZÜ: "Marmara Bölgesi",
-        BEYOĞLU: "Marmara Bölgesi",
-        BÜYÜKÇEKMECE: "Marmara Bölgesi",
-        ÇATALCA: "Marmara Bölgesi",
-        ESENLER: "Marmara Bölgesi",
-        ESENYURT: "Marmara Bölgesi",
-        EYÜP: "Marmara Bölgesi",
-        FATİH: "Marmara Bölgesi",
-        GAZİOSMANPAŞA: "Marmara Bölgesi",
-        GÜNGÖREN: "Marmara Bölgesi",
-        KAĞITHANE: "Marmara Bölgesi",
-        KÜÇÜKÇEKMECE: "Marmara Bölgesi",
-        SARIYER: "Marmara Bölgesi",
-        SİLİVRİ: "Marmara Bölgesi",
-        SULTANGAZİ: "Marmara Bölgesi",
-        ŞİŞLİ: "Marmara Bölgesi",
-        ZEYTİNBURNU: "Marmara Bölgesi",
-    };
-
-    const convertDateToInputFormat = (value) => {
-        if (!value || typeof value !== 'string') return '';
-        const parts = value.split('.');
-        if (parts.length !== 3) return '';
-        const [gun, ay, yil] = parts;
-        return `${yil}-${ay?.padStart(2, '0')}-${gun?.padStart(2, '0')}`;
-    };
-    const convertInputToDateFormat = (value) => {
-        if (!value || typeof value !== 'string') return '';
-        const parts = value.split('-');
-        if (parts.length !== 3) return '';
-        const [yil, ay, gun] = parts;
-        return `${gun?.padStart(2, '0')}.${ay?.padStart(2, '0')}.${yil}`;
-    };
-
-    const getToday = () => {
-        const today = new Date();
-        return today.toISOString().split('T')[0]; // "2025-07-18"
-    };
-
-    useEffect(() => {
-        veriGetir();
-        plakalarGetir();
     }, []);
 
     useEffect(() => {
-        filtreleVeriler();
-    }, [plakaFilter, bolgeFilter, veriler]);
+        fetchData();
+        loadView();
+    }, [fetchData, loadView]);
 
-    const veriGetir = async () => {
-        const { data, error } = await supabase
-            .from('planlama')
-            .select('*')
-            .order('sefer_no', { ascending: false });
-
-        if (!error) {
-            const enriched = (data || []).map((v, index) => {
-                const il = (v.son_nokta || '').toLocaleUpperCase('tr-TR').trim();
-                const bolge = ilToBolgeMap[il] || v.bolge || ''; // 🔥 BURASI DEĞİŞTİ
-                const tarih = v.tarih || getToday();
-                const id = v.sefer_no || `tmp-${Date.now()}-${index}`;
-                return { ...v, bolge, tarih, _rowId: id };
-            });
-
-            setVeriler(enriched);
-            setBolgeler([...new Set(enriched.map(v => v.bolge).filter(Boolean))]);
-            setFilteredVeriler(enriched);
+    /* ---------- filtering ---------- */
+    useEffect(() => {
+        let r = [...rows];
+        if (plakaFilter) r = r.filter((x) => (x.plaka || "") === plakaFilter);
+        if (bolgeFilter) r = r.filter((x) => (x.bolge || "") === bolgeFilter);
+        if (search) {
+            const s = search.toLowerCase();
+            r = r.filter((x) =>
+                Object.values(x || {}).some((v) => String(v || "").toLowerCase().includes(s))
+            );
         }
-    };
-    const plakalarGetir = async () => {
-        const { data } = await supabase.from('plakalar').select('plaka');
-        if (data) setPlakalar(data.map(d => d.plaka));
-    };
+        setFilteredRows(r);
+    }, [rows, plakaFilter, bolgeFilter, search]);
 
-    const filtreleVeriler = () => {
-        let filtrelenmis = [...veriler];
-        if (plakaFilter) filtrelenmis = filtrelenmis.filter(v => v.plaka === plakaFilter);
-        if (bolgeFilter) filtrelenmis = filtrelenmis.filter(v => v.bolge === bolgeFilter);
-        setFilteredVeriler(filtrelenmis);
-    };
-
-    const handleInputChange = (rowIndex, key, value) => {
-        const updatedFiltered = [...filteredVeriler];
-        updatedFiltered[rowIndex][key] = value;
-
-        if (key === 'son_nokta') {
-            const il = (value || '').toLocaleUpperCase('tr-TR').trim();
-            const bolge = ilToBolgeMap[il] || '';
-            updatedFiltered[rowIndex]['bolge'] = bolge;
+    /* ---------- görünümü kaydet ---------- */
+    const saveView = useCallback(async () => {
+        const kullaniciId = parseInt(localStorage.getItem("kullaniciId"));
+        if (!kullaniciId) {
+            setSnack({ open: true, msg: "Kullanıcı bulunamadı.", severity: "warning" });
+            return;
         }
-
-        setFilteredVeriler(updatedFiltered);
-
-        const updatedVeriler = [...veriler];
-        const originalIndex = veriler.findIndex(v => v._rowId === updatedFiltered[rowIndex]._rowId);
-        if (originalIndex !== -1) {
-            updatedVeriler[originalIndex] = { ...updatedFiltered[rowIndex] };
+        const { error } = await supabase
+            .from("kullanici_planlama_gorunumleri")
+            .upsert(
+                { kullanici_id: kullaniciId, sayfa: "planlama", gorunum: columnOrder },
+                { onConflict: ["kullanici_id", "sayfa"] }
+            );
+        if (error) {
+            setSnack({ open: true, msg: "Görünüm kaydedilemedi.", severity: "error" });
+        } else {
+            setSnack({ open: true, msg: "Görünüm kaydedildi.", severity: "success" });
         }
-        setVeriler(updatedVeriler);
-    };
+    }, [columnOrder]);
 
-    const handleKeyNavigation = (e, rowIndex, field) => {
-        const colIndex = alanlar.indexOf(field);
-        let nextRow = rowIndex;
-        let nextCol = colIndex;
-
-        switch (e.key) {
-            case 'ArrowRight': nextCol++; break;
-            case 'ArrowLeft': nextCol--; break;
-            case 'ArrowDown': nextRow++; break;
-            case 'ArrowUp': nextRow--; break;
-            default: return;
+    /* ---------- excel export ---------- */
+    const exportExcel = () => {
+        if (!filteredRows.length) {
+            setSnack({ open: true, msg: "Aktarılacak veri yok.", severity: "info" });
+            return;
         }
-
-        const nextField = alanlar[nextCol];
-        const nextRef = inputRefs.current[`${nextRow}-${nextField}`];
-        if (nextRef?.current) {
-            nextRef.current.focus();
-            e.preventDefault();
-        }
+        const sheet = filteredRows.map((s) => ({
+            SeferNo: s.sefer_no,
+            SevkNo: s.sevk_no,
+            Tarih: s.tarih,
+            Plaka: s.plaka,
+            AdSoyad: s.ad_soyad,
+            Telefon: s.telefon,
+            TC: s.tc,
+            VarisTarihi: s.varis_tarihi,
+            SonNokta: s.son_nokta,
+            FaturaMusterisi: s.fatura_musterisi,
+            YuklemeNoktasi: s.yukleme_noktasi,
+            TahliyeNoktasi: s.tahliye_noktasi,
+            TahliyeIl: s.tahliye_il,
+            Tonaj: s.tonaj,
+            BirOncekiIs: s.bir_onceki_is,
+            Bolge: s.bolge,
+        }));
+        const ws = XLSX.utils.json_to_sheet(sheet);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Planlama");
+        const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+        saveAs(new Blob([buf], { type: "application/octet-stream" }), "planlama.xlsx");
     };
 
-    const yeniSatirEkle = () => {
-        const bosSatir = Object.fromEntries(alanlar.map(a => [a, '']));
-        bosSatir['tarih'] = getToday();
-        bosSatir['_rowId'] = `tmp-${Date.now()}`; // 🔥 BURASI YENİ
-        setFilteredVeriler([bosSatir, ...filteredVeriler]);
-    };
-
-    const handleGuncelleClick = () => {
-        setShowGuncelleModal(true);
-    };
-
-
-    const handleGuncelle = () => {
-        const guncellenmis = filteredVeriler.map(item => {
-            const il = (item.tahliye_il || '').toLocaleUpperCase('tr-TR').trim();
-            const bolge = ilToBolgeMap[il] || '';
-
-            const bir_onceki_is = [
-                item.fatura_musterisi,
-                item.yukleme_noktasi,
-                item.tahliye_noktasi
-            ].filter(Boolean).join(' / ');
-
+    /* ---------- toplu güncelle ---------- */
+    const handleTopluGuncelle = () => setGuncelleDialogOpen(true);
+    const confirmTopluGuncelle = () => {
+        const guncellenmis = filteredRows.map((item) => {
+            const il = toUpperTr(item.tahliye_il);
+            const bolge = ilToBolgeMap[il] || "";
+            const bir_onceki_is = [item.fatura_musterisi, item.yukleme_noktasi, item.tahliye_noktasi]
+                .filter(Boolean)
+                .join(" / ");
             return {
                 ...item,
                 bir_onceki_is,
-                son_nokta: item.tahliye_il || '',
-                fatura_musterisi: '',
-                yukleme_noktasi: '',
-                tahliye_noktasi: '',
-                tahliye_il: '',
-                tonaj: '',
-                bolge
+                son_nokta: item.tahliye_il || "",
+                fatura_musterisi: "",
+                yukleme_noktasi: "",
+                tahliye_noktasi: "",
+                tahliye_il: "",
+                tonaj: "",
+                bolge,
             };
         });
-
-        setFilteredVeriler(guncellenmis);
-
-        const updatedVeriler = veriler.map(v => {
-            const match = guncellenmis.find(g => g._rowId === v._rowId);
-            return match ? { ...match } : v;
-        });
-
-        setVeriler(updatedVeriler);
-        setShowGuncelleModal(false); // Modal'ı kapat
+        const updated = rows.map((r) => guncellenmis.find((g) => g._rowId === r._rowId) || r);
+        setRows(updated);
+        setGuncelleDialogOpen(false);
+        setSnack({ open: true, msg: "Satırlar güncellendi (lokal). Kaydet ile yazılır.", severity: "success" });
     };
 
-
-
-    const renderCell = (v, rowIndex, field) => {
-        const satirId = v._rowId;
-        const key = `${satirId}-${field}`;
-        if (!inputRefs.current[key]) inputRefs.current[key] = React.createRef();
-
-        const readOnlyFields = ['ad_soyad', 'plaka', 'telefon', 'tc', 'bir_onceki_is', 'tarih'];
-        const isDateInput = field === 'varis_tarihi';
-
-        if (field === 'bolge') return <td key={key}>{v.bolge || ''}</td>;
-
-        return (
-            <td key={key}>
-                <input
-                    ref={inputRefs.current[key]}
-                    type={isDateInput ? 'date' : 'text'}
-                    value={
-                        isDateInput && typeof v[field] === 'string'
-                            ? convertDateToInputFormat(v[field])
-                            : (v[field] ?? (field === 'tarih' ? getToday() : ''))
-                    }
-                    onChange={(e) =>
-                        handleInputChange(rowIndex, field,
-                            isDateInput
-                                ? convertInputToDateFormat(e.target.value)
-                                : e.target.value)
-                    }
-                    onKeyDown={(e) => handleKeyNavigation(e, rowIndex, field)}
-                    readOnly={
-                        readOnlyFields.includes(field) && duzenlemeModuSatirId !== v._rowId
-                    }
-                />
-            </td>
-        );
-    };
+    /* ---------- kaydet (insert/update) ---------- */
     const handleKaydet = async () => {
-        setIsSaving(true); // 🔥 Ekranı kilitle
+        setSaving(true);
 
-        for (const item of filteredVeriler) {
-            const { _rowId, duzenleme_tarihi, ...veri } = item;
+        for (const item of rows) {
+            const payload = { ...item };
+            delete payload._rowId;
 
-            const today = getToday();
-
-            if (!veri.tarih) veri.tarih = today;
-            if (!veri.varis_tarihi) veri.varis_tarihi = today;
-
-            const ilHam = veri.son_nokta || '';
-            const il = ilHam.trim().toLocaleUpperCase('tr-TR');
-            veri.bolge = ilToBolgeMap[il] || veri.bolge || null;
-
-            ['tarih', 'varis_tarihi'].forEach(key => {
-                if (veri[key] && typeof veri[key] === 'string' && veri[key].includes('.')) {
-                    const [g, a, y] = veri[key].split('.');
-                    veri[key] = `${y}-${a.padStart(2, '0')}-${g.padStart(2, '0')}`;
+            ["tarih", "varis_tarihi"].forEach((k) => {
+                if (!payload[k]) payload[k] = getTodayISO();
+                if (typeof payload[k] === "string" && payload[k].includes(".")) {
+                    const [g, a, y] = payload[k].split(".");
+                    payload[k] = `${y}-${a.padStart(2, "0")}-${g.padStart(2, "0")}`;
                 }
             });
 
-            for (const key in veri) {
-                if (veri[key] === undefined || veri[key] === '') {
-                    veri[key] = null;
-                }
-            }
+            const il = toUpperTr(payload.son_nokta);
+            payload.bolge = ilToBolgeMap[il] || payload.bolge || null;
+
+            Object.keys(payload).forEach((k) => {
+                if (payload[k] === undefined || payload[k] === "") payload[k] = null;
+            });
 
             try {
-                if (veri.id) {
-                    const { error } = await supabase
-                        .from('planlama')
-                        .update(veri)
-                        .eq('id', veri.id);
+                if (payload.id) {
+                    const { error } = await supabase.from("planlama").update(payload).eq("id", payload.id);
                     if (error) throw error;
                 } else {
-                    const { error } = await supabase
-                        .from('planlama')
-                        .insert(veri);
+                    const { error } = await supabase.from("planlama").insert(payload);
                     if (error) throw error;
                 }
             } catch (err) {
-                console.error('HATA:', err.message, veri);
+                console.error("Kaydet hatası:", err.message, payload);
             }
         }
 
-        await veriGetir();
-        setIsSaving(false); // 🔥 Ekranı serbest bırak
-    };
-    const handlePlakaEkle = () => {
-        setYeniPlaka({ plaka: '', ad_soyad: '', telefon: '', tc: '' });
-        setShowPlakaModal(true);
+        await fetchData();
+        setSaving(false);
+        setSnack({ open: true, msg: "Değişiklikler kaydedildi.", severity: "success" });
     };
 
-    const handleYeniPlakaKaydet = async () => {
+    /* ---------- satır sil ---------- */
+    const handleSil = async (_rowId) => {
+        const satir = rows.find((r) => r._rowId === _rowId);
+        if (!satir) return;
+        if (!window.confirm("Bu satırı silmek istiyor musunuz?")) return;
+
+        if (satir.id) {
+            const { error } = await supabase.from("planlama").delete().eq("id", satir.id);
+            if (error) {
+                setSnack({ open: true, msg: "Kayıt silinemedi.", severity: "error" });
+                return;
+            }
+        }
+        const r = rows.filter((x) => x._rowId !== _rowId);
+        setRows(r);
+        setSnack({ open: true, msg: "Satır silindi (lokal). Kaydet ile kalıcı olur.", severity: "info" });
+    };
+
+    /* ---------- yeni plaka satırı ekle ---------- */
+    const openPlakaDialog = () => {
+        setYeniPlaka({ plaka: "", ad_soyad: "", telefon: "", tc: "" });
+        setPlakaDialogOpen(true);
+    };
+    const saveYeniPlaka = async () => {
         const { plaka, ad_soyad, telefon, tc } = yeniPlaka;
-
         if (!plaka || !ad_soyad || !telefon || !tc) {
-            alert("Tüm alanları doldurmalısınız.");
+            setSnack({ open: true, msg: "Tüm alanlar zorunlu.", severity: "warning" });
             return;
         }
-
-        const yeniKayit = {
-            sefer_no: '',
-            sevk_no: '',
-            tarih: null,           // "2025-07-18" gibi uygun format
-            varis_tarihi: null,
-            son_nokta: '',
-            fatura_musterisi: '',
-            yukleme_noktasi: '',
-            tahliye_noktasi: '',
-            tahliye_il: '',
-            tonaj: '',
-            bir_onceki_is: '',
-            bolge: '',
+        const yeni = {
+            sefer_no: "",
+            sevk_no: "",
+            tarih: getTodayISO(),
+            varis_tarihi: getTodayISO(),
+            son_nokta: "",
+            fatura_musterisi: "",
+            yukleme_noktasi: "",
+            tahliye_noktasi: "",
+            tahliye_il: "",
+            tonaj: "",
+            bir_onceki_is: "",
+            bolge: "",
             plaka,
             ad_soyad,
             telefon,
             tc,
         };
-
-        try {
-            const { data, error } = await supabase.from('planlama').insert([yeniKayit]);
-
-            if (error) {
-                console.error("Plaka ekleme hatası:", error.message);
-                alert("Veritabanına ekleme başarısız oldu.");
-                return;
-            }
-
-            const _rowId = `tmp-${Date.now()}`;
-            setFilteredVeriler([{ ...yeniKayit, _rowId }, ...filteredVeriler]);
-            setVeriler([{ ...yeniKayit, _rowId }, ...veriler]);
-            setShowPlakaModal(false);
-        } catch (err) {
-            console.error("Plaka ekleme sırasında hata:", err.message);
-            alert("Beklenmeyen bir hata oluştu.");
-        }
+        const _rowId = `tmp-${Date.now()}`;
+        setRows([{ ...yeni, _rowId }, ...rows]);
+        setPlakaDialogOpen(false);
+        setSnack({ open: true, msg: "Yeni satır eklendi (lokal). Kaydet ile yazılır.", severity: "success" });
     };
 
+    /* ---------- DataGrid kolonları ---------- */
+    const columns = useMemo(() => {
+        const textCol = (field, headerName, width = 160, editable = true) => ({
+            field,
+            headerName,
+            width,
+            editable,
+        });
 
-    const handleSil = async (_rowId) => {
-        const satir = veriler.find(v => v._rowId === _rowId);
-        if (!satir) return;
+        return [
+            {
+                field: "actions",
+                headerName: "İşlem",
+                width: 110,
+                sortable: false,
+                filterable: false,
+                renderCell: (params) => (
+                    <Stack direction="row" spacing={1}>
+                        <Tooltip title="Sil">
+                            <IconButton size="small" onClick={() => handleSil(params.row._rowId)}>
+                                <DeleteIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                ),
+            },
+            textCol("sefer_no", "Sefer No", 140),
+            textCol("sevk_no", "Sevk No", 140),
+            textCol("tarih", "Tarih", 120),
+            textCol("plaka", "Plaka", 120, false),
+            textCol("ad_soyad", "Ad Soyad", 160, false),
+            textCol("telefon", "Telefon", 140, false),
+            textCol("tc", "TC", 120, false),
+            textCol("varis_tarihi", "Varış Tarihi", 120),
+            textCol("son_nokta", "Son Nokta", 160),
+            textCol("fatura_musterisi", "Fatura Müşterisi", 180),
+            textCol("yukleme_noktasi", "Yükleme Noktası", 200),
+            textCol("tahliye_noktasi", "Tahliye Noktası", 200),
+            textCol("tahliye_il", "Tahliye İl", 140),
+            textCol("tonaj", "Tonaj", 100),
+            textCol("bir_onceki_is", "Bir Önceki İş", 220, false),
+            {
+                field: "bolge",
+                headerName: "Bölge",
+                width: 150,
+                editable: false,
+                // v6 signature: valueGetter: (value, row) => any
+                valueGetter: (value, row) => row?.bolge ?? "",
+            },
+        ];
+    }, [handleSil]);
 
-        const onay = window.confirm("Bu satırı silmek istediğinize emin misiniz?");
-        if (!onay) return;
+    // Kolon sırası
+    const orderedColumns = useMemo(() => {
+        const map = Object.fromEntries(columns.map((c) => [c.field, c]));
+        const ordered = ["actions", ...columnOrder].map((f) => map[f]).filter(Boolean);
+        const rest = columns.filter((c) => !ordered.includes(c));
+        return [...ordered, ...rest];
+    }, [columns, columnOrder]);
 
-        // Eğer veritabanında varsa sil
-        if (satir.id) {
-            try {
-                const { error } = await supabase
-                    .from('planlama')
-                    .delete()
-                    .eq('id', satir.id);
-                if (error) throw error;
-            } catch (err) {
-                console.error("Silme hatası:", err.message);
-                alert("Kayıt silinemedi.");
-                return;
-            }
+    /* ---------- DataGrid edit akışı ---------- */
+    const processRowUpdate = useCallback((newRow, oldRow) => {
+        if (newRow.son_nokta !== oldRow.son_nokta) {
+            const il = toUpperTr(newRow.son_nokta);
+            newRow.bolge = ilToBolgeMap[il] || "";
         }
+        return newRow;
+    }, []);
 
-        // Ekrandaki verileri anında güncelle
-        setFilteredVeriler(prev => prev.filter(v => v._rowId !== _rowId));
-        setVeriler(prev => prev.filter(v => v._rowId !== _rowId));
-    };
+    const handleRowUpdateCommit = useCallback((updatedRow) => {
+        setRows((prev) => prev.map((r) => (r._rowId === updatedRow._rowId ? updatedRow : r)));
+    }, []);
 
-
-
-
-
-
-
-
-
+    const onColumnOrderChange = useCallback((params) => {
+        setColumnOrder((prev) => {
+            const f = params.column?.field;
+            if (!f || !alanlar.includes(f)) return prev;
+            const arr = prev.filter((x) => x !== f);
+            arr.splice(params.targetIndex, 0, f);
+            return arr;
+        });
+    }, []);
 
     return (
-        <div className="planlama-sayfasi">
+        <Box
+            sx={{
+                height: "100dvh",
+                display: "grid",
+                gridTemplateRows: "auto auto 1fr",
+                gap: 1.5,
+                p: 2,
+                background:
+                    "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.10), transparent 40%)," +
+                    "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.12), transparent 50%)," +
+                    "linear-gradient(180deg, #050816 0%, #0B1220 100%)",
+            }}
+        >
             <Helmet>
                 <title>PLANLAMA</title>
             </Helmet>
-            <div className="butonlar">
-                <button onClick={handleKaydet}>KAYDET</button>
-                <button onClick={handleGuncelleClick}>GÜNCELLE</button>
-                <button onClick={gorunumuKaydet} style={{ marginLeft: 8 }}>
-                    Görünümü Kaydet
-                </button>
-            </div>
 
-            <div className="filtre-alani">
-                <input
-                    list="plaka-listesi"
-                    placeholder="Plaka ara veya seç..."
+            {/* Başlık + Aksiyonlar */}
+            <Stack
+                direction={{ xs: "column", md: "row" }}
+                alignItems={{ xs: "flex-start", md: "center" }}
+                justifyContent="space-between"
+                spacing={1}
+            >
+                <Stack spacing={0.25}>
+                    <Typography
+                        variant="h5"
+                        fontWeight={800}
+                        sx={{
+                            lineHeight: 1.1,
+                            background: "linear-gradient(90deg,#E879F9,#22D3EE)",
+                            WebkitBackgroundClip: "text",
+                            WebkitTextFillColor: "transparent",
+                        }}
+                    >
+                        Planlama
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                        Canlı düzenleme • kolon sürükle-bırak • filtreler • Excel aktarım
+                    </Typography>
+                </Stack>
+
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Button variant="contained" startIcon={<SaveIcon />} onClick={handleKaydet}>
+                        Kaydet
+                    </Button>
+                    <Button variant="outlined" startIcon={<TuneIcon />} onClick={handleTopluGuncelle}>
+                        Güncelle
+                    </Button>
+                    <Button variant="outlined" startIcon={<CheckCircleIcon />} onClick={saveView}>
+                        Görünümü Kaydet
+                    </Button>
+                    <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportExcel}>
+                        Excel
+                    </Button>
+                    <Button variant="outlined" startIcon={<AddIcon />} onClick={openPlakaDialog}>
+                        Yeni Plaka
+                    </Button>
+                </Stack>
+            </Stack>
+
+            {/* Filtreler */}
+            <Paper
+                sx={{
+                    p: 1,
+                    borderRadius: 2,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    flexWrap: "wrap",
+                    background: `linear-gradient(180deg, ${alpha("#ffffff", 0.04)} 0%, ${alpha("#ffffff", 0.02)} 100%)`,
+                    border: "1px solid rgba(255,255,255,0.06)",
+                }}
+            >
+                <TextField
+                    label="Plaka"
+                    select
+                    size="small"
                     value={plakaFilter}
                     onChange={(e) => setPlakaFilter(e.target.value)}
-                />
-                <datalist id="plaka-listesi">
-                    {plakalar.map((p, i) => (
-                        <option key={i} value={p} />
+                    sx={{ minWidth: 160 }}
+                >
+                    <MenuItem value="">Tümü</MenuItem>
+                    {plakalar.map((p) => (
+                        <MenuItem key={p} value={p}>
+                            {p}
+                        </MenuItem>
                     ))}
-                </datalist>
+                </TextField>
 
-                <select value={bolgeFilter} onChange={(e) => setBolgeFilter(e.target.value)}>
-                    <option value="">Tüm Bölgeler</option>
-                    {bolgeler.map((b, i) => (
-                        <option key={i} value={b}>
+                <TextField
+                    label="Bölge"
+                    select
+                    size="small"
+                    value={bolgeFilter}
+                    onChange={(e) => setBolgeFilter(e.target.value)}
+                    sx={{ minWidth: 160 }}
+                >
+                    <MenuItem value="">Tümü</MenuItem>
+                    {bolgeler.map((b) => (
+                        <MenuItem key={b} value={b}>
                             {b}
-                        </option>
+                        </MenuItem>
                     ))}
-                </select>
-            </div>
+                </TextField>
 
-            <div className="planlama-wrapper">
-                <table className="planlama-tablo">
-                    <thead>
-                        <tr>
-                            {columns.map((col, i) => (
-                                <th
-                                    key={col}
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, i)}
-                                    onDragOver={allowDrop}
-                                    onDrop={(e) => handleDrop(e, i)}
-                                    style={{ cursor: 'move' }}
-                                >
-                                    {col.replace(/_/g, ' ').toUpperCase()}
-                                </th>
-                            ))}
-                            <th>İŞLEM</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredVeriler.length === 0 ? (
-                            <tr>
-                                <td colSpan={columns.length + 1}>Kayıt bulunamadı.</td>
-                            </tr>
-                        ) : (
-                            filteredVeriler.map((v, rowIndex) => (
-                                <tr key={rowIndex}>
-                                    {columns.map((field) => renderCell(v, rowIndex, field))}
-                                    <td>
-                                        <button
-                                            onClick={() =>
-                                                setDuzenlemeModuSatirId(
-                                                    duzenlemeModuSatirId === v._rowId ? null : v._rowId
-                                                )
-                                            }
-                                        >
-                                            {duzenlemeModuSatirId === v._rowId ? '✔️ Bitir' : '✏️ Düzenle'}
-                                        </button>
-                                        <button
-                                            onClick={() => handleSil(v._rowId)}
-                                            style={{ marginLeft: 6, color: 'red' }}
-                                        >
-                                            🗑️ Sil
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                <Box sx={{ flex: 1 }} />
 
-            {/* 🔄 Kaydetme sırasında ekranı kilitle */}
-            {isSaving && (
-                <div className="loading-overlay">
-                    <div className="spinner"></div>
-                    <p>Kaydediliyor...</p>
-                </div>
-            )}
+                {/* GridToolbarQuickFilter yerine normal arama kutusu */}
+                <TextField
+                    size="small"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Ara…"
+                    sx={{ minWidth: 220 }}
+                />
+            </Paper>
 
-            {showPlakaModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content">
-                        <h3>Yeni Plaka Ekle</h3>
-                        <input
-                            type="text"
-                            placeholder="Plaka"
+            {/* DataGrid */}
+            <Paper
+                sx={{
+                    borderRadius: 3,
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    overflow: "hidden",
+                    minHeight: 0,
+                    display: "grid",
+                }}
+            >
+                <DataGrid
+                    rows={filteredRows}
+                    columns={orderedColumns}
+                    getRowId={(r) => r._rowId}
+                    loading={loading}
+                    disableRowSelectionOnClick
+                    density="compact"
+                    rowHeight={40}
+                    columnHeaderHeight={44}
+                    checkboxSelection={false}
+                    editMode="row"
+                    processRowUpdate={processRowUpdate}
+                    onProcessRowUpdateError={(e) => {
+                        console.error(e);
+                        setSnack({ open: true, msg: "Satır güncellenemedi.", severity: "error" });
+                    }}
+                    // v6'da processRowUpdate sonrası state'i bizim güncellememiz yeterli:
+                    onRowUpdateCommit={handleRowUpdateCommit}
+                    disableColumnMenu={false}
+                    columnReorder
+                    onColumnOrderChange={onColumnOrderChange}
+                    sx={{
+                        border: "none",
+                        "& .MuiDataGrid-columnHeaders": {
+                            background: "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
+                            color: "#C8D1E6",
+                            borderBottomColor: "rgba(255,255,255,0.08)",
+                            fontWeight: 700,
+                        },
+                        "& .MuiDataGrid-cell": {
+                            borderBottomColor: "rgba(255,255,255,0.06)",
+                            whiteSpace: "nowrap",
+                            textOverflow: "ellipsis",
+                            overflow: "hidden",
+                        },
+                        "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": {
+                            backgroundColor: "rgba(255,255,255,0.02)",
+                        },
+                    }}
+                />
+            </Paper>
+
+            {/* Kaydetme sırasında bloklayıcı */}
+            <Backdrop open={saving} sx={{ color: "#fff", zIndex: (t) => t.zIndex.drawer + 1 }}>
+                <CircularProgress color="inherit" />
+                <Typography sx={{ ml: 2 }}>Kaydediliyor…</Typography>
+            </Backdrop>
+
+            {/* Yeni Plaka Dialog */}
+            <Dialog open={plakaDialogOpen} onClose={() => setPlakaDialogOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle>Yeni Plaka Ekle</DialogTitle>
+                <DialogContent sx={{ pt: 1 }}>
+                    <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+                        <TextField
+                            label="Plaka"
                             value={yeniPlaka.plaka}
-                            onChange={(e) => setYeniPlaka({ ...yeniPlaka, plaka: e.target.value })}
+                            onChange={(e) => setYeniPlaka((p) => ({ ...p, plaka: e.target.value }))}
+                            autoFocus
                         />
-                        <input
-                            type="text"
-                            placeholder="Ad Soyad"
+                        <TextField
+                            label="Ad Soyad"
                             value={yeniPlaka.ad_soyad}
-                            onChange={(e) => setYeniPlaka({ ...yeniPlaka, ad_soyad: e.target.value })}
+                            onChange={(e) => setYeniPlaka((p) => ({ ...p, ad_soyad: e.target.value }))}
                         />
-                        <input
-                            type="text"
-                            placeholder="Telefon"
+                        <TextField
+                            label="Telefon"
                             value={yeniPlaka.telefon}
-                            onChange={(e) => setYeniPlaka({ ...yeniPlaka, telefon: e.target.value })}
+                            onChange={(e) => setYeniPlaka((p) => ({ ...p, telefon: e.target.value }))}
                         />
-                        <input
-                            type="text"
-                            placeholder="TC"
+                        <TextField
+                            label="TC"
                             value={yeniPlaka.tc}
-                            onChange={(e) => setYeniPlaka({ ...yeniPlaka, tc: e.target.value })}
+                            onChange={(e) => setYeniPlaka((p) => ({ ...p, tc: e.target.value }))}
                         />
-                        <div className="modal-buttons">
-                            <button onClick={handleYeniPlakaKaydet}>Kaydet</button>
-                            <button onClick={() => setShowPlakaModal(false)}>İptal</button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setPlakaDialogOpen(false)}>İptal</Button>
+                    <Button variant="contained" onClick={saveYeniPlaka}>
+                        Kaydet
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
-            {/* ✅ GÜNCELLE onay modali */}
-            {showGuncelleModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content">
-                        <h3>Güncelleme Onayı</h3>
-                        <p>Tüm kayıtlar güncellenecek. Devam etmek istiyor musunuz?</p>
-                        <div className="modal-buttons">
-                            <button onClick={handleGuncelle}>Evet, Güncelle</button>
-                            <button onClick={() => setShowGuncelleModal(false)}>İptal</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+            {/* Toplu Güncelle Onay */}
+            <Dialog open={guncelleDialogOpen} onClose={() => setGuncelleDialogOpen(false)}>
+                <DialogTitle>Güncelleme Onayı</DialogTitle>
+                <DialogContent>
+                    <Typography>Tüm kayıtlar güncellenecek. Devam etmek istiyor musunuz?</Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setGuncelleDialogOpen(false)}>İptal</Button>
+                    <Button variant="contained" onClick={confirmTopluGuncelle}>
+                        Evet, Güncelle
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Snackbar */}
+            <Snackbar
+                open={snack.open}
+                autoHideDuration={3000}
+                onClose={() => setSnack((s) => ({ ...s, open: false }))}
+                anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+            >
+                <Alert
+                    onClose={() => setSnack((s) => ({ ...s, open: false }))}
+                    severity={snack.severity}
+                    variant="filled"
+                    sx={{ width: "100%" }}
+                >
+                    {snack.msg}
+                </Alert>
+            </Snackbar>
+        </Box>
     );
-
-
 }
-
-export default Planlama;

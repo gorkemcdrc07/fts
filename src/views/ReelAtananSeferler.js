@@ -511,37 +511,65 @@ export default function ReelAtananSeferler() {
         setEditSefer(row);
         setEditOpen(true);
 
-        const { data } = await supabase
-            .from("sefer_detaylari")
-            .select("*")
-            .eq("sefer_id", row.id)
-            .order("nokta_sirasi", { ascending: true });
-
-        if (data && data.length) {
-            setDetailRows(
-                data.map((d) => ({
-                    ...d,
-                    proje_adi: d.proje_adi ?? "",
-                    yukleme_noktasi: d.yukleme_noktasi ?? "",
-                    yukleme_ili: d.yukleme_ili ?? "",
-                    yukleme_ilcesi: d.yukleme_ilcesi ?? "",
-                    teslim_noktasi: d.teslim_noktasi ?? "",
-                    teslim_ili: d.teslim_ili ?? "",
-                    teslim_ilcesi: d.teslim_ilcesi ?? "",
-                    yukleme_varis: d.yukleme_varis ?? "",
-                    yukleme_cikis: d.yukleme_cikis ?? "",
-                    teslim_varis: d.teslim_varis ?? "",
-                    teslim_cikis: d.teslim_cikis ?? "",
-                }))
-            );
-        } else {
-            setDetailRows([{
-                sefer_id: row.id, nokta_sirasi: 0,
-                proje_adi: "", yukleme_noktasi: "", yukleme_ili: "", yukleme_ilcesi: "",
-                teslim_noktasi: "", teslim_ili: "", teslim_ilcesi: "",
-                yukleme_varis: "", yukleme_cikis: "", teslim_varis: "", teslim_cikis: "",
-            }]);
+        // 1) id yoksa sefer_no ile çöz
+        let id = row?.id ?? null;
+        if (!id && row?.sefer_no) {
+            const { data: s } = await supabase
+                .from("seferler")
+                .select("id")
+                .eq("sefer_no", row.sefer_no)
+                .maybeSingle();
+            id = s?.id ?? null;
         }
+
+        // 2) Önce detay tablosunu dene
+        let detay = [];
+        if (id) {
+            const { data } = await supabase
+                .from("sefer_detaylari")
+                .select("*")
+                .eq("sefer_id", id)
+                .order("nokta_sirasi", { ascending: true });
+            detay = data || [];
+        }
+
+        // 3) Detay bulunamadıysa, seferler tablosundaki alanlardan satır türet
+        if (!detay.length) {
+            const arrs = Object.fromEntries(detailFields.map((k) => [k, splitCell(row[k])]));
+            const len = Math.max(1, ...detailFields.map((k) => arrs[k].length));
+            const pick = (k, i) => (arrs[k][i] ?? "");
+            detay = Array.from({ length: len }, (_, i) => ({
+                sefer_id: id ?? null,
+                nokta_sirasi: i,
+                proje_adi: pick("proje_adi", i),
+                yukleme_noktasi: pick("yukleme_noktasi", i),
+                yukleme_ili: pick("yukleme_ili", i),
+                yukleme_ilcesi: pick("yukleme_ilcesi", i),
+                teslim_noktasi: pick("teslim_noktasi", i),
+                teslim_ili: pick("teslim_ili", i),
+                teslim_ilcesi: pick("teslim_ilcesi", i),
+                yukleme_varis: pick("yukleme_varis", i),
+                yukleme_cikis: pick("yukleme_cikis", i),
+                teslim_varis: pick("teslim_varis", i),
+                teslim_cikis: pick("teslim_cikis", i),
+            }));
+        }
+
+        // 4) Formu doldur
+        setDetailRows(detay.map((d) => ({
+            ...d,
+            proje_adi: d.proje_adi ?? "",
+            yukleme_noktasi: d.yukleme_noktasi ?? "",
+            yukleme_ili: d.yukleme_ili ?? "",
+            yukleme_ilcesi: d.yukleme_ilcesi ?? "",
+            teslim_noktasi: d.teslim_noktasi ?? "",
+            teslim_ili: d.teslim_ili ?? "",
+            teslim_ilcesi: d.teslim_ilcesi ?? "",
+            yukleme_varis: d.yukleme_varis ?? "",
+            yukleme_cikis: d.yukleme_cikis ?? "",
+            teslim_varis: d.teslim_varis ?? "",
+            teslim_cikis: d.teslim_cikis ?? "",
+        })));
 
         if (aktarModu) {
             setSnack({
@@ -551,6 +579,7 @@ export default function ReelAtananSeferler() {
             });
         }
     };
+
 
     const closeEditor = () => {
         setEditOpen(false);

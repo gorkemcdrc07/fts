@@ -525,6 +525,8 @@ export default function ReelAtananSeferler() {
                 .maybeSingle();
             id = s?.id ?? null;
         }
+        // id bulunduysa editSefer'e yaz ki save/update .eq("id", ...) kesin dolu olsun
+        if (id) setEditSefer((prev) => ({ ...(prev || row), id }));
 
         // 2) Önce detay tablosunu dene
         let detay = [];
@@ -644,15 +646,18 @@ export default function ReelAtananSeferler() {
                 .upsert(upserts, { onConflict: ["sefer_id", "nokta_sirasi"] });
             if (error) throw error;
 
+            // join sonrası değer boşsa DB'ye "" yerine null yaz
             const joined = Object.fromEntries(
-                detailFields.map((k) => [k, joinCell(detailRows.map((x) => x[k] || ""))])
+                detailFields.map((k) => {
+                    const val = joinCell(detailRows.map((x) => x[k] || ""));
+                    return [k, val || null];
+                })
             );
             const yeniAracStatu = computeAracStatu(detailRows);
             await supabase
                 .from("seferler")
-                .update({ ...joined, arac_statu: yeniAracStatu, nokta_sayisi: detailRows.length })
+                .update({ ...joined, arac_statu: yeniAracStatu })
                 .eq("id", editSefer.id);
-
             setRows((prev) =>
                 prev.map((r) =>
                     r.id === editSefer.id
@@ -664,7 +669,11 @@ export default function ReelAtananSeferler() {
             setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
         } catch (e) {
             console.error(e);
-            setSnack({ open: true, msg: "Kaydetme hatası.", severity: "error" });
+            setSnack({
+                open: true,
+                msg: `Kaydetme hatası: ${e?.message || "Bilinmeyen hata"}`,
+                severity: "error",
+            });
         } finally {
             setSaving(false);
         }

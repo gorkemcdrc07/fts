@@ -120,7 +120,41 @@ const fromISO = (iso) => {
     const [y, m, dd] = d.split("-");
     return { d: `${dd}.${m}.${y}`, t };
 };
+// --- Tek alan tarih+saat yardımcıları ---
+const isDateTimeComplete = (txt) => /^\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$/.test(txt);
 
+const fmtDateTimeDigits = (digits) => {
+    // digits: dd mm yyyy hh mm => en fazla 12 rakam
+    const d = digits.slice(0, 2);
+    const m = digits.slice(2, 4);
+    const y = digits.slice(4, 8);
+    const h = digits.slice(8, 10);
+    const mi = digits.slice(10, 12);
+
+    let s = d;
+    if (digits.length > 2) s += "." + m;
+    if (digits.length > 4) s += "." + y;
+    if (digits.length > 8) s += " " + h;
+    if (digits.length > 10) s += ":" + mi;
+    return s;
+};
+
+const toISOFromCombined = (txt) => {
+    if (!isDateTimeComplete(txt)) return "";
+    const [dateTR, time] = txt.split(" "); // "gg.aa.yyyy", "ss:dd"
+    return toISO(dateTR, time);            // mevcut toISO'yu kullan
+};
+
+const fromISOToCombined = (iso) => {
+    const { d, t } = fromISO(iso || "");
+    return d && t ? `${d} ${t}` : "";
+};
+
+
+
+/** Maskeli tarih + saat; tarih tamamlanınca saate odaklanır */
+/** Maskeli tarih + saat; tarih tamamlanınca saate odaklanır */
+/** Maskeli tarih + saat; tarih tamamlanınca saate odaklanır */
 /** Maskeli tarih + saat; tarih tamamlanınca saate odaklanır */
 function DateTimeCell({ label, value, onChange, sx }) {
     const [dateText, setDateText] = useState("");
@@ -139,10 +173,7 @@ function DateTimeCell({ label, value, onChange, sx }) {
         const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
         const formatted = fmtDateDigits(digits);
         setDateText(formatted);
-        if (formatted.length === 10) {
-            // dd.MM.yyyy tamamlandıktan SONRA saate geç
-            setTimeout(() => timeRef.current?.focus(), 0);
-        }
+        if (formatted.length === 10) setTimeout(() => timeRef.current?.focus(), 0);
         emit(formatted, timeText);
     };
 
@@ -179,6 +210,36 @@ function DateTimeCell({ label, value, onChange, sx }) {
         </Box>
     );
 }
+
+/** Tek alan: "gg.aa.yyyy ss:dd" */
+function DateTimeOneField({ label, value, onChange, sx }) {
+    const [text, setText] = useState("");
+
+    useEffect(() => {
+        setText(fromISOToCombined(value || ""));
+    }, [value]);
+
+    const handleChange = (e) => {
+        const digits = e.target.value.replace(/\D/g, "").slice(0, 12);
+        const formatted = fmtDateTimeDigits(digits);
+        setText(formatted);
+        onChange(toISOFromCombined(formatted)); // tamam değilse "" döner
+    };
+
+    return (
+        <TextField
+            label={label}
+            placeholder="gg.aa.yyyy ss:dd"
+            value={text}
+            onChange={handleChange}
+            size="small"
+            inputProps={{ inputMode: "numeric", maxLength: 16 }}
+            InputLabelProps={{ shrink: true }}
+            sx={sx}
+        />
+    );
+}
+
 
 export default function ReelAtananSeferler() {
     /* data */
@@ -980,7 +1041,7 @@ export default function ReelAtananSeferler() {
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                         <Button startIcon={<AddIcon />} onClick={addDetailRow} color="info" variant="contained">Satır Ekle</Button>
                         <Typography variant="body2" sx={{ color: COLORS.textMuted }}>
-                            Tarihi **gg.aa.yyyy** olarak yaz; tamamlandığında saat alanına otomatik geçer.
+                            Tarih ve saati tek alana yazın: <b>gg.aa.yyyy ss:dd</b> (ör: 13.05.2025 09:35)
                         </Typography>
                     </Stack>
 
@@ -1031,7 +1092,7 @@ export default function ReelAtananSeferler() {
                                                 ["teslim_varis", "Teslim Varış"],
                                                 ["teslim_cikis", "Teslim Çıkış"],
                                             ].map(([key, label]) => (
-                                                <DateTimeCell
+                                                <DateTimeOneField
                                                     key={key}
                                                     label={label}
                                                     value={r[key] || ""}
@@ -1039,6 +1100,7 @@ export default function ReelAtananSeferler() {
                                                     sx={baseInputSX}
                                                 />
                                             ))}
+
                                         </Box>
                                     </CardContent>
                                 </Card>

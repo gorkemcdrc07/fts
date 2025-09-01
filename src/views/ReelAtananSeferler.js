@@ -29,7 +29,7 @@ const daysAgoISO = (n) => new Date(Date.now() - n * 86400000).toISOString().slic
 // Senkronizasyon sırasında hariç tutulacak plakalar
 const EXCLUDED_PLAKAS = new Set([
     "34NHF579", "34NHF636", "34NHF705", "34NHF757",
-    "34NHF811", "34NHF868", "34NHF916", "34NHF964", "34NHG120",
+    "34NHF811", "34NHF868", "34NHF916", "34NHF964", "34NHG120","34NHG208"
 ]);
 
 // Plaka normalize et (boşluk/çizgi sil, büyük harf)

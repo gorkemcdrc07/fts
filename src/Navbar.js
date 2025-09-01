@@ -116,6 +116,16 @@ function Navbar() {
         setProfilResim(previewUrl);
     };
 
+    // component unmount olduğunda olası blob URL sızıntısını temizle
+    useEffect(() => {
+        return () => {
+            if (prevObjectUrlRef.current) {
+                URL.revokeObjectURL(prevObjectUrlRef.current);
+                prevObjectUrlRef.current = null;
+            }
+        };
+    }, []);
+
     // Güvenli fallback avatar harfi
     const avatarHarf = useMemo(
         () => (kullanici?.trim()?.[0] || "K").toUpperCase(),
@@ -214,8 +224,8 @@ function Navbar() {
                 <div className="gorev-bildirimi" role="status" aria-live="polite">
                     <span className="gorev-bildirimi-ikon">📝</span>
                     <span>
-                        Size atanmış <strong>{okunmamisGorevSayisi}</strong> yeni
-                        göreviniz var!
+                        Size atanmış <strong>{okunmamisGorevSayisi}</strong> yeni göreviniz
+                        var!
                     </span>
                 </div>
             )}
@@ -266,7 +276,7 @@ function Navbar() {
                     </button>
 
                     {/* Bildirim ikonu + sayı */}
-                    <div className="notif">
+                    <div className="notif" aria-label="Bildirimler">
                         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
                             <path
                                 d="M18 8a6 6 0 10-12 0c0 7-3 7-3 7h18s-3 0-3-7"
@@ -436,10 +446,7 @@ function Navbar() {
                         )}
 
                         <div className="modal-buttons">
-                            <button
-                                onClick={() => setProfilModalAcik(false)}
-                                className="kapat-btn"
-                            >
+                            <button onClick={() => setProfilModalAcik(false)} className="kapat-btn">
                                 Kapat
                             </button>
                             <button

@@ -12,8 +12,8 @@
     --brand: 99, 102, 241;
     --surface: 255, 255, 255;
     --stroke: 228, 228, 231;
-    --glass: 255, 255, 255; /* glass arka plan rengi */
-    --glass-alpha: 0.65; /* 0-1 */
+    --glass: 255, 255, 255;
+    --glass-alpha: 0.35; /* daha şeffaf */
 }
 
 [data-theme="dark"] {
@@ -24,7 +24,7 @@
     --surface: 24, 26, 34;
     --stroke: 54, 58, 70;
     --glass: 24, 26, 34;
-    --glass-alpha: 0.55;
+    --glass-alpha: 0.28; /* daha şeffaf */
 }
 
 html, body {
@@ -46,11 +46,11 @@ html, body {
     align-items: center;
     justify-content: space-between;
     padding: 0 14px 0 18px;
-    /* glassmorphism */
+    /* Cam efekt */
     background: rgba(var(--glass), var(--glass-alpha));
-    backdrop-filter: saturate(140%) blur(10px);
-    -webkit-backdrop-filter: saturate(140%) blur(10px);
-    border-bottom: 1px solid rgba(var(--stroke), 0.7);
+    backdrop-filter: saturate(140%) blur(12px);
+    -webkit-backdrop-filter: saturate(140%) blur(12px);
+    border-bottom: 1px solid rgba(var(--stroke), 0.6);
     box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 10px 30px rgba(0,0,0,0.05);
 }
 
@@ -90,7 +90,7 @@ html, body {
     width: 36px;
     border-radius: 10px;
     border: 1px solid rgba(var(--stroke), 0.8);
-    background: rgba(var(--surface), .65);
+    background: rgba(var(--surface), .55);
     cursor: pointer;
     transition: transform .08s ease, background .2s ease, border-color .2s ease;
     color: rgb(var(--fg));
@@ -98,11 +98,11 @@ html, body {
 
     .icon-btn:hover {
         transform: translateY(-1px);
-        background: rgba(var(--surface), .9);
+        background: rgba(var(--surface), .85);
         border-color: rgba(var(--stroke), 1);
     }
 
-/* Bildirim ikonu + rozeti */
+/* Bildirim ikonu + rozet */
 .notif {
     position: relative;
     display: inline-flex;
@@ -112,7 +112,7 @@ html, body {
     width: 36px;
     border-radius: 10px;
     border: 1px solid rgba(var(--stroke), 0.8);
-    background: rgba(var(--surface), .65);
+    background: rgba(var(--surface), .55);
 }
 
 .notif-badge {
@@ -139,7 +139,7 @@ html, body {
     width: 40px;
     border-radius: 12px;
     border: 1px solid rgba(var(--stroke), .9);
-    background: rgba(var(--surface), .75);
+    background: rgba(var(--surface), .65);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -202,7 +202,7 @@ html, body {
     padding: 8px 12px;
     border-radius: 12px;
     border: 1px solid rgba(var(--stroke), .9);
-    background: linear-gradient(180deg, rgba(var(--surface), .9), rgba(var(--surface), .7));
+    background: linear-gradient(180deg, rgba(var(--surface), .85), rgba(var(--surface), .65));
     color: rgb(var(--fg));
     font-weight: 700;
     letter-spacing: .2px;
@@ -222,7 +222,7 @@ html, body {
     position: fixed;
     top: 12px;
     right: 16px;
-    z-index: calc(var(--navbar-z) + 20); /* Navbar'ın üstünde dursun */
+    z-index: calc(var(--navbar-z) + 20);
     display: inline-flex;
     align-items: center;
     gap: 10px;
@@ -261,8 +261,8 @@ html, body {
     inset: 0;
     z-index: calc(var(--navbar-z) + 30);
     background: rgba(0,0,0,.35);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     display: grid;
     place-items: center;
     padding: 20px;

@@ -45,12 +45,17 @@ import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
+import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
+
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.locale("tr");
 const IST_TZ = "Europe/Istanbul";
 
 /* ---------- Helpers ---------- */
+// Uygulamanızdaki gerçek ana sayfa yolu
+const HOME_PATH = "/anasayfa"; // sizde neyse: "/dashboard" vb.
+
 const DURUM = {
     BEKLEMEDE: "Beklemede",
     ISLEME_ALINDI: "İşleme Alındı",
@@ -378,10 +383,9 @@ export default function BenimGorevlerim() {
                             <Button size="small" variant="outlined" onClick={() => navigate(-1)}>
                                 Geri
                             </Button>
-                            <Button size="small" variant="outlined" onClick={() => navigate("/")}>
+                            <Button variant="text" startIcon={<HomeOutlinedIcon />} onClick={() => navigate(HOME_PATH)}>
                                 Anasayfa
                             </Button>
-
                             <Tooltip title="Yenile">
                                 <span>
                                     <IconButton onClick={fetchGorevler} disabled={loading}>

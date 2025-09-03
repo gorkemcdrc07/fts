@@ -59,6 +59,9 @@ import "dayjs/locale/tr";
 dayjs.locale("tr");
 
 /* ===================== Zoom’dan Bağımsız Ekrana Sığdırma (KOLON DUYARLI) ===================== */
+// importların hemen altı
+const HOME_PATH = "/anasayfa"; // sizde neyse: "/dashboard" vb.
+
 const BASE_WIDTH = 1920;
 const BASE_HEIGHT = 1080;
 const MAX_SCALE = Infinity;
@@ -604,7 +607,12 @@ export default function KesintiGirisi() {
                                 <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
                                     Geri
                                 </Button>
-                                <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate("/")}>
+                                <Button
+                                    size="small"
+                                    variant="text"
+                                    startIcon={<HomeIcon />}
+                                    onClick={() => navigate(HOME_PATH)}
+                                >
                                     Anasayfa
                                 </Button>
 

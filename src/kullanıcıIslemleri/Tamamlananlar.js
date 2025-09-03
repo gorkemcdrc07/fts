@@ -35,6 +35,8 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 
+
+
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
@@ -48,6 +50,9 @@ import {
 } from "@mui/x-data-grid";
 
 /* ---------------- helpers ---------------- */
+// (tüm importlar bitti)
+const HOME_PATH = "/anasayfa"; // gerçek ana sayfa rotanız ne ise onu yazın (örn: "/", "/dashboard")
+
 const fmtDate = (v) => (v ? new Date(v) : null);
 const fmtDateText = (v) => (v ? new Date(v).toLocaleDateString("tr-TR") : "-");
 const fmtDateTimeText = (v) => (v ? new Date(v).toLocaleString("tr-TR") : "-");
@@ -504,7 +509,7 @@ export default function Tamamlananlar() {
                         size="small"
                         variant="text"
                         startIcon={<HomeOutlinedIcon />}
-                        onClick={() => navigate("/")}
+                        onClick={() => navigate(HOME_PATH)}
                     >
                         Anasayfa
                     </Button>

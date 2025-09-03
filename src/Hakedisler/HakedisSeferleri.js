@@ -3,9 +3,15 @@ import React, { useCallback, useRef, useState } from "react";
 import "./HakedisSeferleri.css";
 import { supabase } from "../supabaseClient"; // ← yolunu düzenle
 import { useNavigate } from "react-router-dom"; // 👈 eklendi
+ import { Button } from "@mui/material";
+ import { HomeOutlined as HomeIcon } from "@mui/icons-material";
+
 // import { authorizedJson } from "../auth/tokenManager"; // ← Artık kullanılmıyor (TMS'e doğrudan login)
 
 /** Kullanıcı şablon başlıkları (Excel) */
+// tüm importlar bitti
+const HOME_PATH = "/anasayfa"; // sizde hangi rota ise: "/dashboard" vb.
+
 const TEMPLATE_HEADERS = [
     "Sefer Tarihi",
     "Sefer No",
@@ -611,16 +617,14 @@ export default function HakedisSeferleri({ onFileReady }) {
                     >
                         ← Geri
                     </button>
-                    <button
-                        type="button"
-                        className="btn"
-                        onClick={() => navigate("/")}
-                        aria-label="Anasayfa"
-                        title="Anasayfa"
+                    <Button
+                        size="small"
+                        variant="text"
+                        startIcon={<HomeIcon />}
+                        onClick={() => navigate(HOME_PATH)}
                     >
-                        ⌂ Anasayfa
-                    </button>
-
+                        Anasayfa
+                    </Button>
                     {/* Mevcut: Şablon indir */}
                     <button
                         type="button"

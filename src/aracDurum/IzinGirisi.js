@@ -69,6 +69,9 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 dayjs.locale("tr");
 
 /* ===================== (YENİ) Ekrana Sığdırma Sarmalayıcısı ===================== */
+// importların hemen altı
+const HOME_PATH = "/anasayfa"; // sizde neyse: "/dashboard" vb.
+
 const BASE_WIDTH = 1750;
 const BASE_HEIGHT = 960;
 function useScaleToFit(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = 1.25) {
@@ -804,12 +807,10 @@ export default function IzinGirisiModern() {
                                 </Button>
                                 <Button
                                     variant="text"
-                                    startIcon={<HomeIcon />}
-                                    onClick={() => navigate("/")}
-                                >
-                                    Anasayfa
-                                </Button>
-
+                                 startIcon={<HomeIcon />}
+                                 onClick={() => navigate(HOME_PATH)} >
+                                Anasayfa
+                            </Button>
                                 <Button
                                     variant="outlined"
                                     startIcon={<FilterListIcon />}

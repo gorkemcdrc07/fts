@@ -38,12 +38,17 @@ import timezone from "dayjs/plugin/timezone";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import HomeIcon from "@mui/icons-material/Home";
+
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.locale("tr");
 
 const IST_TZ = "Europe/Istanbul";
+// Uygulamanızdaki gerçek ana sayfa yolu
+const HOME_PATH = "/anasayfa"; // sizde neyse: "/dashboard" vb.
+
 
 export default function GorevAta() {
     const navigate = useNavigate();
@@ -191,7 +196,7 @@ export default function GorevAta() {
                                 <Button size="small" variant="outlined" onClick={() => navigate(-1)}>
                                     Geri
                                 </Button>
-                                <Button size="small" variant="outlined" onClick={() => navigate("/")}>
+                                <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
                                     Anasayfa
                                 </Button>
                                 <Button

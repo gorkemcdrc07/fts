@@ -58,12 +58,16 @@ import {
     Close as CloseIcon,
     Search as SearchIcon,
     Download as DownloadIcon,
+    HomeOutlined as HomeIcon,
     TaskAlt as TaskAltIcon,
     DoneAll as DoneAllIcon,
     ErrorOutline as ErrorOutlineIcon,
 } from "@mui/icons-material";
 
 /* ---------- Helpers ---------- */
+// tüm importlar bitti
+const HOME_PATH = "/anasayfa"; // sizde hangi rota ise: "/dashboard" vb.
+
 const BOS_FORM = {
     tedarikci: "",
     tarih: "",
@@ -641,13 +645,12 @@ export default function TedarikciMasraf() {
                             </Button>
                             <Button
                                 size="small"
-                                variant="outlined"
-                                onClick={() => navigate("/")}
-                                title="Anasayfa"
+                                variant="text"
+                                startIcon={<HomeIcon />}
+                                onClick={() => navigate(HOME_PATH)}
                             >
                                 Anasayfa
                             </Button>
-
                             <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={handleOpenYeni}>
                                 Yeni
                             </Button>

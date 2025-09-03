@@ -22,6 +22,9 @@ import {
 import { DataGrid, GridToolbar } from "@mui/x-data-grid";
 
 /* ===================== Zoom'dan Bağımsız Ekrana Sığdırma ===================== */
+// tüm importlar bitti
+const HOME_PATH = "/anasayfa"; // sizde hangi rota ise: "/dashboard" vb.
+
 const BASE_WIDTH = 1920;
 const BASE_HEIGHT = 1080;
 const MAX_SCALE = Infinity; // istersen 1.25 gibi sınırlayabilirsin
@@ -431,11 +434,10 @@ export default function AracYonetimiMUI() {
                             size="small"
                             variant="text"
                             startIcon={<HomeIcon />}
-                            onClick={() => navigate("/")}
+                            onClick={() => navigate(HOME_PATH)}
                         >
                             Anasayfa
                         </Button>
-
                         <Tooltip title="Filtreler">
                             <IconButton onClick={() => setDrawerOpen(true)}>
                                 <FilterListIcon />

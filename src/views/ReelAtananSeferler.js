@@ -778,7 +778,7 @@ export default function ReelAtananSeferler() {
                         size="small"
                         variant="text"
                         startIcon={<HomeOutlinedIcon />}
-                        onClick={() => navigate("/")}
+                        onClick={() => navigate("/anasayfa")}   // <-- değişiklik
                     >
                         Anasayfa
                     </Button>

@@ -39,11 +39,16 @@ import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
+import HomeIcon from "@mui/icons-material/Home";
+
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.locale("tr");
 
 // ---- Helpers ----
+// Uygulamanızdaki gerçek ana sayfa yolu
+const HOME_PATH = "/anasayfa"; // sizde neyse: "/dashboard" vb.
+
 const IST_TZ = "Europe/Istanbul";
 
 const DURUM_RENK = {
@@ -244,7 +249,7 @@ export default function TumGorevler() {
                             <Button size="small" variant="outlined" onClick={() => navigate(-1)}>
                                 Geri
                             </Button>
-                            <Button size="small" variant="outlined" onClick={() => navigate("/")}>
+                            <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
                                 Anasayfa
                             </Button>
 

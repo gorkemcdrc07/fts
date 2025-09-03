@@ -52,6 +52,10 @@ import HomeIcon from "@mui/icons-material/HomeOutlined";
 import { utils as XLSXUtils, writeFile as XLSXWriteFile } from "xlsx";
 
 /* ===================== Helpers ===================== */
+
+// Uygulamanızdaki gerçek ana sayfa yolu
+const HOME_PATH = "/anasayfa"; // sizde neyse: "/dashboard" vb.
+
 function formatTL(value) {
     if (value === null || value === undefined || value === "") return "";
     const num = Number(value);
@@ -495,7 +499,7 @@ export default function AracCariVeFiyat() {
                                 <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
                                     Geri
                                 </Button>
-                                <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate("/")}>
+                                <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
                                     Anasayfa
                                 </Button>
                             </Stack>

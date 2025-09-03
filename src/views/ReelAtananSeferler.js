@@ -2,14 +2,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
 
 /* MUI */
 import {
     Box, Paper, Stack, Button, Typography, TextField, MenuItem, Snackbar, Alert,
-    Backdrop, CircularProgress, Chip, alpha, Dialog, DialogTitle, DialogContent,
+    Backdrop, CircularProgress, Chip, Dialog, DialogTitle, DialogContent,
     DialogActions, IconButton, Tooltip, Divider, Switch, FormControlLabel, Grid,
     Card, CardContent, CardHeader,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles"; // ✅ alpha buradan
 import { DataGrid } from "@mui/x-data-grid";
 
 /* Icons */
@@ -21,34 +23,24 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import FileDownloadDoneIcon from "@mui/icons-material/FileDownloadDone";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
+import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 
 /* ---------------- helpers ---------------- */
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const daysAgoISO = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
-// Senkronizasyon sırasında hariç tutulacak plakalar
-// Senkronizasyon sırasında hariç tutulacak plakalar
+
 const EXCLUDED_PLAKAS = new Set([
     "34NHF579", "34NHF636", "34NHF705", "34NHF757",
-    "34NHF811", "34NHF868", "34NHF916", "34NHF964", "34NHG120","34NHG208"
+    "34NHF811", "34NHF868", "34NHF916", "34NHF964", "34NHG120", "34NHG208"
 ]);
 
-// Plaka normalize et (boşluk/çizgi sil, büyük harf)
 const normalizePlate = (s) => (s ?? "").toString().toUpperCase().replace(/[\s-]/g, "");
-
-// Bu plakalar hariç tutulacak mı?
 const isExcludedPlate = (p) => EXCLUDED_PLAKAS.has(normalizePlate(p));
 
-
-const splitCell = (v) =>
-    (v ?? "").toString().split(";").map((x) => x.trim()).filter((x) => x !== "");
-
+const splitCell = (v) => (v ?? "").toString().split(";").map((x) => x.trim()).filter((x) => x !== "");
 const joinCell = (arr) => (arr || []).map((x) => (x ?? "").trim()).filter(Boolean).join("; ");
-
-const clean = (v) => {
-    const t = (v ?? "").toString().trim();
-    if (!t || t === "-" || t === "---") return null;
-    return t;
-};
+const clean = (v) => { const t = (v ?? "").toString().trim(); return !t || t === "-" || t === "---" ? null : t; };
 
 const detailFields = [
     "proje_adi", "yukleme_noktasi", "yukleme_ili", "yukleme_ilcesi",
@@ -56,7 +48,6 @@ const detailFields = [
     "yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis",
 ];
 
-/** detaylardan araç statüsü üret */
 const computeAracStatu = (rows) => {
     if (!Array.isArray(rows) || rows.length === 0) return "";
     const isFilled = (x) => x && x !== "-" && x.trim() !== "";
@@ -77,7 +68,7 @@ const computeAracStatu = (rows) => {
     return "";
 };
 
-/* --------- yüksek-kontrast renkler --------- */
+/* --------- UI renkleri --------- */
 const COLORS = {
     pageBg: "#0F172A",
     surface: "#111827",
@@ -88,8 +79,7 @@ const COLORS = {
     zebra: "rgba(148,163,184,0.06)",
 };
 
-/* ========= Tarih + Saat (maskeli) ========= */
-/** "13052025" -> "13.05.2025" */
+/* ========= Tarih + Saat yardımcıları ========= */
 const fmtDateDigits = (digits) => {
     const d = digits.slice(0, 2);
     const m = digits.slice(2, 4);
@@ -99,7 +89,6 @@ const fmtDateDigits = (digits) => {
     if (digits.length > 4) s += "." + y;
     return s;
 };
-/** "1234" -> "12:34" */
 const fmtTimeDigits = (digits) => {
     const h = digits.slice(0, 2);
     const m = digits.slice(2, 4);
@@ -114,23 +103,19 @@ const toISO = (dateTR, time) => {
 };
 const fromISO = (iso) => {
     if (!iso) return { d: "", t: "" };
-    const d = iso.slice(0, 10); // yyyy-mm-dd
+    const d = iso.slice(0, 10);
     const t = iso.slice(11, 16);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { d: "", t: "" };
     const [y, m, dd] = d.split("-");
     return { d: `${dd}.${m}.${y}`, t };
 };
-// --- Tek alan tarih+saat yardımcıları ---
 const isDateTimeComplete = (txt) => /^\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$/.test(txt);
-
 const fmtDateTimeDigits = (digits) => {
-    // digits: dd mm yyyy hh mm => en fazla 12 rakam
     const d = digits.slice(0, 2);
     const m = digits.slice(2, 4);
     const y = digits.slice(4, 8);
     const h = digits.slice(8, 10);
     const mi = digits.slice(10, 12);
-
     let s = d;
     if (digits.length > 2) s += "." + m;
     if (digits.length > 4) s += "." + y;
@@ -138,92 +123,25 @@ const fmtDateTimeDigits = (digits) => {
     if (digits.length > 10) s += ":" + mi;
     return s;
 };
-
 const toISOFromCombined = (txt) => {
     if (!isDateTimeComplete(txt)) return "";
-    const [dateTR, time] = txt.split(" "); // "gg.aa.yyyy", "ss:dd"
-    return toISO(dateTR, time);            // mevcut toISO'yu kullan
+    const [dateTR, time] = txt.split(" ");
+    return toISO(dateTR, time);
 };
-
 const fromISOToCombined = (iso) => {
     const { d, t } = fromISO(iso || "");
     return d && t ? `${d} ${t}` : "";
 };
 
-
-
-/** Maskeli tarih + saat; tarih tamamlanınca saate odaklanır */
-/** Maskeli tarih + saat; tarih tamamlanınca saate odaklanır */
-/** Maskeli tarih + saat; tarih tamamlanınca saate odaklanır */
-/** Maskeli tarih + saat; tarih tamamlanınca saate odaklanır */
-function DateTimeCell({ label, value, onChange, sx }) {
-    const [dateText, setDateText] = useState("");
-    const [timeText, setTimeText] = useState("");
-    const timeRef = useRef(null);
-
-    useEffect(() => {
-        const { d, t } = fromISO(value || "");
-        setDateText(d);
-        setTimeText(t);
-    }, [value]);
-
-    const emit = (d, t) => onChange(toISO(d, t));
-
-    const onDateChange = (e) => {
-        const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
-        const formatted = fmtDateDigits(digits);
-        setDateText(formatted);
-        if (formatted.length === 10) setTimeout(() => timeRef.current?.focus(), 0);
-        emit(formatted, timeText);
-    };
-
-    const onTimeChange = (e) => {
-        const digits = e.target.value.replace(/\D/g, "").slice(0, 4);
-        const formatted = fmtTimeDigits(digits);
-        setTimeText(formatted);
-        emit(dateText, formatted);
-    };
-
-    return (
-        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 0.8fr", gap: 0.75 }}>
-            <TextField
-                label={label}
-                placeholder="gg.aa.yyyy"
-                value={dateText}
-                onChange={onDateChange}
-                size="small"
-                inputProps={{ inputMode: "numeric", maxLength: 10 }}
-                InputLabelProps={{ shrink: true }}
-                sx={sx}
-            />
-            <TextField
-                label="Saat"
-                placeholder="--:--"
-                value={timeText}
-                onChange={onTimeChange}
-                size="small"
-                inputRef={timeRef}
-                inputProps={{ inputMode: "numeric", maxLength: 5 }}
-                InputLabelProps={{ shrink: true }}
-                sx={sx}
-            />
-        </Box>
-    );
-}
-
-/** Tek alan: "gg.aa.yyyy ss:dd" */
 function DateTimeOneField({ label, value, onChange, sx }) {
     const [text, setText] = useState("");
-
-    useEffect(() => {
-        setText(fromISOToCombined(value || ""));
-    }, [value]);
+    useEffect(() => { setText(fromISOToCombined(value || "")); }, [value]);
 
     const handleChange = (e) => {
         const digits = e.target.value.replace(/\D/g, "").slice(0, 12);
         const formatted = fmtDateTimeDigits(digits);
         setText(formatted);
-        onChange(toISOFromCombined(formatted)); // tamam değilse "" döner
+        onChange(toISOFromCombined(formatted));
     };
 
     return (
@@ -240,8 +158,9 @@ function DateTimeOneField({ label, value, onChange, sx }) {
     );
 }
 
-
 export default function ReelAtananSeferler() {
+    const navigate = useNavigate();
+
     /* data */
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -251,7 +170,6 @@ export default function ReelAtananSeferler() {
     const [endDate, setEndDate] = useState(todayISO());
     const [seferNoTipi, setSeferNoTipi] = useState("");
     const [quick, setQuick] = useState("");
-
     const [plaka, setPlaka] = useState("");
     const [musteri, setMusteri] = useState("");
     const [proje, setProje] = useState("");
@@ -271,6 +189,7 @@ export default function ReelAtananSeferler() {
     const [editOpen, setEditOpen] = useState(false);
     const [editSefer, setEditSefer] = useState(null);
     const [detailRows, setDetailRows] = useState([]);
+    const [seferTarihiYeni, setSeferTarihiYeni] = useState("");
 
     /* options */
     const options = useMemo(() => {
@@ -296,10 +215,8 @@ export default function ReelAtananSeferler() {
             const rangeMin = (startDate || daysAgoISO(6)) + "T00:00:00";
             const rangeMax = (endDate || todayISO()) + "T23:59:59";
             const { data, error } = await supabase
-                .from("seferler")
-                .select("*")
-                .gte("sefer_tarihi", rangeMin)
-                .lte("sefer_tarihi", rangeMax)
+                .from("seferler").select("*")
+                .gte("sefer_tarihi", rangeMin).lte("sefer_tarihi", rangeMax)
                 .order("sefer_tarihi", { ascending: false });
             if (error) throw error;
 
@@ -311,8 +228,6 @@ export default function ReelAtananSeferler() {
 
             const COMPLETED_NOS = new Set((tamamlananNos || []).map(x => (x.sefer_no ?? "").trim()));
 
-            // 1) tamamlananları at
-            // 2) EXCLUDED_PLAKAS içindeki plakaları tamamen gösterme
             const visible = (data || [])
                 .filter(s => !COMPLETED_NOS.has((s.sefer_no ?? "").toString().trim()))
                 .filter(s => !isExcludedPlate(s.plaka));
@@ -332,9 +247,7 @@ export default function ReelAtananSeferler() {
             console.error(e);
             setSnack({ open: true, msg: "Veri çekilirken hata oluştu.", severity: "error" });
             setRows([]);
-        } finally {
-            setLoading(false);
-        }
+        } finally { setLoading(false); }
     }, [startDate, endDate]);
 
     /* senkronize */
@@ -344,13 +257,10 @@ export default function ReelAtananSeferler() {
             const start = (startDate || daysAgoISO(6)) + "T00:00:00";
             const end = (endDate || todayISO()) + "T23:59:59";
             const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000";
-            // Bu aralık, tamamlananları da süzmek için kullanılacak
-            const min = (startDate || daysAgoISO(6)) + "T00:00:00";
-            const max = (endDate || todayISO()) + "T23:59:59";
+            const min = start, max = end;
 
             const res = await fetch(`${API_BASE_URL}/api/proxy/tmsdespatches`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
+                method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ startDate: start, endDate: end, userId: 1 }),
             });
             if (!res.ok) throw new Error(`API Hatası: ${res.status} ${res.statusText}`);
@@ -361,12 +271,11 @@ export default function ReelAtananSeferler() {
                 return;
             }
 
-            // Bu aralıkta daha önce tamamlanan sefer_no'ları çek
             const { data: tamamlananNos } = await supabase
                 .from("tamamlanan_seferler")
                 .select("sefer_no")
                 .gte("sefer_tarihi", min)
-                .lte("sefer_tarihi", max)
+                .lte("sefer_tarihi", max);
             const COMPLETED_NOS = new Set((tamamlananNos || []).map(x => (x.sefer_no ?? "").trim()));
 
             const gelen = json.Data.filter((x) => x && typeof x === "object");
@@ -376,16 +285,12 @@ export default function ReelAtananSeferler() {
                     return tip === "FİLO" || tip === "ÖZMAL";
                 })
                 .filter((item) => !EXCLUDED_PLAKAS.has(normalizePlate(item?.PlateNumber)))
-                // TMS DocumentNo (sefer_no) tamamlananlarda varsa dahil etme
                 .filter((item) => !COMPLETED_NOS.has((item?.DocumentNo ?? "").toString().trim()));
 
             const mapOrders = (orders, field) =>
                 Array.isArray(orders)
-                    ? orders
-                        .filter((o) => o && typeof o === "object")
-                        .map((o) => o[field] ?? "")
-                        .filter(Boolean)
-                        .join("; ")
+                    ? orders.filter(o => o && typeof o === "object")
+                        .map(o => o[field] ?? "").filter(Boolean).join("; ")
                     : "";
 
             const temiz = filtreli.map((s) => {
@@ -432,20 +337,17 @@ export default function ReelAtananSeferler() {
                 const eski = mapDb.get(item.sefer_no?.trim());
                 if (!eski) {
                     const yeni = { ...item, reel_durum: "YENİ" };
-                    seenNew.push(yeni);
-                    upsert.push(yeni);
+                    seenNew.push(yeni); upsert.push(yeni);
                 } else {
                     const changed = Object.keys(item).some((k) => (item[k] ?? null) !== (eski[k] ?? null));
-                    const merged = changed ? { ...item } : { ...eski }; // değiştiyse taze değerleri yaz
+                    const merged = changed ? { ...item } : { ...eski };
                     const eskiKayit = { ...merged, reel_durum: "ESKİ" };
-                    seenNew.push(eskiKayit);
-                    upsert.push(eskiKayit);
+                    seenNew.push(eskiKayit); upsert.push(eskiKayit);
                 }
             }
 
-            const payload = [...upsert]; // EŞLEŞME YOK eklenmez
-            if (payload.length) {
-                await supabase.from("seferler").upsert(payload, { onConflict: ["sefer_no"] });
+            if (upsert.length) {
+                await supabase.from("seferler").upsert(upsert, { onConflict: ["sefer_no"] });
             }
 
             setSuccessCount(upsert.length);
@@ -454,27 +356,17 @@ export default function ReelAtananSeferler() {
 
             const enriched = [...seenNew].map((s, idx) => {
                 const maxLen = Math.max(0, ...detailFields.map((k) => splitCell(s[k]).length));
-                return {
-                    ...s,
-                    _rid: s.id ?? s.sefer_no ?? `tmp-${Date.now()}-${idx}`,
-                    nokta_sayisi: maxLen || 0,
-                };
+                return { ...s, _rid: s.id ?? s.sefer_no ?? `tmp-${Date.now()}-${idx}`, nokta_sayisi: maxLen || 0 };
             });
-
             setRows(enriched);
         } catch (e) {
             console.error(e);
             setSnack({ open: true, msg: "Senkronizasyon hatası.", severity: "error" });
-        } finally {
-            setLoading(false);
-        }
+        } finally { setLoading(false); }
     }, [startDate, endDate]);
 
     /* mount */
-    useEffect(() => {
-        listData();
-    }, [listData]);
-
+    useEffect(() => { listData(); }, [listData]);
 
     /* filtrelenmiş */
     const filtered = useMemo(() => {
@@ -492,27 +384,19 @@ export default function ReelAtananSeferler() {
         }
         if (quick) {
             const q = quick.toLowerCase();
-            r = r.filter((x) =>
-                Object.values(x).some((v) => String(v ?? "").toLowerCase().includes(q))
-            );
+            r = r.filter((x) => Object.values(x).some((v) => String(v ?? "").toLowerCase().includes(q)));
         }
         return r;
     }, [rows, seferNoTipi, plaka, musteri, proje, yuklemeIl, teslimIl, aracStatu, noktaSayisi, quick]);
 
-    /* SFR sayacı */
     const sfrCount = useMemo(
-        () =>
-            filtered.reduce(
-                (n, x) => n + ((x.sefer_no || "").toUpperCase().startsWith("SFR") ? 1 : 0),
-                0
-            ),
+        () => filtered.reduce((n, x) => n + ((x.sefer_no || "").toUpperCase().startsWith("SFR") ? 1 : 0), 0),
         [filtered]
     );
 
-    /* list grid columns */
+    /* grid columns */
     const columns = useMemo(() => {
         const txt = (f, t, w = 170) => ({ field: f, headerName: t, width: w, sortable: true });
-
         return [
             {
                 field: "actions",
@@ -571,116 +455,47 @@ export default function ReelAtananSeferler() {
         ];
     }, []);
 
-    /* editor aç */
-    const openEditor = async (row, aktarModu = false) => {
-        setEditSefer(row);
-        setEditOpen(true);
-
-        // 1) id yoksa sefer_no ile çöz
-        let id = row?.id ?? null;
-        if (!id && row?.sefer_no) {
-            const { data: s } = await supabase
-                .from("seferler")
-                .select("id")
-                .eq("sefer_no", row.sefer_no)
-                .maybeSingle();
-            id = s?.id ?? null;
-        }
-        // id bulunduysa editSefer'e yaz ki save/update .eq("id", ...) kesin dolu olsun
-        if (id) setEditSefer((prev) => ({ ...(prev || row), id }));
-
-        // 2) Önce detay tablosunu dene
-        let detay = [];
-        if (id) {
-            const { data } = await supabase
-                .from("sefer_detaylari")
-                .select("*")
-                .eq("sefer_id", id)
-                .order("nokta_sirasi", { ascending: true });
-            detay = data || [];
-        }
-
-        // 3) Detay bulunamadıysa, seferler tablosundaki alanlardan satır türet
-        if (!detay.length) {
-            const arrs = Object.fromEntries(detailFields.map((k) => [k, splitCell(row[k])]));
-            const len = Math.max(1, ...detailFields.map((k) => arrs[k].length));
-            const pick = (k, i) => (arrs[k][i] ?? "");
-            detay = Array.from({ length: len }, (_, i) => ({
-                sefer_id: id ?? null,
-                nokta_sirasi: i,
-                proje_adi: pick("proje_adi", i),
-                yukleme_noktasi: pick("yukleme_noktasi", i),
-                yukleme_ili: pick("yukleme_ili", i),
-                yukleme_ilcesi: pick("yukleme_ilcesi", i),
-                teslim_noktasi: pick("teslim_noktasi", i),
-                teslim_ili: pick("teslim_ili", i),
-                teslim_ilcesi: pick("teslim_ilcesi", i),
-                yukleme_varis: pick("yukleme_varis", i),
-                yukleme_cikis: pick("yukleme_cikis", i),
-                teslim_varis: pick("teslim_varis", i),
-                teslim_cikis: pick("teslim_cikis", i),
-            }));
-        }
-
-        // 4) Formu doldur
-        setDetailRows(detay.map((d) => ({
-            ...d,
-            proje_adi: d.proje_adi ?? "",
-            yukleme_noktasi: d.yukleme_noktasi ?? "",
-            yukleme_ili: d.yukleme_ili ?? "",
-            yukleme_ilcesi: d.yukleme_ilcesi ?? "",
-            teslim_noktasi: d.teslim_noktasi ?? "",
-            teslim_ili: d.teslim_ili ?? "",
-            teslim_ilcesi: d.teslim_ilcesi ?? "",
-            yukleme_varis: d.yukleme_varis ?? "",
-            yukleme_cikis: d.yukleme_cikis ?? "",
-            teslim_varis: d.teslim_varis ?? "",
-            teslim_cikis: d.teslim_cikis ?? "",
-        })));
-
-        if (aktarModu) {
-            setSnack({
-                open: true,
-                msg: "Detayları kontrol edip 'Tamamlananlara Aktar' ile işlemi bitirin.",
-                severity: "info",
-            });
-        }
-    };
-
-
-    const closeEditor = () => {
+    /* ------- editor helper'ları ------- */
+    const closeEditor = useCallback(() => {
         setEditOpen(false);
         setEditSefer(null);
         setDetailRows([]);
-    };
+        setSeferTarihiYeni("");
+    }, []);
 
-    const addDetailRow = () => {
-        setDetailRows((prev) => [...prev, {
-            sefer_id: editSefer.id, nokta_sirasi: prev.length,
-            proje_adi: "", yukleme_noktasi: "", yukleme_ili: "", yukleme_ilcesi: "",
-            teslim_noktasi: "", teslim_ili: "", teslim_ilcesi: "",
-            yukleme_varis: "", yukleme_cikis: "", teslim_varis: "", teslim_cikis: "",
-        }]);
-    };
+    const addDetailRow = useCallback(() => {
+        setDetailRows((prev) => [
+            ...prev,
+            {
+                sefer_id: editSefer?.id ?? null,
+                nokta_sirasi: prev.length,
+                proje_adi: "", yukleme_noktasi: "", yukleme_ili: "", yukleme_ilcesi: "",
+                teslim_noktasi: "", teslim_ili: "", teslim_ilcesi: "",
+                yukleme_varis: "", yukleme_cikis: "", teslim_varis: "", teslim_cikis: "",
+            },
+        ]);
+    }, [editSefer]);
 
-    const copyDetailRow = (idx) => {
-        const r = detailRows[idx];
-        const c = { ...r, nokta_sirasi: detailRows.length };
-        setDetailRows((prev) => [...prev, c]);
-    };
+    const copyDetailRow = useCallback((idx) => {
+        setDetailRows((prev) => {
+            const r = prev[idx];
+            const c = { ...r, nokta_sirasi: prev.length };
+            return [...prev, c];
+        });
+    }, []);
 
-    const removeDetailRow = (idx) => {
+    const removeDetailRow = useCallback((idx) => {
         setDetailRows((prev) => {
             const arr = prev.filter((_, i) => i !== idx);
             return arr.map((x, i) => ({ ...x, nokta_sirasi: i }));
         });
-    };
+    }, []);
 
-    const onDetailChange = (idx, key, value) => {
+    const onDetailChange = useCallback((idx, key, value) => {
         setDetailRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
-    };
+    }, []);
 
-    const saveDetails = async () => {
+    const saveDetails = useCallback(async () => {
         if (!editSefer) return;
         setSaving(true);
         try {
@@ -707,7 +522,6 @@ export default function ReelAtananSeferler() {
                 .upsert(upserts, { onConflict: ["sefer_id", "nokta_sirasi"] });
             if (error) throw error;
 
-            // join sonrası değer boşsa DB'ye "" yerine null yaz
             const joined = Object.fromEntries(
                 detailFields.map((k) => {
                     const val = joinCell(detailRows.map((x) => x[k] || ""));
@@ -715,14 +529,17 @@ export default function ReelAtananSeferler() {
                 })
             );
             const yeniAracStatu = computeAracStatu(detailRows);
+            const seferTarihiFinal = seferTarihiYeni || editSefer.sefer_tarihi || null;
+
             await supabase
                 .from("seferler")
-                .update({ ...joined, arac_statu: yeniAracStatu })
+                .update({ ...joined, arac_statu: yeniAracStatu, sefer_tarihi: seferTarihiFinal })
                 .eq("id", editSefer.id);
+
             setRows((prev) =>
                 prev.map((r) =>
                     r.id === editSefer.id
-                        ? { ...r, ...joined, arac_statu: yeniAracStatu, nokta_sayisi: detailRows.length }
+                        ? { ...r, ...joined, arac_statu: yeniAracStatu, nokta_sayisi: detailRows.length, sefer_tarihi: seferTarihiFinal }
                         : r
                 )
             );
@@ -730,25 +547,21 @@ export default function ReelAtananSeferler() {
             setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
         } catch (e) {
             console.error(e);
-            setSnack({
-                open: true,
-                msg: `Kaydetme hatası: ${e?.message || "Bilinmeyen hata"}`,
-                severity: "error",
-            });
-        } finally {
-            setSaving(false);
-        }
-    };
+            setSnack({ open: true, msg: `Kaydetme hatası: ${e?.message || "Bilinmeyen hata"}`, severity: "error" });
+        } finally { setSaving(false); }
+    }, [detailRows, editSefer, seferTarihiYeni]);
 
-    const moveToCompleted = async () => {
+    const moveToCompleted = useCallback(async () => {
         if (!editSefer) return;
         if (!window.confirm("Bu sefer tamamlananlara aktarılacak. Devam edilsin mi?")) return;
         setSaving(true);
         try {
             const seferAna = rows.find((r) => r.id === editSefer.id) || editSefer;
+            const seferTarihiFinal = seferTarihiYeni || seferAna.sefer_tarihi || null;
+
             const anaPayload = {
                 arac_statu: seferAna.arac_statu ?? null,
-                sefer_tarihi: seferAna.sefer_tarihi ?? null,
+                sefer_tarihi: seferTarihiFinal,
                 sefer_no: seferAna.sefer_no ?? null,
                 plaka: seferAna.plaka ?? null,
                 treyler: seferAna.treyler ?? null,
@@ -810,17 +623,82 @@ export default function ReelAtananSeferler() {
         } catch (e) {
             console.error(e);
             setSnack({ open: true, msg: "Aktarım hatası.", severity: "error" });
-        } finally {
-            setSaving(false);
+        } finally { setSaving(false); }
+    }, [detailRows, editSefer, rows, seferTarihiYeni, closeEditor]);
+
+    /* editor aç */
+    const openEditor = useCallback(async (row, aktarModu = false) => {
+        setEditSefer(row);
+        setEditOpen(true);
+
+        // id yoksa sefer_no ile çöz
+        let id = row?.id ?? null;
+        if (!id && row?.sefer_no) {
+            const { data: s } = await supabase
+                .from("seferler").select("id").eq("sefer_no", row.sefer_no).maybeSingle();
+            id = s?.id ?? null;
         }
-    };
+        if (id) setEditSefer((prev) => ({ ...(prev || row), id }));
 
-    const canSync = (() => {
-        const name = (localStorage.getItem("kullaniciAdi") || "").toUpperCase();
-        return name === "ADMIN" || name === "SELİN";
-    })();
+        // detayları çek
+        let detay = [];
+        if (id) {
+            const { data } = await supabase
+                .from("sefer_detaylari")
+                .select("*")
+                .eq("sefer_id", id)
+                .order("nokta_sirasi", { ascending: true });
+            detay = data || [];
+        }
 
-    /* --------------- render --------------- */
+        if (!detay.length) {
+            const arrs = Object.fromEntries(detailFields.map((k) => [k, splitCell(row[k])]));
+            const len = Math.max(1, ...detailFields.map((k) => arrs[k].length));
+            const pick = (k, i) => (arrs[k][i] ?? "");
+            detay = Array.from({ length: len }, (_, i) => ({
+                sefer_id: id ?? null,
+                nokta_sirasi: i,
+                proje_adi: pick("proje_adi", i),
+                yukleme_noktasi: pick("yukleme_noktasi", i),
+                yukleme_ili: pick("yukleme_ili", i),
+                yukleme_ilcesi: pick("yukleme_ilcesi", i),
+                teslim_noktasi: pick("teslim_noktasi", i),
+                teslim_ili: pick("teslim_ili", i),
+                teslim_ilcesi: pick("teslim_ilcesi", i),
+                yukleme_varis: pick("yukleme_varis", i),
+                yukleme_cikis: pick("yukleme_cikis", i),
+                teslim_varis: pick("teslim_varis", i),
+                teslim_cikis: pick("teslim_cikis", i),
+            }));
+        }
+
+        setDetailRows(detay.map((d) => ({
+            ...d,
+            proje_adi: d.proje_adi ?? "",
+            yukleme_noktasi: d.yukleme_noktasi ?? "",
+            yukleme_ili: d.yukleme_ili ?? "",
+            yukleme_ilcesi: d.yukleme_ilcesi ?? "",
+            teslim_noktasi: d.teslim_noktasi ?? "",
+            teslim_ili: d.teslim_ili ?? "",
+            teslim_ilcesi: d.teslim_ilcesi ?? "",
+            yukleme_varis: d.yukleme_varis ?? "",
+            yukleme_cikis: d.yukleme_cikis ?? "",
+            teslim_varis: d.teslim_varis ?? "",
+            teslim_cikis: d.teslim_cikis ?? "",
+        })));
+
+        setSeferTarihiYeni(row?.sefer_tarihi || "");
+
+        if (aktarModu) {
+            setSnack({
+                open: true,
+                msg: "Detayları kontrol edip 'Tamamlananlara Aktar' ile işlemi bitirin.",
+                severity: "info",
+            });
+        }
+    }, []);
+
+    /* sabit UI config */
     const baseInputSX = {
         "& .MuiInputBase-root": {
             backgroundColor: COLORS.surface2,
@@ -834,6 +712,12 @@ export default function ReelAtananSeferler() {
         "& .MuiFormLabel-root.Mui-focused": { color: COLORS.textMuted },
     };
 
+    const canSync = (() => {
+        const name = (localStorage.getItem("kullaniciAdi") || "").toUpperCase();
+        return name === "ADMIN" || name === "SELİN";
+    })();
+
+    /* --------------- RENDER --------------- */
     return (
         <Box
             sx={{
@@ -849,11 +733,11 @@ export default function ReelAtananSeferler() {
             <Helmet><title>AKTİF SEFERLER</title></Helmet>
 
             {/* Başlık + aksiyonlar */}
-            {/* Başlık + aksiyonlar */}
             <Stack
                 direction={{ xs: "column", md: "row" }}
                 justifyContent="space-between"
                 alignItems={{ xs: "flex-start", md: "center" }}
+                spacing={1}
             >
                 <Stack spacing={0.25}>
                     <Typography
@@ -869,24 +753,43 @@ export default function ReelAtananSeferler() {
                         Aktif Seferler
                     </Typography>
                     <Typography variant="caption" sx={{ color: COLORS.textMuted }}>
-                        Net, okunabilir ve hızlı veri girişi için optimize edildi
+                        {(() => {
+                            const eskiST = fromISOToCombined(editSefer?.sefer_tarihi || "") || "-";
+                            const yeniST = fromISOToCombined(seferTarihiYeni || "") || "-";
+                            const st = computeAracStatu(detailRows) || "—";
+                            return (eskiST !== yeniST)
+                                ? `Sefer Tarihi (Eski/Yeni): ${eskiST} / ${yeniST} • ${st}`
+                                : `Sefer Tarihi: ${eskiST} • ${st}`;
+                        })()}
                     </Typography>
                 </Stack>
 
                 <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+                    {/* ✅ Geri & Anasayfa */}
+                    <Button
+                        size="small"
+                        variant="text"
+                        startIcon={<ArrowBackIosNewIcon />}
+                        onClick={() => navigate(-1)}
+                    >
+                        Geri
+                    </Button>
+                    <Button
+                        size="small"
+                        variant="text"
+                        startIcon={<HomeOutlinedIcon />}
+                        onClick={() => navigate("/")}
+                    >
+                        Anasayfa
+                    </Button>
+
                     <FormControlLabel
                         control={<Switch checked={dense} onChange={() => setDense(v => !v)} size="small" />}
                         label="Sıkı satırlar"
                         sx={{ color: COLORS.textMuted }}
                     />
 
-                    {/* SFR sayacı */}
-                    <Chip
-                        label={`SFR: ${sfrCount}`}
-                        size="small"
-                        color="info"
-                        sx={{ fontWeight: 800 }}
-                    />
+                    <Chip label={`SFR: ${sfrCount}`} size="small" color="info" sx={{ fontWeight: 800 }} />
 
                     <Button variant="outlined" startIcon={<VisibilityIcon />} onClick={listData}>
                         Listele
@@ -896,7 +799,6 @@ export default function ReelAtananSeferler() {
                     </Button>
                 </Stack>
             </Stack>
-
 
             {/* Filtreler */}
             <Paper sx={{
@@ -1026,8 +928,13 @@ export default function ReelAtananSeferler() {
             </Snackbar>
 
             {/* Detay Editör */}
-            <Dialog open={editOpen} onClose={closeEditor} fullWidth maxWidth="xl"
-                PaperProps={{ sx: { backgroundColor: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.border}` } }}>
+            <Dialog
+                open={editOpen}
+                onClose={closeEditor}
+                fullWidth
+                maxWidth="xl"
+                PaperProps={{ sx: { backgroundColor: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.border}` } }}
+            >
                 <DialogTitle sx={{ fontWeight: 900 }}>
                     <Typography variant="h6" sx={{ fontWeight: 900 }}>
                         {editSefer?.sefer_no || "-"} • {editSefer?.plaka || "-"} • {editSefer?.musteri_adi || "-"}
@@ -1038,6 +945,23 @@ export default function ReelAtananSeferler() {
                 </DialogTitle>
 
                 <DialogContent dividers sx={{ backgroundColor: alpha("#fff", 0.01) }}>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 1, mb: 1.2 }}>
+                        <TextField
+                            label="Sefer Tarihi (Eski)"
+                            size="small"
+                            value={fromISOToCombined(editSefer?.sefer_tarihi || "")}
+                            InputProps={{ readOnly: true }}
+                            InputLabelProps={{ shrink: true }}
+                            sx={baseInputSX}
+                        />
+                        <DateTimeOneField
+                            label="Sefer Tarihi (Yeni)"
+                            value={seferTarihiYeni || ""}
+                            onChange={(val) => setSeferTarihiYeni(val)}
+                            sx={baseInputSX}
+                        />
+                    </Box>
+
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                         <Button startIcon={<AddIcon />} onClick={addDetailRow} color="info" variant="contained">Satır Ekle</Button>
                         <Typography variant="body2" sx={{ color: COLORS.textMuted }}>
@@ -1100,7 +1024,6 @@ export default function ReelAtananSeferler() {
                                                     sx={baseInputSX}
                                                 />
                                             ))}
-
                                         </Box>
                                     </CardContent>
                                 </Card>

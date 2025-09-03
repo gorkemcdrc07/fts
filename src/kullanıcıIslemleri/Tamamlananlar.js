@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
 
 import {
     Box,
@@ -31,6 +32,8 @@ import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import SummarizeIcon from "@mui/icons-material/Summarize";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
+import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -55,9 +58,7 @@ const humanDur = (millis) => {
     const d = Math.floor(totalM / (60 * 24));
     const h = Math.floor((totalM % (60 * 24)) / 60);
     const m = totalM % 60;
-    return [d ? `${d}g` : null, h ? `${h}s` : null, m ? `${m}d` : null]
-        .filter(Boolean)
-        .join(" ") || "0d";
+    return [d ? `${d}g` : null, h ? `${h}s` : null, m ? `${m}d` : null].filter(Boolean).join(" ") || "0d";
 };
 
 /* ---------------- toolbar ---------------- */
@@ -70,21 +71,15 @@ function Toolbar({ onExport, pageSize, onPageSizeChange, statText, onExportWithD
             <Box sx={{ flex: 1 }} />
             <GridToolbarQuickFilter debounceMs={350} />
 
-            {/* Stat text */}
             <Typography variant="body2" sx={{ ml: 1, opacity: 0.8 }}>
                 {statText}
             </Typography>
 
-            {/* Page size inline */}
             <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 1 }}>
                 <Typography variant="body2" sx={{ opacity: 0.8 }}>
                     Sayfa boyutu
                 </Typography>
-                <Select
-                    size="small"
-                    value={pageSize}
-                    onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                >
+                <Select size="small" value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))}>
                     {[25, 50, 100, 200].map((s) => (
                         <MenuItem key={s} value={s}>
                             {s}
@@ -93,25 +88,13 @@ function Toolbar({ onExport, pageSize, onPageSizeChange, statText, onExportWithD
                 </Select>
             </Stack>
 
-            {/* Export */}
             <Tooltip title="Görünen sayfayı Excel'e aktar">
-                <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<FileDownloadIcon />}
-                    onClick={onExport}
-                    sx={{ ml: 1 }}
-                >
+                <Button variant="outlined" size="small" startIcon={<FileDownloadIcon />} onClick={onExport} sx={{ ml: 1 }}>
                     Excel
                 </Button>
             </Tooltip>
             <Tooltip title="Sayfa + detaylarla aktar">
-                <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<SummarizeIcon />}
-                    onClick={onExportWithDetails}
-                >
+                <Button variant="outlined" size="small" startIcon={<SummarizeIcon />} onClick={onExportWithDetails}>
                     Excel (Detay)
                 </Button>
             </Tooltip>
@@ -130,6 +113,7 @@ export default function Tamamlananlar() {
     const theme = useTheme();
     const downMd = useMediaQuery(theme.breakpoints.down("md"));
     const downSm = useMediaQuery(theme.breakpoints.down("sm"));
+    const navigate = useNavigate();
 
     /* ----------- state ----------- */
     const [rows, setRows] = useState([]);
@@ -185,7 +169,7 @@ export default function Tamamlananlar() {
             query = query.lte("sefer_tarihi", endIso);
         }
 
-        // quick filter (GridToolbarQuickFilter -> filter.quickFilterValues)
+        // quick filter
         const qVals = filter?.quickFilterValues ?? [];
         if (qVals.length) {
             const q = qVals.join(" ").replace(/%/g, "");
@@ -203,7 +187,7 @@ export default function Tamamlananlar() {
             );
         }
 
-        // column filters (contains/equals/basic)
+        // column filters
         for (const f of filter?.items || []) {
             const field = f.field;
             const value = f.value;
@@ -219,12 +203,11 @@ export default function Tamamlananlar() {
             } else if (op === "isAnyOf" && Array.isArray(value) && value.length) {
                 query = query.in(field, value);
             } else {
-                // contains / default
                 query = query.ilike(field, `%${value}%`);
             }
         }
 
-        // sorting (tek sütun)
+        // sorting
         if (sort?.length) {
             const s = sort[0];
             query = query.order(s.field, { ascending: s.sort !== "desc" });
@@ -256,9 +239,7 @@ export default function Tamamlananlar() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [paginationModel, sortModel, filterModel, dateStart, dateEnd]);
 
-    // DataGrid kolonları
-
-    // responsive kolon görünürlüğü (ekrana sığdırma)
+    // responsive kolon görünürlüğü
     useEffect(() => {
         if (downSm) {
             setColumnVisibilityModel({
@@ -296,59 +277,58 @@ export default function Tamamlananlar() {
         setDetailLoading(false);
     }, []);
 
-    const columns = useMemo(() => [
-        {
-            field: "sefer_no",
-            headerName: "Sefer No",
-            width: 140,
-            renderCell: (params) => (
-                <Button size="small" onClick={() => openDetails(params.row)}>
-                    {params.value}
-                </Button>
-            ),
-        },
-        { field: "plaka", headerName: "Plaka", width: 120 },
-        { field: "treyler", headerName: "Treyler", width: 120 },
-        { field: "surucu_ad_soyad", headerName: "Şoför", width: 160 },
-        { field: "musteri_adi", headerName: "Müşteri", width: 180 },
-        { field: "hizmet_adi", headerName: "Hizmet", width: 160 },
-        { field: "proje_adi", headerName: "Proje", width: 180 },
-        { field: "yukleme_noktasi", headerName: "Yükleme Noktası", width: 200 },
-        {
-            field: "yukleme_il_ilce",
-            headerName: "Yükleme İl/İlçe",
-            width: 170,
-            valueGetter: (value, row) =>
-                `${row?.yukleme_ili ?? ""} / ${row?.yukleme_ilcesi ?? ""}`,
-        },
-        {
-            field: "teslim_il_ilce",
-            headerName: "Teslim İl/İlçe",
-            width: 170,
-            valueGetter: (value, row) =>
-                `${row?.teslim_ili ?? ""} / ${row?.teslim_ilcesi ?? ""}`,
-        },
-        {
-            field: "atama_tarihi",
-            headerName: "Atama Tarihi",
-            width: 170,
-            valueGetter: (value, row) => fmtDateTimeText(row?.atama_tarihi),
-        },
-        {
-            field: "sefer_tarihi",
-            headerName: "Sefer Tarihi",
-            width: 140,
-            valueGetter: (value, row) => fmtDateText(row?.sefer_tarihi),
-        },
-        {
-            field: "arac_statu",
-            headerName: "Durum",
-            width: 120,
-            renderCell: (params) => <Chip size="small" label={params.value ?? "-"} />,
-        },
-    ], [openDetails]);
-
-
+    const columns = useMemo(
+        () => [
+            {
+                field: "sefer_no",
+                headerName: "Sefer No",
+                width: 140,
+                renderCell: (params) => (
+                    <Button size="small" onClick={() => openDetails(params.row)}>
+                        {params.value}
+                    </Button>
+                ),
+            },
+            { field: "plaka", headerName: "Plaka", width: 120 },
+            { field: "treyler", headerName: "Treyler", width: 120 },
+            { field: "surucu_ad_soyad", headerName: "Şoför", width: 160 },
+            { field: "musteri_adi", headerName: "Müşteri", width: 180 },
+            { field: "hizmet_adi", headerName: "Hizmet", width: 160 },
+            { field: "proje_adi", headerName: "Proje", width: 180 },
+            { field: "yukleme_noktasi", headerName: "Yükleme Noktası", width: 200 },
+            {
+                field: "yukleme_il_ilce",
+                headerName: "Yükleme İl/İlçe",
+                width: 170,
+                valueGetter: (value, row) => `${row?.yukleme_ili ?? ""} / ${row?.yukleme_ilcesi ?? ""}`,
+            },
+            {
+                field: "teslim_il_ilce",
+                headerName: "Teslim İl/İlçe",
+                width: 170,
+                valueGetter: (value, row) => `${row?.teslim_ili ?? ""} / ${row?.teslim_ilcesi ?? ""}`,
+            },
+            {
+                field: "atama_tarihi",
+                headerName: "Atama Tarihi",
+                width: 170,
+                valueGetter: (value, row) => fmtDateTimeText(row?.atama_tarihi),
+            },
+            {
+                field: "sefer_tarihi",
+                headerName: "Sefer Tarihi",
+                width: 140,
+                valueGetter: (value, row) => fmtDateText(row?.sefer_tarihi),
+            },
+            {
+                field: "arac_statu",
+                headerName: "Durum",
+                width: 120,
+                renderCell: (params) => <Chip size="small" label={params.value ?? "-"} />,
+            },
+        ],
+        [openDetails]
+    );
 
     // detay metrikleri (tek sefer için)
     const detailMetrics = useMemo(() => {
@@ -357,7 +337,6 @@ export default function Tamamlananlar() {
         const last = detailRows[detailRows.length - 1];
         const totalCycle = ms(first?.yukleme_varis, last?.teslim_cikis);
 
-        // her satır için parça metrikleri (ilk yükleme -> çıkış, transit, teslim işlemi)
         const parts = detailRows.map((d) => ({
             sira: d.nokta_sirasi,
             yuklemeIslem: ms(d.yukleme_varis, d.yukleme_cikis),
@@ -403,7 +382,7 @@ export default function Tamamlananlar() {
         saveAs(new Blob([buf], { type: "application/octet-stream" }), "tamamlanan_seferler.xlsx");
     };
 
-    // export with details (sayfadaki her sefer için detay çekip tek sayfada birleştir)
+    // export with details
     const exportExcelWithDetails = async () => {
         if (!rows.length) return alert("Aktarılacak veri yok.");
         const all = [];
@@ -425,7 +404,6 @@ export default function Tamamlananlar() {
                 continue;
             }
 
-            // metrikler
             const first = data[0];
             const last = data[data.length - 1];
             const toplamSure = ms(first?.yukleme_varis, last?.teslim_cikis);
@@ -511,70 +489,90 @@ export default function Tamamlananlar() {
                     </Typography>
                 </Stack>
 
-                {/* Tarih filtresi */}
-                <Paper
-                    sx={{
-                        p: 1,
-                        borderRadius: 2,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                        background: `linear-gradient(180deg, ${alpha("#ffffff", 0.04)} 0%, ${alpha(
-                            "#ffffff",
-                            0.02
-                        )} 100%)`,
-                        border: "1px solid rgba(255,255,255,0.06)",
-                        flexWrap: "wrap",
-                    }}
-                >
-                    <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
-                        Tarih (Sefer Tarihi)
-                    </Typography>
-                    <TextField
-                        type="date"
+                {/* Sağ aksiyonlar */}
+                <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+                    {/* ✅ Geri & Anasayfa */}
+                    <Button
                         size="small"
-                        value={(dateStart && fmtDate(dateStart)?.toISOString()?.slice(0, 10)) || ""}
-                        onChange={(e) => {
-                            setPaginationModel((p) => ({ ...p, page: 0 }));
-                            setDateStart(e.target.value ? new Date(e.target.value) : null);
-                        }}
-                        InputLabelProps={{ shrink: true }}
-                    />
-                    <Typography variant="body2" sx={{ opacity: 0.7 }}>
-                        —
-                    </Typography>
-                    <TextField
-                        type="date"
+                        variant="text"
+                        startIcon={<ArrowBackIosNewIcon />}
+                        onClick={() => navigate(-1)}
+                    >
+                        Geri
+                    </Button>
+                    <Button
                         size="small"
-                        value={(dateEnd && fmtDate(dateEnd)?.toISOString()?.slice(0, 10)) || ""}
-                        onChange={(e) => {
-                            setPaginationModel((p) => ({ ...p, page: 0 }));
-                            setDateEnd(e.target.value ? new Date(e.target.value) : null);
+                        variant="text"
+                        startIcon={<HomeOutlinedIcon />}
+                        onClick={() => navigate("/")}
+                    >
+                        Anasayfa
+                    </Button>
+
+                    <Paper
+                        sx={{
+                            p: 1,
+                            borderRadius: 2,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1,
+                            background: `linear-gradient(180deg, ${alpha("#ffffff", 0.04)} 0%, ${alpha("#ffffff", 0.02)} 100%)`,
+                            border: "1px solid rgba(255,255,255,0.06)",
+                            flexWrap: "wrap",
                         }}
-                        InputLabelProps={{ shrink: true }}
-                    />
-
-                    <Divider
-                        flexItem
-                        orientation="vertical"
-                        sx={{ mx: 1, borderColor: "rgba(255,255,255,0.08)" }}
-                    />
-
-                </Paper>
+                    >
+                        <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+                            Tarih (Sefer Tarihi)
+                        </Typography>
+                        <TextField
+                            type="date"
+                            size="small"
+                            value={(dateStart && fmtDate(dateStart)?.toISOString()?.slice(0, 10)) || ""}
+                            onChange={(e) => {
+                                setPaginationModel((p) => ({ ...p, page: 0 }));
+                                setDateStart(e.target.value ? new Date(e.target.value) : null);
+                            }}
+                            InputLabelProps={{ shrink: true }}
+                        />
+                        <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                            —
+                        </Typography>
+                        <TextField
+                            type="date"
+                            size="small"
+                            value={(dateEnd && fmtDate(dateEnd)?.toISOString()?.slice(0, 10)) || ""}
+                            onChange={(e) => {
+                                setPaginationModel((p) => ({ ...p, page: 0 }));
+                                setDateEnd(e.target.value ? new Date(e.target.value) : null);
+                            }}
+                            InputLabelProps={{ shrink: true }}
+                        />
+                    </Paper>
+                </Stack>
             </Stack>
 
             {/* Üstte hızlı özet kartları (sayfa verisi) */}
             <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
                 <Paper sx={{ p: 1.25, borderRadius: 2, flex: 1, border: "1px solid rgba(255,255,255,0.06)" }}>
-                    <Typography variant="caption" color="text.secondary">Toplam Kayıt (filtreli)</Typography>
-                    <Typography variant="h6" fontWeight={800}>{rowCount}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        Toplam Kayıt (filtreli)
+                    </Typography>
+                    <Typography variant="h6" fontWeight={800}>
+                        {rowCount}
+                    </Typography>
                 </Paper>
                 <Paper sx={{ p: 1.25, borderRadius: 2, flex: 1, border: "1px solid rgba(255,255,255,0.06)" }}>
-                    <Typography variant="caption" color="text.secondary">Benzersiz Plaka (sayfa)</Typography>
-                    <Typography variant="h6" fontWeight={800}>{pageInsights.uniquePlates}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        Benzersiz Plaka (sayfa)
+                    </Typography>
+                    <Typography variant="h6" fontWeight={800}>
+                        {pageInsights.uniquePlates}
+                    </Typography>
                 </Paper>
                 <Paper sx={{ p: 1.25, borderRadius: 2, flex: 1.6, border: "1px solid rgba(255,255,255,0.06)" }}>
-                    <Typography variant="caption" color="text.secondary">En çok sefer (sayfa)</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        En çok sefer (sayfa)
+                    </Typography>
                     <Typography variant="h6" fontWeight={800}>
                         {pageInsights.topCustomerName}{" "}
                         <Typography component="span" variant="body2" sx={{ opacity: 0.7 }}>
@@ -618,14 +616,13 @@ export default function Tamamlananlar() {
                     filterModel={filterModel}
                     onFilterModelChange={setFilterModel}
                     slots={{ toolbar: Toolbar }}
-                    components={{ Toolbar }} // (v5 fallback)
+                    components={{ Toolbar }}
                     slotProps={{
                         toolbar: {
                             onExport: exportExcel,
                             onExportWithDetails: exportExcelWithDetails,
                             pageSize: paginationModel.pageSize,
-                            onPageSizeChange: (v) =>
-                                setPaginationModel((p) => ({ ...p, page: 0, pageSize: v })),
+                            onPageSizeChange: (v) => setPaginationModel((p) => ({ ...p, page: 0, pageSize: v })),
                             statText,
                         },
                     }}
@@ -634,8 +631,7 @@ export default function Tamamlananlar() {
                             onExport: exportExcel,
                             onExportWithDetails: exportExcelWithDetails,
                             pageSize: paginationModel.pageSize,
-                            onPageSizeChange: (v) =>
-                                setPaginationModel((p) => ({ ...p, page: 0, pageSize: v })),
+                            onPageSizeChange: (v) => setPaginationModel((p) => ({ ...p, page: 0, pageSize: v })),
                             statText,
                         },
                     }}
@@ -652,8 +648,7 @@ export default function Tamamlananlar() {
                             borderBottom: "1px solid rgba(255,255,255,0.06)",
                         },
                         "& .MuiDataGrid-columnHeaders": {
-                            background:
-                                "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
+                            background: "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
                             color: "#C8D1E6",
                             borderBottomColor: "rgba(255,255,255,0.08)",
                             fontWeight: 700,
@@ -698,20 +693,36 @@ export default function Tamamlananlar() {
                 {detailMetrics && (
                     <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ mb: 2 }}>
                         <Paper sx={{ p: 1.25, borderRadius: 2, flex: 1 }} variant="outlined">
-                            <Typography variant="caption" color="text.secondary">Toplam Süre</Typography>
-                            <Typography variant="h6" fontWeight={800}>{humanDur(detailMetrics.totalCycle)}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Toplam Süre
+                            </Typography>
+                            <Typography variant="h6" fontWeight={800}>
+                                {humanDur(detailMetrics.totalCycle)}
+                            </Typography>
                         </Paper>
                         <Paper sx={{ p: 1.25, borderRadius: 2, flex: 1 }} variant="outlined">
-                            <Typography variant="caption" color="text.secondary">Yükleme İşlemleri (toplam)</Typography>
-                            <Typography variant="h6" fontWeight={800}>{humanDur(detailMetrics.toplamYukleme)}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Yükleme İşlemleri (toplam)
+                            </Typography>
+                            <Typography variant="h6" fontWeight={800}>
+                                {humanDur(detailMetrics.toplamYukleme)}
+                            </Typography>
                         </Paper>
                         <Paper sx={{ p: 1.25, borderRadius: 2, flex: 1 }} variant="outlined">
-                            <Typography variant="caption" color="text.secondary">Transit (toplam)</Typography>
-                            <Typography variant="h6" fontWeight={800}>{humanDur(detailMetrics.toplamTransit)}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Transit (toplam)
+                            </Typography>
+                            <Typography variant="h6" fontWeight={800}>
+                                {humanDur(detailMetrics.toplamTransit)}
+                            </Typography>
                         </Paper>
                         <Paper sx={{ p: 1.25, borderRadius: 2, flex: 1 }} variant="outlined">
-                            <Typography variant="caption" color="text.secondary">Teslim İşlemleri (toplam)</Typography>
-                            <Typography variant="h6" fontWeight={800}>{humanDur(detailMetrics.toplamTeslim)}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Teslim İşlemleri (toplam)
+                            </Typography>
+                            <Typography variant="h6" fontWeight={800}>
+                                {humanDur(detailMetrics.toplamTeslim)}
+                            </Typography>
                         </Paper>
                     </Stack>
                 )}
@@ -721,10 +732,7 @@ export default function Tamamlananlar() {
                         <CircularProgress size={26} />
                     </Box>
                 ) : (
-                    <Paper
-                        variant="outlined"
-                        sx={{ borderRadius: 2, borderColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}
-                    >
+                    <Paper variant="outlined" sx={{ borderRadius: 2, borderColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
                         <Box sx={{ maxHeight: "calc(100dvh - 220px)", overflow: "auto" }}>
                             <Table size="small" stickyHeader>
                                 <TableHead>

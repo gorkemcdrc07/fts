@@ -19,10 +19,9 @@ import {
     Typography,
     Snackbar,
     Alert,
-    alpha,
     Chip,
 } from "@mui/material";
-
+import { alpha } from "@mui/material/styles";
 // Icons
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -54,7 +53,6 @@ export const DRAWER_WIDTH_CLOSED = 72;
 
 export default function Sidebar(props) {
     const { open: controlledOpen, setOpen: setControlledOpen } = props || {};
-    // Uncontrolled fallback (parent setOpen verilmediyse kendi state’ini kullan)
     const [internalOpen, setInternalOpen] = useState(true);
     const isControlled =
         typeof controlledOpen === "boolean" && typeof setControlledOpen === "function";
@@ -63,12 +61,11 @@ export default function Sidebar(props) {
         if (isControlled) setControlledOpen((p) => !p);
         else setInternalOpen((p) => !p);
     };
-    // toggle tanımının ALTINA EKLE
+
     useEffect(() => {
         const w = open ? DRAWER_WIDTH_OPEN : DRAWER_WIDTH_CLOSED;
         document.documentElement.style.setProperty("--sidebar-w", `${w}px`);
     }, [open]);
-
 
     const navigate = useNavigate();
     const location = useLocation();
@@ -83,8 +80,8 @@ export default function Sidebar(props) {
 
     // Counters / user
     const [okunmamisGorevSayisi, setOkunmamisGorevSayisi] = useState(0);
-    const [bildirimSayisi, setBildirimSayisi] = useState(0); // Masraf Onayı
-    const [gorevBildirimSayisi, setGorevBildirimSayisi] = useState(0); // Görev Bildirimi
+    const [bildirimSayisi, setBildirimSayisi] = useState(0);
+    const [gorevBildirimSayisi, setGorevBildirimSayisi] = useState(0);
     const [kullaniciIdState, setKullaniciIdState] = useState(null);
     const kullaniciRol = localStorage.getItem("rol") || "";
 
@@ -98,156 +95,47 @@ export default function Sidebar(props) {
         if (id) setKullaniciIdState(id);
     }, []);
 
-    // İlk yüklemede bildirim sayıları
+    // === YENİ: Aktif route’a göre ilgili kategoriyi otomatik aç ===
     useEffect(() => {
-        if (!kullaniciIdState) return;
+        const p = location.pathname || "";
 
-        const fetchCounts = async () => {
-            // Masraf Onayı
-            const { count: masrafCount } = await supabase
-                .from("bildirimler")
-                .select("*", { count: "exact", head: true })
-                .eq("kullanici_id", kullaniciIdState)
-                .eq("okundu", false)
-                .eq("baslik", "Masraf Onayı");
-            setBildirimSayisi(masrafCount || 0);
+        const anyStartsWith = (arr) => arr.some((x) => p === x || p.startsWith(x + "/"));
 
-            // Görev Bildirimi
-            const { count: gorevCount } = await supabase
-                .from("bildirimler")
-                .select("*", { count: "exact", head: true })
-                .eq("kullanici_id", kullaniciIdState)
-                .eq("okundu", false)
-                .eq("baslik", "Görev Bildirimi");
-            setGorevBildirimSayisi(gorevCount || 0);
-            setOkunmamisGorevSayisi(gorevCount || 0);
-        };
+        setKullaniciMenuAcik(anyStartsWith(["/planlama", "/plaka-onerisi", "/seferler", "/tamamlanan-seferler"]));
+        setAracMenuAcik(anyStartsWith(["/arac/yonetim", "/arac/izin-girisi", "/arac/kesinti-girisi"]));
+        setRaporMenuAcik(anyStartsWith([
+            "/raporlar/kpi-olcumu",
+            "/raporlar/lokasyon-rapor",
+            "/raporlar/yuklemede-bekleme",   // <-- yeni sayfa burada
+            "/raporlar/teslimde-bekleme",
+            "/raporlar/yuklemede-gecikme",
+            "/raporlar/teslimde-gecikme",
+            "/raporlar/sefer-sureleri",
+            "/raporlar/plaka-bazli",
+        ]));
+        setHakedisMenuAcik(anyStartsWith([
+            "/hakedis/tedarikci-masraf",
+            "/hakedis/arac-cari-ve-fiyat",
+            "/hakedis/hakedis-seferleri",
+        ]));
+        setAfyonMenuAcik(anyStartsWith([
+            "/afyon/seferler",
+            "/afyon/araclar",
+        ]));
+        setGorevMenuAcik(anyStartsWith([
+            "/gorevler/tum",
+            "/gorevler/ata",
+            "/gorevler/benim",
+        ]));
+    }, [location.pathname]);
 
-        fetchCounts();
-    }, [kullaniciIdState]);
-
-    // Realtime: yeni bildirimler
-    useEffect(() => {
-        if (!kullaniciIdState) return;
-
-        const kanal = supabase
-            .channel("realtime:bildirimler")
-            .on(
-                "postgres_changes",
-                { event: "INSERT", schema: "public", table: "bildirimler" },
-                (payload) => {
-                    const yeni = payload.new;
-                    if (!yeni || yeni.kullanici_id !== kullaniciIdState) return;
-
-                    if (yeni.baslik === "Masraf Onayı") {
-                        setBildirimSayisi((p) => p + 1);
-                    } else if (yeni.baslik === "Görev Bildirimi") {
-                        setGorevBildirimSayisi((p) => p + 1);
-                        setOkunmamisGorevSayisi((p) => p + 1);
-                    }
-                    if (yeni.mesaj) showPopup(yeni.mesaj, "info");
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(kanal);
-        };
-    }, [kullaniciIdState]);
-
-    // Realtime: görevler
-    useEffect(() => {
-        const channel = supabase
-            .channel("realtime:gorevler")
-            .on(
-                "postgres_changes",
-                { event: "UPDATE", schema: "public", table: "gorevler" },
-                async (payload) => {
-                    const g = payload.new;
-                    const benimId = parseInt(localStorage.getItem("kullaniciId"), 10);
-
-                    if (g?.durum === "Kabul Edildi" && parseInt(g.atayanid, 10) === benimId) {
-                        showPopup("📬 Atadığınız görev kabul edildi!");
-                    }
-
-                    const rol = localStorage.getItem("rol");
-                    if (rol === "YÖNETİCİ" && g?.durum === "Tamamlandı" && !g.okundu) {
-                        let kullaniciAd = "Bir kullanıcı";
-                        if (g.tamamlayanid) {
-                            const { data } = await supabase
-                                .from("login")
-                                .select("kullaniciAdi")
-                                .eq("id", g.tamamlayanid)
-                                .single();
-                            if (data?.kullaniciAdi) kullaniciAd = data.kullaniciAdi;
-                        }
-                        showPopup(`${kullaniciAd} görevi tamamladı.`);
-                    }
-                }
-            )
-            .subscribe();
-
-        return () => {
-            channel.unsubscribe();
-        };
-    }, []);
-
-    // Realtime: bana yeni görev atanınca
-    useEffect(() => {
-        if (!kullaniciIdState) return;
-
-        const kanal = supabase
-            .channel("realtime:gorevler")
-            .on(
-                "postgres_changes",
-                { event: "INSERT", schema: "public", table: "gorevler" },
-                (payload) => {
-                    const yeni = payload.new;
-                    if (!yeni) return;
-                    if (parseInt(yeni.gorevliid, 10) === kullaniciIdState) {
-                        showPopup("📌 Size yeni bir görev atandı!");
-                        setGorevBildirimSayisi((p) => p + 1);
-                        setOkunmamisGorevSayisi((p) => p + 1);
-                    }
-                }
-            )
-            .subscribe();
-
-        return () => {
-            kanal.unsubscribe();
-        };
-    }, [kullaniciIdState]);
-
-    // Helpers
-    const openInNewTab = (path) => {
-        const baseUrl = window.location.origin;
-        window.open(baseUrl + path, "_blank", "noopener,noreferrer");
-    };
-
-    const bildirimiOkunduYap = async (baslik) => {
-        if (!kullaniciIdState || !baslik) return;
-        await supabase
-            .from("bildirimler")
-            .update({ okundu: true })
-            .eq("kullanici_id", kullaniciIdState)
-            .eq("baslik", baslik)
-            .eq("okundu", false);
-
-        if (baslik === "Görev Bildirimi") {
-            setOkunmamisGorevSayisi(0);
-            setGorevBildirimSayisi(0);
-        } else if (baslik === "Masraf Onayı") {
-            setBildirimSayisi(0);
-        }
-    };
-
-    // Menüler
+    // Menü tanımları
     const kullaniciAltMenuler = useMemo(
         () => [
             { ad: "PLANLAMA", yol: "/planlama", ikon: <CalendarMonthIcon /> },
             { ad: "PLAKA ÖNERİSİ", yol: "/plaka-onerisi", ikon: <AssignmentIcon /> },
-            { ad: "AKTİF SEFERLER", yol: "/seferler", ikon: <LocalShippingIcon />, newTab: true },
-            { ad: "TAMAMLANAN SEFERLER", yol: "/tamamlanan-seferler", ikon: <CheckCircleIcon />, newTab: true },
+            { ad: "AKTİF SEFERLER", yol: "/seferler", ikon: <LocalShippingIcon /> },
+            { ad: "TAMAMLANAN SEFERLER", yol: "/tamamlanan-seferler", ikon: <CheckCircleIcon /> },
         ],
         []
     );
@@ -263,9 +151,9 @@ export default function Sidebar(props) {
 
     const raporAltMenuler = useMemo(
         () => [
-            { ad: "Kullanıcı KPI", yol: "/raporlar/kullanici-kpi", ikon: <AssessmentIcon /> },
+            { ad: "KPI Ölçümü", yol: "/raporlar/kpi-olcumu", ikon: <AssessmentIcon /> },
             { ad: "Proje & Lokasyon Bazlı Raporlar", yol: "/raporlar/lokasyon-rapor", ikon: <MapIcon /> },
-            { ad: "Yüklemede Bekleme", yol: "/raporlar/yuklemede-bekleme", ikon: <ScheduleIcon /> },
+            { ad: "Yüklemede Bekleme", yol: "/raporlar/yuklemede-bekleme", ikon: <ScheduleIcon /> }, // <-- yeni
             { ad: "Teslimde Bekleme", yol: "/raporlar/teslimde-bekleme", ikon: <AvTimerIcon /> },
             { ad: "Yüklemede Gecikme", yol: "/raporlar/yuklemede-gecikme", ikon: <QueryStatsIcon /> },
             { ad: "Teslimde Gecikme", yol: "/raporlar/teslimde-gecikme", ikon: <QueryStatsIcon /> },
@@ -292,6 +180,10 @@ export default function Sidebar(props) {
         ],
         []
     );
+
+    // === YENİ: aktiflik kontrolü (alt route’ları da yakalar)
+    const isActivePath = (path) =>
+        location.pathname === path || location.pathname.startsWith(path + "/");
 
     const NavItem = ({ label, to, icon, active, onClick, badge }) => (
         <ListItemButton
@@ -356,10 +248,7 @@ export default function Sidebar(props) {
         </ListItemButton>
     );
 
-    const go = (path, opts = {}) => {
-        if (opts.newTab) openInNewTab(path);
-        else navigate(path);
-    };
+    const go = (path) => navigate(path);
 
     return (
         <>
@@ -449,8 +338,8 @@ export default function Sidebar(props) {
                                 key={m.yol}
                                 label={m.ad}
                                 icon={m.ikon}
-                                active={location.pathname === m.yol}
-                                onClick={() => go(m.yol, { newTab: m.newTab })}
+                                active={isActivePath(m.yol)}
+                                onClick={() => go(m.yol)}
                             />
                         ))}
                     </Collapse>
@@ -468,7 +357,7 @@ export default function Sidebar(props) {
                                 key={m.yol}
                                 label={m.ad}
                                 icon={m.ikon}
-                                active={location.pathname === m.yol}
+                                active={isActivePath(m.yol)}
                                 onClick={() => go(m.yol)}
                             />
                         ))}
@@ -487,11 +376,8 @@ export default function Sidebar(props) {
                                 key={m.yol}
                                 label={m.ad}
                                 icon={m.ikon}
-                                active={location.pathname === m.yol}
-                                onClick={() => {
-                                    bildirimiOkunduYap("Masraf Onayı");
-                                    go(m.yol);
-                                }}
+                                active={isActivePath(m.yol)}
+                                onClick={() => go(m.yol)}
                             />
                         ))}
                     </Collapse>
@@ -519,11 +405,8 @@ export default function Sidebar(props) {
                                 key={m.yol}
                                 label={m.ad}
                                 icon={m.ikon}
-                                active={location.pathname === m.yol}
-                                onClick={() => {
-                                    bildirimiOkunduYap("Masraf Onayı");
-                                    go(m.yol);
-                                }}
+                                active={isActivePath(m.yol)}
+                                onClick={() => go(m.yol)}
                             />
                         ))}
                     </Collapse>
@@ -544,7 +427,7 @@ export default function Sidebar(props) {
                                 key={m.yol}
                                 label={m.ad}
                                 icon={m.ikon}
-                                active={location.pathname === m.yol}
+                                active={isActivePath(m.yol)}
                                 onClick={() => go(m.yol)}
                             />
                         ))}
@@ -573,28 +456,11 @@ export default function Sidebar(props) {
                             .map((m) => (
                                 <NavItem
                                     key={m.yol}
-                                    label={
-                                        m.ad === "Tüm Görevler" && gorevBildirimSayisi > 0 && open ? (
-                                            <Box display="flex" alignItems="center" gap={1}>
-                                                <span>{m.ad}</span>
-                                                <Chip
-                                                    size="small"
-                                                    color="error"
-                                                    label={gorevBildirimSayisi}
-                                                    sx={{ height: 20 }}
-                                                />
-                                            </Box>
-                                        ) : (
-                                            m.ad
-                                        )
-                                    }
+                                    label={m.ad}
                                     icon={m.ikon}
-                                    active={location.pathname === m.yol}
+                                    active={isActivePath(m.yol)}
                                     badge={m.ad === "Tüm Görevler" ? gorevBildirimSayisi : 0}
-                                    onClick={() => {
-                                        if (m.ad === "Tüm Görevler") bildirimiOkunduYap("Görev Bildirimi");
-                                        go(m.yol);
-                                    }}
+                                    onClick={() => go(m.yol)}
                                 />
                             ))}
                     </Collapse>

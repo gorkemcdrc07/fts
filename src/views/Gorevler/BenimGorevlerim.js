@@ -37,6 +37,9 @@ import {
     Refresh as RefreshIcon,
 } from "@mui/icons-material";
 
+/** 🧭 Eklendi: gezinme */
+import { useNavigate } from "react-router-dom";
+
 /** Dates */
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
@@ -145,6 +148,8 @@ export default function BenimGorevlerim() {
     const [completingId, setCompletingId] = useState(null);
     const [completingLoading, setCompletingLoading] = useState(false);
 
+    const navigate = useNavigate(); // 🧭 eklendi
+
     const fetchGorevler = useCallback(async () => {
         if (!kullaniciId) return;
         setLoading(true);
@@ -195,7 +200,6 @@ export default function BenimGorevlerim() {
                     filter: `kullanici_id=eq.${kullaniciId}`,
                 },
                 (payload) => {
-                    // Sessiz alert yerine modern snackbar
                     setSnack({
                         open: true,
                         type: "info",
@@ -231,7 +235,6 @@ export default function BenimGorevlerim() {
             }
 
             if (yeniDurum === DURUM.TAMAMLANDI) {
-                // Bu branch sadece dialog onayından sonra çalıştırılacak
                 updateData.teslim_tarihi = simdiISO;
             }
 
@@ -280,7 +283,6 @@ export default function BenimGorevlerim() {
                 .eq("id", completingId);
             if (error) throw error;
 
-            // Bildirim
             if (gorev) {
                 await supabase.from("bildirimler").insert([
                     {
@@ -372,6 +374,14 @@ export default function BenimGorevlerim() {
                                 label={`İşleme Alındı: ${sayilar.islemde}`}
                             />
 
+                            {/* 🧭 Eklendi: Geri & Anasayfa */}
+                            <Button size="small" variant="outlined" onClick={() => navigate(-1)}>
+                                Geri
+                            </Button>
+                            <Button size="small" variant="outlined" onClick={() => navigate("/")}>
+                                Anasayfa
+                            </Button>
+
                             <Tooltip title="Yenile">
                                 <span>
                                     <IconButton onClick={fetchGorevler} disabled={loading}>
@@ -423,7 +433,7 @@ export default function BenimGorevlerim() {
                                     const durumKey = (g.durum || "").toUpperCase();
                                     const meta =
                                         DURUM_MAP[
-                                        durumKey === "İSLEME ALINDI" ? DURUM.ISLEME_ALINDI : durumKey /* türkçe i/İ normalize */
+                                        durumKey === "İSLEME ALINDI" ? DURUM.ISLEME_ALINDI : durumKey
                                         ] || DURUM_MAP[DURUM.BEKLEMEDE];
 
                                     return (

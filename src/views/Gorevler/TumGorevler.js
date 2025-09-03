@@ -1,6 +1,7 @@
 // src/Gorevler/TumGorevler.jsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "../../supabaseClient";
+import { useNavigate } from "react-router-dom";
 
 /** UI & Animations */
 import { motion } from "framer-motion";
@@ -70,6 +71,8 @@ function useDebounced(val, ms = 350) {
 
 // ---- Component ----
 export default function TumGorevler() {
+    const navigate = useNavigate();
+
     const [gorevler, setGorevler] = useState([]);
     const [loading, setLoading] = useState(true);
     const [q, setQ] = useState("");
@@ -236,6 +239,15 @@ export default function TumGorevler() {
                                     </IconButton>
                                 </span>
                             </Tooltip>
+
+                            {/* ⬇️ Eklendi: Geri & Anasayfa (işlevlere dokunmadan) */}
+                            <Button size="small" variant="outlined" onClick={() => navigate(-1)}>
+                                Geri
+                            </Button>
+                            <Button size="small" variant="outlined" onClick={() => navigate("/")}>
+                                Anasayfa
+                            </Button>
+
                             <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportCSV} disabled={loading || !filtered.length}>
                                 Dışa Aktar (CSV)
                             </Button>

@@ -2,6 +2,7 @@
 import React, { useCallback, useRef, useState } from "react";
 import "./HakedisSeferleri.css";
 import { supabase } from "../supabaseClient"; // ← yolunu düzenle
+import { useNavigate } from "react-router-dom"; // 👈 eklendi
 // import { authorizedJson } from "../auth/tokenManager"; // ← Artık kullanılmıyor (TMS'e doğrudan login)
 
 /** Kullanıcı şablon başlıkları (Excel) */
@@ -162,6 +163,8 @@ export default function HakedisSeferleri({ onFileReady }) {
     const [exporting, setExporting] = useState(false);
     const [exportMsg, setExportMsg] = useState("");
     const inputRef = useRef(null);
+
+    const navigate = useNavigate(); // 👈 eklendi
 
     const ACCEPT = [
         ".csv",
@@ -596,9 +599,38 @@ export default function HakedisSeferleri({ onFileReady }) {
             {/* Üst Bar */}
             <div className="hs-header">
                 <h1 className="hs-title">Hakediş Seferleri</h1>
-                <button type="button" onClick={handleDownloadTemplate} className="btn btn-primary" aria-label="Şablon indir">
-                    <span className="pill">⬇️</span> Şablon indir
-                </button>
+
+                {/* 👇 Eklendi: Geri ve Anasayfa kısayolları */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                        type="button"
+                        className="btn"
+                        onClick={() => navigate(-1)}
+                        aria-label="Geri dön"
+                        title="Geri"
+                    >
+                        ← Geri
+                    </button>
+                    <button
+                        type="button"
+                        className="btn"
+                        onClick={() => navigate("/")}
+                        aria-label="Anasayfa"
+                        title="Anasayfa"
+                    >
+                        ⌂ Anasayfa
+                    </button>
+
+                    {/* Mevcut: Şablon indir */}
+                    <button
+                        type="button"
+                        onClick={handleDownloadTemplate}
+                        className="btn btn-primary"
+                        aria-label="Şablon indir"
+                    >
+                        <span className="pill">⬇️</span> Şablon indir
+                    </button>
+                </div>
             </div>
 
             {/* Yükleme Alanı */}

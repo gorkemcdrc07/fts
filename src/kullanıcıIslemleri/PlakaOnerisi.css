@@ -1,232 +1,213 @@
-.plaka-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 60px 20px;
-    min-height: 100vh;
-    background-color: #f8f9fa;
-}
-
-.plaka-card {
-    background: white;
-    padding: 40px;
-    border-radius: 14px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    max-width: 420px;
-}
-
-.plaka-title {
-    font-size: 26px;
-    font-weight: 700;
-    margin-bottom: 10px;
-    color: #343a40;
-}
-
-.plaka-desc {
-    font-size: 15px;
-    color: #6c757d;
-    margin-bottom: 25px;
-}
-
-.plaka-input-group {
-    margin-bottom: 18px;
-    display: flex;
-    flex-direction: column;
-}
-
-    .plaka-input-group label {
-        font-weight: 600;
-        margin-bottom: 5px;
-        color: #495057;
-    }
-
-    .plaka-input-group input {
-        padding: 10px;
-        font-size: 15px;
-        border: 1px solid #ced4da;
-        border-radius: 8px;
-        outline: none;
-        transition: border-color 0.2s;
-    }
-
-        .plaka-input-group input:focus {
-            border-color: #007bff;
-        }
-
-.plaka-button {
-    background-color: #007bff;
-    color: white;
-    font-size: 16px;
-    padding: 12px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    width: 100%;
-    transition: background-color 0.3s;
-}
-
-    .plaka-button:hover {
-        background-color: #0056b3;
-    }
-
-.geri-buton-container {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    z-index: 1000;
-}
-
-.geri-buton {
-    background-color: #e2e8f0;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-
-    .geri-buton:hover {
-        background-color: #cbd5e1;
-    }
-/* Temel değişkenler (light mode) */
+/* ------------- Temalar ------------- */
 :root {
-    --bg-container: #f8f9fa;
-    --card-bg: #ffffff;
-    --card-shadow: rgba(0, 0, 0, 0.1);
-    --text-primary: #343a40;
-    --text-secondary: #6c757d;
-    --label-color: #495057;
-    --input-bg: #ffffff;
-    --input-border: #ced4da;
-    --input-focus-border: #007bff;
-    --button-bg: #007bff;
-    --button-bg-hover: #0056b3;
-    --button-color: #ffffff;
-    --btn-shadow: none;
-    --geri-btn-bg: #e2e8f0;
-    --geri-btn-bg-hover: #cbd5e1;
-    --geri-btn-color: #000000;
+    --sidebar-w: 72px; /* Sidebar.jsx setProperty ile güncelliyor */
+    --page-padding: 20px;
+    /* light */
+    --bg-page: #f6f7fb;
+    --bg-card: #ffffff;
+    --text-1: #141a26;
+    --text-2: #5d6b86;
+    --line: rgba(20, 26, 38, 0.08);
+    --input-bg: #fff;
+    --input-bd: #cad3e0;
+    --input-bd-focus: #5b8cff;
+    --btn-primary: #2563eb;
+    --btn-primary-hover: #1e40af;
+    --btn-ghost: #e2e8f0;
+    --btn-ghost-hover: #cbd5e1;
+    --error-bg: #fee2e2;
+    --error-fg: #b91c1c;
+    --shadow-card: 0 10px 28px rgba(16, 24, 40, 0.08);
 }
 
-    /* Koyu mod renkleri */
+    /* dark mod destek */
     :root[data-theme="dark"] {
-        --bg-container: #0f172a; /* koyu arkaplan */
-        --card-bg: #1e293b;
-        --card-shadow: rgba(0, 0, 0, 0.7);
-        --text-primary: #e0e7ff;
-        --text-secondary: #94a3b8;
-        --label-color: #cbd5e1;
-        --input-bg: #334155;
-        --input-border: #475569;
-        --input-focus-border: #3b82f6;
-        --button-bg: #2563eb;
-        --button-bg-hover: #1e40af;
-        --button-color: #e0e7ff;
-        --btn-shadow: 0 4px 8px rgba(37, 99, 235, 0.4);
-        --geri-btn-bg: #475569;
-        --geri-btn-bg-hover: #334155;
-        --geri-btn-color: #e0e7ff;
+        --bg-page: #0b1220;
+        --bg-card: #121a2b;
+        --text-1: #e5e9f5;
+        --text-2: #9aa7bd;
+        --line: rgba(255, 255, 255, 0.07);
+        --input-bg: #0f172a;
+        --input-bd: #334155;
+        --input-bd-focus: #3b82f6;
+        --btn-primary: #3b82f6;
+        --btn-primary-hover: #1d4ed8;
+        --btn-ghost: #334155;
+        --btn-ghost-hover: #283548;
+        --error-bg: #3b1b1b;
+        --error-fg: #fecaca;
+        --shadow-card: 0 16px 40px rgba(2, 8, 23, 0.45);
     }
 
-.plaka-container {
+/* ------------- Sayfa ------------- */
+.plaka-page {
+    min-height: 100dvh;
+    background: radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.10), transparent 40%), radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.12), transparent 50%), linear-gradient(180deg, var(--bg-page) 0%, var(--bg-page) 100%);
+    display: grid;
+    grid-template-rows: auto 1fr;
+}
+
+/* üst şerit */
+.plaka-topbar {
+    height: 56px;
     display: flex;
-    justify-content: center;
     align-items: center;
-    padding: 60px 20px;
-    min-height: 100vh;
-    background-color: var(--bg-container);
+    gap: 12px;
+    padding: 0 var(--page-padding);
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    backdrop-filter: blur(6px);
+    z-index: 5;
 }
 
-.plaka-card {
-    background: var(--card-bg);
-    padding: 40px;
-    border-radius: 14px;
-    box-shadow: 0 10px 25px var(--card-shadow);
-    width: 100%;
-    max-width: 420px;
-}
+    .plaka-topbar h2 {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--text-1);
+        margin: 0;
+    }
 
-.plaka-title {
-    font-size: 26px;
-    font-weight: 700;
-    margin-bottom: 10px;
-    color: var(--text-primary);
-}
-
-.plaka-desc {
-    font-size: 15px;
-    color: var(--text-secondary);
-    margin-bottom: 25px;
-}
-
-.plaka-input-group {
-    margin-bottom: 18px;
+.top-actions {
+    margin-left: auto;
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 8px;
 }
 
-    .plaka-input-group label {
+    .top-actions .ghost {
+        background-color: var(--btn-ghost);
+        color: var(--text-1);
+        border: none;
+        border-radius: 10px;
+        padding: 8px 12px;
         font-weight: 600;
-        margin-bottom: 5px;
-        color: var(--label-color);
+        cursor: pointer;
+        transition: background-color .2s ease;
     }
 
-    .plaka-input-group input {
-        padding: 10px;
-        font-size: 15px;
-        border: 1px solid var(--input-border);
-        border-radius: 8px;
-        outline: none;
-        transition: border-color 0.2s;
-        background-color: var(--input-bg);
-        color: var(--text-primary);
-    }
-
-        .plaka-input-group input:focus {
-            border-color: var(--input-focus-border);
+        .top-actions .ghost:hover {
+            background-color: var(--btn-ghost-hover);
         }
 
-.plaka-button {
-    background-color: var(--button-bg);
-    color: var(--button-color);
-    font-size: 16px;
-    padding: 12px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
+/* içerik kabuğu */
+.plaka-shell {
+    display: grid;
+    place-items: start center;
+    padding: 28px var(--page-padding);
+}
+
+/* kart */
+.plaka-card {
+    width: min(560px, calc(100% - 24px));
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px;
+    box-shadow: var(--shadow-card);
+    color: var(--text-1);
+}
+
+.card-head h3 {
+    margin: 0 0 6px 0;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: .2px;
+}
+
+.card-head p {
+    margin: 0 0 18px 0;
+    color: var(--text-2);
+    font-size: 13px;
+}
+
+/* alanlar */
+.field {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+    .field label {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-2);
+    }
+
+    .field input {
+        height: 38px;
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--input-bd);
+        background: var(--input-bg);
+        color: var(--text-1);
+        outline: none;
+        transition: border-color .15s ease;
+    }
+
+        .field input:focus {
+            border-color: var(--input-bd-focus);
+        }
+
+/* butonlar */
+.primary {
     width: 100%;
-    transition: background-color 0.3s;
-    box-shadow: var(--btn-shadow);
-}
-
-    .plaka-button:hover {
-        background-color: var(--button-bg-hover);
-    }
-
-.geri-buton-container {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    z-index: 1000;
-}
-
-.geri-buton {
-    background-color: var(--geri-btn-bg);
+    height: 40px;
+    margin-top: 6px;
     border: none;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: bold;
+    border-radius: 12px;
+    background: var(--btn-primary);
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: .2px;
     cursor: pointer;
-    transition: background-color 0.3s;
-    color: var(--geri-btn-color);
+    transition: background-color .15s ease, transform .05s ease;
 }
 
-    .geri-buton:hover {
-        background-color: var(--geri-btn-bg-hover);
+    .primary:hover {
+        background: var(--btn-primary-hover);
     }
 
+    .primary:active {
+        transform: translateY(1px);
+    }
 
+    .primary:disabled {
+        opacity: .65;
+        cursor: not-allowed;
+    }
+
+/* bilgi/uyarı */
+.error-box {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--error-bg);
+    color: var(--error-fg);
+    font-size: 13px;
+    border: 1px solid rgba(255, 0, 0, .12);
+}
+
+.hint {
+    margin-top: 14px;
+    color: var(--text-2);
+    font-size: 12px;
+}
+
+    .hint code {
+        background: rgba(148,163,184,.18);
+        padding: 2px 6px;
+        border-radius: 6px;
+    }
+
+/* küçük ekran ayarı */
+@media (max-width: 640px) {
+    .plaka-card {
+        border-radius: 14px;
+        padding: 18px;
+    }
+
+    .plaka-topbar {
+        height: 52px;
+    }
+}

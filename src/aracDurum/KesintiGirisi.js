@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from "re
 import { supabase } from "../supabaseClient";
 import * as XLSX from "xlsx";
 import { Helmet } from "react-helmet-async";
+import { useNavigate } from "react-router-dom"; // 👈 eklendi
 
 // MUI
 import {
@@ -40,6 +41,8 @@ import FilterListIcon from "@mui/icons-material/FilterList";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import ArrowBackIcon from "@mui/icons-material/ArrowBackIosNew"; // 👈 eklendi
+import HomeIcon from "@mui/icons-material/HomeOutlined";       // 👈 eklendi
 
 // DataGrid
 import {
@@ -270,6 +273,7 @@ export default function KesintiGirisi() {
     const [plakalar, setPlakalar] = useState([]);
     const [formOpen, setFormOpen] = useState(false);
     const [filtreDrawer, setFiltreDrawer] = useState(false);
+    const navigate = useNavigate(); // 👈 eklendi
 
     // form modu ve düzenlenen id
     const [formMode, setFormMode] = useState("create"); // 'create' | 'edit'
@@ -596,6 +600,14 @@ export default function KesintiGirisi() {
                             </Stack>
 
                             <Stack direction="row" spacing={1}>
+                                {/* 👇 Sadece eklendi */}
+                                <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
+                                    Geri
+                                </Button>
+                                <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate("/")}>
+                                    Anasayfa
+                                </Button>
+
                                 <Button variant="outlined" startIcon={<FilterListIcon />} onClick={() => setFiltreDrawer(true)}>
                                     Filtreler
                                 </Button>
@@ -879,7 +891,7 @@ export default function KesintiGirisi() {
                                             gun_sayisi: "",
                                             aciklama: "",
                                             ekleyen_kullanici: "",
-                                            ay: "", // <-- eklendi
+                                            ay: "",
                                         })
                                     }
 

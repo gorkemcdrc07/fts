@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
+import { useNavigate } from "react-router-dom";
 
 import {
     ThemeProvider,
@@ -50,6 +51,8 @@ import CloseIcon from "@mui/icons-material/Close";
 import ViewWeekIcon from "@mui/icons-material/ViewWeek";
 import DensityMediumIcon from "@mui/icons-material/DensityMedium";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import ArrowBackIcon from "@mui/icons-material/ArrowBackIosNew";
+import HomeIcon from "@mui/icons-material/HomeOutlined";
 
 import {
     DataGrid,
@@ -292,6 +295,8 @@ function CustomToolbar({ onRefresh, onExport, onFilters }) {
 
 /* ===================== Component ===================== */
 export default function IzinGirisiModern() {
+    const navigate = useNavigate();
+
     // data
     const [izinler, setIzinler] = useState([]);
     const [plakaListesi, setPlakaListesi] = useState([]);
@@ -788,7 +793,23 @@ export default function IzinGirisiModern() {
                                     İzin Girişleri
                                 </Typography>
                             </Stack>
-                            <Stack direction="row" spacing={1}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                {/* EKLENDİ: Geri & Anasayfa */}
+                                <Button
+                                    variant="text"
+                                    startIcon={<ArrowBackIcon />}
+                                    onClick={() => navigate(-1)}
+                                >
+                                    Geri
+                                </Button>
+                                <Button
+                                    variant="text"
+                                    startIcon={<HomeIcon />}
+                                    onClick={() => navigate("/")}
+                                >
+                                    Anasayfa
+                                </Button>
+
                                 <Button
                                     variant="outlined"
                                     startIcon={<FilterListIcon />}
@@ -1422,4 +1443,3 @@ export default function IzinGirisiModern() {
         </ThemeProvider>
     );
 }
-

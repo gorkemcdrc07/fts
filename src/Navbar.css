@@ -268,9 +268,10 @@ html, body {
     padding: 20px;
 }
 
+/* Profil modalı panelini biraz daha geniş yapalım */
 .modal-panel {
-    width: 100%;
-    max-width: 560px;
+    width: min(92vw, 720px); /* eskiden max-width: 560px idi */
+    max-width: 720px; /* güvenlik için koruyalım */
     border-radius: var(--radius-lg);
     background: rgba(var(--surface), 1);
     border: 1px solid rgba(var(--stroke), .9);

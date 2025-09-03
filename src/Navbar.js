@@ -352,7 +352,14 @@ function Navbar() {
                         }
                     }}
                 >
-                    <div className="modal-panel" role="document">
+                    {/* ⬇️ Genişlik biraz artırıldı */}
+                    <div
+                        className="modal-panel"
+                        role="document"
+                        style={{
+                            width: "min(92vw, 720px)", // önceki tasarıma göre daha geniş
+                        }}
+                    >
                         <div className="modal-head">
                             <h2>👤 Profil</h2>
                             <button

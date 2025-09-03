@@ -13,6 +13,9 @@ import { motion } from "framer-motion";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 
+// 🧭 Eklendi: gezinme için
+import { useNavigate } from "react-router-dom";
+
 // MUI
 import {
     Box,
@@ -171,6 +174,8 @@ export default function TedarikciMasraf() {
     const theme = useTheme();
     const downSm = useMediaQuery(theme.breakpoints.down("sm"));
     dayjs.locale("tr");
+
+    const navigate = useNavigate(); // 🧭 eklendi
 
     const kullanici = localStorage.getItem("kullanici") || "";
     const kullaniciRol = localStorage.getItem("rol") || "";
@@ -624,6 +629,25 @@ export default function TedarikciMasraf() {
                                     <Chip variant="outlined" label={`Toplam: ${formatTL(toplamBedel)}`} />
                                 </>
                             )}
+
+                            {/* 🧭 Eklendi: Geri ve Anasayfa butonları */}
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => navigate(-1)}
+                                title="Geri"
+                            >
+                                Geri
+                            </Button>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => navigate("/")}
+                                title="Anasayfa"
+                            >
+                                Anasayfa
+                            </Button>
+
                             <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={handleOpenYeni}>
                                 Yeni
                             </Button>

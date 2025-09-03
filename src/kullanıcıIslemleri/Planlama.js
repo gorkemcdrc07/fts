@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import { Helmet } from "react-helmet-async";
+import { useNavigate } from "react-router-dom"; // ⬅️ eklendi
 
 // MUI
 import {
@@ -31,6 +32,8 @@ import TuneIcon from "@mui/icons-material/Tune";
 import DownloadIcon from "@mui/icons-material/Download";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew"; // ⬅️ eklendi
+import HomeIcon from "@mui/icons-material/Home"; // ⬅️ eklendi
 
 // XLSX
 import * as XLSX from "xlsx";
@@ -92,6 +95,8 @@ const alanlar = [
 ];
 
 export default function Planlama() {
+    const navigate = useNavigate(); // ⬅️ eklendi
+
     /* ---------- state ---------- */
     const [rows, setRows] = useState([]);
     const [filteredRows, setFilteredRows] = useState([]);
@@ -403,7 +408,6 @@ export default function Planlama() {
                 headerName: "Bölge",
                 width: 150,
                 editable: false,
-                // v6 signature: valueGetter: (value, row) => any
                 valueGetter: (value, row) => row?.bolge ?? "",
             },
         ];
@@ -465,22 +469,44 @@ export default function Planlama() {
                 justifyContent="space-between"
                 spacing={1}
             >
-                <Stack spacing={0.25}>
-                    <Typography
-                        variant="h5"
-                        fontWeight={800}
-                        sx={{
-                            lineHeight: 1.1,
-                            background: "linear-gradient(90deg,#E879F9,#22D3EE)",
-                            WebkitBackgroundClip: "text",
-                            WebkitTextFillColor: "transparent",
-                        }}
-                    >
-                        Planlama
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                        Canlı düzenleme • kolon sürükle-bırak • filtreler • Excel aktarım
-                    </Typography>
+                <Stack direction="row" alignItems="center" spacing={1.25}>
+                    {/* ⬇️ Navigasyon butonları */}
+                    <Tooltip title="Geri">
+                        <IconButton
+                            onClick={() => navigate(-1)}
+                            sx={{ border: "1px solid rgba(255,255,255,0.12)", mr: 0.5 }}
+                            size="small"
+                        >
+                            <ArrowBackIosNewIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Anasayfa">
+                        <IconButton
+                            onClick={() => navigate("/anasayfa")}
+                            sx={{ border: "1px solid rgba(255,255,255,0.12)" }}
+                            size="small"
+                        >
+                            <HomeIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+
+                    <Stack spacing={0.25}>
+                        <Typography
+                            variant="h5"
+                            fontWeight={800}
+                            sx={{
+                                lineHeight: 1.1,
+                                background: "linear-gradient(90deg,#E879F9,#22D3EE)",
+                                WebkitBackgroundClip: "text",
+                                WebkitTextFillColor: "transparent",
+                            }}
+                        >
+                            Planlama
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                            Canlı düzenleme • kolon sürükle-bırak • filtreler • Excel aktarım
+                        </Typography>
+                    </Stack>
                 </Stack>
 
                 <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -585,7 +611,6 @@ export default function Planlama() {
                         console.error(e);
                         setSnack({ open: true, msg: "Satır güncellenemedi.", severity: "error" });
                     }}
-                    // v6'da processRowUpdate sonrası state'i bizim güncellememiz yeterli:
                     onRowUpdateCommit={handleRowUpdateCommit}
                     disableColumnMenu={false}
                     columnReorder

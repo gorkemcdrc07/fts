@@ -15,7 +15,8 @@ import { alpha } from "@mui/material/styles";
 import {
     Add as AddIcon, FilterList as FilterListIcon, Download as DownloadIcon,
     Info as InfoIcon, Edit as EditIcon, Delete as DeleteIcon,
-    Close as CloseIcon, Search as SearchIcon
+    Close as CloseIcon, Search as SearchIcon,
+    ArrowBackIosNew as ArrowBackIcon, HomeOutlined as HomeIcon    // 👈 EKLENDİ
 } from "@mui/icons-material";
 
 import { DataGrid, GridToolbar } from "@mui/x-data-grid";
@@ -37,7 +38,6 @@ function useScaleToFit(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = MAX_S
         compute();
         window.addEventListener("resize", compute);
 
-        // bazı tarayıcılarda zoom değişimi dppx üzerinden dinlenir
         const mq = window.matchMedia?.(`(resolution: ${window.devicePixelRatio}dppx)`);
         const onChange = () => compute();
         mq?.addEventListener?.("change", onChange);
@@ -67,7 +67,6 @@ function ScaleToFit({ children }: { children: React.ReactNode }) {
                     "linear-gradient(180deg, #050816 0%, #0B1220 100%)",
             }}
         >
-            {/* Sahne: sabit tasarım boyutu */}
             <Box
                 sx={{
                     width: `${BASE_WIDTH}px`,
@@ -419,6 +418,24 @@ export default function AracYonetimiMUI() {
                         Araç Yönetimi
                     </Typography>
                     <Box sx={{ display: "flex", gap: 1 }}>
+                        {/* 👇 EKLENEN BUTONLAR */}
+                        <Button
+                            size="small"
+                            variant="text"
+                            startIcon={<ArrowBackIcon />}
+                            onClick={() => navigate(-1)}
+                        >
+                            Geri
+                        </Button>
+                        <Button
+                            size="small"
+                            variant="text"
+                            startIcon={<HomeIcon />}
+                            onClick={() => navigate("/")}
+                        >
+                            Anasayfa
+                        </Button>
+
                         <Tooltip title="Filtreler">
                             <IconButton onClick={() => setDrawerOpen(true)}>
                                 <FilterListIcon />
@@ -504,11 +521,11 @@ export default function AracYonetimiMUI() {
                 </Grid>
             </Paper>
 
-            {/* GRID alanı — sahne yüksekliği içinde kısaltılmış tablo */}
+            {/* GRID alanı */}
             <Box sx={{ mt: 2, px: 1 }}>
                 <Paper
                     sx={{
-                        height: "65vh",              // 👈 tablo yüksekliği (istersen 50vh / 600px yap)
+                        height: "65vh",
                         borderRadius: 3,
                         overflow: "hidden",
                         background: "transparent",

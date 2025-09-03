@@ -186,14 +186,24 @@ export default function GorevAta() {
                                 </Typography>
                             </Stack>
 
-                            <Button
-                                variant="outlined"
-                                startIcon={<RefreshIcon />}
-                                onClick={fetchKullanicilar}
-                                disabled={yenileniyor || yukleniyor}
-                            >
-                                Kullanıcıları Yenile
-                            </Button>
+                            {/* ⬇️ Eklendi: Geri & Anasayfa butonları (işlevlere dokunmadan) */}
+                            <Stack direction="row" spacing={1}>
+                                <Button size="small" variant="outlined" onClick={() => navigate(-1)}>
+                                    Geri
+                                </Button>
+                                <Button size="small" variant="outlined" onClick={() => navigate("/")}>
+                                    Anasayfa
+                                </Button>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<RefreshIcon />}
+                                    onClick={fetchKullanicilar}
+                                    disabled={yenileniyor || yukleniyor}
+                                >
+                                    Kullanıcıları Yenile
+                                </Button>
+                            </Stack>
                         </Box>
 
                         <Divider />

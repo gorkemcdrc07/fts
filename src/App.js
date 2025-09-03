@@ -1,4 +1,4 @@
-// src/App.jsx
+// src/App.js
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
@@ -31,21 +31,24 @@ import TedarikciMasraf from "./Hakedisler/TedarikciMasraf";
 import AracCariVeFiyat from "./Hakedisler/AracCariVeFiyat";
 import HakedisSeferleri from "./Hakedisler/HakedisSeferleri";
 
-// Layout (Outlet kullanan yeni düzen)
+// KPI & RAPORLAR  (klasör: raporlar, dosyalar: kpiOlcumu.js, yuklemedeBekleme.js)
+import KpiOlcumu from "./raporlar/kpiOlcumu";
+import YuklemedeBekleme from "./raporlar/yuklemedeBekleme";
+
+// Layout
 import AppLayout from "./layout/AppLayout";
 
 function App() {
     return (
         <HelmetProvider>
             <ThemeProvider theme={theme}>
-                {/* CssBaseline, theme.js içindeki MuiCssBaseline styleOverrides'larını aktive eder */}
                 <CssBaseline />
                 <Router>
                     <Routes>
                         {/* Giriş */}
                         <Route path="/" element={<Login />} />
 
-                        {/* Tüm uygulama sayfaları AppLayout içinde render edilir */}
+                        {/* App Layout içinde tüm sayfalar */}
                         <Route element={<AppLayout />}>
                             <Route path="anasayfa" element={<Anasayfa />} />
                             <Route path="planlama" element={<Planlama />} />
@@ -68,6 +71,12 @@ function App() {
                             <Route path="hakedis/tedarikci-masraf" element={<TedarikciMasraf />} />
                             <Route path="hakedis/arac-cari-ve-fiyat" element={<AracCariVeFiyat />} />
                             <Route path="hakedis/hakedis-seferleri" element={<HakedisSeferleri />} />
+
+                            {/* KPI */}
+                            <Route path="raporlar/kpi-olcumu" element={<KpiOlcumu />} />
+
+                            {/* Raporlar */}
+                            <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
 
                             {/* Varsayılan */}
                             <Route path="*" element={<Navigate to="/anasayfa" replace />} />

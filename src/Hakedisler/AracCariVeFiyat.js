@@ -333,655 +333,692 @@ export default function AracCariVeFiyat() {
         setEditingKey(null);
         setEditData({});
     };
+    // değiştir: saveEdit
+    // değiştir: saveEdit
     const saveEdit = async () => {
-        const payload = {
-            calisma_gunu: parseTLToNumber(editData.calisma_gunu),
-            duzenleme_yapan_kullanici: "Admin",
-            duzenleme_yapilan_tarih: new Date().toISOString(),
-        };
-        setSavingId(editingId);
-        const { error } = await supabase
-            .from("arac_cari_ve_fiyat")
-            .update(payload)
-            .eq("plaka", editingKey.plaka)
-            .eq("cari_id", editingKey.cari_id);
+        try {
+            const normalizeMoney = (v) => {
+                const n = parseTLToNumber(v);
+                return n === null ? null : n;
+            };
 
-        if (error) {
-            alert("Kaydetme hatası: " + error.message);
-        } else {
+            // cari_id sayısal olmalı
+            const newCariIdStr = (editData.cari_id ?? "").toString();
+            const newCariId = Number(newCariIdStr.replace(/[^\d-]/g, ""));
+            if (!Number.isFinite(newCariId)) {
+                alert("Cari ID geçersiz veya boş olamaz.");
+                return;
+            }
+
+            const payload = {
+                cari_id: newCariId,
+                cari_adi: editData.cari_adi?.trim() || null,
+                arac_sahip: editData.arac_sahip?.trim() || null,
+                aylik_kira: normalizeMoney(editData.aylik_kira),
+                aylik_surucu: normalizeMoney(editData.aylik_surucu),
+                calisma_gunu:
+                    editData.calisma_gunu === "" || editData.calisma_gunu == null
+                        ? null
+                        : Number(editData.calisma_gunu),
+
+                duzenleme_yapan_kullanici: "Admin",
+                duzenleme_yapilan_tarih: new Date().toISOString(),
+            };
+
+            // undefined temizliği (PostgREST 400 önler)
+            Object.keys(payload).forEach((k) => {
+                if (payload[k] === undefined) delete payload[k];
+            });
+
+            setSavingId(editingId);
+
+            // Eski anahtarla update
+            const { data, error } = await supabase
+                .from("arac_cari_ve_fiyat")
+                .update(payload)
+                .match({ plaka: editingKey.plaka, cari_id: editingKey.cari_id })
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            // State’i güncelle
             setRows((prev) =>
                 prev.map((r) =>
-                    r.plaka === editingKey.plaka && r.cari_id === editingKey.cari_id
-                        ? { ...r, ...payload, plaka: r.plaka }
-                        : r
+                    r.plaka === editingKey.plaka && r.cari_id === editingKey.cari_id ? { ...r, ...data } : r
                 )
             );
+
             cancelEdit();
+        } catch (e) {
+            alert("Kaydetme hatası: " + (e?.message || e));
+        } finally {
+            setSavingId(null);
         }
-        setSavingId(null);
     };
+        /* --------- Yeni Kayıt Ekle (Dialog) --------- */
+        const handleAddChange = (key, value) => setAddForm((p) => ({ ...p, [key]: value }));
 
-    /* --------- Yeni Kayıt Ekle (Dialog) --------- */
-    const handleAddChange = (key, value) => setAddForm((p) => ({ ...p, [key]: value }));
+        const addNew = async () => {
+            setAddError(null);
+            if (!addForm.plaka?.trim()) return setAddError("Plaka zorunludur.");
+            if (!addForm.cari_id?.trim()) return setAddError("Cari ID zorunludur.");
 
-    const addNew = async () => {
-        setAddError(null);
-        if (!addForm.plaka?.trim()) return setAddError("Plaka zorunludur.");
-        if (!addForm.cari_id?.trim()) return setAddError("Cari ID zorunludur.");
+            const payload = {
+                plaka: addForm.plaka.trim(),
+                cari_id: parseTLToNumber(addForm.cari_id),
+                cari_adi: addForm.cari_adi?.trim() || null,
+                arac_sahip: addForm.arac_sahip?.trim() || null,
+                aylik_kira: parseTLToNumber(addForm.aylik_kira),
+                aylik_surucu: parseTLToNumber(addForm.aylik_surucu),
+                calisma_gunu: parseTLToNumber(addForm.calisma_gunu),
+                pasif: !!addForm.pasif,
+                aciklama: addForm.aciklama?.trim() || null,
+                duzenleme_yapan_kullanici: "Admin",
+                duzenleme_yapilan_tarih: new Date().toISOString(),
+            };
 
-        const payload = {
-            plaka: addForm.plaka.trim(),
-            cari_id: parseTLToNumber(addForm.cari_id),
-            cari_adi: addForm.cari_adi?.trim() || null,
-            arac_sahip: addForm.arac_sahip?.trim() || null,
-            aylik_kira: parseTLToNumber(addForm.aylik_kira),
-            aylik_surucu: parseTLToNumber(addForm.aylik_surucu),
-            calisma_gunu: parseTLToNumber(addForm.calisma_gunu),
-            pasif: !!addForm.pasif,
-            aciklama: addForm.aciklama?.trim() || null,
-            duzenleme_yapan_kullanici: "Admin",
-            duzenleme_yapilan_tarih: new Date().toISOString(),
+            setAdding(true);
+            const { error } = await supabase.from("arac_cari_ve_fiyat").insert([payload]);
+            setAdding(false);
+
+            if (error) {
+                setAddError(error.message || "Kayıt eklenemedi.");
+                return;
+            }
+
+            setAddForm({
+                plaka: "",
+                cari_id: "",
+                cari_adi: "",
+                arac_sahip: "",
+                aylik_kira: "",
+                aylik_surucu: "",
+                calisma_gunu: "",
+                pasif: false,
+                aciklama: "",
+            });
+            await refetch();
+            setShowAdd(false);
         };
 
-        setAdding(true);
-        const { error } = await supabase.from("arac_cari_ve_fiyat").insert([payload]);
-        setAdding(false);
+        /* --------- Excel Export --------- */
+        const exportToExcel = () => {
+            const data = sorted.map((r) => ({
+                Plaka: r.plaka ?? "",
+                "Cari ID": r.cari_id ?? "",
+                "Cari Adı": r.cari_adi ?? "",
+                "Araç Sahibi": r.arac_sahip ?? "",
+                "Aylık Kira": toNumberLoose(r.aylik_kira),
+                "Aylık Sürücü": toNumberLoose(r.aylik_surucu),
+                "Toplam Tutar": toNumberLoose(r.aylik_kira) + toNumberLoose(r.aylik_surucu),
+                "Çalışma Günü": r.calisma_gunu ?? "",
+                Pasif: r.pasif ? "Evet" : "Hayır",
+                Açıklama: r.aciklama ?? "",
+                Düzenleyen: r.duzenleme_yapan_kullanici ?? "",
+                "Düzenleme Tarihi": r.duzenleme_yapilan_tarih ? formatDate(r.duzenleme_yapilan_tarih) : "",
+            }));
 
-        if (error) {
-            setAddError(error.message || "Kayıt eklenemedi.");
-            return;
-        }
+            data.push({});
+            data.push({
+                Plaka: "TOPLAM (filtrelenmiş):",
+                "Cari ID": "",
+                "Cari Adı": "",
+                "Araç Sahibi": "",
+                "Aylık Kira": totals.kira,
+                "Aylık Sürücü": totals.surucu,
+                "Toplam Tutar": totals.toplam,
+                "Çalışma Günü": "",
+                Pasif: "",
+                Açıklama: "",
+                Düzenleyen: "",
+                "Düzenleme Tarihi": "",
+            });
 
-        setAddForm({
-            plaka: "",
-            cari_id: "",
-            cari_adi: "",
-            arac_sahip: "",
-            aylik_kira: "",
-            aylik_surucu: "",
-            calisma_gunu: "",
-            pasif: false,
-            aciklama: "",
-        });
-        await refetch();
-        setShowAdd(false);
-    };
+            const ws = XLSXUtils.json_to_sheet(data, { skipHeader: false });
+            ws["!cols"] = [
+                { wch: 12 },
+                { wch: 10 },
+                { wch: 28 },
+                { wch: 20 },
+                { wch: 14 },
+                { wch: 14 },
+                { wch: 14 },
+                { wch: 14 },
+                { wch: 8 },
+                { wch: 30 },
+                { wch: 14 },
+                { wch: 20 },
+            ];
+            const wb = XLSXUtils.book_new();
+            XLSXUtils.book_append_sheet(wb, ws, "AraçCariFiyat");
+            XLSXWriteFile(wb, `arac_cari_fiyat_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        };
 
-    /* --------- Excel Export --------- */
-    const exportToExcel = () => {
-        const data = sorted.map((r) => ({
-            Plaka: r.plaka ?? "",
-            "Cari ID": r.cari_id ?? "",
-            "Cari Adı": r.cari_adi ?? "",
-            "Araç Sahibi": r.arac_sahip ?? "",
-            "Aylık Kira": toNumberLoose(r.aylik_kira),
-            "Aylık Sürücü": toNumberLoose(r.aylik_surucu),
-            "Toplam Tutar": toNumberLoose(r.aylik_kira) + toNumberLoose(r.aylik_surucu),
-            "Çalışma Günü": r.calisma_gunu ?? "",
-            Pasif: r.pasif ? "Evet" : "Hayır",
-            Açıklama: r.aciklama ?? "",
-            Düzenleyen: r.duzenleme_yapan_kullanici ?? "",
-            "Düzenleme Tarihi": r.duzenleme_yapilan_tarih ? formatDate(r.duzenleme_yapilan_tarih) : "",
-        }));
+        /* --------- UI bits --------- */
+        const SortIcon = ({ col }) => {
+            if (sortBy.key !== col) return <ImportExport fontSize="inherit" sx={{ opacity: 0.6 }} />;
+            return sortBy.dir === "asc" ? <ArrowUpward fontSize="inherit" /> : <ArrowDownward fontSize="inherit" />;
+        };
 
-        data.push({});
-        data.push({
-            Plaka: "TOPLAM (filtrelenmiş):",
-            "Cari ID": "",
-            "Cari Adı": "",
-            "Araç Sahibi": "",
-            "Aylık Kira": totals.kira,
-            "Aylık Sürücü": totals.surucu,
-            "Toplam Tutar": totals.toplam,
-            "Çalışma Günü": "",
-            Pasif: "",
-            Açıklama: "",
-            Düzenleyen: "",
-            "Düzenleme Tarihi": "",
-        });
+        const headerCell = (label, key, props = {}) => (
+            <TableCell sx={{ whiteSpace: "nowrap", fontWeight: 800, cursor: "pointer" }} onClick={() => toggleSort(key)} title={`${label} - sırala`} {...props}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                    <span>{label}</span>
+                    <SortIcon col={key} />
+                </Stack>
+            </TableCell>
+        );
 
-        const ws = XLSXUtils.json_to_sheet(data, { skipHeader: false });
-        ws["!cols"] = [
-            { wch: 12 },
-            { wch: 10 },
-            { wch: 28 },
-            { wch: 20 },
-            { wch: 14 },
-            { wch: 14 },
-            { wch: 14 },
-            { wch: 14 },
-            { wch: 8 },
-            { wch: 30 },
-            { wch: 14 },
-            { wch: 20 },
-        ];
-        const wb = XLSXUtils.book_new();
-        XLSXUtils.book_append_sheet(wb, ws, "AraçCariFiyat");
-        XLSXWriteFile(wb, `arac_cari_fiyat_${new Date().toISOString().slice(0, 10)}.xlsx`);
-    };
+        const clearFilters = () => {
+            const empty = {
+                plaka: "",
+                cari_id: "",
+                cari_adi: "",
+                arac_sahip: "",
+                aylik_kira_min: "",
+                aylik_kira_max: "",
+                aylik_surucu_min: "",
+                aylik_surucu_max: "",
+                toplam_min: "",
+                toplam_max: "",
+                calisma_gunu_min: "",
+                calisma_gunu_max: "",
+                pasif: "hepsi",
+                aciklama: "",
+                duzenleyen: "",
+                tarih_from: "",
+                tarih_to: "",
+            };
+            setFilters(empty);
+            setTempFilters(empty);
+        };
 
-    /* --------- UI bits --------- */
-    const SortIcon = ({ col }) => {
-        if (sortBy.key !== col) return <ImportExport fontSize="inherit" sx={{ opacity: 0.6 }} />;
-        return sortBy.dir === "asc" ? <ArrowUpward fontSize="inherit" /> : <ArrowDownward fontSize="inherit" />;
-    };
+        const FilterBadge = ({ children }) => (
+            <Badge color="secondary" badgeContent={activeFilterCount || 0} invisible={activeFilterCount === 0}>
+                {children}
+            </Badge>
+        );
 
-    const headerCell = (label, key, props = {}) => (
-        <TableCell sx={{ whiteSpace: "nowrap", fontWeight: 800, cursor: "pointer" }} onClick={() => toggleSort(key)} title={`${label} - sırala`} {...props}>
-            <Stack direction="row" spacing={1} alignItems="center">
-                <span>{label}</span>
-                <SortIcon col={key} />
+        // Top toolbar (modern)
+        const TopToolbar = (
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ xs: "stretch", md: "center" }}>
+                <TextField
+                    size="small"
+                    placeholder="Plaka, Araç Sahibi, Cari Adı veya Cari ID ara…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    sx={{ minWidth: { xs: "100%", md: 360 } }}
+                    InputProps={{
+                        startAdornment: (
+                            <InputAdornment position="start">
+                                <SearchIcon sx={{ opacity: 0.7 }} />
+                            </InputAdornment>
+                        ),
+                    }}
+                />
+
+                <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    value={onlyActive ? "aktif" : "hepsi"}
+                    onChange={(_, v) => setOnlyActive(v === "aktif")}
+                    sx={{ borderRadius: 999, overflow: "hidden" }}
+                >
+                    <ToggleButton value="hepsi">Tümü</ToggleButton>
+                    <ToggleButton value="aktif">Sadece Aktif</ToggleButton>
+                </ToggleButtonGroup>
+
+                <FilterBadge>
+                    <Button variant="outlined" color="secondary" startIcon={<TuneIcon />} onClick={() => setDrawerOpen(true)}>
+                        Gelişmiş Filtreler
+                    </Button>
+                </FilterBadge>
+
+                <Button variant="outlined" color="primary" startIcon={<RefreshIcon />} onClick={refetch}>
+                    Yenile
+                </Button>
+                <Button variant="contained" color="primary" startIcon={<DownloadIcon />} onClick={exportToExcel}>
+                    Excel’e Aktar
+                </Button>
+                <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => setShowAdd(true)}>
+                    Yeni Kayıt
+                </Button>
+                <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
+                    Geri
+                </Button>
+                <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
+                    Anasayfa
+                </Button>
             </Stack>
-        </TableCell>
-    );
+        );
 
-    const clearFilters = () => {
-        const empty = {
-            plaka: "",
-            cari_id: "",
-            cari_adi: "",
-            arac_sahip: "",
-            aylik_kira_min: "",
-            aylik_kira_max: "",
-            aylik_surucu_min: "",
-            aylik_surucu_max: "",
-            toplam_min: "",
-            toplam_max: "",
-            calisma_gunu_min: "",
-            calisma_gunu_max: "",
-            pasif: "hepsi",
-            aciklama: "",
-            duzenleyen: "",
-            tarih_from: "",
-            tarih_to: "",
-        };
-        setFilters(empty);
-        setTempFilters(empty);
-    };
+        // Quick chips for active filters
+        const ActiveFilterChips = (
+            activeFilterCount > 0 && (
+                <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
+                    {Object.entries(filters).map(([k, v]) => {
+                        if (v === "" || v === null || (k === "pasif" && v === "hepsi")) return null;
+                        const labels = {
+                            plaka: "Plaka",
+                            cari_id: "Cari ID",
+                            cari_adi: "Cari Adı",
+                            arac_sahip: "Araç Sahibi",
+                            aylik_kira_min: "Kira ≥",
+                            aylik_kira_max: "Kira ≤",
+                            aylik_surucu_min: "Sürücü ≥",
+                            aylik_surucu_max: "Sürücü ≤",
+                            toplam_min: "Toplam ≥",
+                            toplam_max: "Toplam ≤",
+                            calisma_gunu_min: "Gün ≥",
+                            calisma_gunu_max: "Gün ≤",
+                            pasif: "Durum",
+                            aciklama: "Açıklama",
+                            duzenleyen: "Düzenleyen",
+                            tarih_from: "Tarih ≥",
+                            tarih_to: "Tarih ≤",
+                        };
+                        return (
+                            <Chip
+                                key={k}
+                                label={`${labels[k] || k}: ${v}`}
+                                onDelete={() => setFilters((p) => ({ ...p, [k]: k === "pasif" ? "hepsi" : "" }))}
+                            />
+                        );
+                    })}
+                    <Button size="small" startIcon={<ClearAllIcon />} onClick={clearFilters}>
+                        Hepsini Temizle
+                    </Button>
+                </Stack>
+            )
+        );
 
-    const FilterBadge = ({ children }) => (
-        <Badge color="secondary" badgeContent={activeFilterCount || 0} invisible={activeFilterCount === 0}>
-            {children}
-        </Badge>
-    );
-
-    // Top toolbar (modern)
-    const TopToolbar = (
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ xs: "stretch", md: "center" }}>
-            <TextField
-                size="small"
-                placeholder="Plaka, Araç Sahibi, Cari Adı veya Cari ID ara…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                sx={{ minWidth: { xs: "100%", md: 360 } }}
-                InputProps={{
-                    startAdornment: (
-                        <InputAdornment position="start">
-                            <SearchIcon sx={{ opacity: 0.7 }} />
-                        </InputAdornment>
-                    ),
+        return (
+            <Box
+                sx={{
+                    minHeight: "100dvh",
+                    py: 4,
+                    px: { xs: 1, md: 2 },
+                    background: (t) =>
+                        t.palette.mode === "dark"
+                            ? `linear-gradient(180deg, ${t.palette.background.default} 0%, ${t.palette.background.paper} 100%)`
+                            : "linear-gradient(180deg, #f5f7fb 0%, #ffffff 100%)",
                 }}
-            />
-
-            <ToggleButtonGroup
-                size="small"
-                exclusive
-                value={onlyActive ? "aktif" : "hepsi"}
-                onChange={(_, v) => setOnlyActive(v === "aktif")}
-                sx={{ borderRadius: 999, overflow: "hidden" }}
             >
-                <ToggleButton value="hepsi">Tümü</ToggleButton>
-                <ToggleButton value="aktif">Sadece Aktif</ToggleButton>
-            </ToggleButtonGroup>
-
-            <FilterBadge>
-                <Button variant="outlined" color="secondary" startIcon={<TuneIcon />} onClick={() => setDrawerOpen(true)}>
-                    Gelişmiş Filtreler
-                </Button>
-            </FilterBadge>
-
-            <Button variant="outlined" color="primary" startIcon={<RefreshIcon />} onClick={refetch}>
-                Yenile
-            </Button>
-            <Button variant="contained" color="primary" startIcon={<DownloadIcon />} onClick={exportToExcel}>
-                Excel’e Aktar
-            </Button>
-            <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => setShowAdd(true)}>
-                Yeni Kayıt
-            </Button>
-            <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
-                Geri
-            </Button>
-            <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
-                Anasayfa
-            </Button>
-        </Stack>
-    );
-
-    // Quick chips for active filters
-    const ActiveFilterChips = (
-        activeFilterCount > 0 && (
-            <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
-                {Object.entries(filters).map(([k, v]) => {
-                    if (v === "" || v === null || (k === "pasif" && v === "hepsi")) return null;
-                    const labels = {
-                        plaka: "Plaka",
-                        cari_id: "Cari ID",
-                        cari_adi: "Cari Adı",
-                        arac_sahip: "Araç Sahibi",
-                        aylik_kira_min: "Kira ≥",
-                        aylik_kira_max: "Kira ≤",
-                        aylik_surucu_min: "Sürücü ≥",
-                        aylik_surucu_max: "Sürücü ≤",
-                        toplam_min: "Toplam ≥",
-                        toplam_max: "Toplam ≤",
-                        calisma_gunu_min: "Gün ≥",
-                        calisma_gunu_max: "Gün ≤",
-                        pasif: "Durum",
-                        aciklama: "Açıklama",
-                        duzenleyen: "Düzenleyen",
-                        tarih_from: "Tarih ≥",
-                        tarih_to: "Tarih ≤",
-                    };
-                    return (
-                        <Chip
-                            key={k}
-                            label={`${labels[k] || k}: ${v}`}
-                            onDelete={() => setFilters((p) => ({ ...p, [k]: k === "pasif" ? "hepsi" : "" }))}
-                        />
-                    );
-                })}
-                <Button size="small" startIcon={<ClearAllIcon />} onClick={clearFilters}>
-                    Hepsini Temizle
-                </Button>
-            </Stack>
-        )
-    );
-
-    return (
-        <Box
-            sx={{
-                minHeight: "100dvh",
-                py: 4,
-                px: { xs: 1, md: 2 },
-                background: (t) =>
-                    t.palette.mode === "dark"
-                        ? `linear-gradient(180deg, ${t.palette.background.default} 0%, ${t.palette.background.paper} 100%)`
-                        : "linear-gradient(180deg, #f5f7fb 0%, #ffffff 100%)",
-            }}
-        >
-            <Container maxWidth="xl">
-                <Paper elevation={8} sx={{ borderRadius: 4, overflow: "hidden", backdropFilter: "blur(8px)", border: (t) => `1px solid ${t.palette.divider}` }}>
-                    {/* Header */}
-                    <Box sx={{ p: 3, background: (t) => (t.palette.mode === "dark" ? t.palette.background.default : "linear-gradient(135deg, #eef3ff 0%, #ffffff 60%)") }}>
-                        <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "start", sm: "center" }} justifyContent="space-between" spacing={2}>
-                            <Stack spacing={0.5}>
-                                <Typography variant="h5" fontWeight={900}>Araç Cari & Fiyat</Typography>
-                                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                                    {loading && <Chip label="Yükleniyor…" color="info" variant="outlined" icon={<CircularProgress size={14} />} />}
-                                    {err && <Chip label={`Hata: ${err}`} color="error" variant="outlined" />}
-                                    {!loading && !err && <Chip label={`Toplam: ${sorted.length}`} variant="outlined" />}
-                                    {onlyActive && <Chip color="success" label="Sadece Aktif" size="small" />}
+                <Container maxWidth="xl">
+                    <Paper elevation={8} sx={{ borderRadius: 4, overflow: "hidden", backdropFilter: "blur(8px)", border: (t) => `1px solid ${t.palette.divider}` }}>
+                        {/* Header */}
+                        <Box sx={{ p: 3, background: (t) => (t.palette.mode === "dark" ? t.palette.background.default : "linear-gradient(135deg, #eef3ff 0%, #ffffff 60%)") }}>
+                            <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "start", sm: "center" }} justifyContent="space-between" spacing={2}>
+                                <Stack spacing={0.5}>
+                                    <Typography variant="h5" fontWeight={900}>Araç Cari & Fiyat</Typography>
+                                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                                        {loading && <Chip label="Yükleniyor…" color="info" variant="outlined" icon={<CircularProgress size={14} />} />}
+                                        {err && <Chip label={`Hata: ${err}`} color="error" variant="outlined" />}
+                                        {!loading && !err && <Chip label={`Toplam: ${sorted.length}`} variant="outlined" />}
+                                        {onlyActive && <Chip color="success" label="Sadece Aktif" size="small" />}
+                                    </Stack>
                                 </Stack>
+                                {TopToolbar}
                             </Stack>
-                            {TopToolbar}
-                        </Stack>
-                        {ActiveFilterChips}
-                    </Box>
+                            {ActiveFilterChips}
+                        </Box>
 
-                    <Divider />
+                        <Divider />
 
-                    {/* Table */}
-                    <TableContainer sx={{ maxHeight: "70vh", "& .MuiTableCell-root": { borderBottomColor: "divider" } }}>
-                        <Table stickyHeader size="small">
-                            <TableHead>
-                                <TableRow sx={{ "& th": { bgcolor: (t) => (t.palette.mode === "dark" ? t.palette.background.default : "#f7f9ff") } }}>
-                                    {headerCell("Plaka", "plaka")}
-                                    {headerCell("Cari ID", "cari_id")}
-                                    {headerCell("Cari Adı", "cari_adi")}
-                                    {headerCell("Araç Sahibi", "arac_sahip")}
-                                    {headerCell("Aylık Kira", "aylik_kira", { align: "right" })}
-                                    {headerCell("Aylık Sürücü", "aylik_surucu", { align: "right" })}
-                                    {headerCell("Toplam Tutar", "toplam_tutar", { align: "right" })}
-                                    {headerCell("Çalışma Günü", "calisma_gunu", { align: "center" })}
-                                    {headerCell("Pasif", "pasif", { align: "center" })}
-                                    {headerCell("Açıklama", "aciklama")}
-                                    <TableCell sx={{ fontWeight: 800 }}>İşlem</TableCell>
-                                    {headerCell("Düzenleyen", "duzenleme_yapan_kullanici")}
-                                    {headerCell("Düzenleme Tarihi", "duzenleme_yapilan_tarih")}
-                                </TableRow>
-                            </TableHead>
+                        {/* Table */}
+                        <TableContainer sx={{ maxHeight: "70vh", "& .MuiTableCell-root": { borderBottomColor: "divider" } }}>
+                            <Table stickyHeader size="small">
+                                <TableHead>
+                                    <TableRow sx={{ "& th": { bgcolor: (t) => (t.palette.mode === "dark" ? t.palette.background.default : "#f7f9ff") } }}>
+                                        {headerCell("Plaka", "plaka")}
+                                        {headerCell("Cari ID", "cari_id")}
+                                        {headerCell("Cari Adı", "cari_adi")}
+                                        {headerCell("Araç Sahibi", "arac_sahip")}
+                                        {headerCell("Aylık Kira", "aylik_kira", { align: "right" })}
+                                        {headerCell("Aylık Sürücü", "aylik_surucu", { align: "right" })}
+                                        {headerCell("Toplam Tutar", "toplam_tutar", { align: "right" })}
+                                        {headerCell("Çalışma Günü", "calisma_gunu", { align: "center" })}
+                                        {headerCell("Pasif", "pasif", { align: "center" })}
+                                        {headerCell("Açıklama", "aciklama")}
+                                        <TableCell sx={{ fontWeight: 800 }}>İşlem</TableCell>
+                                        {headerCell("Düzenleyen", "duzenleme_yapan_kullanici")}
+                                        {headerCell("Düzenleme Tarihi", "duzenleme_yapilan_tarih")}
+                                    </TableRow>
+                                </TableHead>
 
-                            <TableBody sx={{ "& tr:nth-of-type(odd)": { bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "#fafbff") } }}>
-                                {sorted.map((r, i) => {
-                                    const isEditing = editingId === `${r.plaka}-${r.cari_id}`;
-                                    const rowKey = `${r.plaka}-${r.cari_id}-${i}`;
-                                    const toplamTutar = toNumberLoose(r.aylik_kira) + toNumberLoose(r.aylik_surucu);
+                                <TableBody sx={{ "& tr:nth-of-type(odd)": { bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "#fafbff") } }}>
+                                    {sorted.map((r, i) => {
+                                        const isEditing = editingId === `${r.plaka}-${r.cari_id}`;
+                                        const rowKey = `${r.plaka}-${r.cari_id}-${i}`;
+                                        const toplamTutar = toNumberLoose(r.aylik_kira) + toNumberLoose(r.aylik_surucu);
 
-                                    return (
-                                        <TableRow
-                                            key={rowKey}
-                                            hover
-                                            selected={isEditing}
-                                            sx={{ "&.Mui-selected": { backgroundColor: (t) => t.palette.action.selected } }}
-                                        >
-                                            {/* Plaka */}
-                                            <TableCell title={r.plaka} sx={{ fontWeight: 700 }}>
-                                                {r.plaka}
-                                            </TableCell>
+                                        return (
+                                            <TableRow
+                                                key={rowKey}
+                                                hover
+                                                selected={isEditing}
+                                                sx={{ "&.Mui-selected": { backgroundColor: (t) => t.palette.action.selected } }}
+                                            >
+                                                {/* Plaka */}
+                                                <TableCell title={r.plaka} sx={{ fontWeight: 700 }}>
+                                                    {r.plaka}
+                                                </TableCell>
 
-                                            {/* Cari ID (editable) */}
-                                            <TableCell>
-                                                {isEditing ? (
-                                                    <TextField
-                                                        value={editData.cari_id ?? ""}
-                                                        onChange={(e) => setEditData((p) => ({ ...p, cari_id: e.target.value }))}
-                                                        size="small"
-                                                        inputMode="numeric"
-                                                        sx={{ width: 120 }}
-                                                    />
-                                                ) : (
-                                                    r.cari_id
-                                                )}
-                                            </TableCell>
+                                                {/* Cari ID (editable) */}
+                                                <TableCell>
+                                                    {isEditing ? (
+                                                        <TextField
+                                                            value={editData.cari_id ?? ""}
+                                                            onChange={(e) => setEditData((p) => ({ ...p, cari_id: e.target.value }))}
+                                                            size="small"
+                                                            inputMode="numeric"
+                                                            sx={{ width: 120 }}
+                                                        />
+                                                    ) : (
+                                                        r.cari_id
+                                                    )}
+                                                </TableCell>
 
-                                            {/* Cari Adı (editable) */}
-                                            <TableCell title={r.cari_adi} sx={{ maxWidth: 320 }}>
-                                                {isEditing ? (
-                                                    <TextField
-                                                        value={editData.cari_adi ?? ""}
-                                                        onChange={(e) => setEditData((p) => ({ ...p, cari_adi: e.target.value }))}
-                                                        size="small"
-                                                        fullWidth
-                                                    />
-                                                ) : (
-                                                    <Typography noWrap>{r.cari_adi}</Typography>
-                                                )}
-                                            </TableCell>
+                                                {/* Cari Adı (editable) */}
+                                                <TableCell title={r.cari_adi} sx={{ maxWidth: 320 }}>
+                                                    {isEditing ? (
+                                                        <TextField
+                                                            value={editData.cari_adi ?? ""}
+                                                            onChange={(e) => setEditData((p) => ({ ...p, cari_adi: e.target.value }))}
+                                                            size="small"
+                                                            fullWidth
+                                                        />
+                                                    ) : (
+                                                        <Typography noWrap>{r.cari_adi}</Typography>
+                                                    )}
+                                                </TableCell>
 
-                                            {/* Araç Sahibi (editable) */}
-                                            <TableCell title={r.arac_sahip ?? ""} sx={{ maxWidth: 240 }}>
-                                                {isEditing ? (
-                                                    <TextField
-                                                        value={editData.arac_sahip ?? ""}
-                                                        onChange={(e) => setEditData((p) => ({ ...p, arac_sahip: e.target.value }))}
-                                                        size="small"
-                                                        fullWidth
-                                                    />
-                                                ) : (
-                                                    <Typography noWrap>{r.arac_sahip}</Typography>
-                                                )}
-                                            </TableCell>
+                                                {/* Araç Sahibi (editable) */}
+                                                <TableCell title={r.arac_sahip ?? ""} sx={{ maxWidth: 240 }}>
+                                                    {isEditing ? (
+                                                        <TextField
+                                                            value={editData.arac_sahip ?? ""}
+                                                            onChange={(e) => setEditData((p) => ({ ...p, arac_sahip: e.target.value }))}
+                                                            size="small"
+                                                            fullWidth
+                                                        />
+                                                    ) : (
+                                                        <Typography noWrap>{r.arac_sahip}</Typography>
+                                                    )}
+                                                </TableCell>
 
-                                            {/* Aylık Kira (editable) */}
-                                            <TableCell align="right" title={String(r.aylik_kira ?? "")}>
-                                                {isEditing ? (
-                                                    <TextField
-                                                        value={editData.aylik_kira ?? ""}
-                                                        onChange={(e) =>
-                                                            setEditData((p) => ({
-                                                                ...p,
-                                                                aylik_kira: formatTLForTyping(e.target.value),
-                                                            }))
-                                                        }
-                                                        size="small"
-                                                        inputMode="decimal"
-                                                        sx={{ width: 140 }}
-                                                    />
-                                                ) : (
-                                                    formatTL(toNumberLoose(r.aylik_kira))
-                                                )}
-                                            </TableCell>
+                                                {/* Aylık Kira (editable) */}
+                                                <TableCell align="right" title={String(r.aylik_kira ?? "")}>
+                                                    {isEditing ? (
+                                                        <TextField
+                                                            value={editData.aylik_kira ?? ""}
+                                                            onChange={(e) =>
+                                                                setEditData((p) => ({
+                                                                    ...p,
+                                                                    aylik_kira: formatTLForTyping(e.target.value),
+                                                                }))
+                                                            }
+                                                            size="small"
+                                                            inputMode="decimal"
+                                                            sx={{ width: 140 }}
+                                                        />
+                                                    ) : (
+                                                        formatTL(toNumberLoose(r.aylik_kira))
+                                                    )}
+                                                </TableCell>
 
-                                            {/* Aylık Sürücü (editable) */}
-                                            <TableCell align="right" title={String(r.aylik_surucu ?? "")}>
-                                                {isEditing ? (
-                                                    <TextField
-                                                        value={editData.aylik_surucu ?? ""}
-                                                        onChange={(e) =>
-                                                            setEditData((p) => ({
-                                                                ...p,
-                                                                aylik_surucu: formatTLForTyping(e.target.value),
-                                                            }))
-                                                        }
-                                                        size="small"
-                                                        inputMode="decimal"
-                                                        sx={{ width: 140 }}
-                                                    />
-                                                ) : (
-                                                    formatTL(toNumberLoose(r.aylik_surucu))
-                                                )}
-                                            </TableCell>
+                                                {/* Aylık Sürücü (editable) */}
+                                                <TableCell align="right" title={String(r.aylik_surucu ?? "")}>
+                                                    {isEditing ? (
+                                                        <TextField
+                                                            value={editData.aylik_surucu ?? ""}
+                                                            onChange={(e) =>
+                                                                setEditData((p) => ({
+                                                                    ...p,
+                                                                    aylik_surucu: formatTLForTyping(e.target.value),
+                                                                }))
+                                                            }
+                                                            size="small"
+                                                            inputMode="decimal"
+                                                            sx={{ width: 140 }}
+                                                        />
+                                                    ) : (
+                                                        formatTL(toNumberLoose(r.aylik_surucu))
+                                                    )}
+                                                </TableCell>
 
-                                            {/* Toplam Tutar (computed) */}
-                                            <TableCell align="right" title={String(toplamTutar)}>
-                                                {formatTL(toplamTutar)}
-                                            </TableCell>
+                                                {/* Toplam Tutar (computed) */}
+                                                <TableCell align="right" title={String(toplamTutar)}>
+                                                    {formatTL(toplamTutar)}
+                                                </TableCell>
 
-                                            {/* Çalışma Günü (editable) */}
-                                            <TableCell align="center" title={String(r.calisma_gunu ?? "")}>
-                                                {isEditing ? (
-                                                    <TextField
-                                                        value={editData.calisma_gunu ?? ""}
-                                                        onChange={(e) => setEditData((prev) => ({ ...prev, calisma_gunu: e.target.value }))}
-                                                        size="small"
-                                                        inputMode="numeric"
-                                                        sx={{ width: 90 }}
-                                                    />
-                                                ) : (
-                                                    r.calisma_gunu ?? ""
-                                                )}
-                                            </TableCell>
+                                                {/* Çalışma Günü (editable) */}
+                                                <TableCell align="center" title={String(r.calisma_gunu ?? "")}>
+                                                    {isEditing ? (
+                                                        <TextField
+                                                            value={editData.calisma_gunu ?? ""}
+                                                            onChange={(e) => setEditData((prev) => ({ ...prev, calisma_gunu: e.target.value }))}
+                                                            size="small"
+                                                            inputMode="numeric"
+                                                            sx={{ width: 90 }}
+                                                        />
+                                                    ) : (
+                                                        r.calisma_gunu ?? ""
+                                                    )}
+                                                </TableCell>
 
-                                            {/* Pasif (read-only) */}
-                                            <TableCell align="center">
-                                                <Checkbox checked={!!r.pasif} disabled />
-                                            </TableCell>
+                                                {/* Pasif (read-only) */}
+                                                <TableCell align="center">
+                                                    <Checkbox checked={!!r.pasif} disabled />
+                                                </TableCell>
 
-                                            {/* Açıklama (read-only) */}
-                                            <TableCell title={r.aciklama ?? ""} sx={{ maxWidth: 340 }}>
-                                                <Typography noWrap>{r.aciklama}</Typography>
-                                            </TableCell>
+                                                {/* Açıklama (read-only) */}
+                                                <TableCell title={r.aciklama ?? ""} sx={{ maxWidth: 340 }}>
+                                                    <Typography noWrap>{r.aciklama}</Typography>
+                                                </TableCell>
 
-                                            {/* İşlem */}
-                                            <TableCell>
-                                                {isEditing ? (
-                                                    <Stack direction="row" spacing={1}>
-                                                        <Tooltip title="Kaydet">
+                                                {/* İşlem */}
+                                                <TableCell>
+                                                    {isEditing ? (
+                                                        <Stack direction="row" spacing={1}>
+                                                            <Tooltip title="Kaydet">
+                                                                <span>
+                                                                    <IconButton
+                                                                        color="primary"
+                                                                        onClick={saveEdit}
+                                                                        disabled={savingId === editingId}
+                                                                        size="small"
+                                                                    >
+                                                                        <CheckIcon />
+                                                                    </IconButton>
+                                                                </span>
+                                                            </Tooltip>
+                                                            <Tooltip title="İptal">
+                                                                <span>
+                                                                    <IconButton
+                                                                        color="inherit"
+                                                                        onClick={cancelEdit}
+                                                                        disabled={savingId === editingId}
+                                                                        size="small"
+                                                                    >
+                                                                        <CloseIcon />
+                                                                    </IconButton>
+                                                                </span>
+                                                            </Tooltip>
+                                                        </Stack>
+                                                    ) : (
+                                                        <Tooltip title="Satırı düzenle">
                                                             <span>
-                                                                <IconButton
-                                                                    color="primary"
-                                                                    onClick={saveEdit}
-                                                                    disabled={savingId === editingId}
-                                                                    size="small"
-                                                                >
-                                                                    <CheckIcon />
+                                                                <IconButton onClick={() => startEdit(r)} size="small">
+                                                                    <EditIcon />
                                                                 </IconButton>
                                                             </span>
                                                         </Tooltip>
-                                                        <Tooltip title="İptal">
-                                                            <span>
-                                                                <IconButton
-                                                                    color="inherit"
-                                                                    onClick={cancelEdit}
-                                                                    disabled={savingId === editingId}
-                                                                    size="small"
-                                                                >
-                                                                    <CloseIcon />
-                                                                </IconButton>
-                                                            </span>
-                                                        </Tooltip>
-                                                    </Stack>
-                                                ) : (
-                                                    <Tooltip title="Satırı düzenle">
-                                                        <span>
-                                                            <IconButton onClick={() => startEdit(r)} size="small">
-                                                                <EditIcon />
-                                                            </IconButton>
-                                                        </span>
-                                                    </Tooltip>
-                                                )}
-                                            </TableCell>
+                                                    )}
+                                                </TableCell>
 
-                                            {/* Düzenleyen / Tarih */}
-                                            <TableCell title={r.duzenleme_yapan_kullanici ?? ""}>
-                                                {r.duzenleme_yapan_kullanici}
-                                            </TableCell>
-                                            <TableCell title={formatDate(r.duzenleme_yapilan_tarih)}>
-                                                {formatDate(r.duzenleme_yapilan_tarih)}
+                                                {/* Düzenleyen / Tarih */}
+                                                <TableCell title={r.duzenleme_yapan_kullanici ?? ""}>
+                                                    {r.duzenleme_yapan_kullanici}
+                                                </TableCell>
+                                                <TableCell title={formatDate(r.duzenleme_yapilan_tarih)}>
+                                                    {formatDate(r.duzenleme_yapilan_tarih)}
+                                                </TableCell>
+                                            </TableRow>
+
+                                        );
+                                    })}
+
+                                    {!loading && !err && sorted.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={13} align="center" sx={{ py: 4, color: "text.secondary" }}>
+                                                Kayıt bulunamadı.
                                             </TableCell>
                                         </TableRow>
+                                    )}
+                                </TableBody>
 
-                                    );
-                                })}
-
-                                {!loading && !err && sorted.length === 0 && (
-                                    <TableRow>
-                                        <TableCell colSpan={13} align="center" sx={{ py: 4, color: "text.secondary" }}>
-                                            Kayıt bulunamadı.
-                                        </TableCell>
+                                <TableFooter>
+                                    <TableRow sx={{ "& td": { fontWeight: 800, bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "#f0f4ff"), borderTop: (t) => `2px solid ${t.palette.divider}` } }}>
+                                        <TableCell colSpan={4}>Toplam (filtrelenmiş veride)</TableCell>
+                                        <TableCell align="right">{formatTL(totals.kira)}</TableCell>
+                                        <TableCell align="right">{formatTL(totals.surucu)}</TableCell>
+                                        <TableCell align="right">{formatTL(totals.toplam)}</TableCell>
+                                        <TableCell align="center">—</TableCell>
+                                        <TableCell align="center">—</TableCell>
+                                        <TableCell colSpan={4}> </TableCell>
                                     </TableRow>
-                                )}
-                            </TableBody>
+                                </TableFooter>
+                            </Table>
+                        </TableContainer>
+                    </Paper>
+                </Container>
 
-                            <TableFooter>
-                                <TableRow sx={{ "& td": { fontWeight: 800, bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "#f0f4ff"), borderTop: (t) => `2px solid ${t.palette.divider}` } }}>
-                                    <TableCell colSpan={4}>Toplam (filtrelenmiş veride)</TableCell>
-                                    <TableCell align="right">{formatTL(totals.kira)}</TableCell>
-                                    <TableCell align="right">{formatTL(totals.surucu)}</TableCell>
-                                    <TableCell align="right">{formatTL(totals.toplam)}</TableCell>
-                                    <TableCell align="center">—</TableCell>
-                                    <TableCell align="center">—</TableCell>
-                                    <TableCell colSpan={4}> </TableCell>
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
-                    </TableContainer>
-                </Paper>
-            </Container>
-
-            {/* ========== Gelişmiş Filtreler (Drawer) ========== */}
-            <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)} PaperProps={{ sx: { width: { xs: "100%", sm: 480 }, p: 2, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 } }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 1, pb: 1 }}>
-                    <Typography variant="h6" fontWeight={900}>Gelişmiş Filtreler</Typography>
-                    <IconButton onClick={() => setDrawerOpen(false)}><CloseIcon /></IconButton>
-                </Stack>
-
-                <Stack spacing={2} sx={{ pb: 10 }}>
-                    <Card variant="outlined"><CardContent>
-                        <Typography variant="subtitle2" fontWeight={800} gutterBottom>Genel</Typography>
-                        <Grid container spacing={1.5}>
-                            <Grid item xs={12} sm={6}><TextField label="Plaka" size="small" value={tempFilters.plaka} onChange={(e) => setTempFilters((p) => ({ ...p, plaka: e.target.value }))} fullWidth /></Grid>
-                            <Grid item xs={12} sm={6}><TextField label="Cari ID" size="small" value={tempFilters.cari_id} onChange={(e) => setTempFilters((p) => ({ ...p, cari_id: e.target.value }))} inputMode="numeric" fullWidth /></Grid>
-                            <Grid item xs={12}><TextField label="Cari Adı" size="small" value={tempFilters.cari_adi} onChange={(e) => setTempFilters((p) => ({ ...p, cari_adi: e.target.value }))} fullWidth /></Grid>
-                            <Grid item xs={12}><TextField label="Araç Sahibi" size="small" value={tempFilters.arac_sahip} onChange={(e) => setTempFilters((p) => ({ ...p, arac_sahip: e.target.value }))} fullWidth /></Grid>
-                            <Grid item xs={12}><TextField label="Açıklama" size="small" value={tempFilters.aciklama} onChange={(e) => setTempFilters((p) => ({ ...p, aciklama: e.target.value }))} fullWidth /></Grid>
-                            <Grid item xs={12}><TextField label="Düzenleyen" size="small" value={tempFilters.duzenleyen} onChange={(e) => setTempFilters((p) => ({ ...p, duzenleyen: e.target.value }))} fullWidth /></Grid>
-                        </Grid>
-                    </CardContent></Card>
-
-                    <Card variant="outlined"><CardContent>
-                        <Typography variant="subtitle2" fontWeight={800} gutterBottom>Tutar Aralıkları</Typography>
-                        <Grid container spacing={1.5}>
-                            <Grid item xs={12} sm={6}><TextField label="Aylık Kira ≥" size="small" value={tempFilters.aylik_kira_min} onChange={(e) => setTempFilters((p) => ({ ...p, aylik_kira_min: e.target.value }))} inputMode="decimal" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} /></Grid>
-                            <Grid item xs={12} sm={6}><TextField label="Aylık Kira ≤" size="small" value={tempFilters.aylik_kira_max} onChange={(e) => setTempFilters((p) => ({ ...p, aylik_kira_max: e.target.value }))} inputMode="decimal" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} /></Grid>
-                            <Grid item xs={12} sm={6}><TextField label="Aylık Sürücü ≥" size="small" value={tempFilters.aylik_surucu_min} onChange={(e) => setTempFilters((p) => ({ ...p, aylik_surucu_min: e.target.value }))} inputMode="decimal" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} /></Grid>
-                            <Grid item xs={12} sm={6}><TextField label="Aylık Sürücü ≤" size="small" value={tempFilters.aylik_surucu_max} onChange={(e) => setTempFilters((p) => ({ ...p, aylik_surucu_max: e.target.value }))} inputMode="decimal" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} /></Grid>
-                            <Grid item xs={12} sm={6}><TextField label="Toplam ≥" size="small" value={tempFilters.toplam_min} onChange={(e) => setTempFilters((p) => ({ ...p, toplam_min: e.target.value }))} inputMode="decimal" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} /></Grid>
-                            <Grid item xs={12} sm={6}><TextField label="Toplam ≤" size="small" value={tempFilters.toplam_max} onChange={(e) => setTempFilters((p) => ({ ...p, toplam_max: e.target.value }))} inputMode="decimal" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} /></Grid>
-                        </Grid>
-                    </CardContent></Card>
-
-                    <Card variant="outlined"><CardContent>
-                        <Typography variant="subtitle2" fontWeight={800} gutterBottom>Diğer</Typography>
-                        <Grid container spacing={1.5}>
-                            <Grid item xs={12} sm={6}><TextField label="Çalışma Günü ≥" size="small" value={tempFilters.calisma_gunu_min} onChange={(e) => setTempFilters((p) => ({ ...p, calisma_gunu_min: e.target.value }))} inputMode="numeric" fullWidth /></Grid>
-                            <Grid item xs={12} sm={6}><TextField label="Çalışma Günü ≤" size="small" value={tempFilters.calisma_gunu_max} onChange={(e) => setTempFilters((p) => ({ ...p, calisma_gunu_max: e.target.value }))} inputMode="numeric" fullWidth /></Grid>
-                            <Grid item xs={12} sm={6}><TextField select label="Durum" size="small" value={tempFilters.pasif} onChange={(e) => setTempFilters((p) => ({ ...p, pasif: e.target.value }))} fullWidth>
-                                <MenuItem value="hepsi">Hepsi</MenuItem>
-                                <MenuItem value="aktif">Aktif</MenuItem>
-                                <MenuItem value="pasif">Pasif</MenuItem>
-                            </TextField></Grid>
-                            <Grid item xs={12} sm={6}></Grid>
-                            <Grid item xs={12} sm={6}><TextField type="datetime-local" size="small" label="Tarih ≥" value={tempFilters.tarih_from} onChange={(e) => setTempFilters((p) => ({ ...p, tarih_from: e.target.value }))} fullWidth InputLabelProps={{ shrink: true }} /></Grid>
-                            <Grid item xs={12} sm={6}><TextField type="datetime-local" size="small" label="Tarih ≤" value={tempFilters.tarih_to} onChange={(e) => setTempFilters((p) => ({ ...p, tarih_to: e.target.value }))} fullWidth InputLabelProps={{ shrink: true }} /></Grid>
-                        </Grid>
-                    </CardContent></Card>
-                </Stack>
-
-                <Paper elevation={3} sx={{ position: "fixed", bottom: 0, right: 0, left: { xs: 0, sm: "auto" }, width: { xs: "100%", sm: 480 }, p: 2, borderTopLeftRadius: 16 }}>
-                    <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
-                        <Button startIcon={<ClearAllIcon />} onClick={clearFilters}>Temizle</Button>
-                        <Stack direction="row" spacing={1}>
-                            <Button variant="outlined" onClick={() => setDrawerOpen(false)}>Kapat</Button>
-                            <Button variant="contained" onClick={() => { setFilters(tempFilters); setDrawerOpen(false); }}>Uygula</Button>
-                        </Stack>
+                {/* ========== Gelişmiş Filtreler (Drawer) ========== */}
+                <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)} PaperProps={{ sx: { width: { xs: "100%", sm: 480 }, p: 2, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 } }}>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 1, pb: 1 }}>
+                        <Typography variant="h6" fontWeight={900}>Gelişmiş Filtreler</Typography>
+                        <IconButton onClick={() => setDrawerOpen(false)}><CloseIcon /></IconButton>
                     </Stack>
-                </Paper>
-            </Drawer>
 
-            {/* ========== Yeni Kayıt (Dialog) ========== */}
-            <Dialog open={showAdd} onClose={() => setShowAdd(false)} fullWidth maxWidth="md" PaperProps={{ sx: { borderRadius: 3 } }}>
-                <DialogTitle sx={{ fontWeight: 900 }}>Yeni Kayıt Ekle</DialogTitle>
-                <DialogContent dividers>
-                    <Grid container spacing={2}>
-                        <Grid item xs={12} sm={4}>
-                            <TextField label="Plaka *" value={addForm.plaka} onChange={(e) => handleAddChange("plaka", e.target.value.toUpperCase())} size="small" fullWidth />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <TextField label="Cari ID *" value={addForm.cari_id} onChange={(e) => handleAddChange("cari_id", e.target.value)} size="small" inputMode="numeric" fullWidth />
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <TextField label="Çalışma Günü" value={addForm.calisma_gunu} onChange={(e) => handleAddChange("calisma_gunu", e.target.value)} size="small" inputMode="numeric" fullWidth />
-                        </Grid>
+                    <Stack spacing={2} sx={{ pb: 10 }}>
+                        <Card variant="outlined"><CardContent>
+                            <Typography variant="subtitle2" fontWeight={800} gutterBottom>Genel</Typography>
+                            <Grid container spacing={1.5}>
+                                <Grid item xs={12} sm={6}><TextField label="Plaka" size="small" value={tempFilters.plaka} onChange={(e) => setTempFilters((p) => ({ ...p, plaka: e.target.value }))} fullWidth /></Grid>
+                                <Grid item xs={12} sm={6}><TextField label="Cari ID" size="small" value={tempFilters.cari_id} onChange={(e) => setTempFilters((p) => ({ ...p, cari_id: e.target.value }))} inputMode="numeric" fullWidth /></Grid>
+                                <Grid item xs={12}><TextField label="Cari Adı" size="small" value={tempFilters.cari_adi} onChange={(e) => setTempFilters((p) => ({ ...p, cari_adi: e.target.value }))} fullWidth /></Grid>
+                                <Grid item xs={12}><TextField label="Araç Sahibi" size="small" value={tempFilters.arac_sahip} onChange={(e) => setTempFilters((p) => ({ ...p, arac_sahip: e.target.value }))} fullWidth /></Grid>
+                                <Grid item xs={12}><TextField label="Açıklama" size="small" value={tempFilters.aciklama} onChange={(e) => setTempFilters((p) => ({ ...p, aciklama: e.target.value }))} fullWidth /></Grid>
+                                <Grid item xs={12}><TextField label="Düzenleyen" size="small" value={tempFilters.duzenleyen} onChange={(e) => setTempFilters((p) => ({ ...p, duzenleyen: e.target.value }))} fullWidth /></Grid>
+                            </Grid>
+                        </CardContent></Card>
 
-                        <Grid item xs={12} sm={6}>
-                            <TextField label="Cari Adı" value={addForm.cari_adi} onChange={(e) => handleAddChange("cari_adi", e.target.value)} size="small" fullWidth />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <TextField label="Araç Sahibi" value={addForm.arac_sahip} onChange={(e) => handleAddChange("arac_sahip", e.target.value)} size="small" fullWidth />
-                        </Grid>
+                        <Card variant="outlined"><CardContent>
+                            <Typography variant="subtitle2" fontWeight={800} gutterBottom>Tutar Aralıkları</Typography>
+                            <Grid container spacing={1.5}>
+                                <Grid item xs={12} sm={6}><TextField label="Aylık Kira ≥" size="small" value={tempFilters.aylik_kira_min} onChange={(e) => setTempFilters((p) => ({ ...p, aylik_kira_min: e.target.value }))} inputMode="decimal" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} /></Grid>
+                                <Grid item xs={12} sm={6}><TextField label="Aylık Kira ≤" size="small" value={tempFilters.aylik_kira_max} onChange={(e) => setTempFilters((p) => ({ ...p, aylik_kira_max: e.target.value }))} inputMode="decimal" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} /></Grid>
+                                <Grid item xs={12} sm={6}><TextField label="Aylık Sürücü ≥" size="small" value={tempFilters.aylik_surucu_min} onChange={(e) => setTempFilters((p) => ({ ...p, aylik_surucu_min: e.target.value }))} inputMode="decimal" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} /></Grid>
+                                <Grid item xs={12} sm={6}><TextField label="Aylık Sürücü ≤" size="small" value={tempFilters.aylik_surucu_max} onChange={(e) => setTempFilters((p) => ({ ...p, aylik_surucu_max: e.target.value }))} inputMode="decimal" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} /></Grid>
+                                <Grid item xs={12} sm={6}><TextField label="Toplam ≥" size="small" value={tempFilters.toplam_min} onChange={(e) => setTempFilters((p) => ({ ...p, toplam_min: e.target.value }))} inputMode="decimal" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} /></Grid>
+                                <Grid item xs={12} sm={6}><TextField label="Toplam ≤" size="small" value={tempFilters.toplam_max} onChange={(e) => setTempFilters((p) => ({ ...p, toplam_max: e.target.value }))} inputMode="decimal" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} /></Grid>
+                            </Grid>
+                        </CardContent></Card>
 
-                        <Grid item xs={12} sm={6}>
-                            <TextField label="Aylık Kira" value={addForm.aylik_kira} onChange={(e) => handleAddChange("aylik_kira", formatTLForTyping(e.target.value))} size="small" inputMode="decimal" placeholder="0,00" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <TextField label="Aylık Sürücü" value={addForm.aylik_surucu} onChange={(e) => handleAddChange("aylik_surucu", formatTLForTyping(e.target.value))} size="small" inputMode="decimal" placeholder="0,00" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} />
-                        </Grid>
+                        <Card variant="outlined"><CardContent>
+                            <Typography variant="subtitle2" fontWeight={800} gutterBottom>Diğer</Typography>
+                            <Grid container spacing={1.5}>
+                                <Grid item xs={12} sm={6}><TextField label="Çalışma Günü ≥" size="small" value={tempFilters.calisma_gunu_min} onChange={(e) => setTempFilters((p) => ({ ...p, calisma_gunu_min: e.target.value }))} inputMode="numeric" fullWidth /></Grid>
+                                <Grid item xs={12} sm={6}><TextField label="Çalışma Günü ≤" size="small" value={tempFilters.calisma_gunu_max} onChange={(e) => setTempFilters((p) => ({ ...p, calisma_gunu_max: e.target.value }))} inputMode="numeric" fullWidth /></Grid>
+                                <Grid item xs={12} sm={6}><TextField select label="Durum" size="small" value={tempFilters.pasif} onChange={(e) => setTempFilters((p) => ({ ...p, pasif: e.target.value }))} fullWidth>
+                                    <MenuItem value="hepsi">Hepsi</MenuItem>
+                                    <MenuItem value="aktif">Aktif</MenuItem>
+                                    <MenuItem value="pasif">Pasif</MenuItem>
+                                </TextField></Grid>
+                                <Grid item xs={12} sm={6}></Grid>
+                                <Grid item xs={12} sm={6}><TextField type="datetime-local" size="small" label="Tarih ≥" value={tempFilters.tarih_from} onChange={(e) => setTempFilters((p) => ({ ...p, tarih_from: e.target.value }))} fullWidth InputLabelProps={{ shrink: true }} /></Grid>
+                                <Grid item xs={12} sm={6}><TextField type="datetime-local" size="small" label="Tarih ≤" value={tempFilters.tarih_to} onChange={(e) => setTempFilters((p) => ({ ...p, tarih_to: e.target.value }))} fullWidth InputLabelProps={{ shrink: true }} /></Grid>
+                            </Grid>
+                        </CardContent></Card>
+                    </Stack>
 
-                        <Grid item xs={12}>
-                            <TextField label="Açıklama" value={addForm.aciklama} onChange={(e) => handleAddChange("aciklama", e.target.value)} size="small" fullWidth multiline minRows={2} />
-                        </Grid>
+                    <Paper elevation={3} sx={{ position: "fixed", bottom: 0, right: 0, left: { xs: 0, sm: "auto" }, width: { xs: "100%", sm: 480 }, p: 2, borderTopLeftRadius: 16 }}>
+                        <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
+                            <Button startIcon={<ClearAllIcon />} onClick={clearFilters}>Temizle</Button>
+                            <Stack direction="row" spacing={1}>
+                                <Button variant="outlined" onClick={() => setDrawerOpen(false)}>Kapat</Button>
+                                <Button variant="contained" onClick={() => { setFilters(tempFilters); setDrawerOpen(false); }}>Uygula</Button>
+                            </Stack>
+                        </Stack>
+                    </Paper>
+                </Drawer>
 
-                        <Grid item xs={12}>
-                            <Card variant="outlined">
-                                <CardContent>
-                                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ xs: "start", sm: "center" }} justifyContent="space-between">
-                                        <Stack direction="row" spacing={1} alignItems="center">
-                                            <Checkbox checked={addForm.pasif} onChange={(e) => handleAddChange("pasif", e.target.checked)} />
-                                            <Typography>Pasif</Typography>
+                {/* ========== Yeni Kayıt (Dialog) ========== */}
+                <Dialog open={showAdd} onClose={() => setShowAdd(false)} fullWidth maxWidth="md" PaperProps={{ sx: { borderRadius: 3 } }}>
+                    <DialogTitle sx={{ fontWeight: 900 }}>Yeni Kayıt Ekle</DialogTitle>
+                    <DialogContent dividers>
+                        <Grid container spacing={2}>
+                            <Grid item xs={12} sm={4}>
+                                <TextField label="Plaka *" value={addForm.plaka} onChange={(e) => handleAddChange("plaka", e.target.value.toUpperCase())} size="small" fullWidth />
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                                <TextField label="Cari ID *" value={addForm.cari_id} onChange={(e) => handleAddChange("cari_id", e.target.value)} size="small" inputMode="numeric" fullWidth />
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                                <TextField label="Çalışma Günü" value={addForm.calisma_gunu} onChange={(e) => handleAddChange("calisma_gunu", e.target.value)} size="small" inputMode="numeric" fullWidth />
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <TextField label="Cari Adı" value={addForm.cari_adi} onChange={(e) => handleAddChange("cari_adi", e.target.value)} size="small" fullWidth />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField label="Araç Sahibi" value={addForm.arac_sahip} onChange={(e) => handleAddChange("arac_sahip", e.target.value)} size="small" fullWidth />
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <TextField label="Aylık Kira" value={addForm.aylik_kira} onChange={(e) => handleAddChange("aylik_kira", formatTLForTyping(e.target.value))} size="small" inputMode="decimal" placeholder="0,00" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField label="Aylık Sürücü" value={addForm.aylik_surucu} onChange={(e) => handleAddChange("aylik_surucu", formatTLForTyping(e.target.value))} size="small" inputMode="decimal" placeholder="0,00" fullWidth InputProps={{ startAdornment: <InputAdornment position="start">₺</InputAdornment> }} />
+                            </Grid>
+
+                            <Grid item xs={12}>
+                                <TextField label="Açıklama" value={addForm.aciklama} onChange={(e) => handleAddChange("aciklama", e.target.value)} size="small" fullWidth multiline minRows={2} />
+                            </Grid>
+
+                            <Grid item xs={12}>
+                                <Card variant="outlined">
+                                    <CardContent>
+                                        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ xs: "start", sm: "center" }} justifyContent="space-between">
+                                            <Stack direction="row" spacing={1} alignItems="center">
+                                                <Checkbox checked={addForm.pasif} onChange={(e) => handleAddChange("pasif", e.target.checked)} />
+                                                <Typography>Pasif</Typography>
+                                            </Stack>
+                                            <Stack direction="row" spacing={2}>
+                                                <Typography variant="body2" sx={{ opacity: 0.8 }}>Önizleme Toplam:</Typography>
+                                                <Chip label={formatTL(toNumberLoose(addForm.aylik_kira) + toNumberLoose(addForm.aylik_surucu))} color="primary" variant="outlined" />
+                                            </Stack>
                                         </Stack>
-                                        <Stack direction="row" spacing={2}>
-                                            <Typography variant="body2" sx={{ opacity: 0.8 }}>Önizleme Toplam:</Typography>
-                                            <Chip label={formatTL(toNumberLoose(addForm.aylik_kira) + toNumberLoose(addForm.aylik_surucu))} color="primary" variant="outlined" />
-                                        </Stack>
-                                    </Stack>
-                                </CardContent>
-                            </Card>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
                         </Grid>
-                    </Grid>
 
-                    {addError && (
-                        <Alert severity="error" sx={{ mt: 2 }}>{addError}</Alert>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setShowAdd(false)}>Vazgeç</Button>
-                    <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={addNew} disabled={adding}>
-                        {adding ? "Ekleniyor..." : "Ekle"}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </Box>
-    );
-}
+                        {addError && (
+                            <Alert severity="error" sx={{ mt: 2 }}>{addError}</Alert>
+                        )}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setShowAdd(false)}>Vazgeç</Button>
+                        <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={addNew} disabled={adding}>
+                            {adding ? "Ekleniyor..." : "Ekle"}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+            </Box>
+        );
+    }
+
+

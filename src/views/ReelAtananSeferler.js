@@ -32,7 +32,7 @@ const daysAgoISO = (n) => new Date(Date.now() - n * 86400000).toISOString().slic
 
 const EXCLUDED_PLAKAS = new Set([
     "34NHF579", "34NHF636", "34NHF705", "34NHF757",
-    "34NHF811", "34NHF868", "34NHF916", "34NHF964", "34NHG120", "34NHG208"
+    "34NHF811", "34NHF868", "34NHF916", "34NHF964", "34NHG120", "34NHG208", "06CFZ391", "33ADV488", "54AEH576", "26ADN765", "06GD7290", "33ABF523", "33AIM809", "33AVC168",
 ]);
 
 const normalizePlate = (s) => (s ?? "").toString().toUpperCase().replace(/[\s-]/g, "");

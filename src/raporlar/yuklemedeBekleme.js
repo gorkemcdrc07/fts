@@ -39,6 +39,11 @@ import {
     GridToolbarQuickFilter,
 } from "@mui/x-data-grid";
 
+// X-Charts (MUI)
+import { PieChart } from "@mui/x-charts/PieChart";
+import { BarChart } from "@mui/x-charts/BarChart";
+import { LineChart } from "@mui/x-charts/LineChart";
+
 // Icons
 import DownloadIcon from "@mui/icons-material/Download";
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -51,19 +56,6 @@ import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 // ===================== Dayjs Setup =====================
 dayjs.extend(duration);
 dayjs.locale("tr");
-
-/*
-============================================================
-  AMAÇ
-  - Mevcut dosyayı daha anlaşılır bir yapıya kavuşturmak
-  - SORU: "Burası çok anlaşılmıyor" → ÇÖZÜM:
-    * Net isimlendirme
-    * Yardımcı fonksiyonları grupla
-    * UI parçalarını küçük bileşenlere böl
-    * Veri toplama (fetch) akışını sadeleştir
-    * Yorumlar ile niyet belirt
-============================================================
-*/
 
 /* ===================== Sabitler / Şemalar ===================== */
 const DETAIL_TABLES = [
@@ -98,10 +90,27 @@ const fmtDateTR = (v) => {
 
 const fmtMinutes = (min) => {
     if (min === null || min === undefined) return "—";
-    const h = Math.floor(min / 60);
-    const m = Math.floor(min % 60);
+    const n = Number(min);
+    if (!Number.isFinite(n)) return "—";
+    const h = Math.floor(n / 60);
+    const m = Math.floor(n % 60);
     if (h <= 0) return `${m} dk`;
     return `${h} sa ${m.toString().padStart(2, "0")} dk`;
+};
+
+// ---- Güvenli valueFormatter sarmalayıcıları
+const pickVFValue = (p, def = null) =>
+    p && typeof p === "object" && "value" in p ? p.value : (p ?? def);
+
+const safeVF = (fn) => (p) => {
+    const v = pickVFValue(p, null);
+    return fn ? fn(v) : v;
+};
+
+const safeVFRoundMinutes = (fn) => (p) => {
+    const raw = pickVFValue(p, 0);
+    const v = Math.round(Number(raw || 0));
+    return fn ? fn(v) : v;
 };
 
 const firstOf = (obj, keys) => {
@@ -113,9 +122,7 @@ const firstOf = (obj, keys) => {
 };
 
 const prettyKey = (k) =>
-    String(k)
-        .replace(/_/g, " ")
-        .replace(/(\b\w)/g, (m) => m.toUpperCase());
+    String(k).replace(/_/g, " ").replace(/(\b\w)/g, (m) => m.toUpperCase());
 
 const waitSeverity = (min) => {
     if (min == null) return { level: "none", label: "—" };
@@ -134,7 +141,8 @@ const extractDriver = (r, fallback = {}) => {
             "surucu",
             "sofor",
             "sofor_ad",
-        ]) ?? firstOf(fallback, ["surucu_ad_so", "surucu_adi", "surucu", "sofor", "sofor_ad"]);
+        ]) ??
+        firstOf(fallback, ["surucu_ad_so", "surucu_adi", "surucu", "sofor", "sofor_ad"]);
 
     const sofor_tel =
         firstOf(r, [
@@ -144,13 +152,36 @@ const extractDriver = (r, fallback = {}) => {
             "driver_phone",
             "gsm",
             "telefon",
-        ]) ?? firstOf(fallback, ["surucu_telefo", "surucu_telefon", "surucu_tel", "driver_phone", "gsm", "telefon"]);
+        ]) ??
+        firstOf(fallback, ["surucu_telefo", "surucu_telefon", "surucu_tel", "driver_phone", "gsm", "telefon"]);
 
     const tasiyici_firma =
         firstOf(r, ["tasiyici_firma", "tasiyici", "tasiyici_adi", "carrier", "firma"]) ??
         firstOf(fallback, ["tasiyici_firma", "tasiyici", "tasiyici_adi", "carrier", "firma"]);
 
     return { sofor_ad: sofor_ad || null, sofor_tel: sofor_tel || null, tasiyici_firma: tasiyici_firma || null };
+};
+
+/* Detay satırından nokta bilgisi çıkarımı (varış/çıkış + bekleme + nokta adı) */
+const extractStop = (rec, idx = 0) => {
+    const sira =
+        rec?.nokta_sirasi ??
+        rec?.sira ??
+        rec?.noktaSira ??
+        idx + 1;
+
+    const nokta =
+        firstOf(rec, ["yukleme_nokta", "nokta", "nokta_adi", "yukleme_nokl", "nokta_ismi", "nokta_kodu"]) ||
+        `Nokta ${sira}`;
+
+    const arr =
+        firstOf(rec, ["varis", "yukleme_varis", "teslim_varis", "varis_zamani", "varis_tarih"]) ?? null;
+
+    const dep =
+        firstOf(rec, ["cikis", "yukleme_cikis", "teslim_cikis", "cikis_zamani", "cikis_tarih"]) ?? null;
+
+    const bekleme_dk = diffMinutes(arr, dep);
+    return { sira, nokta, varis: arr, cikis: dep, bekleme_dk };
 };
 
 /* ===================== Küçük UI Bileşenleri ===================== */
@@ -202,7 +233,7 @@ export default function YuklemedeBekleme() {
     const [dateFrom, setDateFrom] = useState(""); // yyyy-mm-dd
     const [dateTo, setDateTo] = useState("");
     const [sekme, setSekme] = useState("aktif"); // aktif | tamamlanan | tum
-    const [gorunum, setGorunum] = useState("liste"); // liste | ozet
+    const [gorunum, setGorunum] = useState("liste"); // liste | ozet | dashboard
 
     // Detay drawer
     const [openDrawer, setOpenDrawer] = useState(false);
@@ -221,7 +252,6 @@ export default function YuklemedeBekleme() {
     const fetchAll = useCallback(async () => {
         setLoading(true);
 
-        // Detay tablolarını paralelde çek
         const detailPromises = DETAIL_TABLES.map((t) =>
             supabase.from(t.table).select("*").then(({ data, error }) => ({ t, data: data || [], error }))
         );
@@ -235,7 +265,6 @@ export default function YuklemedeBekleme() {
             Promise.all(summaryPromises),
         ]);
 
-        // 1) Detayları sefer_no -> [] map'ine koy
         const byNo = new Map();
         detailResults.forEach(({ t, data, error }) => {
             if (error) {
@@ -250,12 +279,10 @@ export default function YuklemedeBekleme() {
             });
         });
 
-        // Nokta sırasına göre sırala
         for (const [, arr] of byNo.entries()) {
             arr.sort((a, b) => (a.nokta_sirasi ?? 999) - (b.nokta_sirasi ?? 999));
         }
 
-        // 2) Özet tablolardan satırları üret
         const all = [];
         summaryResults.forEach(({ t, data, error }) => {
             if (error) {
@@ -268,12 +295,10 @@ export default function YuklemedeBekleme() {
                 const detList = byNo.get(sefer_no) || [];
                 const firstDet = detList[0] || {};
 
-                // zamanlar sadece detayda -> 1. noktanın varış/çıkışını kullan
                 const yukleme_varis = firstOf(firstDet, ["yukleme_varis"]) ?? null;
                 const yukleme_cikis = firstOf(firstDet, ["yukleme_cikis"]) ?? null;
                 const bekleme_dk = diffMinutes(yukleme_varis, yukleme_cikis);
 
-                // lokasyon
                 const yukleme_il = firstOf(r, ["yukleme_ili"]) ?? firstOf(firstDet, ["yukleme_ili", "yukleme_il"]);
                 const yukleme_ilce = firstOf(r, ["yukleme_ilcesi"]) ?? firstOf(firstDet, ["yukleme_ilcesi", "yukleme_ilce"]);
                 const teslim_il = firstOf(r, ["teslim_ili"]) ?? firstOf(firstDet, ["teslim_ili", "teslim_il"]);
@@ -311,7 +336,6 @@ export default function YuklemedeBekleme() {
             });
         });
 
-        // 3) Temizlik + dedup (aynı sefer_no için en uzun bekleme)
         const cleaned = all.filter((x) => x.bekleme_dk !== null);
         const dedup = Object.values(
             cleaned.reduce((acc, r) => {
@@ -371,19 +395,18 @@ export default function YuklemedeBekleme() {
             .sort((a, b) => (b.bekleme_dk ?? 0) - (a.bekleme_dk ?? 0));
     }, [rows, q, kaynak, minDakika, dateFrom, dateTo, sekme]);
 
-    // --- KPI'lar ---
+    // --- KPI'lar (medyan yok)
     const stats = useMemo(() => {
         const n = filtered.length;
-        if (!n) return { adet: 0, ort_dk: 0, medyan_dk: 0, max_dk: 0 };
+        if (!n) return { adet: 0, ort_dk: 0, max_dk: 0 };
         const ary = filtered.map((r) => r.bekleme_dk).sort((a, b) => a - b);
         const sum = ary.reduce((a, c) => a + c, 0);
         const ort = Math.round((sum / n) * 100) / 100;
-        const medyan = n % 2 === 1 ? ary[(n - 1) / 2] : Math.round(((ary[n / 2 - 1] + ary[n / 2]) / 2) * 100) / 100;
         const max = ary[ary.length - 1];
-        return { adet: n, ort_dk: ort, medyan_dk: medyan, max_dk: max };
+        return { adet: n, ort_dk: ort, max_dk: max };
     }, [filtered]);
 
-    // --- Özetler (Plaka/Şoför) ---
+    // --- Özetler (Plaka/Şoför) — medyan kaldırıldı
     const { byPlaka, bySofor } = useMemo(() => {
         const group = (key) => {
             const map = new Map();
@@ -396,10 +419,6 @@ export default function YuklemedeBekleme() {
                 const minutes = list.map((x) => x.bekleme_dk).sort((a, b) => a - b);
                 const toplam = minutes.reduce((a, c) => a + c, 0);
                 const ort = Math.round((toplam / minutes.length) * 100) / 100;
-                const medyan =
-                    minutes.length % 2 === 1
-                        ? minutes[(minutes.length - 1) / 2]
-                        : Math.round(((minutes[minutes.length / 2 - 1] + minutes[minutes.length / 2]) / 2) * 100) / 100;
                 const max = minutes[minutes.length - 1] ?? 0;
                 const last = list
                     .slice()
@@ -410,7 +429,6 @@ export default function YuklemedeBekleme() {
                     adet: list.length,
                     toplam_dk: toplam,
                     ort_dk: ort,
-                    medyan_dk: medyan,
                     max_dk: max,
                     son_varis: last?.yukleme_varis || null,
                     ornek_sefer: last?.sefer_no || "",
@@ -421,6 +439,74 @@ export default function YuklemedeBekleme() {
         };
 
         return { byPlaka: group("plaka"), bySofor: group("sofor_ad") };
+    }, [filtered]);
+
+    /* ===================== Dashboard Verileri ===================== */
+    const {
+        severityPie,
+        statusPie,
+        topCityBars,
+        dailyAvgLine,
+    } = useMemo(() => {
+        // Donut 1: Bekleme şiddeti dağılımı
+        const sevCounts = { low: 0, mid: 0, high: 0, critical: 0 };
+        filtered.forEach((r) => {
+            const sev = waitSeverity(r.bekleme_dk).level;
+            if (sevCounts[sev] !== undefined) sevCounts[sev] += 1;
+        });
+        const sevLabels = {
+            low: "Kısa (<60dk)",
+            mid: "Orta (60-119dk)",
+            high: "Uzun (120-239dk)",
+            critical: "Çok Uzun (240dk+)",
+        };
+        const severityPie = Object.entries(sevCounts).map(([k, v], idx) => ({
+            id: k,
+            value: v,
+            label: sevLabels[k],
+        }));
+
+        // Donut 2: Durum (aktif/tamamlanan)
+        const statusCounts = { aktif: 0, tamamlanan: 0 };
+        filtered.forEach((r) => {
+            statusCounts[r.grup] = (statusCounts[r.grup] || 0) + 1;
+        });
+        const statusPie = [
+            { id: "aktif", value: statusCounts.aktif, label: "Aktif" },
+            { id: "tamamlanan", value: statusCounts.tamamlanan, label: "Tamamlanan" },
+        ];
+
+        // Bar: Yükleme iline göre toplam bekleme (Top 10)
+        const cityMap = new Map();
+        filtered.forEach((r) => {
+            const key = (r.yukleme_il || r.yukleme_ili || "Bilinmiyor").toString();
+            cityMap.set(key, (cityMap.get(key) || 0) + (r.bekleme_dk || 0));
+        });
+        const topCityBars = Array.from(cityMap.entries())
+            .map(([name, total]) => ({ name, total }))
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 10);
+
+        // Çizgi: Günlük ortalama bekleme
+        const dayAgg = new Map();
+        filtered.forEach((r) => {
+            const d = parseDT(r.yukleme_varis);
+            if (!d) return;
+            const key = d.format("YYYY-MM-DD");
+            if (!dayAgg.has(key)) dayAgg.set(key, { sum: 0, n: 0 });
+            const x = dayAgg.get(key);
+            x.sum += r.bekleme_dk || 0;
+            x.n += 1;
+        });
+        const dailyAvgLine = Array.from(dayAgg.entries())
+            .map(([date, { sum, n }]) => ({
+                date,
+                label: dayjs(date).format("DD.MM"),
+                avg: Math.round((sum / (n || 1)) * 100) / 100,
+            }))
+            .sort((a, b) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf());
+
+        return { severityPie, statusPie, topCityBars, dailyAvgLine };
     }, [filtered]);
 
     /* ===================== Kolonlar ===================== */
@@ -474,14 +560,14 @@ export default function YuklemedeBekleme() {
         { field: "sofor_tel", headerName: "Telefon", width: 150 },
         { field: "tasiyici_firma", headerName: "Taşıyıcı", width: 180 },
         { field: "kaynak", headerName: "Kaynak", width: 170 },
-        { field: "yukleme_varis", headerName: "Yükleme Varış", width: 170, valueFormatter: (p) => fmtDateTR(p.value) },
-        { field: "yukleme_cikis", headerName: "Yükleme Çıkış", width: 170, valueFormatter: (p) => fmtDateTR(p.value) },
+        { field: "yukleme_varis", headerName: "Yükleme Varış", width: 170, valueFormatter: safeVF(fmtDateTR) },
+        { field: "yukleme_cikis", headerName: "Yükleme Çıkış", width: 170, valueFormatter: safeVF(fmtDateTR) },
         {
             field: "bekleme_dk",
             headerName: "Bekleme",
             width: 160,
             sortComparator: (a, b) => (a ?? -1) - (b ?? -1),
-            renderCell: (p) => <WaitChip minutes={p.value} />,
+            renderCell: (p) => <WaitChip minutes={p.value ?? null} />,
         },
         {
             field: "yukleme_il_ilce",
@@ -510,21 +596,21 @@ export default function YuklemedeBekleme() {
         { field: "gecikme_nedeni", headerName: "Gecikme Nedeni", width: 220 },
     ];
 
+    // Özet tabloları (medyan yok)
     const sumColsCommon = [
         { field: "key", headerName: "Anahtar", width: 200 },
         { field: "adet", headerName: "Adet", width: 90, type: "number" },
-        { field: "toplam_dk", headerName: "Toplam Bekleme", width: 170, type: "number", valueFormatter: (p) => fmtMinutes(p.value) },
-        { field: "ort_dk", headerName: "Ortalama", width: 140, type: "number", valueFormatter: (p) => fmtMinutes(Math.round(p.value)) },
-        { field: "medyan_dk", headerName: "Medyan", width: 140, type: "number", valueFormatter: (p) => fmtMinutes(Math.round(p.value)) },
+        { field: "toplam_dk", headerName: "Toplam Bekleme", width: 170, type: "number", valueFormatter: safeVF(fmtMinutes) },
+        { field: "ort_dk", headerName: "Ortalama", width: 140, type: "number", valueFormatter: safeVFRoundMinutes(fmtMinutes) },
         {
             field: "max_dk",
             headerName: "Maks",
             width: 130,
             type: "number",
-            valueFormatter: (p) => fmtMinutes(p.value),
-            renderCell: (p) => <WaitChip minutes={p.row.max_dk} />,
+            valueFormatter: safeVF(fmtMinutes),
+            renderCell: (p) => <WaitChip minutes={p.row.max_dk ?? null} />,
         },
-        { field: "son_varis", headerName: "Son Varış", width: 170, valueFormatter: (p) => fmtDateTR(p.value) },
+        { field: "son_varis", headerName: "Son Varış", width: 170, valueFormatter: safeVF(fmtDateTR) },
         { field: "ornek_sefer", headerName: "Örnek Sefer", width: 160 },
         {
             field: "action",
@@ -601,6 +687,30 @@ export default function YuklemedeBekleme() {
         return uniq.map((x, i) => ({ ...x, delta: i > 0 ? dayjs(x.dt).diff(dayjs(uniq[i - 1].dt), "minute") : null }));
     }, [selectedRow, detailByNo]);
 
+    // Nokta bazlı bekleme listesi (Yükleme Noktası dahil)
+    const stopRows = useMemo(() => {
+        if (!selectedRow) return [];
+        const det = detailByNo.get(selectedRow.sefer_no) || [];
+        return det
+            .map((rec, idx) => ({ ...extractStop(rec, idx), id: `${selectedRow.sefer_no}-${idx}` }))
+            .filter((s) => s.varis || s.cikis)
+            .sort((a, b) => (a.sira ?? 999) - (b.sira ?? 999));
+    }, [selectedRow, detailByNo]);
+
+    const stopColumns = [
+        { field: "sira", headerName: "Sıra", width: 70, type: "number" },
+        { field: "nokta", headerName: "Yükleme Noktası", width: 230 },
+        { field: "varis", headerName: "Varış", width: 170, valueFormatter: safeVF(fmtDateTR) },
+        { field: "cikis", headerName: "Çıkış", width: 170, valueFormatter: safeVF(fmtDateTR) },
+        {
+            field: "bekleme_dk",
+            headerName: "Bekleme",
+            width: 140,
+            type: "number",
+            renderCell: (p) => <WaitChip minutes={p.value ?? null} />,
+        },
+    ];
+
     /* ===================== Render ===================== */
     return (
         <Box
@@ -643,7 +753,6 @@ export default function YuklemedeBekleme() {
                         <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap">
                             <Chip variant="outlined" label={`Kayıt: ${filtered.length}`} />
                             <Chip variant="outlined" label={`Ort.: ${fmtMinutes(Math.round(stats.ort_dk))}`} />
-                            <Chip variant="outlined" label={`Medyan: ${fmtMinutes(Math.round(stats.medyan_dk))}`} />
                             <Chip color="warning" variant="outlined" label={`Maks.: ${fmtMinutes(stats.max_dk)}`} />
                         </Stack>
                     </Box>
@@ -739,10 +848,9 @@ export default function YuklemedeBekleme() {
                             {[
                                 { label: "Kayıt", value: filtered.length },
                                 { label: "Ortalama Bekleme", value: fmtMinutes(Math.round(stats.ort_dk)) },
-                                { label: "Medyan Bekleme", value: fmtMinutes(Math.round(stats.medyan_dk)) },
                                 { label: "Maksimum Bekleme", value: fmtMinutes(stats.max_dk) },
                             ].map((k, i) => (
-                                <Grid item xs={12} sm={6} md={3} key={i}>
+                                <Grid item xs={12} sm={6} md={4} key={i}>
                                     <Card variant="outlined" sx={{ borderRadius: 3 }}>
                                         <CardContent>
                                             <Typography variant="body2" sx={{ opacity: 0.7 }}>
@@ -763,6 +871,7 @@ export default function YuklemedeBekleme() {
                         <Tabs value={gorunum} onChange={(_, v) => setGorunum(v)} sx={{ mb: 1 }}>
                             <Tab value="liste" label="Liste" />
                             <Tab value="ozet" label="Kim bekleme yapmış? (Özet)" />
+                            <Tab value="dashboard" label="Dashboard" />
                         </Tabs>
                     </Box>
 
@@ -801,7 +910,7 @@ export default function YuklemedeBekleme() {
                                 }}
                             />
                         </Box>
-                    ) : (
+                    ) : gorunum === "ozet" ? (
                         // ÖZET
                         <Box sx={{ px: { xs: 1, md: 2 }, pb: 2 }}>
                             <Grid container spacing={1.5}>
@@ -853,12 +962,97 @@ export default function YuklemedeBekleme() {
                                 </Grid>
                             </Grid>
                         </Box>
+                    ) : (
+                        // DASHBOARD
+                        <Box sx={{ px: { xs: 1, md: 2 }, pb: 2 }}>
+                            <Grid container spacing={1.5}>
+                                {/* Donut: Bekleme Şiddeti */}
+                                <Grid item xs={12} md={4}>
+                                    <Card variant="outlined" sx={{ borderRadius: 3, height: 360 }}>
+                                        <CardContent sx={{ height: "100%" }}>
+                                            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                                                Bekleme Şiddeti Dağılımı
+                                            </Typography>
+                                            <PieChart
+                                                height={280}
+                                                series={[
+                                                    {
+                                                        data: severityPie,
+                                                        innerRadius: 60,
+                                                        valueFormatter: (d) => `${d.value} kayıt`,
+                                                    },
+                                                ]}
+                                                slotProps={{ legend: { direction: "column", position: { vertical: "middle", horizontal: "right" } } }}
+                                            />
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+
+                                {/* Donut: Durum */}
+                                <Grid item xs={12} md={4}>
+                                    <Card variant="outlined" sx={{ borderRadius: 3, height: 360 }}>
+                                        <CardContent sx={{ height: "100%" }}>
+                                            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                                                Durum Dağılımı
+                                            </Typography>
+                                            <PieChart
+                                                height={280}
+                                                series={[
+                                                    {
+                                                        data: statusPie,
+                                                        innerRadius: 60,
+                                                        valueFormatter: (d) => `${d.value} kayıt`,
+                                                    },
+                                                ]}
+                                                slotProps={{ legend: { direction: "column", position: { vertical: "middle", horizontal: "right" } } }}
+                                            />
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+
+                                {/* Bar: Yükleme İline Göre Toplam Bekleme */}
+                                <Grid item xs={12} md={4}>
+                                    <Card variant="outlined" sx={{ borderRadius: 3, height: 360 }}>
+                                        <CardContent sx={{ height: "100%" }}>
+                                            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                                                Toplam Bekleme (İllere Göre) — İlk 10
+                                            </Typography>
+                                            <BarChart
+                                                height={280}
+                                                xAxis={[{ scaleType: "band", dataKey: "name", tickLabelInterval: (v) => v % 1 === 0 }]}
+                                                series={[{ dataKey: "total", label: "dk (toplam)" }]}
+                                                dataset={topCityBars}
+                                                margin={{ top: 10, right: 10, bottom: 30, left: 40 }}
+                                            />
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+
+                                {/* Çizgi: Günlük Ortalama Bekleme */}
+                                <Grid item xs={12}>
+                                    <Card variant="outlined" sx={{ borderRadius: 3 }}>
+                                        <CardContent>
+                                            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                                                Günlük Ortalama Bekleme
+                                            </Typography>
+                                            <LineChart
+                                                height={300}
+                                                xAxis={[{ dataKey: "label" }]}
+                                                series={[{ dataKey: "avg", label: "dk (ortalama)" }]}
+                                                dataset={dailyAvgLine}
+                                                margin={{ top: 10, right: 20, bottom: 20, left: 40 }}
+                                            />
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+                            </Grid>
+                        </Box>
                     )}
                 </Paper>
             </Container>
 
             {/* Detay çekmecesi */}
-            <Drawer anchor="right" open={openDrawer} onClose={closeDetail} PaperProps={{ sx: { width: { xs: "100%", md: 520 } } }}>
+            <Drawer anchor="right" open={openDrawer} onClose={closeDetail} PaperProps={{ sx: { width: { xs: "100%", md: 640 } } }}>
                 <Box sx={{ p: 2 }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <Typography variant="h6" fontWeight={800}>
@@ -925,6 +1119,26 @@ export default function YuklemedeBekleme() {
                                     </Typography>
                                 )}
                             </Stack>
+
+                            <Divider sx={{ my: 1.5 }} />
+
+                            <Typography variant="subtitle2" sx={{ opacity: 0.75 }}>
+                                Nokta Bazlı Bekleme (Yükleme Noktası Dahil)
+                            </Typography>
+                            <Box sx={{ height: 360 }}>
+                                <DataGrid
+                                    rows={stopRows}
+                                    columns={stopColumns}
+                                    density="compact"
+                                    disableRowSelectionOnClick
+                                    pageSizeOptions={[5, 10, 25]}
+                                    initialState={{
+                                        pagination: { paginationModel: { page: 0, pageSize: 10 } },
+                                        sorting: { sortModel: [{ field: "sira", sort: "asc" }] },
+                                    }}
+                                    sx={{ border: 0 }}
+                                />
+                            </Box>
                         </Stack>
                     ) : null}
                 </Box>

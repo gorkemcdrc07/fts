@@ -31,9 +31,10 @@ import TedarikciMasraf from "./Hakedisler/TedarikciMasraf";
 import AracCariVeFiyat from "./Hakedisler/AracCariVeFiyat";
 import HakedisSeferleri from "./Hakedisler/HakedisSeferleri";
 
-// KPI & RAPORLAR  (klasör: raporlar, dosyalar: kpiOlcumu.js, yuklemedeBekleme.js)
+// KPI & RAPORLAR
 import KpiOlcumu from "./raporlar/kpiOlcumu";
 import YuklemedeBekleme from "./raporlar/yuklemedeBekleme";
+import ProjeLokasyonRaporlari from "./raporlar/ProjeLokasyonRaporlari"; // ✅ Eklendi
 
 // Layout
 import AppLayout from "./layout/AppLayout";
@@ -77,6 +78,7 @@ function App() {
 
                             {/* Raporlar */}
                             <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
+                            <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} /> {/* ✅ Yeni rota */}
 
                             {/* Varsayılan */}
                             <Route path="*" element={<Navigate to="/anasayfa" replace />} />

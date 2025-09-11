@@ -1,5 +1,5 @@
 // src/kullanıcıIslemleri/Tamamlananlar.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
@@ -29,13 +29,9 @@ import {
 import { alpha, useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import SummarizeIcon from "@mui/icons-material/Summarize";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
-
-
 
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -50,8 +46,7 @@ import {
 } from "@mui/x-data-grid";
 
 /* ---------------- helpers ---------------- */
-// (tüm importlar bitti)
-const HOME_PATH = "/anasayfa"; // gerçek ana sayfa rotanız ne ise onu yazın (örn: "/", "/dashboard")
+const HOME_PATH = "/anasayfa";
 
 const fmtDate = (v) => (v ? new Date(v) : null);
 const fmtDateText = (v) => (v ? new Date(v).toLocaleDateString("tr-TR") : "-");
@@ -63,8 +58,33 @@ const humanDur = (millis) => {
     const d = Math.floor(totalM / (60 * 24));
     const h = Math.floor((totalM % (60 * 24)) / 60);
     const m = totalM % 60;
-    return [d ? `${d}g` : null, h ? `${h}s` : null, m ? `${m}d` : null].filter(Boolean).join(" ") || "0d";
+    return [d ? `${d}g` : null, h ? `${h}s` : null, m ? `${m}d` : null]
+        .filter(Boolean)
+        .join(" ") || "0d";
 };
+
+// Ortalama hız (km/s)
+const KM_HIZ = 65;
+// KGM / AETR benzeri sürüş kuralları
+const BREAK_EVERY_H = 4.5;     // her 4.5 saat sürüşten sonra
+const BREAK_MIN = 45;          // 45 dk mola
+const DAILY_DRIVE_LIMIT_H = 9; // günde maks. 9 saat sürüş
+const DAILY_REST_H = 11;       // günlük dinlenme 11 saat
+
+
+// "1.685,69" -> 1685.69 ; "440,78" -> 440.78
+const toNumberFromTr = (txt) => {
+    if (txt == null) return null;
+    const s = String(txt).trim();
+    if (!s) return null;
+    const normalized = s.replace(/\./g, "").replace(",", ".");
+    const val = Number(normalized);
+    return Number.isFinite(val) ? val : null;
+};
+
+// "A; B ;C" -> ["A","B","C"]
+const splitList = (txt) =>
+    (txt ? String(txt).split(";").map((s) => s.trim()).filter(Boolean) : []) || [];
 
 /* ---------------- toolbar ---------------- */
 function Toolbar({ onExport, pageSize, onPageSizeChange, statText, onExportWithDetails }) {
@@ -109,10 +129,243 @@ function Toolbar({ onExport, pageSize, onPageSizeChange, statText, onExportWithD
 
 /* ---------------- quick chips for date ranges ---------------- */
 const now = new Date();
-const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+/* ---------------- Mesafe & ETA yardımcıları ---------------- */
+
+// (yuklemeIl|yuklemeIlce__teslimIl|teslimIlce) -> km cache
+const distanceCache = new Map();
+const distanceKey = (a, b, c, d) =>
+    `${(a || "").toUpperCase()}|${(b || "").toUpperCase()}__${(c || "").toUpperCase()}|${(d || "").toUpperCase()}`;
+
+async function fetchDistanceKmFromTable({ fromIl, fromIlce, toIl, toIlce }) {
+    const key = distanceKey(fromIl, fromIlce, toIl, toIlce);
+    if (distanceCache.has(key)) return distanceCache.get(key);
+
+    const { data, error } = await supabase
+        .from("mesafeler")
+        .select("mesafe")
+        .eq("yukleme_il", fromIl ?? "")
+        .eq("yukleme_ilce", fromIlce ?? "")
+        .eq("teslim_il", toIl ?? "")
+        .eq("teslim_ilce", toIlce ?? "")
+        .limit(1)
+        .maybeSingle();
+
+    if (error) {
+        console.error("Mesafe sorgu hatası:", error);
+        distanceCache.set(key, null);
+        return null;
+    }
+
+    const km = toNumberFromTr(data?.mesafe);
+    distanceCache.set(key, km);
+    return km;
+}
+
+const addHoursMs = (date, hours) => new Date(new Date(date).getTime() + hours * 3600000);
+
+// Yükleme tarafında "ilk nokta", Teslim tarafında "tüm noktalar" (sıralı) alınır
+const pickOrigin = (row) => {
+    const ils = splitList(row?.yukleme_ili);
+    const ilces = splitList(row?.yukleme_ilcesi);
+    const il = (ils[0] || row?.yukleme_ili || "").toUpperCase();
+    const ilce = (ilces[0] || row?.yukleme_ilcesi || "").toUpperCase();
+    return { il, ilce };
+};
+
+const pickDeliveries = (row) => {
+    const ils = splitList(row?.teslim_ili).map((s) => s.toUpperCase());
+    const ilces = splitList(row?.teslim_ilcesi).map((s) => s.toUpperCase());
+    const n = Math.min(ils.length, ilces.length);
+    const arr = [];
+    for (let i = 0; i < n; i++) arr.push({ il: ils[i], ilce: ilces[i] });
+
+    // Tekil yapı desteği
+    if (!arr.length && (row?.teslim_ili || row?.teslim_ilcesi)) {
+        arr.push({
+            il: String(row?.teslim_ili || "").toUpperCase(),
+            ilce: String(row?.teslim_ilcesi || "").toUpperCase(),
+        });
+    }
+    return arr;
+};
+
+// Aynı il/ilçe bacağı 0 km
+const sameLeg = (from, to) => from.il === to.il && from.ilce === to.ilce;
+
+// Çok-bacaklı toplam km: Origin -> D1 -> D2 -> ... zincirindeki tüm bacaklar toplanır
+async function computeMultiLegKm(row) {
+    const origin = pickOrigin(row);
+    const deliveries = pickDeliveries(row);
+    if (!origin.il || !origin.ilce || deliveries.length === 0) return null;
+
+    let total = 0;
+    let from = origin;
+
+    for (const to of deliveries) {
+        if (sameLeg(from, to)) {
+            from = to; // aynı yerdeyse 0 km ve sıradaki bacağı başlangıç yap
+            continue;
+        }
+
+        const km = await fetchDistanceKmFromTable({
+            fromIl: from.il,
+            fromIlce: from.ilce,
+            toIl: to.il,
+            toIlce: to.ilce,
+        });
+
+        if (km == null) return null; // istersen continue ile "eksik bacağı" atlayabilirsin
+        total += km;
+        from = to;
+    }
+    return total;
+}
+
+// Başlangıç zamanı: satırın kendi "yukleme_cikis" (yoksa detaylardan en erken)
+async function pickStartTime(row) {
+    const direct = row?.yukleme_cikis || row?.yukleme_cikis_tarihi;
+    if (direct) {
+        const t = new Date(direct);
+        if (!isNaN(t)) return t;
+    }
+
+    const { data: detaylar, error } = await supabase
+        .from("tamamlanan_detaylar")
+        .select("yukleme_cikis")
+        .eq("sefer_no", row.sefer_no);
+
+    if (error) {
+        console.error("Detay sorgu hatası:", error);
+        return null;
+    }
+
+    const times = (detaylar ?? [])
+        .map((d) => d.yukleme_cikis && new Date(d.yukleme_cikis))
+        .filter((d) => d && !isNaN(d));
+
+    if (!times.length) return null;
+    return new Date(Math.min(...times.map((t) => t.getTime())));
+}
+
+// En geç (max) teslim_varis'i getirir (multi-stop için)
+async function pickLatestTeslimVaris(row) {
+    try {
+        const { data, error } = await supabase
+            .from("tamamlanan_detaylar")
+            .select("teslim_varis")
+            .eq("sefer_no", row.sefer_no);
+
+        if (error) {
+            console.error("Detay teslim_varis sorgu hatası:", error);
+            return null;
+        }
+
+        const times = (data || [])
+            .map(d => d?.teslim_varis && new Date(d.teslim_varis))
+            .filter(d => d && !isNaN(d));
+
+        if (!times.length) return null;
+        return new Date(Math.max(...times.map(t => t.getTime()))).toISOString();
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+
+// KGM kurallarına göre ETA hesapla (4.5s/45dk, günlük 9s, günlük 11s dinlenme)
+function etaWithKGMRules(startDate, totalKm) {
+    if (!startDate || !Number.isFinite(totalKm) || totalKm <= 0) return null;
+
+    let t = new Date(startDate).getTime();      // ms olarak zaman damgası
+    let remainingDriveH = totalKm / KM_HIZ;     // gereken toplam sürüş saati
+    let sinceBreakH = 0;                        // son 45 dk moladan beri sürüş
+    let sinceDailyStartH = 0;                   // gün içi toplam sürüş
+
+    const H = 3600000;
+    const M = 60000;
+
+    while (remainingDriveH > 1e-6) {
+        // Günlük sürüş limiti dolduysa günlük dinlenme uygula
+        if (sinceDailyStartH >= DAILY_DRIVE_LIMIT_H) {
+            t += DAILY_REST_H * H;
+            sinceDailyStartH = 0;
+            sinceBreakH = 0;
+            continue;
+        }
+
+        // Bir sonraki zorunlu olay (mola / günlük limit) gelene kadar sürülebilecek süre
+        const untilBreak = BREAK_EVERY_H - sinceBreakH;
+        const untilDaily = DAILY_DRIVE_LIMIT_H - sinceDailyStartH;
+        const canDriveNow = Math.max(0, Math.min(remainingDriveH, untilBreak, untilDaily));
+
+        if (canDriveNow > 0) {
+            t += canDriveNow * H;
+            remainingDriveH -= canDriveNow;
+            sinceBreakH += canDriveNow;
+            sinceDailyStartH += canDriveNow;
+            if (remainingDriveH <= 1e-6) break; // hedefe vardık
+        }
+
+        // Mola şartı
+        if (sinceBreakH >= BREAK_EVERY_H && sinceDailyStartH < DAILY_DRIVE_LIMIT_H) {
+            t += BREAK_MIN * M;
+            sinceBreakH = 0;
+            continue;
+        }
+
+        // Günlük dinlenme (güvenlik için tekrar)
+        if (sinceDailyStartH >= DAILY_DRIVE_LIMIT_H) {
+            t += DAILY_REST_H * H;
+            sinceDailyStartH = 0;
+            sinceBreakH = 0;
+            continue;
+        }
+    }
+    return new Date(t);
+}
+
+
+async function computeEtaForRow(row) {
+    try {
+        // 1) Başlangıç = bu satırın yükleme çıkışı (fallback: detaylardan en erken)
+        const start = await pickStartTime(row);
+        if (!start) {
+            return { tahmini_varis: null, mesafe_km: null, baslangic: null };
+        }
+
+        // 2) Çok-bacaklı toplam mesafe
+        const totalKm = await computeMultiLegKm(row);
+
+        if (!totalKm || totalKm <= 0) {
+            return {
+                tahmini_varis: null,
+                mesafe_km: totalKm ?? null,
+                baslangic: start.toISOString(),   // her zaman orijinal yükleme çıkışı
+            };
+        }
+
+        // 3) Cumartesi kontrolü sadece ETA için
+        let etaStart = new Date(start);
+        if (etaStart.getDay() === 6) { // Cumartesi
+            etaStart = new Date(etaStart.getTime() + 24 * 3600000);
+        }
+
+        // 4) KGM kurallı ETA
+        const etaDate = etaWithKGMRules(etaStart, totalKm);
+        return {
+            tahmini_varis: etaDate ? etaDate.toISOString() : null,
+            mesafe_km: totalKm,
+            baslangic: start.toISOString(),   // kolon ve export için hep orijinal
+        };
+    } catch (e) {
+        console.error(e);
+        return { tahmini_varis: null, mesafe_km: null, baslangic: null };
+    }
+}
+
 
 export default function Tamamlananlar() {
     const theme = useTheme();
@@ -125,28 +378,33 @@ export default function Tamamlananlar() {
     const [rowCount, setRowCount] = useState(0);
     const [loading, setLoading] = useState(false);
 
-    // date range filter (server-side)
+    // tarih aralığı
     const [dateStart, setDateStart] = useState(startOfMonth);
     const [dateEnd, setDateEnd] = useState(now);
 
     // DataGrid server paging/sorting/filtering
-    const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 50 }); // 0-based
+    const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 50 });
     const [sortModel, setSortModel] = useState([]);
     const [filterModel, setFilterModel] = useState({ items: [] });
 
     // column visibility responsive
     const [columnVisibilityModel, setColumnVisibilityModel] = useState({});
 
+    // ETA enrichment
+    const [enrichedRows, setEnrichedRows] = useState([]);
+    const fetchSeqRef = useRef(0);
+
     // insights from current page
     const pageInsights = useMemo(() => {
-        const uniquePlates = new Set(rows.map((r) => r.plaka)).size;
-        const byCustomer = rows.reduce((acc, r) => {
+        const uniquePlates = new Set((enrichedRows.length ? enrichedRows : rows).map((r) => r.plaka)).size;
+        const dataSrc = enrichedRows.length ? enrichedRows : rows;
+        const byCustomer = dataSrc.reduce((acc, r) => {
             acc[r.musteri_adi || "-"] = (acc[r.musteri_adi || "-"] || 0) + 1;
             return acc;
         }, {});
         const topCustomer = Object.entries(byCustomer).sort((a, b) => b[1] - a[1])[0] || ["-", 0];
         return { uniquePlates, topCustomerName: topCustomer[0], topCustomerCount: topCustomer[1] };
-    }, [rows]);
+    }, [rows, enrichedRows]);
 
     // right drawer for details
     const [detailOpen, setDetailOpen] = useState(false);
@@ -188,6 +446,11 @@ export default function Tamamlananlar() {
                     `proje_adi.ilike.%${q}%`,
                     `yukleme_noktasi.ilike.%${q}%`,
                     `teslim_noktasi.ilike.%${q}%`,
+                    // Çoklu alanlar için tekil aramalar da çalışsın
+                    `yukleme_ili.ilike.%${q}%`,
+                    `yukleme_ilcesi.ilike.%${q}%`,
+                    `teslim_ili.ilike.%${q}%`,
+                    `teslim_ilcesi.ilike.%${q}%`,
                 ].join(",")
             );
         }
@@ -228,6 +491,63 @@ export default function Tamamlananlar() {
         if (!error) {
             setRows(data || []);
             setRowCount(count || 0);
+
+            // ETA enrichment (yarışları önlemek için sıralı sayaç)
+            const mySeq = ++fetchSeqRef.current;
+            (async () => {
+                const base = data || [];
+                const results = await Promise.all(
+                    base.map(async (r) => {
+                        const { tahmini_varis, mesafe_km, baslangic } = await computeEtaForRow(r);
+                        const latest_teslim_varis = await pickLatestTeslimVaris(r);
+
+                        // Durum ve fark (gerçek - ETA)
+                        let tamamlama_durumu = "-";
+                        let tamamlama_fark_ms = null;
+
+                        if (tahmini_varis && latest_teslim_varis) {
+                            const eta = new Date(tahmini_varis).getTime();
+                            const gercek = new Date(latest_teslim_varis).getTime();
+                            tamamlama_fark_ms = gercek - eta; // + ise geç, - ise erken
+
+                            if (gercek < eta) tamamlama_durumu = "Erken";
+                            else if (gercek > eta) tamamlama_durumu = "Geç";
+                            else tamamlama_durumu = "Tam Zamanında";
+                        }
+
+                        // ↓↓↓ YENİ: Süreleri hesapla
+                        let sure_plan_ms = null;   // ETA - başlangıç
+                        let sure_gercek_ms = null; // Gerçek - başlangıç
+                        if (baslangic && tahmini_varis) {
+                            sure_plan_ms = new Date(tahmini_varis).getTime() - new Date(baslangic).getTime();
+                        }
+                        if (baslangic && latest_teslim_varis) {
+                            sure_gercek_ms = new Date(latest_teslim_varis).getTime() - new Date(baslangic).getTime();
+                        }
+                        const sure_fark_ms = (sure_gercek_ms != null && sure_plan_ms != null)
+                            ? (sure_gercek_ms - sure_plan_ms)
+                            : null;
+                        // ↑↑↑ YENİ
+
+                        return {
+                            ...r,
+                            tahmini_varis,
+                            mesafe_km,
+                            tahmini_varis_baslangic: baslangic,
+                            latest_teslim_varis,
+                            tamamlama_durumu,
+                            tamamlama_fark_ms,
+                            // ↓↓↓ YENİ alanlar
+                            sure_plan_ms,
+                            sure_gercek_ms,
+                            sure_fark_ms,
+                        };
+                    })
+                );
+                if (fetchSeqRef.current === mySeq) {
+                    setEnrichedRows(results);
+                }
+            })();
         } else {
             console.error(error);
         }
@@ -235,7 +555,7 @@ export default function Tamamlananlar() {
     };
 
     useEffect(() => {
-        fetchPage({ page: 0 }); // ilk sayfa
+        fetchPage({ page: 0 });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -305,13 +625,15 @@ export default function Tamamlananlar() {
                 field: "yukleme_il_ilce",
                 headerName: "Yükleme İl/İlçe",
                 width: 170,
-                valueGetter: (value, row) => `${row?.yukleme_ili ?? ""} / ${row?.yukleme_ilcesi ?? ""}`,
+                valueGetter: (value, row) =>
+                    `${row?.yukleme_ili ?? ""} / ${row?.yukleme_ilcesi ?? ""}`,
             },
             {
                 field: "teslim_il_ilce",
                 headerName: "Teslim İl/İlçe",
                 width: 170,
-                valueGetter: (value, row) => `${row?.teslim_ili ?? ""} / ${row?.teslim_ilcesi ?? ""}`,
+                valueGetter: (value, row) =>
+                    `${row?.teslim_ili ?? ""} / ${row?.teslim_ilcesi ?? ""}`,
             },
             {
                 field: "atama_tarihi",
@@ -326,15 +648,119 @@ export default function Tamamlananlar() {
                 valueGetter: (value, row) => fmtDateText(row?.sefer_tarihi),
             },
             {
-                field: "arac_statu",
-                headerName: "Durum",
+                field: "mesafe_km",
+                headerName: "Mesafe (km)",
                 width: 120,
-                renderCell: (params) => <Chip size="small" label={params.value ?? "-"} />,
+                valueGetter: (v, row) =>
+                    row?.mesafe_km != null ? Math.round(row.mesafe_km) : null,
+            },
+            {
+                field: "tahmini_varis_baslangic",
+                headerName: "Yükleme Çıkış",
+                width: 180,
+                valueGetter: (v, row) =>
+                    row?.tahmini_varis_baslangic
+                        ? fmtDateTimeText(row.tahmini_varis_baslangic)
+                        : "-",
+            },
+            {
+                field: "tahmini_varis",
+                headerName: "Tahmini Varış",
+                width: 220,
+                renderCell: ({ row }) => (
+                    <Stack sx={{ lineHeight: 1 }}>
+                        <Typography variant="body2">
+                            {row?.tahmini_varis ? fmtDateTimeText(row.tahmini_varis) : "-"}
+                        </Typography>
+                        {row?.tahmini_varis_baslangic && (
+                            <Typography variant="caption" sx={{ opacity: 0.75 }}>
+                                Başlangıç: {fmtDateTimeText(row.tahmini_varis_baslangic)}
+                            </Typography>
+                        )}
+                    </Stack>
+                ),
+            },
+            // ▼ Tahmini Varış'ın hemen altında
+            {
+                field: "latest_teslim_varis",
+                headerName: "Teslim Varış (En Geç)",
+                width: 220,
+                valueGetter: (v, row) =>
+                    row?.latest_teslim_varis
+                        ? fmtDateTimeText(row.latest_teslim_varis)
+                        : "-",
+            },
+            // ▼ ETA karşılaştırma durumu
+            {
+                field: "tamamlama_durumu",
+                headerName: "Durum (ETA Karşılaştırma)",
+                width: 180,
+                renderCell: ({ row }) => {
+                    const val = row?.tamamlama_durumu;
+                    let color = "inherit";
+                    if (val === "Erken") color = "lightgreen";
+                    if (val === "Geç") color = "salmon";
+                    if (val === "Tam Zamanında") color = "lightblue";
+                    return (
+                        <Typography variant="body2" sx={{ fontWeight: 600, color }}>
+                            {val || "-"}
+                        </Typography>
+                    );
+                },
+            },
+            // ▼ Planlanan Süre (ETA - Başlangıç)
+            {
+                field: "sure_plan",
+                headerName: "Planlanan Süre (ETA)",
+                width: 170,
+                valueGetter: (v, row) =>
+                    row?.sure_plan_ms != null ? humanDur(row.sure_plan_ms) : "-",
+            },
+            // ▼ Gerçek Süre (Gerçek - Başlangıç)
+            {
+                field: "sure_gercek",
+                headerName: "Gerçek Süre",
+                width: 150,
+                valueGetter: (v, row) =>
+                    row?.sure_gercek_ms != null ? humanDur(row.sure_gercek_ms) : "-",
+            },
+            // ▼ Süre Farkı (Gerçek - Planlanan)
+            {
+                field: "sure_fark",
+                headerName: "Süre Farkı",
+                width: 140,
+                valueGetter: (v, row) => {
+                    const diff = row?.sure_fark_ms;
+                    if (diff == null) return "-";
+                    const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
+                    const abs = Math.abs(diff);
+                    const totalM = Math.floor(abs / 60000);
+                    const d = Math.floor(totalM / (60 * 24));
+                    const h = Math.floor((totalM % (60 * 24)) / 60);
+                    const m = totalM % 60;
+                    const parts = [];
+                    if (d) parts.push(`${d}g`);
+                    if (h) parts.push(`${h}s`);
+                    if (m || (!d && !h)) parts.push(`${m}d`);
+                    return `${sign}${parts.join(" ")}`;
+                },
+                renderCell: ({ value }) => {
+                    let color = "inherit";
+                    if (typeof value === "string") {
+                        if (value.startsWith("+")) color = "salmon";        // plan olandan uzun
+                        else if (value.startsWith("-")) color = "lightgreen"; // plan olandan kısa
+                        else color = "lightblue";
+                    }
+                    return (
+                        <Typography variant="body2" sx={{ fontWeight: 600, color }}>
+                            {value}
+                        </Typography>
+                    );
+                },
             },
         ],
         [openDetails]
     );
-
     // detay metrikleri (tek sefer için)
     const detailMetrics = useMemo(() => {
         if (!detailRows?.length) return null;
@@ -362,8 +788,9 @@ export default function Tamamlananlar() {
 
     /* ----------- export current page ----------- */
     const exportExcel = () => {
-        if (!rows.length) return alert("Aktarılacak veri yok.");
-        const sheet = rows.map((s) => ({
+        const src = enrichedRows.length ? enrichedRows : rows;
+        if (!src.length) return alert("Aktarılacak veri yok.");
+        const sheet = src.map((s) => ({
             SeferNo: s.sefer_no,
             Plaka: s.plaka,
             Treyler: s.treyler,
@@ -379,6 +806,12 @@ export default function Tamamlananlar() {
             AtamaTarihi: fmtDateTimeText(s.atama_tarihi),
             SeferTarihi: fmtDateText(s.sefer_tarihi),
             Durum: s.arac_statu,
+            MesafeKm: s.mesafe_km ?? "",
+            TahminiVaris: s.tahmini_varis ? fmtDateTimeText(s.tahmini_varis) : "",
+            TahminiVarisBaslangic: s.tahmini_varis_baslangic ? fmtDateTimeText(s.tahmini_varis_baslangic) : "",
+            TeslimVarisEnGec: s.latest_teslim_varis ? fmtDateTimeText(s.latest_teslim_varis) : "",
+
+
         }));
         const ws = XLSX.utils.json_to_sheet(sheet);
         const wb = XLSX.utils.book_new();
@@ -389,9 +822,10 @@ export default function Tamamlananlar() {
 
     // export with details
     const exportExcelWithDetails = async () => {
-        if (!rows.length) return alert("Aktarılacak veri yok.");
+        const src = enrichedRows.length ? enrichedRows : rows;
+        if (!src.length) return alert("Aktarılacak veri yok.");
         const all = [];
-        for (const s of rows) {
+        for (const s of src) {
             const { data } = await supabase
                 .from("tamamlanan_detaylar")
                 .select("*")
@@ -405,6 +839,12 @@ export default function Tamamlananlar() {
                     Musteri: s.musteri_adi,
                     Proje: s.proje_adi,
                     Asama: "Detay yok",
+                    MesafeKm: s.mesafe_km ?? "",
+                    TahminiVaris: s.tahmini_varis ? fmtDateTimeText(s.tahmini_varis) : "",
+                    TahminiVarisBaslangic: s.tahmini_varis_baslangic ? fmtDateTimeText(s.tahmini_varis_baslangic) : "",
+                    TeslimVarisEnGec: s.latest_teslim_varis ? fmtDateTimeText(s.latest_teslim_varis) : "",
+
+
                 });
                 continue;
             }
@@ -430,6 +870,10 @@ export default function Tamamlananlar() {
                     Sure_Transit: humanDur(ms(d.yukleme_cikis, d.teslim_varis)),
                     Sure_Teslim: humanDur(ms(d.teslim_varis, d.teslim_cikis)),
                     ToplamSure: humanDur(toplamSure),
+                    MesafeKm: s.mesafe_km ?? "",
+                    TahminiVaris: s.tahmini_varis ? fmtDateTimeText(s.tahmini_varis) : "",
+                    TeslimVarisEnGec: s.latest_teslim_varis ? fmtDateTimeText(s.latest_teslim_varis) : "",
+
                 });
             }
         }
@@ -490,27 +934,16 @@ export default function Tamamlananlar() {
                         Tamamlanan Seferler
                     </Typography>
                     <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                        Raporlar • tarih aralığı • detay metrikleri
+                        Raporlar • tarih aralığı • detay metrikleri • ETA (65 km/s)
                     </Typography>
                 </Stack>
 
                 {/* Sağ aksiyonlar */}
                 <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
-                    {/* ✅ Geri & Anasayfa */}
-                    <Button
-                        size="small"
-                        variant="text"
-                        startIcon={<ArrowBackIosNewIcon />}
-                        onClick={() => navigate(-1)}
-                    >
+                    <Button size="small" variant="text" startIcon={<ArrowBackIosNewIcon />} onClick={() => navigate(-1)}>
                         Geri
                     </Button>
-                    <Button
-                        size="small"
-                        variant="text"
-                        startIcon={<HomeOutlinedIcon />}
-                        onClick={() => navigate(HOME_PATH)}
-                    >
+                    <Button size="small" variant="text" startIcon={<HomeOutlinedIcon />} onClick={() => navigate(HOME_PATH)}>
                         Anasayfa
                     </Button>
 
@@ -556,7 +989,7 @@ export default function Tamamlananlar() {
                 </Stack>
             </Stack>
 
-            {/* Üstte hızlı özet kartları (sayfa verisi) */}
+            {/* Üstte hızlı özet kartları */}
             <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
                 <Paper sx={{ p: 1.25, borderRadius: 2, flex: 1, border: "1px solid rgba(255,255,255,0.06)" }}>
                     <Typography variant="caption" color="text.secondary">
@@ -599,7 +1032,7 @@ export default function Tamamlananlar() {
                 }}
             >
                 <DataGrid
-                    rows={rows}
+                    rows={enrichedRows.length ? enrichedRows : rows}
                     columns={columns}
                     columnVisibilityModel={columnVisibilityModel}
                     onColumnVisibilityModelChange={setColumnVisibilityModel}
@@ -621,17 +1054,7 @@ export default function Tamamlananlar() {
                     filterModel={filterModel}
                     onFilterModelChange={setFilterModel}
                     slots={{ toolbar: Toolbar }}
-                    components={{ Toolbar }}
                     slotProps={{
-                        toolbar: {
-                            onExport: exportExcel,
-                            onExportWithDetails: exportExcelWithDetails,
-                            pageSize: paginationModel.pageSize,
-                            onPageSizeChange: (v) => setPaginationModel((p) => ({ ...p, page: 0, pageSize: v })),
-                            statText,
-                        },
-                    }}
-                    componentsProps={{
                         toolbar: {
                             onExport: exportExcel,
                             onExportWithDetails: exportExcelWithDetails,

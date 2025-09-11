@@ -261,7 +261,18 @@ export default function ReelAtananSeferler() {
 
             const res = await fetch(`${API_BASE_URL}/api/proxy/tmsdespatches`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ startDate: start, endDate: end, userId: 1 }),
+                body: JSON.stringify({
+                    startDate: start,        // örn: 2025-09-11T00:00:00
+                    endDate: end,            // örn: 2025-09-11T23:59:59
+                    userId: 1,
+                    CustomerId: 0,
+                    SupplierId: 0,
+                    DriverId: 0,
+                    TMSDespatchId: 0,
+                    VehicleId: 0,
+                    DocumentPrint: "",
+                    WorkingTypesId: [3,4]
+                }),
             });
             if (!res.ok) throw new Error(`API Hatası: ${res.status} ${res.statusText}`);
             const json = await res.json();

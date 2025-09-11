@@ -1,7 +1,6 @@
 // src/Sidebar.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { supabase } from "./supabaseClient";
 
 // MUI
 import {
@@ -22,6 +21,7 @@ import {
     Chip,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
+
 // Icons
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -78,7 +78,7 @@ export default function Sidebar(props) {
     const [afyonMenuAcik, setAfyonMenuAcik] = useState(false);
     const [hakedisMenuAcik, setHakedisMenuAcik] = useState(false);
 
-    // Counters / user
+    // Counters / user (şimdilik placeholder)
     const [okunmamisGorevSayisi, setOkunmamisGorevSayisi] = useState(0);
     const [bildirimSayisi, setBildirimSayisi] = useState(0);
     const [gorevBildirimSayisi, setGorevBildirimSayisi] = useState(0);
@@ -95,47 +95,54 @@ export default function Sidebar(props) {
         if (id) setKullaniciIdState(id);
     }, []);
 
-    // === YENİ: Aktif route’a göre ilgili kategoriyi otomatik aç ===
+    // Aktif route’a göre ilgili kategoriyi otomatik aç
     useEffect(() => {
         const p = location.pathname || "";
-
         const anyStartsWith = (arr) => arr.some((x) => p === x || p.startsWith(x + "/"));
 
-        setKullaniciMenuAcik(anyStartsWith(["/planlama", "/plaka-onerisi", "/seferler", "/tamamlanan-seferler"]));
-        setAracMenuAcik(anyStartsWith(["/arac/yonetim", "/arac/izin-girisi", "/arac/kesinti-girisi"]));
-        setRaporMenuAcik(anyStartsWith([
-            "/raporlar/kpi-olcumu",
-            "/raporlar/lokasyon-rapor",
-            "/raporlar/yuklemede-bekleme",   // <-- yeni sayfa burada
-            "/raporlar/teslimde-bekleme",
-            "/raporlar/yuklemede-gecikme",
-            "/raporlar/teslimde-gecikme",
-            "/raporlar/sefer-sureleri",
-            "/raporlar/plaka-bazli",
-        ]));
-        setHakedisMenuAcik(anyStartsWith([
-            "/hakedis/tedarikci-masraf",
-            "/hakedis/arac-cari-ve-fiyat",
-            "/hakedis/hakedis-seferleri",
-        ]));
-        setAfyonMenuAcik(anyStartsWith([
-            "/afyon/seferler",
-            "/afyon/araclar",
-        ]));
-        setGorevMenuAcik(anyStartsWith([
-            "/gorevler/tum",
-            "/gorevler/ata",
-            "/gorevler/benim",
-        ]));
+        setKullaniciMenuAcik(
+            anyStartsWith([
+                "/planlama",
+                "/plaka-onerisi",
+                "/seferler",
+                "/tamamlanan-seferler",
+            ])
+        );
+        setAracMenuAcik(
+            anyStartsWith(["/arac/yonetim", "/arac/izin-girisi", "/arac/kesinti-girisi"])
+        );
+        setRaporMenuAcik(
+            anyStartsWith([
+                "/raporlar/kpi-olcumu",
+                "/raporlar/lokasyon-rapor", // 🔗 Proje & Lokasyon Bazlı Raporlar
+                "/raporlar/yuklemede-bekleme",
+                "/raporlar/teslimde-bekleme",
+                "/raporlar/yuklemede-gecikme",
+                "/raporlar/teslimde-gecikme",
+                "/raporlar/sefer-sureleri",
+                "/raporlar/plaka-bazli",
+            ])
+        );
+        setHakedisMenuAcik(
+            anyStartsWith([
+                "/hakedis/tedarikci-masraf",
+                "/hakedis/arac-cari-ve-fiyat",
+                "/hakedis/hakedis-seferleri",
+            ])
+        );
+        setAfyonMenuAcik(anyStartsWith(["/afyon/seferler", "/afyon/araclar"]));
+        setGorevMenuAcik(
+            anyStartsWith(["/gorevler/tum", "/gorevler/ata", "/gorevler/benim"])
+        );
     }, [location.pathname]);
 
     // Menü tanımları
     const kullaniciAltMenuler = useMemo(
         () => [
-            { ad: "PLANLAMA", yol: "/planlama", ikon: <CalendarMonthIcon /> },
-            { ad: "PLAKA ÖNERİSİ", yol: "/plaka-onerisi", ikon: <AssignmentIcon /> },
-            { ad: "AKTİF SEFERLER", yol: "/seferler", ikon: <LocalShippingIcon /> },
-            { ad: "TAMAMLANAN SEFERLER", yol: "/tamamlanan-seferler", ikon: <CheckCircleIcon /> },
+            { ad: "Planlama", yol: "/planlama", ikon: <CalendarMonthIcon /> },
+            { ad: "Plaka Önerisi", yol: "/plaka-onerisi", ikon: <AssignmentIcon /> },
+            { ad: "Aktif Seferler", yol: "/seferler", ikon: <LocalShippingIcon /> },
+            { ad: "Tamamlanan Seferler", yol: "/tamamlanan-seferler", ikon: <CheckCircleIcon /> },
         ],
         []
     );
@@ -152,8 +159,12 @@ export default function Sidebar(props) {
     const raporAltMenuler = useMemo(
         () => [
             { ad: "KPI Ölçümü", yol: "/raporlar/kpi-olcumu", ikon: <AssessmentIcon /> },
-            { ad: "Proje & Lokasyon Bazlı Raporlar", yol: "/raporlar/lokasyon-rapor", ikon: <MapIcon /> },
-            { ad: "Yüklemede Bekleme", yol: "/raporlar/yuklemede-bekleme", ikon: <ScheduleIcon /> }, // <-- yeni
+            {
+                ad: "Proje & Lokasyon Bazlı Raporlar",
+                yol: "/raporlar/lokasyon-rapor", // 🔗 App.jsx’te ProjeLokasyonRaporlari ile eşleyin
+                ikon: <MapIcon />,
+            },
+            { ad: "Yüklemede Bekleme", yol: "/raporlar/yuklemede-bekleme", ikon: <ScheduleIcon /> },
             { ad: "Teslimde Bekleme", yol: "/raporlar/teslimde-bekleme", ikon: <AvTimerIcon /> },
             { ad: "Yüklemede Gecikme", yol: "/raporlar/yuklemede-gecikme", ikon: <QueryStatsIcon /> },
             { ad: "Teslimde Gecikme", yol: "/raporlar/teslimde-gecikme", ikon: <QueryStatsIcon /> },
@@ -181,7 +192,7 @@ export default function Sidebar(props) {
         []
     );
 
-    // === YENİ: aktiflik kontrolü (alt route’ları da yakalar)
+    // aktiflik kontrolü (alt route’ları da yakalar)
     const isActivePath = (path) =>
         location.pathname === path || location.pathname.startsWith(path + "/");
 
@@ -378,6 +389,7 @@ export default function Sidebar(props) {
                                 icon={m.ikon}
                                 active={isActivePath(m.yol)}
                                 onClick={() => go(m.yol)}
+                                badge={m.ad === "Tüm Görevler" ? gorevBildirimSayisi : 0}
                             />
                         ))}
                     </Collapse>

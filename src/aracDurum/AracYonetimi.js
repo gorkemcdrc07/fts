@@ -1,34 +1,75 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
+// MUI
 import {
-    AppBar, Toolbar, Typography, IconButton, Button, Tabs, Tab,
-    Box, Grid, Paper, Chip, TextField, Drawer, Divider, Tooltip,
-    Dialog, DialogActions, DialogContent, DialogTitle, Snackbar, Alert,
-    Stack, InputAdornment
+    AppBar,
+    Toolbar,
+    Typography,
+    IconButton,
+    Button,
+    Tabs,
+    Tab,
+    Box,
+    Grid,
+    Paper,
+    Chip,
+    TextField,
+    Drawer,
+    Divider,
+    Tooltip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Snackbar,
+    Alert,
+    Stack,
+    InputAdornment,
+    CircularProgress,
+    Badge,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import {
-    Add as AddIcon, FilterList as FilterListIcon, Download as DownloadIcon,
-    Info as InfoIcon, Edit as EditIcon, Delete as DeleteIcon,
-    Close as CloseIcon, Search as SearchIcon,
-    ArrowBackIosNew as ArrowBackIcon, HomeOutlined as HomeIcon    // 👈 EKLENDİ
+    Add as AddIcon,
+    FilterList as FilterListIcon,
+    Download as DownloadIcon,
+    Info as InfoIcon,
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+    Close as CloseIcon,
+    Search as SearchIcon,
+    ArrowBackIosNew as ArrowBackIcon,
+    HomeOutlined as HomeIcon,
+    Refresh as RefreshIcon,
+    Clear as ClearIcon,
 } from "@mui/icons-material";
 
 import { DataGrid, GridToolbar } from "@mui/x-data-grid";
 
-/* ===================== Zoom'dan Bağımsız Ekrana Sığdırma ===================== */
-// tüm importlar bitti
-const HOME_PATH = "/anasayfa"; // sizde hangi rota ise: "/dashboard" vb.
+/* ===================== Sabitler & Yardımcılar ===================== */
+const HOME_PATH = "/anasayfa";
 
 const BASE_WIDTH = 1920;
 const BASE_HEIGHT = 1080;
-const MAX_SCALE = Infinity; // istersen 1.25 gibi sınırlayabilirsin
+const MAX_SCALE = Infinity;
 
+const GRADIENT_BG =
+    "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.15), transparent 40%)," +
+    "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.20), transparent 50%)," +
+    "linear-gradient(180deg, #050816 0%, #0B1220 100%)";
+
+const glass = (opacityTop = 0.92, opacityBottom = 0.75) => ({
+    background: `linear-gradient(180deg, rgba(15,23,42,${opacityTop}) 0%, rgba(15,23,42,${opacityBottom}) 100%)`,
+    backdropFilter: "blur(10px)",
+    border: "1px solid rgba(255,255,255,0.08)",
+});
+
+/* ===================== Ölçekleme: Zoom'dan Bağımsız ===================== */
 function useScaleToFit(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = MAX_SCALE) {
     const [scale, setScale] = useState(1);
     useEffect(() => {
@@ -53,7 +94,7 @@ function useScaleToFit(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = MAX_S
     return scale;
 }
 
-function ScaleToFit({ children }: { children: React.ReactNode }) {
+function ScaleToFit({ children }) {
     const scale = useScaleToFit();
 
     return (
@@ -64,10 +105,7 @@ function ScaleToFit({ children }: { children: React.ReactNode }) {
                 overflow: "hidden",
                 display: "grid",
                 placeItems: "center",
-                background:
-                    "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.15), transparent 40%)," +
-                    "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.20), transparent 50%)," +
-                    "linear-gradient(180deg, #050816 0%, #0B1220 100%)",
+                background: GRADIENT_BG,
             }}
         >
             <Box
@@ -84,21 +122,40 @@ function ScaleToFit({ children }: { children: React.ReactNode }) {
         </Box>
     );
 }
-/* ============================================================================ */
+
+/* ===================== Util Fonksiyonlar ===================== */
 
 const BOS_FORM = {
-    plaka: "", treyler: "", surucu_adi: "", surucu_telefon: "", surucu_tc: "",
-    ikamet_adresi: "", cekici_ruhsat_no: "", dorse_ruhsat_no: "", tedarikci_isim: "",
-    cekici_muayene: "", dorse_muayene: "", trafik_sigorta: "", arac_yil: "",
-    dorse_yil: "", bolge: "", arac_tip: "", dorse_tip: "", liftmaster: "",
-    gps_seri_no: "", gps_sim_kart_no: "", odak_k1: "",
+    plaka: "",
+    treyler: "",
+    surucu_adi: "",
+    surucu_telefon: "",
+    surucu_tc: "",
+    ikamet_adresi: "",
+    cekici_ruhsat_no: "",
+    dorse_ruhsat_no: "",
+    tedarikci_isim: "",
+    cekici_muayene: "",
+    dorse_muayene: "",
+    trafik_sigorta: "",
+    arac_yil: "",
+    dorse_yil: "",
+    bolge: "",
+    arac_tip: "",
+    dorse_tip: "",
+    liftmaster: "",
+    gps_seri_no: "",
+    gps_sim_kart_no: "",
+    odak_k1: "",
 };
 
 const getMevcutKullanici = () => localStorage.getItem("kullanici") || "Bilinmeyen Kullanıcı";
 
 const tespitEtDegisenAlanlar = (eski, yeni) => {
     const farklar = [];
-    for (const key in yeni) if (eski[key] !== yeni[key]) farklar.push(key);
+    for (const key in yeni) {
+        if ((eski && eski[key]) !== (yeni && yeni[key])) farklar.push(key);
+    }
     return farklar.join(", ");
 };
 
@@ -107,13 +164,56 @@ function turkiyeSaatISOString() {
     return turkiyeSaati.toISOString();
 }
 
+// localStorage helper
+function useLocalStorage(key, initial) {
+    const [value, setValue] = useState(() => {
+        try {
+            const raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : initial;
+        } catch {
+            return initial;
+        }
+    });
+    useEffect(() => {
+        try {
+            localStorage.setItem(key, JSON.stringify(value));
+        } catch { }
+    }, [key, value]);
+    return [value, setValue];
+}
+
+// debounce hook
+function useDebounced(value, delay = 300) {
+    const [debounced, setDebounced] = useState(value);
+    useEffect(() => {
+        const t = setTimeout(() => setDebounced(value), delay);
+        return () => clearTimeout(t);
+    }, [value, delay]);
+    return debounced;
+}
+
+/* ===================== Ana Bileşen ===================== */
 export default function AracYonetimiMUI() {
     const navigate = useNavigate();
 
     const [tumAraclar, setTumAraclar] = useState([]);
-    const [tab, setTab] = useState("aktif");
-    const [globalSearch, setGlobalSearch] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [tab, setTab] = useLocalStorage("aracTab", "aktif");
+    const [globalSearch, setGlobalSearch] = useLocalStorage("aracSearch", "");
+    const debouncedSearch = useDebounced(globalSearch, 250);
     const [drawerOpen, setDrawerOpen] = useState(false);
+
+    // Detaylı filtreler (bolge, plaka, surucu)
+    const FILTER_DEFAULTS = { bolge: "", plaka: "", surucu: "" };
+    const [filters, setFilters] = useLocalStorage("aracFilters", FILTER_DEFAULTS);
+
+    // LocalStorage'ta eski yapılar varsa anahtarları tamamla (migration)
+    useEffect(() => {
+        setFilters((f) => ({ ...FILTER_DEFAULTS, ...(f || {}) }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const clearFilters = () => setFilters(FILTER_DEFAULTS);
 
     const [form, setForm] = useState(BOS_FORM);
     const [editId, setEditId] = useState(null);
@@ -130,117 +230,219 @@ export default function AracYonetimiMUI() {
     const [kesintiBilgisi, setKesintiBilgisi] = useState(null);
 
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
-    const openSnack = (msg, severity = "success") => setSnack({ open: true, msg, severity });
+    const openSnack = useCallback((msg, severity = "success") => setSnack({ open: true, msg, severity }), []);
 
+    const mountedRef = useRef(true);
+    useEffect(() => () => { mountedRef.current = false; }, []);
+
+    // Login kontrolü
     useEffect(() => {
         const kullanici = localStorage.getItem("kullanici");
         if (!kullanici) navigate("/login");
     }, [navigate]);
 
-    useEffect(() => { verileriGetir(); }, []);
+    useEffect(() => {
+        verileriGetir();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-    const verileriGetir = async () => {
-        const { data, error } = await supabase.from("plakalar").select("*");
-        if (error) return openSnack("Veriler alınamadı", "error");
-        if (data) {
+    const verileriGetir = useCallback(async () => {
+        setLoading(true);
+        try {
+            const { data: sess } = await supabase.auth.getSession();
+            console.log("Supabase user:", sess?.session?.user?.id || null);
+
+            const { data, error } = await supabase
+                .from("plakalar")
+                .select("*")
+                .order("id", { ascending: false });
+
+            if (error) throw error;
+            if (!Array.isArray(data)) {
+                console.warn("Beklenmeyen response:", data);
+                setTumAraclar([]);
+                return;
+            }
+
             const bugun = new Date();
             const guncelData = data.map((arac) => {
                 if (arac.kesinti_bitis_tarihi) {
                     const bitis = new Date(arac.kesinti_bitis_tarihi);
                     if (bitis < bugun) {
-                        const farkGun = Math.floor((bugun - bitis) / (1000 * 60 * 60 * 24));
+                        const farkGun = Math.floor((+bugun - +bitis) / (1000 * 60 * 60 * 24));
                         return { ...arac, statu: `${farkGun} gün kesintiden yeni çıktı` };
                     }
                 }
                 return arac;
             });
-            setTumAraclar(guncelData);
-        }
-    };
 
+            setTumAraclar(guncelData);
+            console.log("Plaka kayıt sayısı:", guncelData.length);
+        } catch (err) {
+            console.error("Supabase hata:", err);
+            openSnack(`Veriler alınamadı: ${err?.message || err}`, "error");
+            setTumAraclar([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [openSnack]);
+
+    // Filtrelenmiş liste
     const araclar = useMemo(() => {
         let liste = [...tumAraclar];
+
         if (tab === "aktif") liste = liste.filter((a) => a.statu !== "ÇIKARILDI");
         if (tab === "pasif") liste = liste.filter((a) => a.statu === "ÇIKARILDI");
 
-        if (globalSearch.trim()) {
-            const q = globalSearch.toLowerCase();
+        // Detaylı filtreler (güvenli okuma)
+        const fBolge = (filters?.bolge ?? "").trim().toLowerCase();
+        const fPlaka = (filters?.plaka ?? "").trim().toLowerCase();
+        const fSurucu = (filters?.surucu ?? "").trim().toLowerCase();
+
+        if (fBolge) {
+            liste = liste.filter((a) => (a.bolge || "").toLowerCase().includes(fBolge));
+        }
+        if (fPlaka) {
+            liste = liste.filter((a) => (a.plaka || "").toLowerCase().includes(fPlaka));
+        }
+        if (fSurucu) {
+            liste = liste.filter((a) => (a.surucu_adi || "").toLowerCase().includes(fSurucu));
+        }
+
+        // Üst genel arama
+        const q = (debouncedSearch ?? "").trim().toLowerCase();
+        if (q) {
             liste = liste.filter((a) =>
                 [
-                    a.plaka, a.treyler, a.surucu_adi, a.surucu_telefon, a.surucu_tc,
-                    a.ikamet_adresi, a.cekici_ruhsat_no, a.dorse_ruhsat_no, a.tedarikci_isim,
-                    a.bolge, a.arac_tip, a.dorse_tip, a.liftmaster, a.gps_seri_no,
-                    a.gps_sim_kart_no, a.odak_k1, a.statu,
+                    a.plaka,
+                    a.treyler,
+                    a.surucu_adi,
+                    a.surucu_telefon,
+                    a.surucu_tc,
+                    a.ikamet_adresi,
+                    a.cekici_ruhsat_no,
+                    a.dorse_ruhsat_no,
+                    a.tedarikci_isim,
+                    a.bolge,
+                    a.arac_tip,
+                    a.dorse_tip,
+                    a.liftmaster,
+                    a.gps_seri_no,
+                    a.gps_sim_kart_no,
+                    a.odak_k1,
+                    a.statu,
                 ]
                     .map((v) => (v || "").toString().toLowerCase())
                     .some((v) => v.includes(q))
             );
         }
         return liste;
-    }, [tumAraclar, tab, globalSearch]);
+    }, [tumAraclar, tab, debouncedSearch, filters]); // filters bağımlılığı mevcut
 
-    const aktifSayisi = tumAraclar.filter((a) => a.statu !== "ÇIKARILDI").length;
-    const pasifSayisi = tumAraclar.filter((a) => a.statu === "ÇIKARILDI").length;
+    const aktifSayisi = useMemo(() => tumAraclar.filter((a) => a.statu !== "ÇIKARILDI").length, [tumAraclar]);
+    const pasifSayisi = useMemo(() => tumAraclar.filter((a) => a.statu === "ÇIKARILDI").length, [tumAraclar]);
 
-    const handleChange = (e) => setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
+    const handleChange = useCallback((e) => {
+        const { name, value } = e.target;
+        setForm((p) => ({ ...p, [name]: value }));
+    }, []);
 
-    const handleYeniEkle = () => { setForm(BOS_FORM); setEditId(null); setDuzenleAcik(true); };
-    const temizleVeKapat = () => { setForm(BOS_FORM); setEditId(null); setDuzenleAcik(false); };
-
-    const handleSubmit = async (e) => {
-        e?.preventDefault?.();
-        const kullanici = getMevcutKullanici();
-        if (editId) {
-            const mevcut = tumAraclar.find((a) => a.id === editId) || {};
-            const guncellenenAlanlar = tespitEtDegisenAlanlar(mevcut, form);
-            const guncellemeTarihi = turkiyeSaatISOString();
-            const { error } = await supabase
-                .from("plakalar")
-                .update({
-                    ...form,
-                    guncelleyen_kullanici: kullanici,
-                    guncellenen_alanlar: guncellenenAlanlar,
-                    guncelleme_tarihi: guncellemeTarihi,
-                })
-                .eq("id", editId);
-            if (!error) { openSnack("Araç güncellendi"); temizleVeKapat(); verileriGetir(); }
-            else openSnack("Güncelleme başarısız", "error");
-        } else {
-            const { error } = await supabase.from("plakalar").insert([{
-                ...form, statu: "Aktif", ekleyen_kullanici: kullanici, eklenen_tarih: turkiyeSaatISOString(),
-            }]);
-            if (!error) { openSnack("Araç eklendi"); temizleVeKapat(); verileriGetir(); }
-            else openSnack("Ekleme başarısız", "error");
-        }
-    };
-
-    const handleDuzenle = (arac) => {
-        if (!arac?.id) return openSnack("HATA: Bu aracın ID bilgisi eksik.", "error");
-        setForm({
-            plaka: arac.plaka || "", treyler: arac.treyler || "", surucu_adi: arac.surucu_adi || "",
-            surucu_telefon: arac.surucu_telefon || "", surucu_tc: arac.surucu_tc || "",
-            ikamet_adresi: arac.ikamet_adresi || "", cekici_ruhsat_no: arac.cekici_ruhsat_no || "",
-            dorse_ruhsat_no: arac.dorse_ruhsat_no || "", tedarikci_isim: arac.tedarikci_isim || "",
-            cekici_muayene: arac.cekici_muayene || "", dorse_muayene: arac.dorse_muayene || "",
-            trafik_sigorta: arac.trafik_sigorta || "", arac_yil: arac.arac_yil || "",
-            dorse_yil: arac.dorse_yil || "", bolge: arac.bolge || "", arac_tip: arac.arac_tip || "",
-            dorse_tip: arac.dorse_tip || "", liftmaster: arac.liftmaster || "",
-            gps_seri_no: arac.gps_seri_no || "", gps_sim_kart_no: arac.gps_sim_kart_no || "",
-            odak_k1: arac.odak_k1 || "",
-        });
-        setEditId(arac.id);
+    const handleYeniEkle = useCallback(() => {
+        setForm(BOS_FORM);
+        setEditId(null);
         setDuzenleAcik(true);
-    };
+    }, []);
 
-    const handleSilIstegi = (id) => {
+    const temizleVeKapat = useCallback(() => {
+        setForm(BOS_FORM);
+        setEditId(null);
+        setDuzenleAcik(false);
+    }, []);
+
+    const handleSubmit = useCallback(
+        async (e) => {
+            e?.preventDefault?.();
+            const kullanici = getMevcutKullanici();
+
+            if (editId) {
+                const mevcut = tumAraclar.find((a) => a.id === editId) || {};
+                const guncellenenAlanlar = tespitEtDegisenAlanlar(mevcut, form);
+                const guncellemeTarihi = turkiyeSaatISOString();
+                const { error } = await supabase
+                    .from("plakalar")
+                    .update({
+                        ...form,
+                        guncelleyen_kullanici: kullanici,
+                        guncellenen_alanlar: guncellenenAlanlar,
+                        guncelleme_tarihi: guncellemeTarihi,
+                    })
+                    .eq("id", editId);
+
+                if (!error) {
+                    openSnack("Araç güncellendi");
+                    temizleVeKapat();
+                    verileriGetir();
+                } else openSnack("Güncelleme başarısız", "error");
+            } else {
+                const { error } = await supabase.from("plakalar").insert([
+                    {
+                        ...form,
+                        statu: "Aktif",
+                        ekleyen_kullanici: kullanici,
+                        eklenen_tarih: turkiyeSaatISOString(),
+                    },
+                ]);
+                if (!error) {
+                    openSnack("Araç eklendi");
+                    temizleVeKapat();
+                    verileriGetir();
+                } else openSnack("Ekleme başarısız", "error");
+            }
+        },
+        [editId, form, openSnack, temizleVeKapat, tumAraclar, verileriGetir]
+    );
+
+    const handleDuzenle = useCallback(
+        (arac) => {
+            if (!arac?.id) return openSnack("HATA: Bu aracın ID bilgisi eksik.", "error");
+            setForm({
+                plaka: arac.plaka || "",
+                treyler: arac.treyler || "",
+                surucu_adi: arac.surucu_adi || "",
+                surucu_telefon: arac.surucu_telefon || "",
+                surucu_tc: arac.surucu_tc || "",
+                ikamet_adresi: arac.ikamet_adresi || "",
+                cekici_ruhsat_no: arac.cekici_ruhsat_no || "",
+                dorse_ruhsat_no: arac.dorse_ruhsat_no || "",
+                tedarikci_isim: arac.tedarikci_isim || "",
+                cekici_muayene: arac.cekici_muayene || "",
+                dorse_muayene: arac.dorse_muayene || "",
+                trafik_sigorta: arac.trafik_sigorta || "",
+                arac_yil: arac.arac_yil || "",
+                dorse_yil: arac.dorse_yil || "",
+                bolge: arac.bolge || "",
+                arac_tip: arac.arac_tip || "",
+                dorse_tip: arac.dorse_tip || "",
+                liftmaster: arac.liftmaster || "",
+                gps_seri_no: arac.gps_seri_no || "",
+                gps_sim_kart_no: arac.gps_sim_kart_no || "",
+                odak_k1: arac.odak_k1 || "",
+            });
+            setEditId(arac.id);
+            setDuzenleAcik(true);
+        },
+        [openSnack]
+    );
+
+    const handleSilIstegi = useCallback((id) => {
         setSeciliAracId(id);
         setSilmeSebebi("");
         setSilinmeTarihi(turkiyeSaatISOString().slice(0, 16));
         setSilModalAcik(true);
-    };
+    }, []);
 
-    const handleSilOnayla = async () => {
-        if (!silmeSebebi.trim() || !silinmeTarihi) return;
+    const handleSilOnayla = useCallback(async () => {
+        if (!(silmeSebebi || "").trim() || !silinmeTarihi) return;
         const kullanici = getMevcutKullanici();
         const { error } = await supabase
             .from("plakalar")
@@ -257,131 +459,154 @@ export default function AracYonetimiMUI() {
             setSeciliAracId(null);
             verileriGetir();
         } else openSnack("Silme işlemi başarısız", "error");
-    };
+    }, [seciliAracId, silinmeTarihi, silmeSebebi, openSnack, verileriGetir]);
 
-    const handleBilgiAc = async (arac) => {
+    const handleBilgiAc = useCallback(async (arac) => {
         const plakaTreyler = `${arac.plaka} - ${arac.treyler}`;
+
         const { data: izinData } = await supabase
-            .from("izinler").select("*")
-            .eq("plaka_treyler", plakaTreyler).order("id", { ascending: false }).limit(1);
+            .from("izinler")
+            .select("*")
+            .eq("plaka_treyler", plakaTreyler)
+            .order("id", { ascending: false })
+            .limit(1);
         setIzinBilgisi(izinData?.[0] || null);
 
         const { data: kesintiData } = await supabase
-            .from("kesintiler").select("*")
-            .eq("plaka_treyler", plakaTreyler).order("id", { ascending: false }).limit(1);
+            .from("kesintiler")
+            .select("*")
+            .eq("plaka_treyler", plakaTreyler)
+            .order("id", { ascending: false })
+            .limit(1);
+
+        let gosterilecek = { ...arac };
         if (kesintiData?.[0]) {
             setKesintiBilgisi(kesintiData[0]);
             const bitis = new Date(kesintiData[0].bitis_tarihi);
             const bugun = new Date();
             if (bitis < bugun) {
-                const farkGun = Math.floor((bugun - bitis) / (1000 * 60 * 60 * 24));
-                arac.statu = `${farkGun} gün kesintiden çıktı`;
+                const farkGun = Math.floor((+bugun - +bitis) / (1000 * 60 * 60 * 24));
+                gosterilecek = { ...gosterilecek, statu: `${farkGun} gün kesintiden çıktı` };
             }
         } else setKesintiBilgisi(null);
 
-        setBilgiArac(arac);
+        setBilgiArac(gosterilecek);
         setBilgiModalAcik(true);
-    };
+    }, []);
 
-    const excelAktar = () => {
+    const excelAktar = useCallback(() => {
         const liste = araclar;
         if (!liste.length) return openSnack("Aktarılacak araç bulunamadı", "warning");
-        const dataToExport = liste.map(
-            ({ plaka, treyler, surucu_adi, surucu_telefon, surucu_tc, statu }) => ({
-                Plaka: plaka,
-                Treyler: treyler,
-                "Sürücü Adı": surucu_adi,
-                Telefon: surucu_telefon,
-                TC: surucu_tc,
-                Statü: statu,
-            })
-        );
+        const dataToExport = liste.map(({ plaka, treyler, surucu_adi, surucu_telefon, surucu_tc, statu }) => ({
+            Plaka: plaka,
+            Treyler: treyler,
+            "Sürücü Adı": surucu_adi,
+            Telefon: surucu_telefon,
+            TC: surucu_tc,
+            Statü: statu,
+        }));
         const ws = XLSX.utils.json_to_sheet(dataToExport);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Araçlar");
         const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
         const blob = new Blob([buffer], { type: "application/octet-stream" });
         saveAs(blob, `arac_listesi_${tab}.xlsx`);
-    };
+    }, [araclar, openSnack, tab]);
 
-    const columns = useMemo(() => ([
-        { field: "plaka", headerName: "Plaka", minWidth: 120, flex: 0.9 },
-        { field: "treyler", headerName: "Treyler", minWidth: 120, flex: 0.9 },
-        { field: "surucu_adi", headerName: "Sürücü", minWidth: 150, flex: 1 },
-        { field: "surucu_telefon", headerName: "Telefon", minWidth: 140, flex: 0.9 },
-        { field: "surucu_tc", headerName: "TC", minWidth: 140, flex: 0.9 },
-        {
-            field: "ikamet_adresi", headerName: "İkamet", minWidth: 220, flex: 1.4,
-            renderCell: (p) => <Typography noWrap title={p.value || ""}>{p.value}</Typography>,
-            sortable: false,
-        },
-        { field: "cekici_ruhsat_no", headerName: "Çekici Ruhsat", minWidth: 160, flex: 1 },
-        { field: "dorse_ruhsat_no", headerName: "Dorse Ruhsat", minWidth: 160, flex: 1 },
-        { field: "tedarikci_isim", headerName: "Tedarikçi", minWidth: 150, flex: 1 },
-        { field: "cekici_muayene", headerName: "Çekici Muayene", minWidth: 150, flex: 1 },
-        { field: "dorse_muayene", headerName: "Dorse Muayene", minWidth: 150, flex: 1 },
-        { field: "trafik_sigorta", headerName: "Trafik Sigorta", minWidth: 150, flex: 1 },
-        { field: "arac_yil", headerName: "Araç Yıl", minWidth: 110, flex: 0.7 },
-        { field: "dorse_yil", headerName: "Dorse Yıl", minWidth: 110, flex: 0.7 },
-        { field: "bolge", headerName: "Bölge", minWidth: 120, flex: 0.9 },
-        { field: "arac_tip", headerName: "Araç Tip", minWidth: 130, flex: 0.9 },
-        { field: "dorse_tip", headerName: "Dorse Tip", minWidth: 130, flex: 0.9 },
-        { field: "liftmaster", headerName: "Liftmaster", minWidth: 120, flex: 0.9 },
-        { field: "gps_seri_no", headerName: "GPS Seri", minWidth: 140, flex: 0.9 },
-        { field: "gps_sim_kart_no", headerName: "GPS Sim", minWidth: 140, flex: 0.9 },
-        { field: "odak_k1", headerName: "Odak K1", minWidth: 120, flex: 0.9 },
-        {
-            field: "silme_sebebi",
-            headerName: "Silme Sebebi",
-            minWidth: 180,
-            flex: 1,
-            hide: !(tab === "pasif" || tab === "tum"),
-        },
-        {
-            field: "statu",
-            headerName: "Statü",
-            minWidth: 120,
-            flex: 0.9,
-            renderCell: ({ value }) => (
-                <Chip
-                    label={value || "Aktif"}
-                    size="small"
-                    color={value === "ÇIKARILDI" ? "error" : "default"}
-                    variant={value === "ÇIKARILDI" ? "outlined" : "filled"}
-                />
-            ),
-        },
-        {
-            field: "__actions",
-            headerName: "İşlem",
-            sortable: false,
-            filterable: false,
-            minWidth: 140,
-            flex: 0.9,
-            align: "right",
-            renderCell: ({ row }) => (
-                <Stack direction="row" spacing={1}>
-                    <Tooltip title="Bilgi">
-                        <IconButton size="small" onClick={() => handleBilgiAc(row)}>
-                            <InfoIcon fontSize="inherit" />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Düzenle">
-                        <IconButton size="small" onClick={() => handleDuzenle(row)}>
-                            <EditIcon fontSize="inherit" />
-                        </IconButton>
-                    </Tooltip>
-                    {row.statu !== "ÇIKARILDI" && (
-                        <Tooltip title="Sil">
-                            <IconButton size="small" color="error" onClick={() => handleSilIstegi(row.id)}>
-                                <DeleteIcon fontSize="inherit" />
+    // GRID sütunları
+    const columns = useMemo(
+        () => [
+            { field: "plaka", headerName: "Plaka", minWidth: 120, flex: 0.9 },
+            { field: "treyler", headerName: "Treyler", minWidth: 120, flex: 0.9 },
+            { field: "surucu_adi", headerName: "Sürücü", minWidth: 150, flex: 1 },
+            { field: "surucu_telefon", headerName: "Telefon", minWidth: 140, flex: 0.9 },
+            { field: "surucu_tc", headerName: "TC", minWidth: 140, flex: 0.9 },
+            {
+                field: "ikamet_adresi",
+                headerName: "İkamet",
+                minWidth: 220,
+                flex: 1.4,
+                renderCell: (p) => (
+                    <Typography noWrap title={p.value || ""} sx={{ maxWidth: "100%" }}>
+                        {p.value}
+                    </Typography>
+                ),
+                sortable: false,
+            },
+            { field: "cekici_ruhsat_no", headerName: "Çekici Ruhsat", minWidth: 160, flex: 1 },
+            { field: "dorse_ruhsat_no", headerName: "Dorse Ruhsat", minWidth: 160, flex: 1 },
+            { field: "tedarikci_isim", headerName: "Tedarikçi", minWidth: 150, flex: 1 },
+            { field: "cekici_muayene", headerName: "Çekici Muayene", minWidth: 150, flex: 1 },
+            { field: "dorse_muayene", headerName: "Dorse Muayene", minWidth: 150, flex: 1 },
+            { field: "trafik_sigorta", headerName: "Trafik Sigorta", minWidth: 150, flex: 1 },
+            { field: "arac_yil", headerName: "Araç Yıl", minWidth: 110, flex: 0.7 },
+            { field: "dorse_yil", headerName: "Dorse Yıl", minWidth: 110, flex: 0.7 },
+            { field: "bolge", headerName: "Bölge", minWidth: 120, flex: 0.9 },
+            { field: "arac_tip", headerName: "Araç Tip", minWidth: 130, flex: 0.9 },
+            { field: "dorse_tip", headerName: "Dorse Tip", minWidth: 130, flex: 0.9 },
+            { field: "liftmaster", headerName: "Liftmaster", minWidth: 120, flex: 0.9 },
+            { field: "gps_seri_no", headerName: "GPS Seri", minWidth: 140, flex: 0.9 },
+            { field: "gps_sim_kart_no", headerName: "GPS Sim", minWidth: 140, flex: 0.9 },
+            { field: "odak_k1", headerName: "Odak K1", minWidth: 120, flex: 0.9 },
+            {
+                field: "silme_sebebi",
+                headerName: "Silme Sebebi",
+                minWidth: 200,
+                flex: 1,
+                hide: !(tab === "pasif" || tab === "tum"),
+            },
+            {
+                field: "statu",
+                headerName: "Statü",
+                minWidth: 140,
+                flex: 0.9,
+                renderCell: ({ value }) => {
+                    const label = value || "Aktif";
+                    const isRemoved = label === "ÇIKARILDI";
+                    const isWarning = /kesintiden/.test(label || "");
+                    return (
+                        <Chip
+                            label={label}
+                            size="small"
+                            color={isRemoved ? "error" : isWarning ? "warning" : "success"}
+                            variant={isRemoved ? "outlined" : "filled"}
+                        />
+                    );
+                },
+            },
+            {
+                field: "__actions",
+                headerName: "İşlem",
+                sortable: false,
+                filterable: false,
+                minWidth: 160,
+                flex: 0.9,
+                align: "right",
+                renderCell: ({ row }) => (
+                    <Stack direction="row" spacing={1}>
+                        <Tooltip title="Bilgi">
+                            <IconButton size="small" onClick={() => handleBilgiAc(row)}>
+                                <InfoIcon fontSize="inherit" />
                             </IconButton>
                         </Tooltip>
-                    )}
-                </Stack>
-            ),
-        },
-    ]), [tab]);
+                        <Tooltip title="Düzenle">
+                            <IconButton size="small" onClick={() => handleDuzenle(row)}>
+                                <EditIcon fontSize="inherit" />
+                            </IconButton>
+                        </Tooltip>
+                        {row.statu !== "ÇIKARILDI" && (
+                            <Tooltip title="Sil">
+                                <IconButton size="small" color="error" onClick={() => handleSilIstegi(row.id)}>
+                                    <DeleteIcon fontSize="inherit" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                    </Stack>
+                ),
+            },
+        ],
+        [tab, handleBilgiAc, handleDuzenle, handleSilIstegi]
+    );
 
     const rows = useMemo(
         () => araclar.map((a, i) => ({ id: a.id ?? `${a.plaka}-${a.treyler}-${i}`, ...a })),
@@ -390,22 +615,12 @@ export default function AracYonetimiMUI() {
 
     return (
         <ScaleToFit>
-            <Helmet><title>ARAÇ YÖNETİMİ</title></Helmet>
+            <Helmet>
+                <title>ARAÇ YÖNETİMİ</title>
+            </Helmet>
 
             {/* APP BAR */}
-            <AppBar
-                position="static"
-                color="transparent"
-                elevation={0}
-                sx={{
-                    borderRadius: 2,
-                    background: "linear-gradient(180deg, rgba(15,23,42,0.92) 0%, rgba(15,23,42,0.75) 100%)",
-                    backdropFilter: "blur(8px)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    mx: 1,
-                    mt: 1,
-                }}
-            >
+            <AppBar position="static" color="transparent" elevation={0} sx={{ borderRadius: 2, ...glass(0.92, 0.75), mx: 1, mt: 1 }}>
                 <Toolbar>
                     <Typography
                         variant="h6"
@@ -420,69 +635,81 @@ export default function AracYonetimiMUI() {
                     >
                         Araç Yönetimi
                     </Typography>
-                    <Box sx={{ display: "flex", gap: 1 }}>
-                        {/* 👇 EKLENEN BUTONLAR */}
-                        <Button
-                            size="small"
-                            variant="text"
-                            startIcon={<ArrowBackIcon />}
-                            onClick={() => navigate(-1)}
-                        >
-                            Geri
-                        </Button>
-                        <Button
-                            size="small"
-                            variant="text"
-                            startIcon={<HomeIcon />}
-                            onClick={() => navigate(HOME_PATH)}
-                        >
-                            Anasayfa
-                        </Button>
+
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        {/* Yenile */}
+                        <Tooltip title="Yenile">
+                            <span>
+                                <IconButton onClick={verileriGetir} disabled={loading}>
+                                    {loading ? <CircularProgress size={18} /> : <RefreshIcon />}
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+
+                        {/* Filtreler */}
                         <Tooltip title="Filtreler">
                             <IconButton onClick={() => setDrawerOpen(true)}>
                                 <FilterListIcon />
                             </IconButton>
                         </Tooltip>
+
+                        {/* Excel */}
                         <Button variant="outlined" startIcon={<DownloadIcon />} onClick={excelAktar}>
                             Excel'e Aktar
                         </Button>
+
+                        {/* Yeni */}
                         <Button variant="contained" startIcon={<AddIcon />} onClick={handleYeniEkle}>
                             Yeni Araç
                         </Button>
-                    </Box>
+
+                        {/* Geri & Anasayfa */}
+                        <Button size="small" variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
+                            Geri
+                        </Button>
+                        <Button size="small" variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
+                            Anasayfa
+                        </Button>
+                    </Stack>
                 </Toolbar>
             </AppBar>
 
-            {/* KPI */}
+            {/* KPI Kartları */}
             <Grid container spacing={2} sx={{ mt: 2, px: 1 }}>
                 <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 2, borderRadius: 2, background: `linear-gradient(180deg, ${alpha("#ffffff", 0.05)} 0%, ${alpha("#ffffff", 0.02)} 100%)`, border: "1px solid rgba(255,255,255,0.08)" }}>
-                        <Typography variant="body2" color="text.secondary">AKTİF ARAÇLAR</Typography>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1 }}>
-                            <Typography variant="h4">{aktifSayisi}</Typography>
-                            <Chip label="Aktif" size="small" />
+                    <Paper sx={{ p: 2, borderRadius: 2, ...glass(0.08, 0.02) }}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                            <Box>
+                                <Typography variant="body2" color="text.secondary">
+                                    AKTİF ARAÇLAR
+                                </Typography>
+                                <Typography variant="h4" sx={{ mt: 0.5 }}>
+                                    {aktifSayisi}
+                                </Typography>
+                            </Box>
+                            <Chip label="Aktif" size="small" color="success" />
                         </Stack>
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 2, borderRadius: 2, background: `linear-gradient(180deg, ${alpha("#ffffff", 0.05)} 0%, ${alpha("#ffffff", 0.02)} 100%)`, border: "1px solid rgba(255,255,255,0.08)" }}>
-                        <Typography variant="body2" color="text.secondary">ÇIKARILAN ARAÇLAR</Typography>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1 }}>
-                            <Typography variant="h4">{pasifSayisi}</Typography>
+                    <Paper sx={{ p: 2, borderRadius: 2, ...glass(0.08, 0.02) }}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                            <Box>
+                                <Typography variant="body2" color="text.secondary">
+                                    ÇIKARILAN ARAÇLAR
+                                </Typography>
+                                <Typography variant="h4" sx={{ mt: 0.5 }}>
+                                    {pasifSayisi}
+                                </Typography>
+                            </Box>
                             <Chip label="Pasif" color="error" variant="outlined" size="small" />
                         </Stack>
                     </Paper>
                 </Grid>
             </Grid>
 
-            {/* Sekmeler + dış arama */}
-            <Paper
-                sx={{
-                    p: 2, mt: 2, mx: 1, borderRadius: 2,
-                    background: `linear-gradient(180deg, ${alpha("#ffffff", 0.04)} 0%, ${alpha("#ffffff", 0.02)} 100%)`,
-                    border: "1px solid rgba(255,255,255,0.08)",
-                }}
-            >
+            {/* Sekmeler + üst arama */}
+            <Paper sx={{ p: 2, mt: 2, mx: 1, borderRadius: 2, ...glass(0.04, 0.02) }}>
                 <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} md={6}>
                         <Tabs
@@ -494,15 +721,15 @@ export default function AracYonetimiMUI() {
                                 "& .MuiTabs-indicator": { height: 3, borderRadius: 1 },
                             }}
                         >
-                            <Tab value="aktif" label="Aktif" />
-                            <Tab value="pasif" label="Çıkarılan" />
+                            <Tab value="aktif" label={<Badge color="success" badgeContent={aktifSayisi}>Aktif</Badge>} />
+                            <Tab value="pasif" label={<Badge color="error" badgeContent={pasifSayisi}>Çıkarılan</Badge>} />
                             <Tab value="tum" label="Tümü" />
                         </Tabs>
                     </Grid>
                     <Grid item xs={12} md={6}>
                         <TextField
                             fullWidth
-                            value={globalSearch}
+                            value={globalSearch ?? ""}
                             onChange={(e) => setGlobalSearch(e.target.value)}
                             placeholder="Genel arama: araç, sürücü, bölge…"
                             InputProps={{
@@ -511,6 +738,13 @@ export default function AracYonetimiMUI() {
                                         <SearchIcon />
                                     </InputAdornment>
                                 ),
+                                endAdornment: (globalSearch?.length ?? 0) > 0 ? (
+                                    <InputAdornment position="end">
+                                        <IconButton aria-label="temizle" edge="end" onClick={() => setGlobalSearch("")}>
+                                            <ClearIcon fontSize="small" />
+                                        </IconButton>
+                                    </InputAdornment>
+                                ) : null,
                             }}
                             sx={{
                                 "& .MuiInputBase-root": {
@@ -545,6 +779,7 @@ export default function AracYonetimiMUI() {
                             disableRowSelectionOnClick
                             pagination={false}
                             hideFooter
+                            loading={loading}
                             slots={{ toolbar: GridToolbar }}
                             slotProps={{
                                 toolbar: {
@@ -570,7 +805,10 @@ export default function AracYonetimiMUI() {
                                     whiteSpace: "nowrap",
                                 },
                                 "& .MuiDataGrid-row:hover .MuiDataGrid-cell": {
-                                    backgroundColor: "rgba(139,92,246,0.10)",
+                                    backgroundColor: alpha("#8B5CF6", 0.10),
+                                },
+                                "& .MuiDataGrid-overlayWrapper": {
+                                    background: "transparent",
                                 },
                             }}
                         />
@@ -583,15 +821,13 @@ export default function AracYonetimiMUI() {
                 anchor="right"
                 open={drawerOpen}
                 onClose={() => setDrawerOpen(false)}
-                slotProps={{
-                    paper: {
-                        sx: {
-                            width: 380,
-                            background: "linear-gradient(180deg, rgba(15,23,42,0.95) 0%, rgba(15,23,42,0.85) 100%)",
-                            backdropFilter: "blur(8px)",
-                            color: "text.primary",
-                            borderLeft: "1px solid rgba(255,255,255,0.08)",
-                        },
+                PaperProps={{
+                    sx: {
+                        width: 380,
+                        background: "linear-gradient(180deg, rgba(15,23,42,0.95) 0%, rgba(15,23,42,0.85) 100%)",
+                        backdropFilter: "blur(8px)",
+                        color: "text.primary",
+                        borderLeft: "1px solid rgba(255,255,255,0.08)",
                     },
                 }}
             >
@@ -603,15 +839,51 @@ export default function AracYonetimiMUI() {
                         </IconButton>
                     </Stack>
                     <Divider sx={{ mb: 2, borderColor: "rgba(255,255,255,0.12)" }} />
-                    <Typography variant="body2" color="text.secondary">
+
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                         Not: Tablo araç çubuğundan (Quick filter / Columns / Filters / Density) anlık filtreleme yapabilirsiniz.
                     </Typography>
+
+                    {/* FİLTRE KONTROLLERİ: Bölge, Plaka, Sürücü */}
+                    <Stack spacing={2}>
+                        <TextField
+                            label="Bölge"
+                            value={filters?.bolge ?? ""}
+                            onChange={(e) => setFilters((f) => ({ ...(f || {}), bolge: e.target.value }))}
+                            fullWidth
+                        />
+                        <TextField
+                            label="Plaka"
+                            value={filters?.plaka ?? ""}
+                            onChange={(e) => setFilters((f) => ({ ...(f || {}), plaka: e.target.value }))}
+                            fullWidth
+                        />
+                        <TextField
+                            label="Sürücü"
+                            value={filters?.surucu ?? ""}
+                            onChange={(e) => setFilters((f) => ({ ...(f || {}), surucu: e.target.value }))}
+                            fullWidth
+                        />
+
+                        <Stack direction="row" spacing={1} sx={{ pt: 1 }}>
+                            <Button
+                                variant="outlined"
+                                startIcon={<ClearIcon />}
+                                onClick={clearFilters}
+                            >
+                                Temizle
+                            </Button>
+                            <Box sx={{ flexGrow: 1 }} />
+                            <Button variant="contained" onClick={() => setDrawerOpen(false)}>
+                                Uygula
+                            </Button>
+                        </Stack>
+                    </Stack>
                 </Box>
             </Drawer>
 
             {/* Dialog: Ekle / Düzenle */}
-            <Dialog open={duzenleAcik} onClose={() => setDuzenleAcik(false)} maxWidth="md" fullWidth
-                PaperProps={{ sx: { backgroundColor: "background.paper" } }}>
+            <Dialog open={duzenleAcik} onClose={() => setDuzenleAcik(false)} maxWidth="md" fullWidth PaperProps={{ sx: { backgroundColor: "background.paper" } }}>
                 <DialogTitle>{editId ? "Araç Bilgilerini Güncelle" : "Yeni Araç Bilgisi"}</DialogTitle>
                 <DialogContent>
                     <Grid container spacing={2} sx={{ mt: 0 }}>
@@ -644,21 +916,25 @@ export default function AracYonetimiMUI() {
                         <Grid item xs={12} md={4}><TextField fullWidth name="odak_k1" value={form.odak_k1} onChange={handleChange} label="Odak K1" /></Grid>
                     </Grid>
                 </DialogContent>
-                <DialogActions sx={{
-                    position: "sticky", bottom: 0,
-                    background: "linear-gradient(180deg, rgba(10,16,30,0.9) 0%, rgba(10,16,30,0.95) 100%)",
-                    borderTop: "1px solid rgba(255,255,255,0.06)",
-                }}>
+                <DialogActions
+                    sx={{
+                        position: "sticky",
+                        bottom: 0,
+                        background: "linear-gradient(180deg, rgba(10,16,30,0.9) 0%, rgba(10,16,30,0.95) 100%)",
+                        borderTop: "1px solid rgba(255,255,255,0.06)",
+                    }}
+                >
                     <Button onClick={handleSubmit} variant="contained" sx={{ px: 3, py: 1.1 }}>
                         {editId ? "Güncelle" : "Kaydet"}
                     </Button>
-                    <Button onClick={temizleVeKapat} variant="text">İptal</Button>
+                    <Button onClick={temizleVeKapat} variant="text">
+                        İptal
+                    </Button>
                 </DialogActions>
             </Dialog>
 
             {/* Dialog: Silme */}
-            <Dialog open={silModalAcik} onClose={() => setSilModalAcik(false)}
-                PaperProps={{ sx: { backgroundColor: "background.paper" } }}>
+            <Dialog open={silModalAcik} onClose={() => setSilModalAcik(false)} PaperProps={{ sx: { backgroundColor: "background.paper" } }}>
                 <DialogTitle>Araç Silme Bilgisi</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} sx={{ mt: 1 }}>
@@ -673,8 +949,7 @@ export default function AracYonetimiMUI() {
             </Dialog>
 
             {/* Dialog: Bilgi */}
-            <Dialog open={bilgiModalAcik} onClose={() => setBilgiModalAcik(false)} maxWidth="md" fullWidth
-                PaperProps={{ sx: { backgroundColor: "background.paper" } }}>
+            <Dialog open={bilgiModalAcik} onClose={() => setBilgiModalAcik(false)} maxWidth="md" fullWidth PaperProps={{ sx: { backgroundColor: "background.paper" } }}>
                 <DialogTitle>İşlem Bilgisi</DialogTitle>
                 <DialogContent dividers>
                     {bilgiArac && (
@@ -693,10 +968,10 @@ export default function AracYonetimiMUI() {
                                 <Typography><b>Kesinti Bitiş:</b> {new Date(bilgiArac.kesinti_bitis_tarihi).toLocaleDateString()}</Typography>
                             )}
 
-                            {bilgiArac.eklenme_tarihi && (
+                            {(bilgiArac.eklenen_tarih || bilgiArac.ekleyen_kullanici) && (
                                 <Grid container spacing={2}>
                                     <Grid item xs={12} md={6}>
-                                        <Typography><b>Eklenme Tarihi:</b> {new Date(bilgiArac.eklenme_tarihi).toLocaleString()}</Typography>
+                                        <Typography><b>Eklenme Tarihi:</b> {bilgiArac.eklenen_tarih ? new Date(bilgiArac.eklenen_tarih).toLocaleString() : "-"}</Typography>
                                     </Grid>
                                     <Grid item xs={12} md={6}>
                                         <Typography><b>Araç Kaydını Ekleyen:</b> {bilgiArac.ekleyen_kullanici || "-"}</Typography>
@@ -768,12 +1043,7 @@ export default function AracYonetimiMUI() {
                 onClose={() => setSnack((s) => ({ ...s, open: false }))}
                 anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
             >
-                <Alert
-                    onClose={() => setSnack((s) => ({ ...s, open: false }))}
-                    severity={snack.severity}
-                    variant="filled"
-                    sx={{ width: "100%" }}
-                >
+                <Alert onClose={() => setSnack((s) => ({ ...s, open: false }))} severity={snack.severity} variant="filled" sx={{ width: "100%" }}>
                     {snack.msg}
                 </Alert>
             </Snackbar>

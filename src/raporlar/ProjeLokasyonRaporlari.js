@@ -1,4 +1,4 @@
-// src/raporlar/ProjeLokasyonRaporlari.jsx
+// src/raporlar/ProjeLokasyonRaporlari.js
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
@@ -9,7 +9,6 @@ import {
     Container,
     Stack,
     Typography,
-    Grid,
     Paper,
     Chip,
     Divider,
@@ -27,7 +26,11 @@ import {
     TableCell,
     TableBody,
     TextField,
+    alpha,
+    useTheme,
 } from "@mui/material";
+import Grid from "@mui/material/Grid"; // ✅ Klasik Grid
+
 import RefreshIcon from "@mui/icons-material/Refresh";
 import DownloadIcon from "@mui/icons-material/Download";
 
@@ -111,7 +114,7 @@ async function fetchAllRows(table) {
     return { rows: out, warn: "" };
 }
 
-// Simple bar list
+// Basit bar liste
 function BarList({ rows = [], max = 10, height = 18 }) {
     const data = rows.slice(0, max);
     const maxVal = Math.max(1, ...data.map((d) => d.value));
@@ -120,7 +123,7 @@ function BarList({ rows = [], max = 10, height = 18 }) {
             {data.map((d, i) => (
                 <Stack key={d.key || i} direction="row" alignItems="center" spacing={1}>
                     <Typography sx={{ width: 28, opacity: 0.6 }}>{i + 1}.</Typography>
-                    <Box sx={{ flex: 1 }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography noWrap title={d.key} sx={{ fontWeight: 700 }}>
                             {d.key || "—"}
                         </Typography>
@@ -159,6 +162,98 @@ function downloadCSV(filename, rows, headers) {
     URL.revokeObjectURL(url);
 }
 
+/* -------------------- Mini Chart Components (SVG) -------------------- */
+function DonutChart({ data = [], size = 148, thickness = 18, title, subtitle }) {
+    const theme = useTheme();
+    const radius = size / 2;
+    const inner = radius - thickness;
+    const C = size / 2;
+    const total = data.reduce((a, c) => a + (c.value || 0), 0);
+    let acc = 0;
+    const palette = [
+        theme.palette.primary.main,
+        theme.palette.secondary.main,
+        theme.palette.success.main,
+        theme.palette.warning.main,
+        theme.palette.info.main,
+        theme.palette.error.main,
+    ];
+
+    return (
+        <Box sx={{ position: "relative", display: "inline-flex" }}>
+            <svg width={size} height={size}>
+                {/* Arka plan */}
+                <circle cx={C} cy={C} r={inner} fill="none" stroke={alpha(theme.palette.text.primary, 0.08)} strokeWidth={thickness} />
+                {/* Dilimler */}
+                {data.map((d, i) => {
+                    const val = d.value || 0;
+                    const angle = (val / (total || 1)) * Math.PI * 2;
+                    const x1 = C + inner * Math.cos(acc);
+                    const y1 = C + inner * Math.sin(acc);
+                    const x2 = C + inner * Math.cos(acc + angle);
+                    const y2 = C + inner * Math.sin(acc + angle);
+                    const large = angle > Math.PI ? 1 : 0;
+                    const path = `M ${x1} ${y1} A ${inner} ${inner} 0 ${large} 1 ${x2} ${y2}`;
+                    const stroke = d.color || palette[i % palette.length];
+                    const el = <path key={d.label + i} d={path} stroke={stroke} strokeWidth={thickness} fill="none" />;
+                    acc += angle;
+                    return el;
+                })}
+            </svg>
+
+            {/* Merkez metin */}
+            <Box
+                sx={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    textAlign: "center",
+                    px: 1,
+                }}
+            >
+                {title ? (
+                    <Typography variant="body2" sx={{ opacity: 0.75 }}>
+                        {title}
+                    </Typography>
+                ) : null}
+                <Typography variant="h6" fontWeight={900}>
+                    {total}
+                </Typography>
+                {subtitle ? (
+                    <Typography variant="caption" sx={{ opacity: 0.75 }}>
+                        {subtitle}
+                    </Typography>
+                ) : null}
+            </Box>
+        </Box>
+    );
+}
+
+function Sparkline({ points = [], width = 260, height = 80 }) {
+    const theme = useTheme();
+    const max = Math.max(1, ...points);
+    const step = points.length > 1 ? width / (points.length - 1) : width;
+    const path = points
+        .map((v, i) => {
+            const x = i * step;
+            const y = height - (v / max) * (height - 6) - 3;
+            return `${i === 0 ? "M" : "L"} ${x} ${y}`;
+        })
+        .join(" ");
+
+    const area = `${path} L ${width} ${height} L 0 ${height} Z`;
+
+    return (
+        <svg width={width} height={height}>
+            <path d={area} fill={alpha(theme.palette.primary.main, 0.18)} />
+            <path d={path} fill="none" stroke={theme.palette.primary.main} strokeWidth={2} />
+        </svg>
+    );
+}
+
 /* -------------------- Styles -------------------- */
 const cardSX = {
     borderRadius: 3,
@@ -193,13 +288,11 @@ export default function ProjeLokasyonRaporlari() {
     const [seferler, setSeferler] = useState([]);
     const [tamamlanan, setTamamlanan] = useState([]);
 
-    // Görünüm
     const [mode, setMode] = useState("MONTH"); // 'MONTH' | 'RANGE'
     const [month, setMonth] = useState(monthKey(todayISO()));
     const [startDate, setStartDate] = useState(startOfMonthISO());
     const [endDate, setEndDate] = useState(todayISO());
 
-    // Proje seçimi
     const [selectedProject, setSelectedProject] = useState("");
 
     const fetchData = useCallback(async () => {
@@ -225,7 +318,6 @@ export default function ProjeLokasyonRaporlari() {
 
     const unified = useMemo(() => [...seferler, ...tamamlanan], [seferler, tamamlanan]);
 
-    // Ay listesi
     const allMonths = useMemo(() => {
         const s = new Set();
         for (const r of unified) {
@@ -235,7 +327,6 @@ export default function ProjeLokasyonRaporlari() {
         return Array.from(s).sort().reverse();
     }, [unified]);
 
-    // Tarih filtresi
     const filteredRows = useMemo(() => {
         if (!unified.length) return [];
         if (mode === "MONTH") {
@@ -251,7 +342,6 @@ export default function ProjeLokasyonRaporlari() {
         });
     }, [unified, mode, month, startDate, endDate]);
 
-    // Proje listesi (+ sayıları)
     const projects = useMemo(() => {
         const m = new Map();
         for (const r of filteredRows) {
@@ -267,12 +357,10 @@ export default function ProjeLokasyonRaporlari() {
         if (!selectedProject && projects.length) setSelectedProject(projects[0].proje);
     }, [projects, selectedProject]);
 
-    // Genel özet
     const summary = useMemo(() => {
         const TOPLAM = filteredRows.length;
         const PROJE = projects.length;
-        // En yoğun gün (tüm projeler toplu)
-        const days = new Map(); // date -> count
+        const days = new Map();
         for (const r of filteredRows) {
             const d = getRowDate(r);
             days.set(d, (days.get(d) || 0) + 1);
@@ -281,7 +369,6 @@ export default function ProjeLokasyonRaporlari() {
         return { TOPLAM, PROJE, PEAK_DAY: peak?.[0] || "-", PEAK_COUNT: peak?.[1] || 0 };
     }, [filteredRows, projects.length]);
 
-    // Günlük toplam + o gün “en çok hangi proje?”
     const effectiveRange = useMemo(() => {
         if (mode === "MONTH") {
             const { start, end } = monthStartEndByKey(month);
@@ -295,8 +382,7 @@ export default function ProjeLokasyonRaporlari() {
     const dailyAll = useMemo(() => {
         const days = enumerateDates(effectiveRange.start, effectiveRange.end, 180);
         const map = new Map(days.map((d) => [d, { date: d, TOPLAM: 0 }]));
-        // proje kırılımı için geçici tut
-        const byDayProj = new Map(); // date -> Map(proje -> n)
+        const byDayProj = new Map();
         for (const r of filteredRows) {
             const d = getRowDate(r);
             if (!map.has(d)) continue;
@@ -306,7 +392,6 @@ export default function ProjeLokasyonRaporlari() {
             const pm = byDayProj.get(d);
             pm.set(p, (pm.get(p) || 0) + 1);
         }
-        // En çok proje etiketi
         for (const [d, row] of map.entries()) {
             const pm = byDayProj.get(d);
             if (!pm) {
@@ -317,22 +402,20 @@ export default function ProjeLokasyonRaporlari() {
                 row.PEAK_PROJE = top?.[0] || "—";
                 row.PEAK_SAYI = top?.[1] || 0;
             }
-            // Haftanın günü
-            const wd = new Date(d + "T00:00:00").getDay(); // 0=Sun
-            row.HAFTA_GUNU = dayNamesTR[(wd + 6) % 7]; // Paz(0)-> index 6
+            const wd = new Date(d + "T00:00:00").getDay();
+            row.HAFTA_GUNU = dayNamesTR[(wd + 6) % 7];
         }
         return Array.from(map.values());
     }, [effectiveRange, filteredRows]);
 
-    // Proje -> weekday pivot + tepe günü
     const projectWeekdayAgg = useMemo(() => {
-        const m = new Map(); // proje -> [pzt..paz]
+        const m = new Map();
         for (const r of filteredRows) {
             const p = getProject(r) || "—";
             const d = getRowDate(r);
             if (!d) continue;
-            const wd = new Date(d + "T00:00:00").getDay(); // 0 pazar
-            const idx = (wd + 6) % 7; // pazarı sona
+            const wd = new Date(d + "T00:00:00").getDay();
+            const idx = (wd + 6) % 7;
             if (!m.has(p)) m.set(p, Array(7).fill(0));
             const arr = m.get(p);
             arr[idx] += 1;
@@ -356,7 +439,6 @@ export default function ProjeLokasyonRaporlari() {
         return rows;
     }, [filteredRows]);
 
-    // Seçili proje: günlük dağılım + lokasyonlar
     const dailyForProject = useMemo(() => {
         if (!selectedProject) return [];
         const days = enumerateDates(effectiveRange.start, effectiveRange.end, 180);
@@ -380,7 +462,6 @@ export default function ProjeLokasyonRaporlari() {
         [projects]
     );
 
-    // Lokasyon kırılımları
     const overallLoadCities = useMemo(() => {
         const m = new Map();
         for (const r of filteredRows) {
@@ -439,6 +520,33 @@ export default function ProjeLokasyonRaporlari() {
         [filteredRows.length]
     );
 
+    const donutProjects = useMemo(() => {
+        const top = projects.slice(0, 5);
+        const topSum = top.reduce((a, c) => a + c.count, 0);
+        const rest = Math.max(0, filteredRows.length - topSum);
+        const items = top.map((p) => ({ label: p.proje, value: p.count }));
+        if (rest > 0) items.push({ label: "Diğer", value: rest });
+        return items;
+    }, [projects, filteredRows.length]);
+
+    const donutLoadCities = useMemo(() => {
+        const top = overallLoadCities.slice(0, 5);
+        const topSum = top.reduce((a, c) => a + c.value, 0);
+        const rest = Math.max(0, overallLoadCities.reduce((a, c) => a + c.value, 0) - topSum);
+        const items = top.map((x) => ({ label: x.key, value: x.value }));
+        if (rest > 0) items.push({ label: "Diğer", value: rest });
+        return items;
+    }, [overallLoadCities]);
+
+    const donutDelivCities = useMemo(() => {
+        const top = overallDelivCities.slice(0, 5);
+        const topSum = top.reduce((a, c) => a + c.value, 0);
+        const rest = Math.max(0, overallDelivCities.reduce((a, c) => a + c.value, 0) - topSum);
+        const items = top.map((x) => ({ label: x.key, value: x.value }));
+        if (rest > 0) items.push({ label: "Diğer", value: rest });
+        return items;
+    }, [overallDelivCities]);
+
     // Shortcuts
     const setToday = () => {
         const t = todayISO();
@@ -476,7 +584,7 @@ export default function ProjeLokasyonRaporlari() {
             </Helmet>
 
             <Box sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                {/* ÜST BAR / FİLTRELER */}
+                {/* Üst Bar / Filtreler */}
                 <Box
                     sx={{
                         py: { xs: 2, md: 3 },
@@ -510,46 +618,46 @@ export default function ProjeLokasyonRaporlari() {
                             </Box>
 
                             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                                {/* Hızlı kısayollar */}
                                 <Button size="small" onClick={setToday}>Bugün</Button>
                                 <Button size="small" onClick={setLast7}>Son 7 Gün</Button>
                                 <Button size="small" onClick={setLast30}>Son 30 Gün</Button>
                                 <Button size="small" onClick={setThisMonth}>Bu Ay</Button>
                                 <Button size="small" onClick={setPrevMonth}>Geçen Ay</Button>
 
-                                {/* Ay seçimi */}
-                                <FormControl size="small" sx={{ minWidth: 180, display: mode === "MONTH" ? "block" : "none" }}>
-                                    <InputLabel>Ay</InputLabel>
-                                    <Select label="Ay" value={month || ""} onChange={(e) => setMonth(e.target.value)}>
-                                        {allMonths.map((m) => (
-                                            <MenuItem key={m} value={m}>
-                                                {m}
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
+                                {mode === "MONTH" && (
+                                    <FormControl size="small" sx={{ minWidth: 180 }}>
+                                        <InputLabel>Ay</InputLabel>
+                                        <Select label="Ay" value={month || ""} onChange={(e) => setMonth(e.target.value)}>
+                                            {allMonths.map((m) => (
+                                                <MenuItem key={m} value={m}>
+                                                    {m}
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                )}
 
-                                {/* Özel tarih aralığı */}
-                                <Stack direction="row" spacing={1} sx={{ display: mode === "RANGE" ? "flex" : "none", alignItems: "center" }}>
-                                    <TextField
-                                        size="small"
-                                        type="date"
-                                        label="Başlangıç"
-                                        InputLabelProps={{ shrink: true }}
-                                        value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                    />
-                                    <TextField
-                                        size="small"
-                                        type="date"
-                                        label="Bitiş"
-                                        InputLabelProps={{ shrink: true }}
-                                        value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
-                                    />
-                                </Stack>
+                                {mode === "RANGE" && (
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                        <TextField
+                                            size="small"
+                                            type="date"
+                                            label="Başlangıç"
+                                            InputLabelProps={{ shrink: true }}
+                                            value={startDate}
+                                            onChange={(e) => setStartDate(e.target.value)}
+                                        />
+                                        <TextField
+                                            size="small"
+                                            type="date"
+                                            label="Bitiş"
+                                            InputLabelProps={{ shrink: true }}
+                                            value={endDate}
+                                            onChange={(e) => setEndDate(e.target.value)}
+                                        />
+                                    </Stack>
+                                )}
 
-                                {/* Proje seçimi */}
                                 <FormControl size="small" sx={{ minWidth: 220 }}>
                                     <InputLabel>Proje</InputLabel>
                                     <Select
@@ -565,6 +673,16 @@ export default function ProjeLokasyonRaporlari() {
                                     </Select>
                                 </FormControl>
 
+                                <Tooltip title="Görünüm: Ay / Aralık">
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={() => setMode((m) => (m === "MONTH" ? "RANGE" : "MONTH"))}
+                                    >
+                                        {mode === "MONTH" ? "Tarih Aralığı" : "Ay Görünümü"}
+                                    </Button>
+                                </Tooltip>
+
                                 <Tooltip title="Yenile">
                                     <span>
                                         <IconButton onClick={fetchData} disabled={loading} color="primary">
@@ -577,17 +695,11 @@ export default function ProjeLokasyonRaporlari() {
                     </Container>
                 </Box>
 
-                {/* İÇERİK */}
+                {/* Dashboard */}
                 <Container maxWidth={false} sx={{ px: { xs: 2, md: 4 }, maxWidth: "1600px", py: 2 }}>
-                    {err && (
-                        <Paper sx={{ ...panelSX, mb: 2 }}>
-                            <Typography color="error">{err}</Typography>
-                        </Paper>
-                    )}
-
-                    {/* ÖZET KARTLAR */}
-                    <Grid container spacing={2.4}>
-                        <Grid size={{ xs: 12, md: 3 }}>
+                    {/* Özet Kartlar */}
+                    <Grid container spacing={2}>
+                        <Grid item xs={12} md={3}>
                             <Paper elevation={6} sx={cardSX}>
                                 <Typography variant="subtitle2" sx={{ opacity: 0.7 }}>
                                     Toplam Kayıt (filtre)
@@ -599,7 +711,7 @@ export default function ProjeLokasyonRaporlari() {
                             </Paper>
                         </Grid>
 
-                        <Grid size={{ xs: 12, md: 3 }}>
+                        <Grid item xs={12} md={3}>
                             <Paper elevation={6} sx={cardSX}>
                                 <Typography variant="subtitle2" sx={{ opacity: 0.7 }}>
                                     En Yoğun Gün (tümü)
@@ -611,7 +723,7 @@ export default function ProjeLokasyonRaporlari() {
                             </Paper>
                         </Grid>
 
-                        <Grid size={{ xs: 12, md: 3 }}>
+                        <Grid item xs={12} md={3}>
                             <Paper elevation={6} sx={cardSX}>
                                 <Typography variant="subtitle2" sx={{ opacity: 0.7 }}>
                                     En Çok Proje (TOP 1)
@@ -623,7 +735,7 @@ export default function ProjeLokasyonRaporlari() {
                             </Paper>
                         </Grid>
 
-                        <Grid size={{ xs: 12, md: 3 }}>
+                        <Grid item xs={12} md={3}>
                             <Paper elevation={6} sx={cardSX}>
                                 <Typography variant="subtitle2" sx={{ opacity: 0.7 }}>
                                     Seçili Proje
@@ -641,10 +753,75 @@ export default function ProjeLokasyonRaporlari() {
                         </Grid>
                     </Grid>
 
-                    {/* TOP PROJELER + HAFTANIN GÜNÜ PİVOTU */}
-                    <Grid container spacing={2.4} sx={{ mt: 0.5 }}>
-                        {/* TOP Projeler (bar) */}
-                        <Grid size={{ xs: 12, md: 5 }}>
+                    {/* Donut Paneller */}
+                    <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                        <Grid item xs={12} md={4}>
+                            <Paper elevation={0} sx={{ ...panelSX, height: 300, display: "flex", alignItems: "center", justifyContent: "space-between", px: 3 }}>
+                                <Box>
+                                    <Typography variant="subtitle1" fontWeight={800}>
+                                        Proje Payları (TOP 5 + Diğer)
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                                        Filtrelenen kayıtlar içinde
+                                    </Typography>
+                                    <Stack spacing={0.5} sx={{ mt: 1 }}>
+                                        {donutProjects.slice(0, 6).map((d, i) => (
+                                            <Typography key={i} variant="body2">
+                                                • {d.label} — <b>{d.value}</b>
+                                            </Typography>
+                                        ))}
+                                    </Stack>
+                                </Box>
+                                <DonutChart data={donutProjects} title="Toplam" subtitle="kayıt" />
+                            </Paper>
+                        </Grid>
+
+                        <Grid item xs={12} md={4}>
+                            <Paper elevation={0} sx={{ ...panelSX, height: 300, display: "flex", alignItems: "center", justifyContent: "space-between", px: 3 }}>
+                                <Box>
+                                    <Typography variant="subtitle1" fontWeight={800}>
+                                        Yükleme İli Payları (TOP 5 + Diğer)
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                                        Tüm veride, filtre bazında
+                                    </Typography>
+                                    <Stack spacing={0.5} sx={{ mt: 1 }}>
+                                        {donutLoadCities.slice(0, 6).map((d, i) => (
+                                            <Typography key={i} variant="body2">
+                                                • {d.label} — <b>{d.value}</b>
+                                            </Typography>
+                                        ))}
+                                    </Stack>
+                                </Box>
+                                <DonutChart data={donutLoadCities} title="Toplam" subtitle="yükleme" />
+                            </Paper>
+                        </Grid>
+
+                        <Grid item xs={12} md={4}>
+                            <Paper elevation={0} sx={{ ...panelSX, height: 300, display: "flex", alignItems: "center", justifyContent: "space-between", px: 3 }}>
+                                <Box>
+                                    <Typography variant="subtitle1" fontWeight={800}>
+                                        Teslim İli Payları (TOP 5 + Diğer)
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                                        Tüm veride, filtre bazında
+                                    </Typography>
+                                    <Stack spacing={0.5} sx={{ mt: 1 }}>
+                                        {donutDelivCities.slice(0, 6).map((d, i) => (
+                                            <Typography key={i} variant="body2">
+                                                • {d.label} — <b>{d.value}</b>
+                                            </Typography>
+                                        ))}
+                                    </Stack>
+                                </Box>
+                                <DonutChart data={donutDelivCities} title="Toplam" subtitle="teslim" />
+                            </Paper>
+                        </Grid>
+                    </Grid>
+
+                    {/* TOP Projeler + Pivot */}
+                    <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                        <Grid item xs={12} md={5}>
                             <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                                     <Typography variant="subtitle1" fontWeight={800}>
@@ -673,8 +850,7 @@ export default function ProjeLokasyonRaporlari() {
                             </Paper>
                         </Grid>
 
-                        {/* Proje x Haftanın Günü Pivot */}
-                        <Grid size={{ xs: 12, md: 7 }}>
+                        <Grid item xs={12} md={7}>
                             <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                                     <Typography variant="subtitle1" fontWeight={800}>
@@ -768,11 +944,10 @@ export default function ProjeLokasyonRaporlari() {
                         </Grid>
                     </Grid>
 
-                    {/* GÜNLÜK PANELLER (Tümü ve Seçili Proje) */}
+                    {/* Günlük paneller */}
                     <Divider sx={{ my: 3, opacity: 0.2 }} />
-                    <Grid container spacing={2.4}>
-                        {/* Günlük — Tüm projeler */}
-                        <Grid size={{ xs: 12, md: 6 }}>
+                    <Grid container spacing={2}>
+                        <Grid item xs={12} md={6}>
                             <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                                     <Typography variant="subtitle1" fontWeight={800}>
@@ -804,6 +979,9 @@ export default function ProjeLokasyonRaporlari() {
                                         CSV
                                     </Button>
                                 </Stack>
+                                <Box sx={{ mt: 1, px: 1 }}>
+                                    <Sparkline points={dailyAll.map((d) => d.TOPLAM)} />
+                                </Box>
                                 <Box sx={{ mt: 1, flex: 1, overflow: "auto" }}>
                                     <Table size="small" stickyHeader>
                                         <TableHead>
@@ -840,8 +1018,7 @@ export default function ProjeLokasyonRaporlari() {
                             </Paper>
                         </Grid>
 
-                        {/* Günlük — Seçili Proje */}
-                        <Grid size={{ xs: 12, md: 6 }}>
+                        <Grid item xs={12} md={6}>
                             <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                                     <Typography variant="subtitle1" fontWeight={800}>
@@ -870,6 +1047,9 @@ export default function ProjeLokasyonRaporlari() {
                                         CSV
                                     </Button>
                                 </Stack>
+                                <Box sx={{ mt: 1, px: 1 }}>
+                                    <Sparkline points={dailyForProject.map((d) => d.ADET)} />
+                                </Box>
                                 <Box sx={{ mt: 1, flex: 1, overflow: "auto" }}>
                                     <Table size="small" stickyHeader>
                                         <TableHead>
@@ -903,11 +1083,10 @@ export default function ProjeLokasyonRaporlari() {
                         </Grid>
                     </Grid>
 
-                    {/* LOKASYON PANELLERİ */}
+                    {/* Lokasyon panelleri */}
                     <Divider sx={{ my: 3, opacity: 0.2 }} />
-                    <Grid container spacing={2.4}>
-                        {/* Tüm veride Yükleme İlleri */}
-                        <Grid size={{ xs: 12, md: 6 }}>
+                    <Grid container spacing={2}>
+                        <Grid item xs={12} md={6}>
                             <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                                     <Typography variant="subtitle1" fontWeight={800}>
@@ -937,8 +1116,7 @@ export default function ProjeLokasyonRaporlari() {
                             </Paper>
                         </Grid>
 
-                        {/* Tüm veride Teslim İlleri */}
-                        <Grid size={{ xs: 12, md: 6 }}>
+                        <Grid item xs={12} md={6}>
                             <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                                     <Typography variant="subtitle1" fontWeight={800}>
@@ -970,9 +1148,8 @@ export default function ProjeLokasyonRaporlari() {
                     </Grid>
 
                     {/* Seçili proje için lokasyonlar */}
-                    <Grid container spacing={2.4} sx={{ mt: 0.5 }}>
-                        {/* Seçili Proje: Yükleme İlleri */}
-                        <Grid size={{ xs: 12, md: 6 }}>
+                    <Grid container spacing={2} sx={{ mt: 0.5, pb: 4 }}>
+                        <Grid item xs={12} md={6}>
                             <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                                     <Typography variant="subtitle1" fontWeight={800}>
@@ -1002,8 +1179,7 @@ export default function ProjeLokasyonRaporlari() {
                             </Paper>
                         </Grid>
 
-                        {/* Seçili Proje: Teslim İlleri */}
-                        <Grid size={{ xs: 12, md: 6 }}>
+                        <Grid item xs={12} md={6}>
                             <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                                     <Typography variant="subtitle1" fontWeight={800}>

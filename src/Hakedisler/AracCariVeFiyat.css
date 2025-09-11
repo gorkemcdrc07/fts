@@ -111,7 +111,7 @@ html, body, #root {
     flex: 0 0 auto;
     height: clamp(420px, 60vh, 720px);
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: auto; /* <--- değişti (hidden yerine auto) */
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--card);
@@ -140,11 +140,11 @@ body[data-theme="dark"] .acf-table-wrap:hover::-webkit-scrollbar-thumb {
 /* ============ Tablo ============ */
 .acf-table {
     width: 100%;
-    table-layout: fixed;
-    border-collapse: collapse; /* düz çizgiler */
+    min-width: 100px; /* <--- tabloyu daha geniş yapar */
+    table-layout: auto; /* <--- fixed yerine auto */
+    border-collapse: collapse;
     color: var(--text);
 }
-
     /* Başlık */
     .acf-table thead th {
         position: sticky;

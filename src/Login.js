@@ -278,7 +278,7 @@ function Login() {
                             }}
                         >
                             <Typography variant="h4" fontWeight={900} sx={{ letterSpacing: 0.3 }}>
-                                Lojistik Portal
+                                Filo Takip Sistemi
                             </Typography>
                             <Typography sx={{ opacity: 0.85 }}>
                                 Görevler, masraflar ve operasyonların merkez üssü.

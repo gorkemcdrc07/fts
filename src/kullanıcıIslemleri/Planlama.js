@@ -158,6 +158,7 @@ export default function PlanlamaDeluxe() {
     const [filteredRows, setFilteredRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
 
     // filtreler
     const [plakalar, setPlakalar] = useState([]);
@@ -188,6 +189,66 @@ export default function PlanlamaDeluxe() {
     // değişiklik takibi (sticky kaydet barı)
     const lastSavedSnapshot = useRef("[]");
     const isDirty = useMemo(() => lastSavedSnapshot.current !== JSON.stringify(rows), [rows]);
+
+    // ⬇️ Sürükle-bırak ve dosya seçici için
+    const [dragActive, setDragActive] = useState(false);
+    const fileInputRef = useRef(null);
+
+    const acceptedExts = [".xlsx", ".xls", ".csv"];
+
+    const normalizeHeader = (s = "") =>
+        toUpperTr(String(s)).replace(/\s+/g, " ").replace(/\./g, "").trim();
+
+    // Excel başlığı → alan eşleme
+    const headerMap = {
+        "SEFER NO": "sefer_no",
+        "SEVK NO": "sevk_no",
+        "TARİH": "tarih", // ilk TARİH
+        "PLAKA": "plaka",
+        "SÜRÜCÜ": "ad_soyad",
+        "TELEFON": "telefon",
+        "TC KİMLİK NO": "tc",
+        "SON NOKTA": "son_nokta",
+        "FATURA MÜŞTERİSİ": "fatura_musterisi",
+        "YÜKLEYEN MÜŞTERİ": "yukleyen_musteri__tmp",
+        "YÜKLEME İL": "yukleme_il__tmp",
+        "YÜKLEME İLÇE": "yukleme_ilce__tmp",
+        "TONAJ": "tonaj",
+        "TAHLİYE MÜŞTERİ": "tahliye_musteri__tmp",
+        "TAHLİYE İL": "tahliye_il",
+        "TAHLİYE İLÇE": "tahliye_ilce__tmp",
+        "NOKTA SAYISI": "nokta_sayisi__tmp",
+        "FİYAT": "fiyat__tmp",
+    };
+
+    const parseDateLike = (v) => {
+        if (!v) return null;
+        if (typeof v === "string" && v.includes(".")) {
+            const [g, a, y] = v.split(".");
+            if (y && a && g) return `${y}-${a.padStart(2, "0")}-${g.padStart(2, "0")}`;
+        }
+        if (typeof v === "number") {
+            const dec = XLSX.SSF ? XLSX.SSF.parse_date_code(v) : null;
+            if (dec) {
+                const y = String(dec.y).padStart(4, "0");
+                const m = String(dec.m).padStart(2, "0");
+                const d = String(dec.d).padStart(2, "0");
+                return `${y}-${m}-${d}`;
+            }
+        }
+        try {
+            const d = new Date(v);
+            if (!isNaN(d)) return d.toISOString().slice(0, 10);
+        } catch { }
+        return null;
+    };
+
+    const toNumber = (v) => {
+        if (v === null || v === undefined || v === "") return null;
+        const n = parseFloat(String(v).replace(",", "."));
+        return isNaN(n) ? null : n;
+    };
+
 
     /* ---------- keyboard shortcuts ---------- */
     useEffect(() => {
@@ -304,6 +365,93 @@ export default function PlanlamaDeluxe() {
         }
     }, [columnOrder]);
 
+    // ⬇️ Excel satırlarını dahili yapıya çevir
+    const buildRowFromExcel = (obj) => {
+        const tarih =
+            parseDateLike(obj.tarih ?? obj["TARİH"] ?? obj["Tarih"]);
+        const varis_tarihi =
+            parseDateLike(
+                obj.varis_tarihi ??
+                obj["VARIŞ TARİHİ"] ?? obj["VARIS TARIHI"] ??
+                obj["VARIŞ TARİH"] ?? obj["TARİH_2"]
+            ) || null;
+
+        const yukleme_noktasi_parts = [
+            obj.yukleyen_musteri__tmp,
+            obj.yukleme_il__tmp,
+            obj.yukleme_ilce__tmp,
+        ].filter(Boolean);
+
+        const tahliye_noktasi_parts = [
+            obj.tahliye_musteri__tmp,
+            obj.tahliye_ilce__tmp,
+        ].filter(Boolean);
+
+        const son_nokta = obj.tahliye_il || obj.son_nokta || "";
+        const ilUpper = toUpperTr(son_nokta);
+        const bolge = ilToBolgeMap[ilUpper] || "";
+
+        const base = {
+            sefer_no: obj.sefer_no ?? "",
+            sevk_no: obj.sevk_no ?? "",
+            tarih: tarih || getTodayISO(),
+            varis_tarihi: varis_tarihi || tarih || getTodayISO(),
+            plaka: obj.plaka ?? "",
+            ad_soyad: obj.ad_soyad ?? "",
+            telefon: obj.telefon ?? "",
+            tc: obj.tc ?? "",
+            son_nokta,
+            fatura_musterisi: obj.fatura_musterisi ?? "",
+            yukleme_noktasi: yukleme_noktasi_parts.join(" / "),
+            tahliye_noktasi: tahliye_noktasi_parts.join(" / "),
+            tahliye_il: obj.tahliye_il ?? "",
+            tonaj: toNumber(obj.tonaj)?.toString() ?? "",
+            bir_onceki_is: "",
+            bolge,
+        };
+
+        Object.keys(base).forEach((k) => (base[k] === "" ? (base[k] = null) : null));
+
+        return {
+            ...base,
+            _rowId: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        };
+    };
+
+    const parseWorkbookToRows = (wb) => {
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
+        if (!aoa.length) return [];
+
+        const headersRaw = (aoa[0] || []).map((h) => normalizeHeader(h));
+        let tarihCount = 0;
+
+        const headerKeys = headersRaw.map((h) => {
+            if (h === "TARİH") {
+                tarihCount += 1;
+                return tarihCount === 1 ? "tarih" : "TARİH_2";
+            }
+            return headerMap[h] || null;
+        });
+
+        const body = aoa.slice(1);
+        const tempObjects = body
+            .filter((row) => row.some((c) => c !== null && c !== undefined && String(c).trim() !== ""))
+            .map((row) => {
+                const obj = {};
+                headerKeys.forEach((k, idx) => {
+                    if (!k) return;
+                    obj[k] = row[idx];
+                });
+                if (obj["TARİH_2"] && !obj.varis_tarihi) obj.varis_tarihi = obj["TARİH_2"];
+                if (obj["TC KİMLİK NO"] && !obj.tc) obj.tc = obj["TC KİMLİK NO"];
+                return obj;
+            });
+
+        return tempObjects.map(buildRowFromExcel);
+    };
+
+
     /* ---------- excel export ---------- */
     const exportExcel = () => {
         if (!filteredRows.length) {
@@ -362,13 +510,92 @@ export default function PlanlamaDeluxe() {
         setSnack({ open: true, msg: "Satırlar güncellendi (lokal). Kaydet ile yazılır.", severity: "success" });
     };
 
+    const handleFiles = async (files) => {
+        const file = files?.[0];
+        if (!file) return;
+
+        const ext = "." + file.name.split(".").pop().toLowerCase();
+        if (!acceptedExts.includes(ext)) {
+            setSnack({ open: true, msg: "Desteklenmeyen dosya türü.", severity: "warning" });
+            return;
+        }
+
+        try {
+            const data = await file.arrayBuffer();
+            const wb = XLSX.read(data, { type: "array" });
+            const importedRows = parseWorkbookToRows(wb);
+
+            if (!importedRows.length) {
+                setSnack({ open: true, msg: "Dosyada veri bulunamadı.", severity: "info" });
+                return;
+            }
+
+            setRows(importedRows);
+            setFilteredRows(importedRows);
+
+            const yeniBolgeler = [...new Set(importedRows.map((r) => r.bolge).filter(Boolean))];
+            const yeniPlakalar = [...new Set(importedRows.map((r) => r.plaka).filter(Boolean))];
+            setBolgeler(yeniBolgeler);
+            setPlakalar(yeniPlakalar);
+
+            setPlakaFilter([]);
+            setBolgeFilter([]);
+            setSearch("");
+
+            setSnack({
+                open: true,
+                msg: `${yeniPlakalar.length} plaka değeri getirildi. (Toplam ${importedRows.length} satır)`,
+                severity: "success",
+            });
+        } catch (e) {
+            console.error(e);
+            setSnack({ open: true, msg: "İçe aktarma sırasında hata oluştu.", severity: "error" });
+        } finally {
+            setDragActive(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
+
+    const onDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!dragActive) setDragActive(true);
+    };
+    const onDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(false);
+    };
+    const onDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(false);
+        const files = e.dataTransfer?.files;
+        if (files?.length) handleFiles(files);
+    };
+
+
     /* ---------- kaydet (insert/update) ---------- */
     const handleKaydet = async () => {
         setSaving(true);
 
-        for (const item of rows) {
+        // 1) TÜM KAYITLARI SİL
+        const { error: delErr } = await supabase
+            .from("planlama")
+            .delete()
+            .not("id", "is", null); // id IS NOT NULL
+        if (delErr) {
+            console.error(delErr);
+            setSaving(false);
+            setSnack({ open: true, msg: "Silme sırasında hata oluştu.", severity: "error" });
+            return;
+        }
+
+        // 2) Normalize + TEKİLLEŞTİR
+        const normalizeRow = (item) => {
             const payload = { ...item };
             delete payload._rowId;
+            delete payload.id; // her zaman yeni kayıt
 
             ["tarih", "varis_tarihi"].forEach((k) => {
                 if (!payload[k]) payload[k] = getTodayISO();
@@ -384,23 +611,45 @@ export default function PlanlamaDeluxe() {
             Object.keys(payload).forEach((k) => {
                 if (payload[k] === undefined || payload[k] === "") payload[k] = null;
             });
+            return payload;
+        };
 
-            try {
-                if (payload.id) {
-                    const { error } = await supabase.from("planlama").update(payload).eq("id", payload.id);
-                    if (error) throw error;
-                } else {
-                    const { error } = await supabase.from("planlama").insert(payload);
-                    if (error) throw error;
-                }
-            } catch (err) {
-                console.error("Kaydet hatası:", err?.message, payload);
+        // Son görünen kazansın (Map set ederken son yazılan kalır)
+        const map = new Map(); // key: "PLAKA|YYYY-MM-DD"
+        for (const r of filteredRows) {
+            const p = normalizeRow(r);
+            const key = `${p.plaka ?? ""}|${p.tarih ?? ""}`;
+            map.set(key, p);
+        }
+        const payloads = Array.from(map.values());
+        const dropped = filteredRows.length - payloads.length; // kaç tane elendi
+
+        // 3) UPSERT (onConflict: plaka,tarih) — tekilleştirilmiş veriyi yaz
+        const chunkSize = 500;
+        try {
+            for (let i = 0; i < payloads.length; i += chunkSize) {
+                const slice = payloads.slice(i, i + chunkSize);
+                const { error: upErr } = await supabase
+                    .from("planlama")
+                    .upsert(slice, { onConflict: "plaka,tarih" }); // unique’e uygun hedef
+                if (upErr) throw upErr;
             }
+        } catch (e) {
+            console.error("Upsert hatası:", e?.message);
+            setSaving(false);
+            setSnack({ open: true, msg: "Yazma sırasında hata oluştu.", severity: "error" });
+            return;
         }
 
         await fetchData();
         setSaving(false);
-        setSnack({ open: true, msg: "Değişiklikler kaydedildi.", severity: "success" });
+        setSnack({
+            open: true,
+            msg: dropped > 0
+                ? `Tablo ekrandakiyle değiştirildi. ${dropped} yinelenen (plaka,tarih) atlandı.`
+                : "Tablo ekrandakiyle değiştirildi.",
+            severity: "success",
+        });
     };
 
     /* ---------- geri al ---------- */
@@ -617,6 +866,9 @@ export default function PlanlamaDeluxe() {
 
     return (
         <Box
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
             sx={{
                 height: "100dvh",
                 display: "grid",
@@ -629,6 +881,7 @@ export default function PlanlamaDeluxe() {
                     "linear-gradient(180deg, #050816 0%, #0B1220 100%)",
             }}
         >
+
             <Helmet>
                 <title>PLANLAMA</title>
             </Helmet>
@@ -792,6 +1045,24 @@ export default function PlanlamaDeluxe() {
                         </Button>
                     </span>
                 </Tooltip>
+                {/* İçe Aktar (Excel/CSV) */}
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    hidden
+                    onChange={(e) => handleFiles(e.target.files)}
+                />
+                <Tooltip title="Excel/CSV içe aktar">
+                    <Button
+                        variant="outlined"
+                        startIcon={<DownloadIcon />}
+                        onClick={() => fileInputRef.current?.click()}
+                    >
+                        İçe Aktar
+                    </Button>
+                </Tooltip>
+
             </Paper>
 
             {/* DataGrid */}
@@ -826,6 +1097,7 @@ export default function PlanlamaDeluxe() {
                     onRowDoubleClick={(p) => openDrawer(p.row)}
                     disableColumnMenu={false}
                     columnReorder
+                    disableColumnReorder={false}
                     onColumnOrderChange={onColumnOrderChange}
                     getRowClassName={(params) => {
                         const c = (params.row.bolge || "").toString();
@@ -1024,6 +1296,34 @@ export default function PlanlamaDeluxe() {
                 )}
             </Drawer>
 
+            {/* Drag & Drop Overlay */}
+            {dragActive && (
+                <Box
+                    sx={{
+                        position: "fixed",
+                        inset: 0,
+                        zIndex: (t) => t.zIndex.modal + 1,
+                        backgroundColor: alpha("#000", 0.5),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        border: "3px dashed rgba(255,255,255,0.5)",
+                    }}
+                    onDragOver={onDragOver}
+                    onDragLeave={onDragLeave}
+                    onDrop={onDrop}
+                >
+                    <Stack spacing={1} alignItems="center">
+                        <DownloadIcon sx={{ fontSize: 52, opacity: 0.85 }} />
+                        <Typography variant="h6" fontWeight={800}>Dosyayı buraya bırak</Typography>
+                        <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                            .xlsx, .xls veya .csv desteklenir
+                        </Typography>
+                    </Stack>
+                </Box>
+            )}
+
+
             {/* Snackbar */}
             <Snackbar
                 open={snack.open}
@@ -1043,4 +1343,5 @@ export default function PlanlamaDeluxe() {
             </Snackbar>
         </Box>
     );
-}
+    }
+

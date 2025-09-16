@@ -35,7 +35,7 @@ import HakedisSeferleri from "./Hakedisler/HakedisSeferleri";
 import KpiOlcumu from "./raporlar/kpiOlcumu";
 import YuklemedeBekleme from "./raporlar/yuklemedeBekleme";
 import ProjeLokasyonRaporlari from "./raporlar/ProjeLokasyonRaporlari"; // ✅ Eklendi
-
+import Tools from "./raporlar/tools";
 // Layout
 import AppLayout from "./layout/AppLayout";
 
@@ -79,7 +79,7 @@ function App() {
                             {/* Raporlar */}
                             <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
                             <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} /> {/* ✅ Yeni rota */}
-
+                            <Route path="raporlar/tools" element={<div style={{ padding: 24 }}>ROUTE OK</div>} />
                             {/* Varsayılan */}
                             <Route path="*" element={<Navigate to="/anasayfa" replace />} />
                         </Route>

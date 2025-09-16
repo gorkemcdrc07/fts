@@ -675,7 +675,7 @@ export default function ReelAtananSeferler() {
             }
 
             if (upsert.length) {
-                await supabase.from("seferler").upsert(upsert, { onConflict: ["sefer_no"] });
+                await supabase.from("seferler").upsert(upsert, { onConflict: "sefer_no" });
             }
 
             setSuccessCount(upsert.length);
@@ -902,7 +902,8 @@ export default function ReelAtananSeferler() {
 
             const { error: detErr } = await supabase
                 .from("sefer_detaylari")
-                .upsert(upserts, { onConflict: ["sefer_id", "nokta_sirasi"] });
+                .upsert(upserts, { onConflict: "sefer_id,nokta_sirasi" });
+
             if (detErr) throw detErr;
 
 
@@ -920,9 +921,10 @@ export default function ReelAtananSeferler() {
                     kayit_zamani: new Date().toISOString(),
                 }));
 
-    const { error: kmErr } = await supabase
-        .from("reel_km")
-        .upsert(kmRows, { onConflict: ["sefer_no", "nokta_sirasi"] });
+            const { error: kmErr } = await supabase
+                .from("reel_km")
+                .upsert(kmRows, { onConflict: "sefer_no,nokta_sirasi" });
+
             if (kmErr) throw kmErr;
 
             // Upsert sonrası genel "Kayıtlı KM" toplamını güncelle
@@ -1020,7 +1022,8 @@ export default function ReelAtananSeferler() {
             };
             const { error: e1 } = await supabase
                 .from("tamamlanan_seferler")
-                .upsert(anaPayload, { onConflict: ["sefer_no"] });
+                .upsert(anaPayload, { onConflict: "sefer_no" });
+
             if (e1) throw e1;
 
             const detPayload = detailRows.map((d, i) => ({
@@ -1052,7 +1055,8 @@ export default function ReelAtananSeferler() {
             if (detPayload.length) {
                 const { error: e2 } = await supabase
                     .from("tamamlanan_detaylar")
-                    .upsert(detPayload, { onConflict: ["sefer_no", "nokta_sirasi"] });
+                    .upsert(detPayload, { onConflict: "sefer_no,nokta_sirasi" });
+
                 if (e2) throw e2;
             }
 
@@ -1070,9 +1074,10 @@ export default function ReelAtananSeferler() {
                     km: clean(d.yeni_km) || clean(d.kayitli_km) || null,
                     kayit_zamani: new Date().toISOString(),
                     }));
-                const { error: kmDoneErr } = await supabase
-                    .from("reel_km")
-                    .upsert(kmRowsCompleted, { onConflict: ["sefer_no", "nokta_sirasi"] });
+            const { error: kmDoneErr } = await supabase
+                .from("reel_km")
+                .upsert(kmRowsCompleted, { onConflict: "sefer_no,nokta_sirasi" });
+
                 if (kmDoneErr) throw kmDoneErr;
 
 

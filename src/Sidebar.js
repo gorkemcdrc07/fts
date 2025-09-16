@@ -47,6 +47,7 @@ import PushPinIcon from "@mui/icons-material/PushPin";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import DirectionsBusFilledIcon from "@mui/icons-material/DirectionsBusFilled";
 import AirportShuttleOutlinedIcon from "@mui/icons-material/AirportShuttleOutlined";
+import PivotTableChartIcon from "@mui/icons-material/PivotTableChart"; // ✅ yeni: tools menüsü ikonu
 
 export const DRAWER_WIDTH_OPEN = 260;
 export const DRAWER_WIDTH_CLOSED = 72;
@@ -114,13 +115,14 @@ export default function Sidebar(props) {
         setRaporMenuAcik(
             anyStartsWith([
                 "/raporlar/kpi-olcumu",
-                "/raporlar/lokasyon-rapor", // 🔗 Proje & Lokasyon Bazlı Raporlar
+                "/raporlar/lokasyon-rapor",
                 "/raporlar/yuklemede-bekleme",
                 "/raporlar/teslimde-bekleme",
                 "/raporlar/yuklemede-gecikme",
                 "/raporlar/teslimde-gecikme",
                 "/raporlar/sefer-sureleri",
                 "/raporlar/plaka-bazli",
+                "/raporlar/tools",              // ✅ yeni: tools sayfası
             ])
         );
         setHakedisMenuAcik(
@@ -158,12 +160,9 @@ export default function Sidebar(props) {
 
     const raporAltMenuler = useMemo(
         () => [
+            { ad: "Analiz Araçları (Pivot & Grafik)", yol: "/raporlar/tools", ikon: <PivotTableChartIcon /> },
             { ad: "KPI Ölçümü", yol: "/raporlar/kpi-olcumu", ikon: <AssessmentIcon /> },
-            {
-                ad: "Proje & Lokasyon Bazlı Raporlar",
-                yol: "/raporlar/lokasyon-rapor", // 🔗 App.jsx’te ProjeLokasyonRaporlari ile eşleyin
-                ikon: <MapIcon />,
-            },
+            { ad: "Proje & Lokasyon Bazlı Raporlar", yol: "/raporlar/lokasyon-rapor", ikon: <MapIcon /> },
             { ad: "Yüklemede Bekleme", yol: "/raporlar/yuklemede-bekleme", ikon: <ScheduleIcon /> },
             { ad: "Teslimde Bekleme", yol: "/raporlar/teslimde-bekleme", ikon: <AvTimerIcon /> },
             { ad: "Yüklemede Gecikme", yol: "/raporlar/yuklemede-gecikme", ikon: <QueryStatsIcon /> },

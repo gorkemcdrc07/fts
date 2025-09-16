@@ -867,6 +867,8 @@ export default function ReelAtananSeferler() {
         }
     }, []);
 
+
+
     const saveDetails = useCallback(async () => {
         if (!editSefer) return;
         setSaving(true);

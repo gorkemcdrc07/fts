@@ -1374,8 +1374,11 @@ export default function ReelAtananSeferler() {
     };
 
     const canSync = (() => {
-        const name = (localStorage.getItem("kullaniciAdi") || "").toUpperCase();
-        return name === "ADMIN" || name === "SELİN";
+        const allowed = new Set(["admin", "selin", "bekirakcagoz"]);
+        const name = (localStorage.getItem("kullaniciAdi") || "")
+            .toLocaleLowerCase("tr-TR"); // Türkçe duyarlı
+
+        return allowed.has(name);
     })();
 
     /* --------------- RENDER --------------- */

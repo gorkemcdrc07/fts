@@ -1374,7 +1374,7 @@ export default function ReelAtananSeferler() {
     };
 
     const canSync = (() => {
-        const allowed = new Set(["admin", "selin", "bekirakcagoz"]);
+        const allowed = new Set(["admin", "selin", "bekirakcagoz","buketcimenci"]);
         const name = (localStorage.getItem("kullaniciAdi") || "")
             .toLocaleLowerCase("tr-TR"); // Türkçe duyarlı
 

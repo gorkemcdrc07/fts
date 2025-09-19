@@ -25,6 +25,13 @@ import FileDownloadDoneIcon from "@mui/icons-material/FileDownloadDone";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import PersonIcon from "@mui/icons-material/Person";
+import PlaceIcon from "@mui/icons-material/Place";
+import FlagIcon from "@mui/icons-material/Flag";
+import NumbersIcon from "@mui/icons-material/Numbers";
+import WorkOutlineIcon from "@mui/icons-material/WorkOutline";
+
 
 /* ---------------- helpers ---------------- */
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -337,6 +344,7 @@ export default function ReelAtananSeferler() {
     const [successCount, setSuccessCount] = useState(0);
     const [showSuccess, setShowSuccess] = useState(false);
     const [dense, setDense] = useState(false);
+
 
     /* dialog (Edit) */
     const [editOpen, setEditOpen] = useState(false);
@@ -992,6 +1000,52 @@ export default function ReelAtananSeferler() {
     }, [canSeeETA]);
 
     // kullanışlı: son yukleme_cikis'i memoize edelim
+    // --- Yükleme (origin) ve Şoför özetleri ---
+    const originText = useMemo(() => {
+        if (!etaRow) return "-";
+        const first = (arr) => (arr.length ? arr[0] : "");
+        const yuklemeIl = first(splitCell(etaRow.yukleme_ili || ""));
+        const yuklemeIlce = first(splitCell(etaRow.yukleme_ilcesi || ""));
+        const yuklemeNokta = first(splitCell(etaRow.yukleme_noktasi || ""));
+        return [yuklemeNokta, yuklemeIlce, yuklemeIl].filter(Boolean).join(" • ");
+    }, [etaRow]);
+
+    const formatPhone = (s = "") => {
+        const d = String(s).replace(/\D/g, "");
+        if (d.length < 10) return s || "-";
+        // ör: 5437819538 -> 543 781 95 38
+        return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6, 8)} ${d.slice(8, 10)}`;
+    };
+
+    const ellipsize = (txt, max = 60) => {
+        const s = String(txt || "");
+        return s.length > max ? s.slice(0, max - 1) + "…" : s;
+    };
+
+
+    const driverText = useMemo(() => {
+        if (!etaRow) return "-";
+        const ad = etaRow.surucu_ad_soyad || "-";
+        const tel = formatPhone(etaRow.surucu_telefon || "");
+        const tckn = (etaRow.surucu_tckn || "").toString();
+        const tcknMasked = tckn ? `${tckn.slice(0, 3)}****${tckn.slice(-2)}` : "-";
+        return `${ad} — ${tel} — ${tcknMasked}`;
+    }, [etaRow]);
+
+    const vehicleText = useMemo(() => {
+        if (!etaRow) return "-";
+        const plaka = etaRow.plaka || "-";
+        const treyler = etaRow.treyler ? ` • Treyler: ${etaRow.treyler}` : "";
+        return `${plaka}${treyler}`;
+    }, [etaRow]);
+
+    const jobText = useMemo(() => {
+        if (!etaRow) return "-";
+        const musteri = etaRow.musteri_adi || "-";
+        const proje = etaRow.proje_adi || "-";
+        return `${ellipsize(musteri, 50)} • ${ellipsize(proje, 50)}`;
+    }, [etaRow]);
+
     const latestYuklemeCikis = useMemo(() => getLatestYuklemeCikisISO(etaDetails), [etaDetails]);
 
     const computedETAISO = useMemo(() => {
@@ -1724,23 +1778,115 @@ export default function ReelAtananSeferler() {
                 PaperProps={{ sx: { backgroundColor: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.border}` } }}
             >
                 <DialogTitle sx={{ fontWeight: 900 }}>
-                    ETA Hesabı • {etaRow?.sefer_no || "-"} • {etaRow?.plaka || "-"}
+                    ETA Hesabı • {etaRow?.sefer_no || "-"} • {etaRow?.plaka || "-"} • {etaRow?.surucu_ad_soyad || "-"}
                 </DialogTitle>
 
                 <DialogContent dividers sx={{ backgroundColor: alpha("#fff", 0.01) }}>
                     <Stack spacing={1.2}>
-                        <Typography variant="body2" sx={{ color: COLORS.textMuted }}>
-                            Hedef: <b>{destinationText}</b>
-                        </Typography>
+                        <Card
+                            variant="outlined"
+                            sx={{
+                                borderColor: COLORS.border,
+                                background: COLORS.surface2,
+                                borderRadius: 2,
+                                mb: 1
+                            }}
+                        >
+                            <CardContent sx={{ py: 1 }}>
+                                {/* üstte küçük “çip” başlıklar */}
+                                <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 0.5 }}>
+                                    <Chip size="small" icon={<NumbersIcon />} label={etaRow?.sefer_no || "-"} />
+                                    <Chip size="small" icon={<LocalShippingIcon />} label={vehicleText} />
+                                </Stack>
 
-                        <Typography variant="body2" sx={{ color: COLORS.textMuted }}>
-                            Not: ETA mesafe ve KGM kuralına göre hesaplanır (4,5s + 45dk + 4,5s + 45dk + 11s).
-                        </Typography>
+                                {/* iki sütunlu sade bilgi listesi */}
+                                <Grid container spacing={1}>
+                                    <Grid item xs={12} md={6}>
+                                        <Stack spacing={0.4}>
+                                            <Typography variant="overline" sx={{ color: COLORS.textMuted, lineHeight: 1 }}>
+                                                <PersonIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                                                Şoför
+                                            </Typography>
+                                            <Typography variant="body2" sx={{ fontWeight: 700 }}>{driverText}</Typography>
+                                        </Stack>
+                                    </Grid>
 
-                        {/* Mesafe bilgisi */}
-                        <Typography variant="body2" sx={{ color: COLORS.textMuted }}>
-                            {etaDistanceInfo}
-                        </Typography>
+                                    <Grid item xs={12} md={6}>
+                                        <Stack spacing={0.4}>
+                                            <Typography variant="overline" sx={{ color: COLORS.textMuted, lineHeight: 1 }}>
+                                                <WorkOutlineIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                                                İş
+                                            </Typography>
+                                            <Typography variant="body2" title={jobText} sx={{ fontWeight: 700 }}>
+                                                {jobText}
+                                            </Typography>
+                                        </Stack>
+                                    </Grid>
+
+                                    <Grid item xs={12} md={6}>
+                                        <Box
+                                            sx={{
+                                                p: 1,
+                                                borderRadius: 1.5,
+                                                border: `1px solid ${COLORS.border}`,
+                                                background: COLORS.surface,
+                                            }}
+                                        >
+                                            <Typography
+                                                variant="overline"
+                                                sx={{ color: COLORS.textMuted, display: "block" }}
+                                            >
+                                                <PlaceIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                                                YÜKLEME
+                                            </Typography>
+                                            <Typography
+                                                variant="body2"
+                                                title={originText}
+                                                sx={{ fontWeight: 800, whiteSpace: "normal", wordBreak: "break-word" }}
+                                            >
+                                                {originText}
+                                            </Typography>
+                                        </Box>
+                                    </Grid>
+
+                                    <Grid item xs={12} md={6}>
+                                        <Box
+                                            sx={{
+                                                p: 1,
+                                                borderRadius: 1.5,
+                                                border: `1px solid ${COLORS.border}`,
+                                                background: COLORS.surface,
+                                            }}
+                                        >
+                                            <Typography
+                                                variant="overline"
+                                                sx={{ color: COLORS.textMuted, display: "block" }}
+                                            >
+                                                <FlagIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: "middle" }} />
+                                                TESLİM
+                                            </Typography>
+                                            <Typography
+                                                variant="body2"
+                                                title={destinationText}
+                                                sx={{ fontWeight: 800, whiteSpace: "normal", wordBreak: "break-word" }}
+                                            >
+                                                {destinationText}
+                                            </Typography>
+                                        </Box>
+                                    </Grid>
+                                {/* altta çok küçük notlar */}
+                                <Stack spacing={0.2} sx={{ mt: 0.75 }}>
+                                    <Typography variant="caption" sx={{ color: COLORS.textMuted }}>
+                                        Not: ETA KGM kuralına göre hesaplanır (4,5s + 45dk + 4,5s + 45dk + 11s).
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: COLORS.textMuted }}>
+                                        {etaDistanceInfo}
+                                    </Typography>
+                                    </Stack>
+                                </Grid>
+                            </CardContent>
+                        </Card>
+
 
                         {/* >>> değişen kısım: etiket ve fallback */}
                         <DateTimeOneField

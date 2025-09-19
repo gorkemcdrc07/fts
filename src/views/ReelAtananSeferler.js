@@ -1,5 +1,5 @@
 // src/kullanıcıIslemleri/ReelAtananSeferler.jsx
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
@@ -9,9 +9,9 @@ import {
     Box, Paper, Stack, Button, Typography, TextField, MenuItem, Snackbar, Alert,
     Backdrop, CircularProgress, Chip, Dialog, DialogTitle, DialogContent,
     DialogActions, IconButton, Tooltip, Divider, Switch, FormControlLabel, Grid,
-    Card, CardContent, CardHeader, FormControl, FormLabel,    // ✅ eklendi
+    Card, CardContent, CardHeader,
 } from "@mui/material";
-import { alpha } from "@mui/material/styles"; // ✅ alpha buradan
+import { alpha } from "@mui/material/styles";
 import { DataGrid } from "@mui/x-data-grid";
 
 /* Icons */
@@ -27,32 +27,18 @@ import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 
 /* ---------------- helpers ---------------- */
-// nokta adlarını normalize et (UPPER + trim)
-const normNokta = (s) => trUpper((s ?? "").toString().trim());
-
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const daysAgoISO = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
 
 const EXCLUDED_PLAKAS = new Set([
     "34NHF579", "34NHF636", "34NHF705", "34NHF757",
-    "34NHF811", "34NHF868", "34NHF916", "34NHF964",
-    "34NHG120", "34NHG208", "06CFZ391", "33ADV488",
-    "54AEH576", "26ADN765", "06GD7290", "33ABF523",
-    "33AIM809", "33AVC168", "33ACR730"
+    "34NHF811", "34NHF868", "34NHF916", "34NHF964", "34NHG120", "34NHG208", "06CFZ391", "33ADV488", "54AEH576", "26ADN765", "06GD7290", "33ABF523", "33AIM809", "33AVC168", "33ACR730"
 ]);
-
-// reel_km'den gelen "12,3" gibi metinleri güvenle sayıya çevir
-const parseKmNumber = (v) => {
-    const n = parseFloat(String(v ?? "").replace(",", "."));
-    return Number.isFinite(n) ? n : 0;
-};
-
 
 const normalizePlate = (s) => (s ?? "").toString().toUpperCase().replace(/[\s-]/g, "");
 const isExcludedPlate = (p) => EXCLUDED_PLAKAS.has(normalizePlate(p));
 
 const splitCell = (v) => (v ?? "").toString().split(";").map((x) => x.trim()).filter((x) => x !== "");
-const joinCell = (arr) => (arr || []).map((x) => (x ?? "").trim()).filter(Boolean).join("; ");
 const clean = (v) => { const t = (v ?? "").toString().trim(); return !t || t === "-" || t === "---" ? null : t; };
 
 const detailFields = [
@@ -93,20 +79,6 @@ const COLORS = {
 };
 
 /* ========= Tarih + Saat yardımcıları ========= */
-const fmtDateDigits = (digits) => {
-    const d = digits.slice(0, 2);
-    const m = digits.slice(2, 4);
-    const y = digits.slice(4, 8);
-    let s = d;
-    if (digits.length > 2) s += "." + m;
-    if (digits.length > 4) s += "." + y;
-    return s;
-};
-const fmtTimeDigits = (digits) => {
-    const h = digits.slice(0, 2);
-    const m = digits.slice(2, 4);
-    return digits.length > 2 ? `${h}:${m}` : h;
-};
 const isDateComplete = (txt) => /^\d{2}\.\d{2}\.\d{4}$/.test(txt);
 const isTimeComplete = (txt) => /^\d{2}:\d{2}$/.test(txt);
 const toISO = (dateTR, time) => {
@@ -114,13 +86,15 @@ const toISO = (dateTR, time) => {
     const [dd, mm, yyyy] = dateTR.split(".");
     return `${yyyy}-${mm}-${dd}T${time}`;
 };
-const fromISO = (iso) => {
-    if (!iso) return { d: "", t: "" };
-    const d = iso.slice(0, 10);
-    const t = iso.slice(11, 16);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { d: "", t: "" };
-    const [y, m, dd] = d.split("-");
-    return { d: `${dd}.${m}.${y}`, t };
+const fromISO = (raw) => {
+    if (!raw) return { d: "", t: "" };
+    const iso = raw instanceof Date ? raw.toISOString() : String(raw);
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2}))?/);
+    if (!m) return { d: "", t: "" };
+    const [, y, mo, dd, hh, mi] = m;
+    const d = `${dd}.${mo}.${y}`;
+    const t = (hh && mi) ? `${hh}:${mi}` : "";
+    return { d, t };
 };
 const isDateTimeComplete = (txt) => /^\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$/.test(txt);
 const fmtDateTimeDigits = (digits) => {
@@ -141,237 +115,31 @@ const toISOFromCombined = (txt) => {
     const [dateTR, time] = txt.split(" ");
     return toISO(dateTR, time);
 };
-const fromISOToCombined = (iso) => {
-    const { d, t } = fromISO(iso || "");
-    return d && t ? `${d} ${t}` : "";
-};
-// ========= ETA hesaplama yardımcıları =========
-const trUpper = (s) => (s || "").toLocaleUpperCase("tr-TR").trim();
-const normIlce = (s) => trUpper(s) || "MERKEZ";
-
-const parseHHMM = (txt) => {
-    const [h = "0", m = "0"] = String(txt || "").split(":");
-    return (parseInt(h, 10) || 0) * 60 + (parseInt(m, 10) || 0);
+const fromISOToCombined = (raw) => {
+    const { d, t } = fromISO(raw);
+    return d ? (t ? `${d} ${t}` : d) : "";
 };
 
-// 4,5 saatte bir 45 dk mola (tam 4,5 saatle bitiyorsa son molayı eklemeyiz)
-const breakMinutesFor = (driveMin) => {
-    let c = Math.floor(driveMin / 270);
-    if (driveMin % 270 === 0 && c > 0) c -= 1;
-    return c * 45;
+// API’den gelen çeşitli tarih formatlarını güvenli ISO’ya çevir
+const normalizeISO = (raw) => {
+    if (!raw) return null;
+    if (raw instanceof Date && !isNaN(raw)) return raw.toISOString();
+    const s = String(raw);
+
+    // /Date(1694793600000)/ formatı
+    const m = s.match(/\/Date\((\d+)\)\//);
+    if (m) return new Date(Number(m[1])).toISOString();
+
+    // ISO'ya benzeyenler
+    if (/^\d{4}-\d{2}-\d{2}([T\s]\d{2}:\d{2}(:\d{2})?)?/.test(s)) {
+        const d = new Date(s);
+        return isNaN(d) ? null : d.toISOString();
+    }
+
+    // Son çare: Date parse
+    const d = new Date(s);
+    return isNaN(d) ? null : d.toISOString();
 };
-
-const toLocalIso = (d) => {
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-
-// "YYYY-MM-DDTHH:MM" (veya "YYYY-MM-DD HH:MM") -> Date
-const parseIsoMinute = (s) => {
-    if (!s) return null;
-    const str = String(s).replace(" ", "T").slice(0, 16);
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(str)) return null;
-    const d = new Date(str);
-    return isNaN(d.getTime()) ? null : d;
-};
-
-// ⬇️ yeni: ISO string’e dakika ekle
-const addMinutesToIso = (iso, mins) => {
-    const d = parseIsoMinute(iso);
-    if (!d || !mins) return iso;
-    d.setMinutes(d.getMinutes() + Number(mins));
-    return toLocalIso(d);
-};
-
-// Cumartesi 08:00–17:00 aralığı kontrolü ve 1 gün ekleme
-function isSaturdayBetween0800and1700(iso) {
-    const d = parseIsoMinute(iso);           // "YYYY-MM-DDTHH:MM" -> Date (local)
-    if (!d) return false;
-    const day = d.getDay();                  // Cumartesi = 6
-    const mins = d.getHours() * 60 + d.getMinutes();
-    return day === 6 && mins >= 8 * 60 && mins <= 17 * 60;
-}
-
-function applySaturdayRule(iso) {
-    if (!iso) return iso;
-    const d = parseIsoMinute(iso);
-    if (!d) return iso;
-    if (isSaturdayBetween0800and1700(iso)) {
-        d.setDate(d.getDate() + 1);          // +1 gün
-    }
-    return toLocalIso(d);                    // "YYYY-MM-DDTHH:MM"
-}
-
-
-// detailRows içinden en erken YÜKLEME ÇIKIŞ'ı al
-const getEarliestYuklemeCikisIso = (rows) => {
-    const times = (rows || [])
-        .map((r) => parseIsoMinute(r?.yukleme_cikis))
-        .filter(Boolean)
-        .map((d) => d.getTime());
-    if (!times.length) return null;
-    const t = Math.min(...times);
-    return toLocalIso(new Date(t)); // "YYYY-MM-DDTHH:MM"
-};
-
-// Tek nokta için km çek
-async function getDistanceKmForRow(r) {
-    // 1) Tam eşleşme
-    let { data, error } = await supabase
-        .from("mesafeler")
-        .select("mesafe")
-        .match({
-            yukleme_il: trUpper(r.yukleme_ili),
-            yukleme_ilce: normIlce(r.yukleme_ilcesi),
-            teslim_il: trUpper(r.teslim_ili),
-            teslim_ilce: normIlce(r.teslim_ilcesi),
-        })
-        .limit(1)
-        .maybeSingle();
-
-    // 2) Hata yok ama kayıt bulunmadıysa birkaç basit fallback dene
-    if (!error && !data) {
-        const yIlce = normIlce(r.yukleme_ilcesi);
-        const tIlce = normIlce(r.teslim_ilcesi);
-        if (yIlce !== "MERKEZ" || tIlce !== "MERKEZ") {
-            const f1 = await supabase
-                .from("mesafeler")
-                .select("mesafe")
-                .match({
-                    yukleme_il: trUpper(r.yukleme_ili),
-                    yukleme_ilce: "MERKEZ",
-                    teslim_il: trUpper(r.teslim_ili),
-                    teslim_ilce: "MERKEZ",
-                })
-                .limit(1)
-                .maybeSingle();
-            if (!f1.error && f1.data) { data = f1.data; }
-        }
-    }
-
-    // 3) Hâlâ yoksa uyarı bas ve 0 dön
-    if (error) {
-        console.error("mesafe sorgu hatası:", error);
-        return 0;
-    }
-    if (!data) {
-        console.warn("Mesafe bulunamadı (ETA hesaplanamaz):", {
-            yukleme_il: trUpper(r.yukleme_ili),
-            yukleme_ilce: normIlce(r.yukleme_ilcesi),
-            teslim_il: trUpper(r.teslim_ili),
-            teslim_ilce: normIlce(r.teslim_ilcesi),
-        });
-        return 0;
-    }
-    const km = parseFloat(String(data.mesafe ?? "0").replace(",", "."));
-    return Number.isFinite(km) ? km : 0;
-}
-
-// reel_km tablosundan aynı (yukleme_noktasi, teslim_noktasi) eşleşmesini bulup km döndür
-async function getReelKmByNokta(yukleme_noktasi, teslim_noktasi) {
-    const y = normNokta(yukleme_noktasi);
-    const t = normNokta(teslim_noktasi);
-    if (!y || !t) return "";
-
-    // Önce birebir eşleşme (normalize değerlerle)
-    let { data, error } = await supabase
-        .from("reel_km")
-        .select("km, kayit_zamani")
-        .eq("yukleme_noktasi", y)
-        .eq("teslim_noktasi", t)
-        .order("kayit_zamani", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-    // Hâlâ yoksa case-insensitive fallback (veriniz normalize değilse)
-    if (!error && !data) {
-        const f = await supabase
-            .from("reel_km")
-            .select("km, kayit_zamani")
-            .ilike("yukleme_noktasi", y)
-            .ilike("teslim_noktasi", t)
-            .order("kayit_zamani", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-        if (!f.error && f.data) data = f.data;
-    }
-
-    if (error) {
-        console.warn("reel_km (nokta) sorgu hatası:", error);
-        return "";
-    }
-    const km = parseKmNumber(data?.km);
-    return km > 0 ? String(Math.round(km)) : "";
-}
-
-
-// Çok nokta toplam km
-async function computeTotalDistanceKm(detailRows) {
-    const arr = await Promise.all((detailRows || []).map((r) => getDistanceKmForRow(r)));
-    return arr.reduce((a, b) => a + b, 0);
-}
-
-// km + kalan_sürüş (bugünkü) ile molalar ve günlük dinlenmeyle ETA üret
-// km + "bir sonraki 45 dk molaya kadar kalan sürüş" + 9s/11s kuralları ile ETA üret
-function computeEtaIsoFrom(totalKm, remainingHHMM, baseStartIso) {
-    if (!totalKm || !baseStartIso) return "";
-
-    const AVG_SPEED_KMH = 65;           // ortalama hız
-    const CHUNK = 4.5 * 60;             // 4,5 saat (dk)
-    const CHUNK_BREAK = 45;             // 45 dk mola
-    const DAY_CAP = 9 * 60;             // günlük azami sürüş (dk)
-    const DAILY_REST = 11 * 60;         // günlük dinlenme (dk)
-
-    // Gerekli toplam sürüş (dk)
-    let remainingDriveMin = Math.ceil((totalKm / AVG_SPEED_KMH) * 60);
-
-    // Başlangıç zamanı
-    const base = parseIsoMinute(baseStartIso);
-    if (!base) return "";
-
-    // "Kalan sürüş": şu anki 4,5 saatlik blokta molaya kadar kalan dakika
-    let timeUntilBreak = parseHHMM(remainingHHMM || "");
-    if (!Number.isFinite(timeUntilBreak) || timeUntilBreak <= 0) timeUntilBreak = CHUNK;
-
-    // Bugünkü kalan sürüş hakkı (9 saat)
-    let dailyRemaining = DAY_CAP;
-
-    // Toplam geçen süre (dk)
-    let totalElapsed = 0;
-
-    while (remainingDriveMin > 0) {
-        // Şu an sürülebilecek maksimum dakika
-        const driveNow = Math.min(remainingDriveMin, timeUntilBreak, dailyRemaining);
-
-        totalElapsed += driveNow;
-        remainingDriveMin -= driveNow;
-        timeUntilBreak -= driveNow;
-        dailyRemaining -= driveNow;
-
-        // Varış anı: ek mola/dinlenme yok
-        if (remainingDriveMin <= 0) break;
-
-        // Günlük 9 saat dolduysa: 11 saat dinlenme; yeni güne geç
-        if (dailyRemaining === 0) {
-            totalElapsed += DAILY_REST;
-            dailyRemaining = DAY_CAP;
-            timeUntilBreak = CHUNK; // yeni günde 4,5 saatlik sayaç tazelenir
-            continue;
-        }
-
-        // 4,5 saatlik blok dolduysa: 45 dk mola; aynı günde devam
-        if (timeUntilBreak === 0) {
-            totalElapsed += CHUNK_BREAK;
-            timeUntilBreak = CHUNK; // mola sonrası yeni 4,5 saatlik blok
-            // dailyRemaining aynı kalır (günlük sınır azalttıkça devam)
-            continue;
-        }
-    }
-
-    const etaDate = new Date(base.getTime() + totalElapsed * 60000);
-    return toLocalIso(etaDate); // "YYYY-MM-DDTHH:MM"
-}
-
 
 function DateTimeOneField({ label, value, onChange, sx }) {
     const [text, setText] = useState("");
@@ -397,68 +165,6 @@ function DateTimeOneField({ label, value, onChange, sx }) {
         />
     );
 }
-
-// Tek alanda ss.dd gösterir; 2 hane sonra otomatik nokta (ss.)
-// 0-1-2 hane: state -> "H" veya "HH" (pad yok)
-// 3 hane: state -> "HH:M"  (dakikada pad yok)
-// 4 hane: state -> "HH:MM" (dakika 0-59 clamp + pad)
-function TimeHMField({ label, value, onChange, sx }) {
-    const [text, setText] = useState("");
-
-    useEffect(() => {
-        const v = (value || "").toString();
-        setText(v ? v.replace(":", ".") : ""); // başlangıçta boş
-    }, [value]);
-
-    const handleChange = (e) => {
-        const digits = e.target.value.replace(/\D/g, "").slice(0, 4); // ssdd
-        const hh = digits.slice(0, 2);
-        const m1 = digits.slice(2, 3); // tek dakika hanesi
-        const mm = digits.slice(2, 4); // iki dakika hanesi
-
-        // ekranda gösterim
-        let display = hh;
-        if (digits.length === 2) {
-            display = `${hh}.`;            // 2 hane olunca dakikaya geç
-        } else if (digits.length === 3) {
-            display = `${hh}.${m1}`;
-        } else if (digits.length === 4) {
-            display = `${hh}.${mm}`;
-        }
-        setText(display);
-
-        // dışarıya değer (state)
-        if (digits.length === 0) {
-            onChange("");                   // boş
-        } else if (digits.length <= 2) {
-            onChange(hh);                   // "H" ya da "HH" (pad yok)
-        } else if (digits.length === 3) {
-            onChange(`${hh}:${m1}`);        // "HH:M" (pad yok)
-        } else {
-            // 4 hane olduğunda dakika clamp + pad
-            const mmNumRaw = parseInt(mm || "0", 10);
-            const mmNum = isNaN(mmNumRaw) ? 0 : Math.min(59, mmNumRaw);
-            const mmClamped = String(mmNum).padStart(2, "0");
-            onChange(`${hh}:${mmClamped}`); // "HH:MM"
-        }
-    };
-
-    return (
-        <TextField
-            label={label}
-            placeholder="ss.dd"
-            value={text}
-            onChange={handleChange}
-            size="small"
-            inputProps={{ inputMode: "numeric", maxLength: 5 }}
-            InputLabelProps={{ shrink: true }}
-            sx={sx}
-        />
-    );
-}
-
-
-
 
 export default function ReelAtananSeferler() {
     const navigate = useNavigate();
@@ -492,17 +198,6 @@ export default function ReelAtananSeferler() {
     const [editSefer, setEditSefer] = useState(null);
     const [detailRows, setDetailRows] = useState([]);
     const [seferTarihiYeni, setSeferTarihiYeni] = useState("");
-    const [kalanSuresi, setKalanSuresi] = useState(""); // "HH:MM" ya da boş
-    const [etaGlobal, setEtaGlobal] = useState("");     // ISO "yyyy-mm-ddThh:mm" ya da boş
-    const [mola, setMola] = useState("");               // "", "45" (dk), "660" (11 saat)
-    // ...
-    const [totalKm, setTotalKm] = useState(0);
-    const [kayitliKm, setKayitliKm] = useState("");   // ✅ genel
-    const [yeniKm, setYeniKm] = useState("");         // ✅ genel
-    const [kmAciklama, setKmAciklama] = useState(""); // ✅ genel
-    // ...
-
-
 
     /* options */
     const options = useMemo(() => {
@@ -527,9 +222,12 @@ export default function ReelAtananSeferler() {
         try {
             const rangeMin = (startDate || daysAgoISO(6)) + "T00:00:00";
             const rangeMax = (endDate || todayISO()) + "T23:59:59";
+
             const { data, error } = await supabase
                 .from("seferler").select("*")
-                .gte("sefer_tarihi", rangeMin).lte("sefer_tarihi", rangeMax)
+                .gte("sefer_tarihi", rangeMin)
+                .lte("sefer_tarihi", rangeMax)
+                .ilike("sefer_no", "SFR%")
                 .order("sefer_tarihi", { ascending: false });
             if (error) throw error;
 
@@ -539,9 +237,14 @@ export default function ReelAtananSeferler() {
                 .gte("sefer_tarihi", rangeMin)
                 .lte("sefer_tarihi", rangeMax);
 
-            const COMPLETED_NOS = new Set((tamamlananNos || []).map(x => (x.sefer_no ?? "").trim()));
+            const COMPLETED_NOS = new Set(
+                (tamamlananNos || [])
+                    .map(x => (x.sefer_no ?? "").toString().trim())
+                    .filter(v => v.length > 0)
+            );
 
             const visible = (data || [])
+                .filter(s => (s.sefer_no || '').toString().trim().toUpperCase().startsWith('SFR'))
                 .filter(s => !COMPLETED_NOS.has((s.sefer_no ?? "").toString().trim()))
                 .filter(s => !isExcludedPlate(s.plaka));
 
@@ -570,13 +273,13 @@ export default function ReelAtananSeferler() {
             const start = (startDate || daysAgoISO(6)) + "T00:00:00";
             const end = (endDate || todayISO()) + "T23:59:59";
             const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000";
-            const min = start, max = end;
 
             const res = await fetch(`${API_BASE_URL}/api/proxy/tmsdespatches`, {
-                method: "POST", headers: { "Content-Type": "application/json" },
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    startDate: start,        // örn: 2025-09-11T00:00:00
-                    endDate: end,            // örn: 2025-09-11T23:59:59
+                    startDate: start,
+                    endDate: end,
                     userId: 1,
                     CustomerId: 0,
                     SupplierId: 0,
@@ -584,7 +287,7 @@ export default function ReelAtananSeferler() {
                     TMSDespatchId: 0,
                     VehicleId: 0,
                     DocumentPrint: "",
-                    WorkingTypesId: [3,4]
+                    WorkingTypesId: [3, 4],
                 }),
             });
             if (!res.ok) throw new Error(`API Hatası: ${res.status} ${res.statusText}`);
@@ -598,9 +301,14 @@ export default function ReelAtananSeferler() {
             const { data: tamamlananNos } = await supabase
                 .from("tamamlanan_seferler")
                 .select("sefer_no")
-                .gte("sefer_tarihi", min)
-                .lte("sefer_tarihi", max);
-            const COMPLETED_NOS = new Set((tamamlananNos || []).map(x => (x.sefer_no ?? "").trim()));
+                .gte("sefer_tarihi", start)
+                .lte("sefer_tarihi", end);
+
+            const COMPLETED_NOS = new Set(
+                (tamamlananNos || [])
+                    .map((x) => (x.sefer_no ?? "").toString().trim())
+                    .filter((v) => v.length > 0)
+            );
 
             const gelen = json.Data.filter((x) => x && typeof x === "object");
             const filtreli = gelen
@@ -608,20 +316,27 @@ export default function ReelAtananSeferler() {
                     const tip = (item?.VehicleWorkingTypeName || "").toString().trim().toUpperCase();
                     return tip === "FİLO" || tip === "ÖZMAL";
                 })
+                .filter((item) => {
+                    const docNo = (item?.DocumentNo || "").toString().trim().toUpperCase();
+                    return docNo.startsWith("SFR");
+                })
                 .filter((item) => !EXCLUDED_PLAKAS.has(normalizePlate(item?.PlateNumber)))
                 .filter((item) => !COMPLETED_NOS.has((item?.DocumentNo ?? "").toString().trim()));
 
             const mapOrders = (orders, field) =>
                 Array.isArray(orders)
-                    ? orders.filter(o => o && typeof o === "object")
-                        .map(o => o[field] ?? "").filter(Boolean).join("; ")
+                    ? orders
+                        .filter((o) => o && typeof o === "object")
+                        .map((o) => o[field] ?? "")
+                        .filter(Boolean)
+                        .join("; ")
                     : "";
 
             const temiz = filtreli.map((s) => {
                 const tmsOrders = Array.isArray(s.TMSOrders) ? s.TMSOrders : [];
                 return {
                     sefer_no: s?.DocumentNo?.trim() ?? "",
-                    arac_statu: s?.VehicleStatus ?? "",
+                    arac_statu: s?.VehicleStatus ?? "", // NOT NULL'a boş string gönder
                     plaka: s?.PlateNumber ?? "",
                     treyler: s?.TrailerPlateNumber ?? "",
                     surucu_ad_soyad: s?.FullName ?? "",
@@ -647,15 +362,23 @@ export default function ReelAtananSeferler() {
                 };
             });
 
+            // Var olanları çekip eşle
             const { data: mevcut } = await supabase
                 .from("seferler")
-                .select("*")
-                .gte("sefer_tarihi", min)
-                .lte("sefer_tarihi", max);
+                .select("id,sefer_no") // id'yi sadece eşlemede kullan
+                .gte("sefer_tarihi", start)
+                .lte("sefer_tarihi", end);
 
             const mapDb = new Map((mevcut || []).map((r) => [r.sefer_no?.trim(), r]));
+
             const seenNew = [];
             const upsert = [];
+
+            const stripId = (obj) => {
+                // Upsert'e giden payload'dan id ve _rid kesinlikle çıksın
+                const { id, _rid, ...rest } = obj || {};
+                return rest;
+            };
 
             for (const item of temiz) {
                 const key = (item.sefer_no ?? "").trim();
@@ -663,97 +386,45 @@ export default function ReelAtananSeferler() {
 
                 if (!eski) {
                     const yeni = { ...item, reel_durum: "YENİ" };
-                    seenNew.push(yeni);
-                    upsert.push(yeni);
+                    const temizYeni = stripId(yeni);
+                    seenNew.push(temizYeni);
+                    upsert.push(temizYeni);
                 } else {
-                    // mevcut kayıttaki (kullanıcıdan gelen) alanları koru,
-                    // API'den gelenlerle güncelle. Böylece eta/kalan_surus_suresi kaybolmaz.
-                    const merged = { ...eski, ...item, reel_durum: "ESKİ" };
+                    // id'yi ASLA taşımıyoruz
+                    const merged = stripId({ ...item, reel_durum: "ESKİ" });
                     seenNew.push(merged);
                     upsert.push(merged);
                 }
             }
 
             if (upsert.length) {
-                await supabase.from("seferler").upsert(upsert, { onConflict: "sefer_no" });
+                const { error: upErr } = await supabase
+                    .from("seferler")
+                    .upsert(upsert, { onConflict: "sefer_no" })
+                    .select(); // debug için
+                if (upErr) throw upErr;
             }
 
             setSuccessCount(upsert.length);
             setShowSuccess(true);
             setTimeout(() => setShowSuccess(false), 3500);
 
-            const enriched = [...seenNew].map((s, idx) => {
+            // Grid için (DB id’sini kullanmıyoruz)
+            const enriched = seenNew.map((s, idx) => {
                 const maxLen = Math.max(0, ...detailFields.map((k) => splitCell(s[k]).length));
-                return { ...s, _rid: s.id ?? s.sefer_no ?? `tmp-${Date.now()}-${idx}`, nokta_sayisi: maxLen || 0 };
+                return { ...s, _rid: s.sefer_no ?? `tmp-${Date.now()}-${idx}`, nokta_sayisi: maxLen || 0 };
             });
             setRows(enriched);
         } catch (e) {
             console.error(e);
             setSnack({ open: true, msg: "Senkronizasyon hatası.", severity: "error" });
-        } finally { setLoading(false); }
+        } finally {
+            setLoading(false);
+        }
     }, [startDate, endDate]);
 
-    /* mount */
-    /* mount */
     useEffect(() => { listData(); }, [listData]);
 
-    /* 1) Noktalar değişince TOPLAM KM'yi hesapla */
-    /* 1) Noktalar değişince TOPLAM KM'yi hesapla */
-    useEffect(() => {
-        if (!editOpen) return;
-        let cancel = false;
-
-        (async () => {
-            try {
-                const km = await computeTotalDistanceKm(detailRows);
-                if (!cancel) setTotalKm(km);
-            } catch (e) {
-                console.error("KM hesaplama hatası:", e);
-                if (!cancel) setTotalKm(0);
-            }
-        })();
-
-        return () => { cancel = true; };
-    }, [editOpen, detailRows]);
-
-    // ETA'yı anında güncelle: kalan sürüş, km, sefer tarihi veya yükleme_çıkış değişince
-    useEffect(() => {
-        if (!editOpen) return;
-
-        const baseIsoRaw =
-            getEarliestYuklemeCikisIso(detailRows) ||
-            (seferTarihiYeni || editSefer?.sefer_tarihi) ||
-            toLocalIso(new Date());
-
-        // Cumartesi 08:00–17:00 ise +1 gün uygula
-        // Cumartesi 08:00–17:00 ise +1 gün uygula
-        let baseIso = applySaturdayRule(baseIsoRaw);
-
-        // ⬇️ yeni: sürüşe başlamadan önce seçili mola varsa uygula
-        if (mola === "45") baseIso = addMinutesToIso(baseIso, 45);
-        else if (mola === "660") baseIso = addMinutesToIso(baseIso, 660);
-
-        const kalan = (kalanSuresi || "").toString().trim();
-
-        if (totalKm > 0 && kalan) {
-            setEtaGlobal(computeEtaIsoFrom(totalKm, kalan, baseIso));
-        } else {
-            setEtaGlobal("");
-        }
-    }, [editOpen, detailRows, seferTarihiYeni, editSefer, totalKm, kalanSuresi, mola]); // ⬅️ mola eklendi
-
-
-    // editörde ETA veya Kalan Sürüş değiştikçe ana tabloda anında göster
-    useEffect(() => {
-        if (!editOpen || !editSefer) return;
-        setRows(prev =>
-            prev.map(r =>
-                r.sefer_no === editSefer.sefer_no || r.id === editSefer.id
-                    ? { ...r, eta: etaGlobal, kalan_surus_suresi: kalanSuresi }
-                    : r
-            )
-        );
-    }, [etaGlobal, kalanSuresi, editOpen, editSefer]);
     const filtered = useMemo(() => {
         let r = [...rows].filter(x => (x.reel_durum || "") !== "EŞLEŞME YOK");
         if (seferNoTipi) r = r.filter((x) => (x.sefer_no || "").toUpperCase().startsWith(seferNoTipi));
@@ -785,14 +456,7 @@ export default function ReelAtananSeferler() {
         setEditSefer(null);
         setDetailRows([]);
         setSeferTarihiYeni("");
-        setMola("");
-        setKayitliKm("");   // ⬅️ eklendi
-        setYeniKm("");      // ⬅️ eklendi
-        setKmAciklama("");  // ⬅️ eklendi
     }, []);
-
-    // --- reel_km tablosundan kayıtlı km'leri oku (öncelik sefer_no, yoksa sefer_id)
-    // --- reel_km tablosundan kayıtlı km'leri oku (öncelik sefer_no, yoksa sefer_id)
 
     const addDetailRow = useCallback(() => {
         setDetailRows((prev) => [
@@ -800,17 +464,9 @@ export default function ReelAtananSeferler() {
             {
                 sefer_id: editSefer?.id ?? null,
                 nokta_sirasi: prev.length,
-                proje_adi: "",
-                yukleme_noktasi: "",
-                yukleme_ili: "",
-                yukleme_ilcesi: "",
-                teslim_noktasi: "",
-                teslim_ili: "",
-                teslim_ilcesi: "",
-                yukleme_varis: "",
-                yukleme_cikis: "",
-                teslim_varis: "",
-                teslim_cikis: "",
+                proje_adi: "", yukleme_noktasi: "", yukleme_ili: "", yukleme_ilcesi: "",
+                teslim_noktasi: "", teslim_ili: "", teslim_ilcesi: "",
+                yukleme_varis: "", yukleme_cikis: "", teslim_varis: "", teslim_cikis: "",
             },
         ]);
     }, [editSefer]);
@@ -830,51 +486,15 @@ export default function ReelAtananSeferler() {
         });
     }, []);
 
-    const onDetailChange = useCallback(async (idx, key, value) => {
-        // Önce değeri yaz
+    const onDetailChange = useCallback((idx, key, value) => {
         setDetailRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
-
-        // Nokta alanları değiştiyse reel_km'den km çekip kayitli_km'yi doldur (yeni_km girildiyse dokunma)
-        if (key === "yukleme_noktasi" || key === "teslim_noktasi") {
-            // Güncel satır değerlerini oku
-            let current;
-            setDetailRows(prev => {
-                current = { ...prev[idx], [key]: value };
-                return prev;
-            });
-
-            const hasUserKm = current?.yeni_km && String(current.yeni_km).trim() !== "";
-            if (!hasUserKm) {
-                const km = await getReelKmByNokta(current?.yukleme_noktasi, current?.teslim_noktasi);
-                if (km) {
-                    setDetailRows(prev => {
-                        const next = prev.map((r, i) => i === idx ? { ...r, kayitli_km: km } : r);
-                        // toplam kayitliKm'yi güncelle
-                        const sum = next.reduce((a, rr) => a + parseKmNumber(rr.kayitli_km), 0);
-                        setKayitliKm(sum > 0 ? String(Math.round(sum)) : "");
-                        // 🔥 Ana grid satırına da yansıt
-                            setRows(prevRows =>
-                                prevRows.map(r =>
-                                     r.sefer_no === (editSefer?.sefer_no) || r.id === (editSefer?.id)
-                                        ? { ...r, kayitli_km: sum > 0 ? String(Math.round(sum)) : null }
-                                    : r
-                                    )
-                                );
-                        return next;
-                    });
-                }
-            }
-        }
     }, []);
-
-
 
     const saveDetails = useCallback(async () => {
         if (!editSefer) return;
         setSaving(true);
 
         try {
-            // 1) sefer_detaylari upsert
             const upserts = detailRows.map((d, i) => ({
                 sefer_id: editSefer.id,
                 nokta_sirasi: i,
@@ -890,88 +510,14 @@ export default function ReelAtananSeferler() {
                 teslim_varis: clean(d.teslim_varis),
                 teslim_cikis: clean(d.teslim_cikis),
 
-                kayitli_km: clean(d.kayitli_km),
-                yeni_km: clean(d.yeni_km),
-                km_aciklama: clean(d.km_aciklama),
-
-                // genel alanları satıra da yazıyoruz (isteğe bağlı)
-                kalan_surus_suresi: clean(kalanSuresi),
-                eta: clean(etaGlobal),
-
                 arac_statu: computeAracStatu(detailRows) || null,
                 kayit_zamani: new Date().toISOString(),
             }));
 
             const { error: detErr } = await supabase
                 .from("sefer_detaylari")
-                .upsert(upserts, { onConflict: "sefer_id,nokta_sirasi" });
-
+                .upsert(upserts, { onConflict: "sefer_id,nokta_sirasi" }); // 🔧 string
             if (detErr) throw detErr;
-
-
-                const kmRows = detailRows.map((d, i) => ({
-                sefer_id: editSefer.id ?? null,
-                    sefer_no: editSefer.sefer_no ?? null,
-                    nokta_sirasi: i,
-                    yukleme_noktasi: clean(d.yukleme_noktasi),
-                    yukleme_ili: clean(d.yukleme_ili),
-                    yukleme_ilcesi: clean(d.yukleme_ilcesi),
-                    teslim_noktasi: clean(d.teslim_noktasi),
-                    teslim_ili: clean(d.teslim_ili),
-                    teslim_ilcesi: clean(d.teslim_ilcesi),
-                    km: clean(d.yeni_km) || clean(d.kayitli_km) || null,
-                    kayit_zamani: new Date().toISOString(),
-                }));
-
-            const { error: kmErr } = await supabase
-                .from("reel_km")
-                .upsert(kmRows, { onConflict: "sefer_no,nokta_sirasi" });
-
-            if (kmErr) throw kmErr;
-
-            // Upsert sonrası genel "Kayıtlı KM" toplamını güncelle
-            const yeniToplam = (kmRows || []).reduce((acc, r) => acc + parseKmNumber(r.km), 0);
-            setKayitliKm(yeniToplam > 0 ? String(Math.round(yeniToplam)) : "");
-
-
-            // 2) seferler: SADECE eta ve kalan_surus_suresi
-            // saniye ekleyip DB’ye öyle gönder
-            const etaForDb = etaGlobal
-                ? (etaGlobal.length === 16 ? `${etaGlobal}:00` : etaGlobal) // "YYYY-MM-DDTHH:MM" -> "...:SS"
-                : null;
-
-            const payload = {
-                kalan_surus_suresi: clean(kalanSuresi),
-                eta: clean(etaForDb),
-                kayitli_km: yeniToplam > 0 ? String(Math.round(yeniToplam)) : null,
-            };
-
-            let mainErr = null;
-            if (editSefer?.sefer_no) {
-                const { error } = await supabase
-                    .from("seferler")
-                    .update(payload)
-                    .eq("sefer_no", editSefer.sefer_no);
-                mainErr = error;
-            } else if (editSefer?.id) {
-                const { error } = await supabase
-                    .from("seferler")
-                    .update(payload)
-                    .eq("id", editSefer.id);
-                mainErr = error;
-            } else {
-                throw new Error("Güncellenecek kayıt için id/sefer_no bulunamadı.");
-            }
-            if (mainErr) throw mainErr;
-
-            // 3) UI state'ini güncelle
-            setRows((prev) =>
-                prev.map((r) =>
-                    r.sefer_no === editSefer.sefer_no || r.id === editSefer.id
-                        ? { ...r, ...payload, kayitli_km: payload.kayitli_km }
-                        : r
-                )
-            );
 
             setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
         } catch (e) {
@@ -984,7 +530,7 @@ export default function ReelAtananSeferler() {
         } finally {
             setSaving(false);
         }
-    }, [detailRows, editSefer, kalanSuresi, etaGlobal]);
+    }, [detailRows, editSefer]);
 
     const moveToCompleted = useCallback(async () => {
         if (!editSefer) return;
@@ -1018,14 +564,10 @@ export default function ReelAtananSeferler() {
                 kayit_zamani: new Date().toISOString(),
                 atama_yapan_kullanici: seferAna.atama_yapan_kullanici ?? null,
                 atama_tarihi: seferAna.atama_tarihi ?? null,
-                // 🌟 Global alanlar ana kayıtta
-                kalan_surus_suresi: clean(kalanSuresi || seferAna.kalan_surus_suresi),
-                eta: clean(etaGlobal || seferAna.eta),
             };
             const { error: e1 } = await supabase
                 .from("tamamlanan_seferler")
-                .upsert(anaPayload, { onConflict: "sefer_no" });
-
+                .upsert(anaPayload, { onConflict: "sefer_no" }); // 🔧 string
             if (e1) throw e1;
 
             const detPayload = detailRows.map((d, i) => ({
@@ -1043,45 +585,15 @@ export default function ReelAtananSeferler() {
                 teslim_varis: clean(d.teslim_varis),
                 teslim_cikis: clean(d.teslim_cikis),
 
-                kayitli_km: clean(d.kayitli_km),
-                yeni_km: clean(d.yeni_km),
-                km_aciklama: clean(d.km_aciklama),
-
-                // 🌟 global değerler detaylara da
-                kalan_surus_suresi: clean(kalanSuresi || seferAna.kalan_surus_suresi),
-                eta: clean(etaGlobal || seferAna.eta),
-
                 kayit_zamani: new Date().toISOString(),
                 arac_statu: seferAna.arac_statu ?? null,
             }));
             if (detPayload.length) {
                 const { error: e2 } = await supabase
                     .from("tamamlanan_detaylar")
-                    .upsert(detPayload, { onConflict: "sefer_no,nokta_sirasi" });
-
+                    .upsert(detPayload, { onConflict: "sefer_no,nokta_sirasi" }); // 🔧 string
                 if (e2) throw e2;
             }
-
-            // reel_km upsert (tamamlanan)
-                const kmRowsCompleted = detailRows.map((d, i) => ({
-                sefer_id: seferAna.id ?? null,
-                    sefer_no: seferAna.sefer_no ?? null,
-                    nokta_sirasi: i,
-                    yukleme_noktasi: clean(d.yukleme_noktasi),
-                    yukleme_ili: clean(d.yukleme_ili),
-                    yukleme_ilcesi: clean(d.yukleme_ilcesi),
-                    teslim_noktasi: clean(d.teslim_noktasi),
-                    teslim_ili: clean(d.teslim_ili),
-                    teslim_ilcesi: clean(d.teslim_ilcesi),
-                    km: clean(d.yeni_km) || clean(d.kayitli_km) || null,
-                    kayit_zamani: new Date().toISOString(),
-                    }));
-            const { error: kmDoneErr } = await supabase
-                .from("reel_km")
-                .upsert(kmRowsCompleted, { onConflict: "sefer_no,nokta_sirasi" });
-
-                if (kmDoneErr) throw kmDoneErr;
-
 
             await supabase.from("sefer_detaylari").delete().eq("sefer_id", seferAna.id);
             await supabase.from("seferler").delete().eq("id", seferAna.id);
@@ -1094,14 +606,13 @@ export default function ReelAtananSeferler() {
             console.error(e);
             setSnack({ open: true, msg: "Aktarım hatası.", severity: "error" });
         } finally { setSaving(false); }
-    }, [detailRows, editSefer, rows, seferTarihiYeni, kalanSuresi, etaGlobal, closeEditor]);
+    }, [detailRows, editSefer, rows, seferTarihiYeni, closeEditor]);
 
     /* editor aç */
     const openEditor = useCallback(async (row, aktarModu = false) => {
         setEditSefer(row);
         setEditOpen(true);
 
-        // id yoksa sefer_no ile çöz
         let id = row?.id ?? null;
         if (!id && row?.sefer_no) {
             const { data: s } = await supabase
@@ -1110,7 +621,6 @@ export default function ReelAtananSeferler() {
         }
         if (id) setEditSefer((prev) => ({ ...(prev || row), id }));
 
-        // detayları çek
         let detay = [];
         if (id) {
             const { data } = await supabase
@@ -1142,108 +652,22 @@ export default function ReelAtananSeferler() {
             }));
         }
 
-        // --- reel_km: mevcut kayıtları çek (önce sefer_no, yoksa sefer_id)
-        let rkRows = [];
-        if (row?.sefer_no) {
-            const { data: rk1, error: err1 } = await supabase
-                .from("reel_km")
-                .select("nokta_sirasi, km")
-                .eq("sefer_no", row.sefer_no)
-                .order("nokta_sirasi", { ascending: true });
-            if (!err1 && rk1) rkRows = rk1;
-        }
-        if (!rkRows.length && id) {
-            const { data: rk2, error: err2 } = await supabase
-                .from("reel_km")
-                .select("nokta_sirasi, km")
-                .eq("sefer_id", id)
-                .order("nokta_sirasi", { ascending: true });
-            if (!err2 && rk2) rkRows = rk2;
-        }
+        setDetailRows(detay.map((d) => ({
+            ...d,
+            proje_adi: d.proje_adi ?? "",
+            yukleme_noktasi: d.yukleme_noktasi ?? "",
+            yukleme_ili: d.yukleme_ili ?? "",
+            yukleme_ilcesi: d.yukleme_ilcesi ?? "",
+            teslim_noktasi: d.teslim_noktasi ?? "",
+            teslim_ili: d.teslim_ili ?? "",
+            teslim_ilcesi: d.teslim_ilcesi ?? "",
+            yukleme_varis: d.yukleme_varis ?? "",
+            yukleme_cikis: d.yukleme_cikis ?? "",
+            teslim_varis: d.teslim_varis ?? "",
+            teslim_cikis: d.teslim_cikis ?? "",
+        })));
 
-        // nokta_sirasi -> km map'i
-        // nokta_sirasi -> km map'i
-        const kmByIndex = new Map(rkRows.map(r => [r.nokta_sirasi, r.km]));
-
-        // 1) reel_km (nokta eşleşmesi) önerilerini topla
-        const noktaKmArr = await Promise.all(
-            detay.map((d) => getReelKmByNokta(d.yukleme_noktasi, d.teslim_noktasi))
-        );
-
-        // 2) detailRows'u km önceliğiyle kur:
-        //    a) satırın kendi kayitli_km'si
-        //    b) sefer_no/nokta_sirasi eşleşmesi (kmByIndex)
-        //    c) reel_km (yukleme_noktasi+teslim_noktasi) eşleşmesi
-        //    d) ""
-        const hydratedRows = detay.map((d) => {
-            const idx = d.nokta_sirasi;
-            const fromIndex = kmByIndex.get(idx);
-            const fromNokta = noktaKmArr[idx];
-            const kayitli =
-                (d.kayitli_km && String(d.kayitli_km).trim() !== "") ? d.kayitli_km
-                    : (fromIndex && String(fromIndex).trim() !== "") ? fromIndex
-                        : (fromNokta && String(fromNokta).trim() !== "") ? fromNokta
-                            : "";
-
-            return {
-                ...d,
-                proje_adi: d.proje_adi ?? "",
-                yukleme_noktasi: d.yukleme_noktasi ?? "",
-                yukleme_ili: d.yukleme_ili ?? "",
-                yukleme_ilcesi: d.yukleme_ilcesi ?? "",
-                teslim_noktasi: d.teslim_noktasi ?? "",
-                teslim_ili: d.teslim_ili ?? "",
-                teslim_ilcesi: d.teslim_ilcesi ?? "",
-                yukleme_varis: d.yukleme_varis ?? "",
-                yukleme_cikis: d.yukleme_cikis ?? "",
-                teslim_varis: d.teslim_varis ?? "",
-                teslim_cikis: d.teslim_cikis ?? "",
-
-                kayitli_km: kayitli,
-                yeni_km: d.yeni_km ?? "",
-                km_aciklama: d.km_aciklama ?? "",
-            };
-        });
-
-        setDetailRows(hydratedRows);
-
-        // Genel "Kayıtlı KM" toplamını (satır bazlı) güncelle
-        const toplamKayitli = hydratedRows.reduce((acc, r) => acc + parseKmNumber(r.kayitli_km), 0);
-        setKayitliKm(toplamKayitli > 0 ? String(Math.round(toplamKayitli)) : "");
-
-        // 🔥 Ana grid satırına anında yansıt (Kaydet'e basmadan da görünür)
-            setRows(prev =>
-                 prev.map(r =>
-                    r.sefer_no === (row?.sefer_no ?? editSefer?.sefer_no) || r.id === (row?.id ?? editSefer?.id)
-                        ? { ...r, kayitli_km: toplamKayitli > 0 ? String(Math.round(toplamKayitli)) : null }
-                    : r
-                    )
-                );
-        /* 🔥 EDITÖR AÇILIR AÇILMAZ: TOPLAM KM + İLK ETA */
-        try {
-            const km = await computeTotalDistanceKm(detay);
-            setTotalKm(km);
-
-            const baseIsoRaw =
-                getEarliestYuklemeCikisIso(detay)
-                || (row?.sefer_tarihi || seferTarihiYeni)
-                || toLocalIso(new Date());
-
-            // ✅ Cumartesi 08:00–17:00 ise +1 gün uygula
-            let baseIso = applySaturdayRule(baseIsoRaw);
-
-            // ⬇️ yeni: editör ilk açıldığında seçili mola varsa uygula
-            if (mola === "45") baseIso = addMinutesToIso(baseIso, 45);
-            else if (mola === "660") baseIso = addMinutesToIso(baseIso, 660);
-
-            const kalan = (row?.kalan_surus_suresi || "").toString().trim();
-            if (km > 0 && kalan) {
-                setEtaGlobal(computeEtaIsoFrom(km, kalan, baseIso));
-            }
-        } catch (e) {
-            console.error("openEditor km/eta:", e);
-            setTotalKm(0);
-        }
+        setSeferTarihiYeni(row?.sefer_tarihi || "");
 
         if (aktarModu) {
             setSnack({
@@ -1252,25 +676,9 @@ export default function ReelAtananSeferler() {
                 severity: "info",
             });
         }
-    }, []); // <-- useCallback kapanışı
+    }, []);
 
-    const formatEta = (val) => {
-        if (!val) return "";
-        const s = String(val).replace(" ", "T");   // "YYYY-MM-DD HH:MM" gelirse normalize et
-        const d = s.slice(0, 10);                  // YYYY-MM-DD
-        const t = s.slice(11, 16);                 // HH:MM
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !/^\d{2}:\d{2}$/.test(t)) {
-            // tanınmazsa ham hâliyle göster
-            return String(val);
-        }
-        const [y, m, dd] = d.split("-");
-        return `${dd}.${m}.${y} ${t}`;             // "gg.aa.yyyy ss:dd"
-    };
-
-
-
-    /* grid columns */
-    /* grid columns */
+    /* grid columns — DÜZELTİLMİŞ BLOK */
     const columns = useMemo(() => {
         const txt = (f, t, w = 170) => ({ field: f, headerName: t, width: w, sortable: true });
 
@@ -1289,11 +697,7 @@ export default function ReelAtananSeferler() {
                             </IconButton>
                         </Tooltip>
                         <Tooltip title="Tamamlananlara Aktar">
-                            <IconButton
-                                size="small"
-                                color="success"
-                                onClick={() => openEditor(p.row, true)}
-                            >
+                            <IconButton size="small" color="success" onClick={() => openEditor(p.row, true)}>
                                 <FileDownloadDoneIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
@@ -1308,9 +712,7 @@ export default function ReelAtananSeferler() {
                     const raw = p.row.reel_durum || "-";
                     const v = raw === "EŞLEŞTİ" || raw === "GÜNCELLENDİ" ? "ESKİ" : raw;
                     const color = v === "YENİ" ? "info" : "default";
-                    return (
-                        <Chip label={v} size="small" color={color} sx={{ fontWeight: 700 }} />
-                    );
+                    return <Chip label={v} size="small" color={color} sx={{ fontWeight: 700 }} />;
                 },
             },
             { field: "nokta_sayisi", headerName: "NOKTA", width: 100, align: "center", headerAlign: "center" },
@@ -1320,21 +722,16 @@ export default function ReelAtananSeferler() {
             txt("musteri_adi", "Müşteri", 240),
             txt("proje_adi", "Proje", 240),
 
-            // ✅ YENİ: ETA ve Kalan Sürüş Süresi sütunları
             {
-                field: "eta",
-                headerName: "ETA",
+                field: "sefer_tarihi",
+                headerName: "Sefer Tarihi",
                 width: 190,
-                sortable: true,
-                renderCell: (p) => formatEta(p.row?.eta),
+                renderCell: (p) => fromISOToCombined(p.row.sefer_tarihi || ""),
+                sortComparator: (a, b) => new Date(a) - new Date(b),
             },
-            txt("kalan_surus_suresi", "Kalan Sürüş (ss:dd)", 170),
-
-            txt("sefer_tarihi", "Sefer Tarihi", 190),
             txt("atama_yapan_kullanici", "Atayan", 170),
             txt("arac_statu", "Araç Statü", 210),
 
-            // 🔽 Eklenen sütunlar
             txt("yukleme_ili", "Yükleme İl", 160),
             txt("yukleme_ilcesi", "Yükleme İlçe", 160),
             txt("teslim_ili", "Teslim İl", 160),
@@ -1348,16 +745,24 @@ export default function ReelAtananSeferler() {
             txt("hizmet_adi", "Hizmet", 190),
             txt("yukleme_noktasi", "Yükleme Noktası", 280),
             txt("teslim_noktasi", "Teslim Noktası", 280),
-            txt("kayitli_km", "Kayıtlı KM", 130),
-            txt("yeni_km", "Yeni KM", 130),
-            txt("km_aciklama", "KM Açıklama", 220),
             txt("irsaliye_no", "İrsaliye No", 170),
-            txt("kayit_zamani", "Kayıt Zamanı", 190),
-            txt("atama_tarihi", "Atama Tarihi", 190),
+
+            {
+                field: "kayit_zamani",
+                headerName: "Kayıt Zamanı",
+                width: 190,
+                renderCell: (p) => fromISOToCombined(p.row.kayit_zamani || ""),
+                sortComparator: (a, b) => new Date(a) - new Date(b),
+            },
+            {
+                field: "atama_tarihi",
+                headerName: "Atama Tarihi",
+                width: 190,
+                renderCell: (p) => fromISOToCombined(p.row.atama_tarihi || ""),
+                sortComparator: (a, b) => new Date(a) - new Date(b),
+            },
         ];
     }, [openEditor]);
-
-
 
     /* sabit UI config */
     const baseInputSX = {
@@ -1374,11 +779,8 @@ export default function ReelAtananSeferler() {
     };
 
     const canSync = (() => {
-        const allowed = new Set(["admin", "selin", "bekirakcagoz","buketcimenci"]);
-        const name = (localStorage.getItem("kullaniciAdi") || "")
-            .toLocaleLowerCase("tr-TR"); // Türkçe duyarlı
-
-        return allowed.has(name);
+        const name = (localStorage.getItem("kullaniciAdi") || "").toUpperCase();
+        return name === "ADMIN" || name === "SELİN";
     })();
 
     /* --------------- RENDER --------------- */
@@ -1429,7 +831,6 @@ export default function ReelAtananSeferler() {
                 </Stack>
 
                 <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
-                    {/* ✅ Geri & Anasayfa */}
                     <Button
                         size="small"
                         variant="text"
@@ -1442,7 +843,7 @@ export default function ReelAtananSeferler() {
                         size="small"
                         variant="text"
                         startIcon={<HomeOutlinedIcon />}
-                        onClick={() => navigate("/anasayfa")}   // <-- değişiklik
+                        onClick={() => navigate("/anasayfa")}
                     >
                         Anasayfa
                     </Button>
@@ -1634,89 +1035,6 @@ export default function ReelAtananSeferler() {
                         />
                     </Box>
 
-                    {/* ✅ GENEL ALANLAR: sadece 1 kez */}
-                    <Card
-                        variant="outlined"
-                        sx={{ borderColor: COLORS.border, background: COLORS.surface2, borderRadius: 2, mb: 1.2 }}
-                    >
-                        <CardHeader
-                            title="Genel Alanlar"
-                            sx={{
-                                "& .MuiCardHeader-title": { fontWeight: 800, fontSize: 16 },
-                                pb: 0.5,
-                            }}
-                        />
-                        <CardContent sx={{ pt: 1.5 }}>
-                            <Box
-                                sx={{
-                                    display: "grid",
-                                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                                    gap: 1,
-                                }}
-                            >
-                                <TimeHMField
-                                    label="Kalan Sürüş Süresi (ss.dd)"
-                                    value={kalanSuresi}
-                                    onChange={(val) => setKalanSuresi(val)}
-                                    sx={baseInputSX}
-                                />
-
-                                {/* ⬇️ yeni: Mola seçimi */}
-                                <TextField
-                                    select
-                                    label="Mola"
-                                    value={mola}
-                                    onChange={(e) => setMola(e.target.value)}
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={baseInputSX}
-                                >
-                                    <MenuItem value="">Yok</MenuItem>
-                                    <MenuItem value="45">45 dakika</MenuItem>
-                                    <MenuItem value="660">11 saat</MenuItem>
-                                </TextField>
-
-                                <TextField
-                                    label="ETA (otomatik)"
-                                    value={etaGlobal ? fromISOToCombined(etaGlobal) : ""}
-                                    InputProps={{ readOnly: true }}
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={baseInputSX}
-                                />
-
-                                <TextField
-                                    label="Kayıtlı KM"
-                                    value={kayitliKm}
-                                    InputProps={{ readOnly: true }}
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={baseInputSX}
-                                />
-
-
-                                <TextField
-                                    label="Yeni KM"
-                                    value={yeniKm}
-                                    onChange={(e) => setYeniKm(e.target.value)}
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={baseInputSX}
-                                />
-
-                                <TextField
-                                    label="KM Açıklama"
-                                    value={kmAciklama}
-                                    onChange={(e) => setKmAciklama(e.target.value)}
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={baseInputSX}
-                                />
-
-                                <Typography variant="caption" sx={{ color: COLORS.textMuted, alignSelf: "center" }}>
-                                    {totalKm > 0
-                                        ? `Toplam km: ${Math.round(totalKm)} • Kalan sürüş: ${kalanSuresi || "—"}`
-                                        : 'Mesafe kaydı bulunamadığı için ETA hesaplanamadı'}
-                                </Typography>
-                            </Box>
-                        </CardContent>
-                    </Card>
-
                     {/* Satır ekle butonu ve ipucu */}
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                         <Button startIcon={<AddIcon />} onClick={addDetailRow} color="info" variant="contained">
@@ -1830,7 +1148,6 @@ export default function ReelAtananSeferler() {
                         İpucu: Satır başındaki <b>kopyala</b> ile seri veri girişi çok hızlanır.
                     </Typography>
                 </DialogContent>
-
 
                 <DialogActions sx={{ p: 2 }}>
                     <Button startIcon={<SaveIcon />} onClick={saveDetails} variant="outlined">Kaydet</Button>

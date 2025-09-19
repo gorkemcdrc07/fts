@@ -252,7 +252,7 @@ export default function KpiOlcumu() {
 
     // Sadece bu kullanıcılar gösterilsin
     const ALLOWED_USERS = useMemo(
-        () => new Set(["SELÇUK OLGUN", "FERHAT KARIŞLI", "MERT ULUTAŞ"]),
+        () => new Set(["SELÇUK OLGUN", "FERHAT KARIŞLI", "MERT ULUTAŞ", "BUKET ÇİMENCİ"]),
         []
     );
 

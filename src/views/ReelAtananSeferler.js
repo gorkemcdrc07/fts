@@ -30,9 +30,13 @@ import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const daysAgoISO = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
 
+
 const EXCLUDED_PLAKAS = new Set([
     "34NHF579", "34NHF636", "34NHF705", "34NHF757",
-    "34NHF811", "34NHF868", "34NHF916", "34NHF964", "34NHG120", "34NHG208", "06CFZ391", "33ADV488", "54AEH576", "26ADN765", "06GD7290", "33ABF523", "33AIM809", "33AVC168", "33ACR730"
+    "34NHF811", "34NHF868", "34NHF916", "34NHF964",
+    "34NHG120", "34NHG208", "06CFZ391", "33ADV488",
+    "54AEH576", "26ADN765", "06GD7290", "33ABF523",
+    "33AIM809", "33AVC168", "33ACR730"
 ]);
 
 const normalizePlate = (s) => (s ?? "").toString().toUpperCase().replace(/[\s-]/g, "");
@@ -88,7 +92,7 @@ const toISO = (dateTR, time) => {
 };
 const fromISO = (raw) => {
     if (!raw) return { d: "", t: "" };
-    const iso = raw instanceof Date ? raw.toISOString() : String(raw);
+    const iso = raw instanceof Date ? toLocalISO(raw) : String(raw); // toISOString yerine yerel
     const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2}))?/);
     if (!m) return { d: "", t: "" };
     const [, y, mo, dd, hh, mi] = m;
@@ -119,26 +123,25 @@ const fromISOToCombined = (raw) => {
     const { d, t } = fromISO(raw);
     return d ? (t ? `${d} ${t}` : d) : "";
 };
+// Yerel ISO üret (YYYY-MM-DDTHH:MM)
+const toLocalISO = (d) => {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+const nowLocalISO = () => toLocalISO(new Date());
+
 
 // API’den gelen çeşitli tarih formatlarını güvenli ISO’ya çevir
 const normalizeISO = (raw) => {
     if (!raw) return null;
-    if (raw instanceof Date && !isNaN(raw)) return raw.toISOString();
-    const s = String(raw);
-
-    // /Date(1694793600000)/ formatı
-    const m = s.match(/\/Date\((\d+)\)\//);
-    if (m) return new Date(Number(m[1])).toISOString();
-
-    // ISO'ya benzeyenler
-    if (/^\d{4}-\d{2}-\d{2}([T\s]\d{2}:\d{2}(:\d{2})?)?/.test(s)) {
-        const d = new Date(s);
-        return isNaN(d) ? null : d.toISOString();
-    }
-
-    // Son çare: Date parse
+    if (raw instanceof Date && !isNaN(raw)) return toLocalISO(raw); // yerel
+    const s = String(raw).trim();
+    const m = s.match(/\/Date\((\d+)\)\//);           // /Date(…)/ -> epoch
+    if (m) return toLocalISO(new Date(Number(m[1])));
+    if (/^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}/.test(s)) // zaten ISO benzeri
+        return s.replace(" ", "T").slice(0, 16);      // TZ ekleme, saniyeyi at
     const d = new Date(s);
-    return isNaN(d) ? null : d.toISOString();
+    return isNaN(d) ? null : toLocalISO(d);
 };
 
 function DateTimeOneField({ label, value, onChange, sx }) {
@@ -166,6 +169,146 @@ function DateTimeOneField({ label, value, onChange, sx }) {
     );
 }
 
+/* === Zaman alanı (ss.dd) ve süre dönüştürücü yardımcılar === */
+function TimeHMField({ label, value, onChange, sx }) {
+    const [text, setText] = useState("");
+
+    useEffect(() => {
+        const v = (value || "").toString();
+        setText(v ? v.replace(":", ".") : ""); // ekranda ss.dd
+    }, [value]);
+
+    const handleChange = (e) => {
+        const digits = e.target.value.replace(/\D/g, "").slice(0, 4); // ssdd
+        const hh = digits.slice(0, 2);
+        const m1 = digits.slice(2, 3);
+        const mm = digits.slice(2, 4);
+
+        let display = hh;
+        if (digits.length === 2) display = `${hh}.`;
+        else if (digits.length === 3) display = `${hh}.${m1}`;
+        else if (digits.length === 4) display = `${hh}.${mm}`;
+
+        setText(display);
+
+        if (digits.length === 0) onChange("");
+        else if (digits.length <= 2) onChange(hh);
+        else if (digits.length === 3) onChange(`${hh}:${m1}`);
+        else {
+            const mmNum = Math.min(59, Math.max(0, parseInt(mm || "0", 10) || 0));
+            onChange(`${hh}:${String(mmNum).padStart(2, "0")}`);
+        }
+    };
+
+    return (
+        <TextField
+            label={label}
+            placeholder="ss.dd"
+            value={text}
+            onChange={handleChange}
+            size="small"
+            inputProps={{ inputMode: "numeric", maxLength: 5 }}
+            InputLabelProps={{ shrink: true }}
+            sx={sx}
+        />
+    );
+}
+
+// "HH:MM" -> toplam dakika
+function parseHHMMtoMin(txt) {
+    const [h = "0", m = "0"] = String(txt || "").split(":");
+    const hh = parseInt(h, 10) || 0;
+    const mm = parseInt(m, 10) || 0;
+    return Math.max(0, hh * 60 + mm);
+}
+
+// ETA için en güncel "yukleme_cikis"
+const getLatestYuklemeCikisISO = (arr = []) => {
+    const ts = arr.map(d => normalizeISO(d?.yukleme_cikis)).filter(Boolean).sort();
+    return ts.length ? ts[ts.length - 1] : null;
+};
+
+// ==== KGM + Mesafe ETA yardımcıları ====
+const AVG_SPEED_KMPH = 65;           // tır ortalama hız
+const BLOCK_MIN = 270;               // 4.5 saat
+const BREAK1_MIN = 45;               // 45 dk mola
+const DAILY_REST_MIN = 11 * 60;      // 11 saat
+
+// "1.685,69" -> 1685.69 (km)
+const parseMesafeKm = (v) => {
+    const s = String(v ?? "").replace(/\./g, "").replace(",", ".");
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+};
+
+// Mesafe(km) + KGM: 4.5s -> 45dk -> 4.5s -> 45dk + 11s -> ...
+function computeETAWithKGM(distanceKm, startISO, initialRemainMin = BLOCK_MIN, speedKmh = AVG_SPEED_KMPH) {
+    const kmPerMin = speedKmh / 60;
+    let remainingKm = Math.max(0, distanceKm);
+    let t = new Date(startISO);
+    let remainToBreak = Math.max(0, initialRemainMin);
+    let blocksToday = 0;
+
+    while (remainingKm > 0.01) {
+        if (remainToBreak <= 0) {
+            if (blocksToday === 1) t = new Date(t.getTime() + BREAK1_MIN * 60000);
+            else if (blocksToday === 2) { t = new Date(t.getTime() + (BREAK1_MIN + DAILY_REST_MIN) * 60000); blocksToday = 0; }
+            remainToBreak = BLOCK_MIN;
+            continue;
+        }
+        const canDriveKm = remainToBreak * kmPerMin;
+        const driveKm = Math.min(remainingKm, canDriveKm);
+        const driveMin = Math.round(driveKm / kmPerMin);
+
+        t = new Date(t.getTime() + driveMin * 60000);
+        remainingKm -= driveKm;
+        remainToBreak -= driveMin;
+
+        if (remainingKm <= 0.01) break; // vardık
+
+        // blok bitti -> zorunlu mola/istirahat
+        blocksToday += 1;
+        if (blocksToday === 1) t = new Date(t.getTime() + BREAK1_MIN * 60000);
+        else if (blocksToday === 2) { t = new Date(t.getTime() + (BREAK1_MIN + DAILY_REST_MIN) * 60000); blocksToday = 0; }
+        remainToBreak = BLOCK_MIN;
+    }
+
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(t.getHours())}:${pad(t.getMinutes())}`;
+}
+
+// mola seçenekleri + başlangıca dakika ekleme
+const BREAK_OPTIONS = [
+    { label: "Yok", value: 0 },
+    { label: "45 dk", value: 45 },
+    { label: "11 saat", value: 11 * 60 },
+];
+
+const addMinutesISO = (iso, min = 0) => {
+    const d = new Date(iso || nowLocalISO());
+    return toLocalISO(new Date(d.getTime() + (Number(min) || 0) * 60000));
+};
+
+
+// ilk/son il-ilçe’yi çıkar
+const pickOD = (row, detay) => {
+    const first = (arr) => (arr.length ? arr[0] : "");
+    const last = (arr) => (arr.length ? arr[arr.length - 1] : "");
+    const yIl = first(splitCell(row.yukleme_ili || ""));
+    const yIlce = first(splitCell(row.yukleme_ilcesi || ""));
+    const tIl = last(splitCell(row.teslim_ili || ""));
+    const tIlce = last(splitCell(row.teslim_ilcesi || ""));
+    const dFirst = detay?.[0] || {};
+    const dLast = detay?.[detay.length - 1] || {};
+    return {
+        yIl: yIl || dFirst.yukleme_ili || "",
+        yIlce: yIlce || dFirst.yukleme_ilcesi || "",
+        tIl: tIl || dLast.teslim_ili || "",
+        tIlce: tIlce || dLast.teslim_ilcesi || "",
+    };
+};
+
+
 export default function ReelAtananSeferler() {
     const navigate = useNavigate();
 
@@ -185,6 +328,8 @@ export default function ReelAtananSeferler() {
     const [teslimIl, setTeslimIl] = useState("");
     const [aracStatu, setAracStatu] = useState("");
     const [noktaSayisi, setNoktaSayisi] = useState("");
+    const [surucu, setSurucu] = useState("");
+
 
     /* UI */
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
@@ -193,11 +338,22 @@ export default function ReelAtananSeferler() {
     const [showSuccess, setShowSuccess] = useState(false);
     const [dense, setDense] = useState(false);
 
-    /* dialog */
+    /* dialog (Edit) */
     const [editOpen, setEditOpen] = useState(false);
     const [editSefer, setEditSefer] = useState(null);
     const [detailRows, setDetailRows] = useState([]);
     const [seferTarihiYeni, setSeferTarihiYeni] = useState("");
+
+    // ETA dialog state
+    const [etaOpen, setEtaOpen] = useState(false);
+    const [etaRow, setEtaRow] = useState(null);
+    const [etaStartISO, setEtaStartISO] = useState("");
+    const [driveHM, setDriveHM] = useState("");          // ilk mola öncesi kalan sürüş
+    const [etaDetails, setEtaDetails] = useState([]);
+    const [etaDistanceKm, setEtaDistanceKm] = useState(null);   // mesafeler tablosundan km
+    const [etaDistanceInfo, setEtaDistanceInfo] = useState(""); // UI bilgi
+    const [breakSel, setBreakSel] = useState(0); // başlangıçta mola: 0 / 45 / 660
+    // breakSel artık kullanılmıyor (silebilirsin)
 
     /* options */
     const options = useMemo(() => {
@@ -213,6 +369,8 @@ export default function ReelAtananSeferler() {
             yukleme_ili: uniq("yukleme_ili"),
             teslim_ili: uniq("teslim_ili"),
             arac_statu: uniq("arac_statu"),
+            surucu_ad_soyad: uniq("surucu_ad_soyad"),
+
         };
     }, [rows]);
 
@@ -336,7 +494,7 @@ export default function ReelAtananSeferler() {
                 const tmsOrders = Array.isArray(s.TMSOrders) ? s.TMSOrders : [];
                 return {
                     sefer_no: s?.DocumentNo?.trim() ?? "",
-                    arac_statu: s?.VehicleStatus ?? "", // NOT NULL'a boş string gönder
+                    arac_statu: s?.VehicleStatus ?? "",
                     plaka: s?.PlateNumber ?? "",
                     treyler: s?.TrailerPlateNumber ?? "",
                     surucu_ad_soyad: s?.FullName ?? "",
@@ -365,7 +523,7 @@ export default function ReelAtananSeferler() {
             // Var olanları çekip eşle
             const { data: mevcut } = await supabase
                 .from("seferler")
-                .select("id,sefer_no") // id'yi sadece eşlemede kullan
+                .select("id,sefer_no")
                 .gte("sefer_tarihi", start)
                 .lte("sefer_tarihi", end);
 
@@ -375,7 +533,6 @@ export default function ReelAtananSeferler() {
             const upsert = [];
 
             const stripId = (obj) => {
-                // Upsert'e giden payload'dan id ve _rid kesinlikle çıksın
                 const { id, _rid, ...rest } = obj || {};
                 return rest;
             };
@@ -390,7 +547,6 @@ export default function ReelAtananSeferler() {
                     seenNew.push(temizYeni);
                     upsert.push(temizYeni);
                 } else {
-                    // id'yi ASLA taşımıyoruz
                     const merged = stripId({ ...item, reel_durum: "ESKİ" });
                     seenNew.push(merged);
                     upsert.push(merged);
@@ -401,7 +557,7 @@ export default function ReelAtananSeferler() {
                 const { error: upErr } = await supabase
                     .from("seferler")
                     .upsert(upsert, { onConflict: "sefer_no" })
-                    .select(); // debug için
+                    .select();
                 if (upErr) throw upErr;
             }
 
@@ -409,7 +565,6 @@ export default function ReelAtananSeferler() {
             setShowSuccess(true);
             setTimeout(() => setShowSuccess(false), 3500);
 
-            // Grid için (DB id’sini kullanmıyoruz)
             const enriched = seenNew.map((s, idx) => {
                 const maxLen = Math.max(0, ...detailFields.map((k) => splitCell(s[k]).length));
                 return { ...s, _rid: s.sefer_no ?? `tmp-${Date.now()}-${idx}`, nokta_sayisi: maxLen || 0 };
@@ -434,6 +589,9 @@ export default function ReelAtananSeferler() {
         if (yuklemeIl) r = r.filter((x) => (x.yukleme_ili || "") === yuklemeIl);
         if (teslimIl) r = r.filter((x) => (x.teslim_ili || "") === teslimIl);
         if (aracStatu) r = r.filter((x) => (x.arac_statu || "") === aracStatu);
+        // ↓↓↓ EKLE
+        if (surucu) r = r.filter((x) => (x.surucu_ad_soyad || "") === surucu);
+
         if (noktaSayisi) {
             const n = parseInt(noktaSayisi, 10);
             if (!Number.isNaN(n)) r = r.filter((x) => (x.nokta_sayisi || 0) === n);
@@ -443,12 +601,27 @@ export default function ReelAtananSeferler() {
             r = r.filter((x) => Object.values(x).some((v) => String(v ?? "").toLowerCase().includes(q)));
         }
         return r;
-    }, [rows, seferNoTipi, plaka, musteri, proje, yuklemeIl, teslimIl, aracStatu, noktaSayisi, quick]);
+        // ↓↓↓ dependency listesine 'surucu' ekle
+    }, [rows, seferNoTipi, plaka, musteri, proje, yuklemeIl, teslimIl, aracStatu, noktaSayisi, quick, surucu]);
 
     const sfrCount = useMemo(
         () => filtered.reduce((n, x) => n + ((x.sefer_no || "").toUpperCase().startsWith("SFR") ? 1 : 0), 0),
         [filtered]
     );
+
+    /* ======= YETKİLER ======= */
+    const normalizeUser = (s) =>
+        (s || "")
+            .toLocaleUpperCase("tr-TR")
+            .normalize("NFD")
+            .replace(/\p{Diacritic}/gu, "")
+            .replace(/\s+/g, "");
+
+    const allowedEditors = new Set(["ADMIN", "SELIN", "BEKIRAKCAGOZ"]);
+    const canEdit = allowedEditors.has(normalizeUser(localStorage.getItem("kullaniciAdi")));
+
+    const allowedETA = new Set(["MERT", "FERHATKARISLI", "BEKIRAKCAGOZ", "ADMIN", "SELCUK", "BUKETCIMENCI"]);
+    const canSeeETA = allowedETA.has(normalizeUser(localStorage.getItem("kullaniciAdi")));
 
     /* ------- editor helper'ları ------- */
     const closeEditor = useCallback(() => {
@@ -490,6 +663,7 @@ export default function ReelAtananSeferler() {
         setDetailRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
     }, []);
 
+    // ESKİSİNİ SİL → AYNISINI BU BLOKLA DEĞİŞTİR
     const saveDetails = useCallback(async () => {
         if (!editSefer) return;
         setSaving(true);
@@ -516,8 +690,51 @@ export default function ReelAtananSeferler() {
 
             const { error: detErr } = await supabase
                 .from("sefer_detaylari")
-                .upsert(upserts, { onConflict: "sefer_id,nokta_sirasi" }); // 🔧 string
+                .upsert(upserts, { onConflict: "sefer_id,nokta_sirasi" });
             if (detErr) throw detErr;
+
+            // ⬇️⬇️⬇️ BURASI YENİ: Detaylar kaydedildi -> ETA otomatik güncelle
+            try {
+                // Son "yukleme_cikis" yakala
+                const latest = getLatestYuklemeCikisISO(detailRows);
+                if (editSefer?.id && latest) {
+                    // Mesafe çek (ilk/son il-ilçe)
+                    const { yIl, yIlce, tIl, tIlce } = pickOD(editSefer || {}, detailRows);
+                    const { data: rec } = await supabase
+                        .from("mesafeler")
+                        .select("mesafe")
+                        .ilike("yukleme_il", yIl)
+                        .ilike("yukleme_ilce", yIlce)
+                        .ilike("teslim_il", tIl)
+                        .ilike("teslim_ilce", tIlce)
+                        .maybeSingle();
+
+                    const km = parseMesafeKm(rec?.mesafe);
+                    if (km) {
+                        // Kullanıcının daha önce girdiği kalan sürüş varsa al
+                        const { data: srow } = await supabase
+                            .from("seferler")
+                            .select("kalan_surus_dk")
+                            .eq("id", editSefer.id)
+                            .maybeSingle();
+                        const remain = Number(srow?.kalan_surus_dk) || BLOCK_MIN;
+
+                        const newETA = computeETAWithKGM(km, latest, remain);
+                        const { error: eUp } = await supabase
+                            .from("seferler")
+                            .update({ eta_varis: newETA, kayit_zamani: new Date().toISOString() })
+                            .eq("id", editSefer.id);
+                        if (eUp) console.error("ETA update error:", eUp);
+
+                        setRows(prev =>
+                            prev.map(r => (r.id === editSefer.id ? { ...r, eta_varis: newETA } : r))
+                        );
+                    }
+                }
+            } catch (e) {
+                console.error("Auto ETA hesaplama hatası:", e);
+            }
+            // ⬆️⬆️⬆️ YENİ BLOK SONU
 
             setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
         } catch (e) {
@@ -567,7 +784,7 @@ export default function ReelAtananSeferler() {
             };
             const { error: e1 } = await supabase
                 .from("tamamlanan_seferler")
-                .upsert(anaPayload, { onConflict: "sefer_no" }); // 🔧 string
+                .upsert(anaPayload, { onConflict: "sefer_no" });
             if (e1) throw e1;
 
             const detPayload = detailRows.map((d, i) => ({
@@ -591,7 +808,7 @@ export default function ReelAtananSeferler() {
             if (detPayload.length) {
                 const { error: e2 } = await supabase
                     .from("tamamlanan_detaylar")
-                    .upsert(detPayload, { onConflict: "sefer_no,nokta_sirasi" }); // 🔧 string
+                    .upsert(detPayload, { onConflict: "sefer_no,nokta_sirasi" });
                 if (e2) throw e2;
             }
 
@@ -608,8 +825,14 @@ export default function ReelAtananSeferler() {
         } finally { setSaving(false); }
     }, [detailRows, editSefer, rows, seferTarihiYeni, closeEditor]);
 
-    /* editor aç */
+    // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    // EKSİK OLAN FONKSİYON GERİ EKLENDİ
     const openEditor = useCallback(async (row, aktarModu = false) => {
+        if (!canEdit) {
+            setSnack({ open: true, msg: "Bu işlemi yapma yetkiniz yok.", severity: "warning" });
+            return;
+        }
+
         setEditSefer(row);
         setEditOpen(true);
 
@@ -676,34 +899,195 @@ export default function ReelAtananSeferler() {
                 severity: "info",
             });
         }
-    }, []);
+    }, [canEdit]);
+    // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
-    /* grid columns — DÜZELTİLMİŞ BLOK */
+    /* ===== ETA PANELİ ===== */
+    const openETA = useCallback(async (row) => {
+        if (!canSeeETA) {
+            setSnack({ open: true, msg: "ETA panelini görüntüleme yetkiniz yok.", severity: "warning" });
+            return;
+        }
+        setEtaRow(row);
+        setDriveHM("");
+        setEtaDetails([]);
+        setEtaDistanceKm(null);
+        setEtaDistanceInfo("");
+        setBreakSel(row?.eta_mola_dk ?? 0); // kayıt varsa al, yoksa 0
+        setEtaOpen(true);
+
+        try {
+            let id = row?.id ?? null;
+            if (!id && row?.sefer_no) {
+                const { data: s } = await supabase
+                    .from("seferler").select("id").eq("sefer_no", row.sefer_no).maybeSingle();
+                id = s?.id ?? null;
+            }
+
+            let detay = [];
+            if (id) {
+                const { data } = await supabase
+                    .from("sefer_detaylari")
+                    .select("*")
+                    .eq("sefer_id", id)
+                    .order("nokta_sirasi", { ascending: true });
+                detay = data || [];
+            }
+
+            if (!detay.length) {
+                const arrs = Object.fromEntries(detailFields.map((k) => [k, splitCell(row[k])]));
+                const len = Math.max(1, ...detailFields.map((k) => arrs[k].length));
+                const pick = (k, i) => (arrs[k][i] ?? "");
+                detay = Array.from({ length: len }, (_, i) => ({
+                    nokta_sirasi: i,
+                    proje_adi: pick("proje_adi", i),
+                    yukleme_noktasi: pick("yukleme_noktasi", i),
+                    yukleme_ili: pick("yukleme_ili", i),
+                    yukleme_ilcesi: pick("yukleme_ilcesi", i),
+                    teslim_noktasi: pick("teslim_noktasi", i),
+                    teslim_ili: pick("teslim_ili", i),
+                    teslim_ilcesi: pick("teslim_ilcesi", i),
+                    yukleme_varis: pick("yukleme_varis", i),
+                    yukleme_cikis: pick("yukleme_cikis", i),
+                    teslim_varis: pick("teslim_varis", i),
+                    teslim_cikis: pick("teslim_cikis", i),
+                }));
+            }
+
+            setEtaDetails(detay);
+            const latest = getLatestYuklemeCikisISO(detay);
+            setEtaStartISO(latest || nowLocalISO());
+
+            // --- MESAFE: mesafeler tablosundan çek ---
+            try {
+                const { yIl, yIlce, tIl, tIlce } = pickOD(row, detay);
+
+                const { data: rec } = await supabase
+                    .from("mesafeler")
+                    .select("mesafe")
+                    .ilike("yukleme_il", yIl)
+                    .ilike("yukleme_ilce", yIlce)
+                    .ilike("teslim_il", tIl)
+                    .ilike("teslim_ilce", tIlce)
+                    .maybeSingle();
+
+                const km = parseMesafeKm(rec?.mesafe);
+                if (km) {
+                    setEtaDistanceKm(km);
+                    const safMin = Math.round((km / AVG_SPEED_KMPH) * 60);
+                    setEtaDistanceInfo(`${km.toFixed(0)} km • saf sürüş ~ ${Math.floor(safMin / 60)}s ${String(safMin % 60).padStart(2, "0")}d @ ${AVG_SPEED_KMPH} km/s`);
+                } else {
+                    setEtaDistanceKm(null);
+                    setEtaDistanceInfo("Mesafe bulunamadı.");
+                }
+            } catch {
+                setEtaDistanceKm(null);
+                setEtaDistanceInfo("Mesafe sorgusunda hata.");
+            }
+        } catch (e) {
+            console.error(e);
+            setEtaDetails([]);
+            setEtaStartISO(nowLocalISO());
+        }
+    }, [canSeeETA]);
+
+    // kullanışlı: son yukleme_cikis'i memoize edelim
+    const latestYuklemeCikis = useMemo(() => getLatestYuklemeCikisISO(etaDetails), [etaDetails]);
+
+    const computedETAISO = useMemo(() => {
+        try {
+            const latest = getLatestYuklemeCikisISO(etaDetails);
+            if (!latest) return "__WAITING__";
+            if (!etaDistanceKm) return "__NEED_DISTANCE__";
+
+            const base0 = etaStartISO || latest;
+            const base = addMinutesISO(base0, Number(breakSel) || 0); // seçilen mola başlangıca eklenir
+            const initialRemain = parseHHMMtoMin(driveHM) || BLOCK_MIN; // ilk mola öncesi kalan sürüş
+            return computeETAWithKGM(etaDistanceKm, base, initialRemain);
+        } catch {
+            return "";
+        }
+    }, [etaStartISO, driveHM, etaDetails, etaDistanceKm, breakSel]);
+
+    const destinationText = useMemo(() => {
+        if (!etaRow) return "-";
+        const last = (arr) => (arr.length ? arr[arr.length - 1] : "");
+        const teslimIl = last(splitCell(etaRow.teslim_ili || ""));
+        const teslimIlce = last(splitCell(etaRow.teslim_ilcesi || ""));
+        const teslimNokta = last(splitCell(etaRow.teslim_noktasi || ""));
+        return [teslimNokta, teslimIlce, teslimIl].filter(Boolean).join(" • ");
+    }, [etaRow]);
+
+    const copyETA = useCallback(async () => {
+        if (computedETAISO === "__WAITING__" || computedETAISO === "__NEED_DISTANCE__") return;
+        const txt = fromISOToCombined(computedETAISO || "") || "-";
+        try {
+            await navigator.clipboard.writeText(txt);
+            setSnack({ open: true, msg: `ETA kopyalandı: ${txt}`, severity: "success" });
+        } catch {
+            setSnack({ open: true, msg: "Kopyalanamadı.", severity: "error" });
+        }
+    }, [computedETAISO]);
+
+    const saveETA = useCallback(async () => {
+        try {
+            setSaving(true);
+
+            let id = etaRow?.id ?? null;
+            if (!id && etaRow?.sefer_no) {
+                const { data: s, error: idErr } = await supabase
+                    .from("seferler")
+                    .select("id")
+                    .eq("sefer_no", etaRow.sefer_no)
+                    .maybeSingle();
+                if (idErr) console.error("ID sorgu hatası:", idErr);
+                id = s?.id ?? null;
+            }
+            if (!id) throw new Error("Sefer kaydı bulunamadı.");
+
+            // Hesaplanabilir mi?
+            const latest = getLatestYuklemeCikisISO(etaDetails);
+            const canCompute = !!(etaDistanceKm && (etaStartISO || latest));
+
+            // Baz (başlangıç) ve parametreler
+            const base0 = etaStartISO || latest || nowLocalISO();
+            const base = addMinutesISO(base0, Number(breakSel) || 0);
+            const initialRemain = parseHHMMtoMin(driveHM) || BLOCK_MIN;
+
+            const newETA = canCompute
+                ? computeETAWithKGM(etaDistanceKm, base, initialRemain)
+                : null;
+
+            const payload = {
+                eta_varis: newETA,                          // hesaplanamadıysa null kaydedilir
+                kalan_surus_dk: Number(initialRemain) || null,
+                kayit_zamani: new Date().toISOString(),
+            };
+
+            const { error } = await supabase.from("seferler").update(payload).eq("id", id).select("id");
+            if (error) throw error;
+
+            setRows(prev => prev.map(r => (r.id === id ? { ...r, ...payload } : r)));
+            setSnack({
+                open: true,
+                msg: newETA
+                    ? "ETA kaydedildi."
+                    : "Bilgiler kaydedildi. Detaylarda 'Yükleme Çıkış' veya mesafe gelince ETA otomatik hesaplanacak.",
+                severity: "success",
+            });
+        } catch (e) {
+            console.error("Kaydetme exception:", e?.message, e);
+            setSnack({ open: true, msg: `Kaydedilemedi: ${e?.message || e}`, severity: "error" });
+        } finally {
+            setSaving(false);
+        }
+    }, [etaRow, etaStartISO, driveHM, etaDetails, etaDistanceKm, breakSel]);
+
+    /* grid columns — aksiyon sütunu: Edit ve/veya ETA */
     const columns = useMemo(() => {
         const txt = (f, t, w = 170) => ({ field: f, headerName: t, width: w, sortable: true });
 
-        return [
-            {
-                field: "actions",
-                headerName: "İşlem",
-                width: 140,
-                sortable: false,
-                filterable: false,
-                renderCell: (p) => (
-                    <Stack direction="row" spacing={1}>
-                        <Tooltip title="Detayları Düzenle">
-                            <IconButton size="small" onClick={() => openEditor(p.row)}>
-                                <EditIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Tamamlananlara Aktar">
-                            <IconButton size="small" color="success" onClick={() => openEditor(p.row, true)}>
-                                <FileDownloadDoneIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    </Stack>
-                ),
-            },
+        const baseCols = [
             {
                 field: "reel_durum",
                 headerName: "REEL DURUM",
@@ -721,7 +1105,6 @@ export default function ReelAtananSeferler() {
             txt("plaka", "Plaka", 130),
             txt("musteri_adi", "Müşteri", 240),
             txt("proje_adi", "Proje", 240),
-
             {
                 field: "sefer_tarihi",
                 headerName: "Sefer Tarihi",
@@ -731,12 +1114,10 @@ export default function ReelAtananSeferler() {
             },
             txt("atama_yapan_kullanici", "Atayan", 170),
             txt("arac_statu", "Araç Statü", 210),
-
             txt("yukleme_ili", "Yükleme İl", 160),
             txt("yukleme_ilcesi", "Yükleme İlçe", 160),
             txt("teslim_ili", "Teslim İl", 160),
             txt("teslim_ilcesi", "Teslim İlçe", 160),
-
             txt("treyler", "Treyler", 160),
             txt("surucu_ad_soyad", "Sürücü", 200),
             txt("surucu_tckn", "TC", 150),
@@ -746,7 +1127,6 @@ export default function ReelAtananSeferler() {
             txt("yukleme_noktasi", "Yükleme Noktası", 280),
             txt("teslim_noktasi", "Teslim Noktası", 280),
             txt("irsaliye_no", "İrsaliye No", 170),
-
             {
                 field: "kayit_zamani",
                 headerName: "Kayıt Zamanı",
@@ -761,8 +1141,39 @@ export default function ReelAtananSeferler() {
                 renderCell: (p) => fromISOToCombined(p.row.atama_tarihi || ""),
                 sortComparator: (a, b) => new Date(a) - new Date(b),
             },
+            { field: "eta_varis", headerName: "ETA", width: 190, renderCell: (p) => fromISOToCombined(p.row.eta_varis || ""), sortComparator: (a, b) => new Date(a) - new Date(b) },
+            { field: "kalan_surus_dk", headerName: "Kalan (dk)", width: 120, align: "center", headerAlign: "center" },
         ];
-    }, [openEditor]);
+
+        const showActions = canEdit || canSeeETA;
+        if (!showActions) return baseCols;
+
+        const actionsCol = {
+            field: "actions",
+            headerName: "İşlem",
+            width: 160,
+            sortable: false,
+            filterable: false,
+            renderCell: (p) => (
+                <Stack direction="row" spacing={0.5}>
+                    {canSeeETA && (
+                        <Button size="small" variant="outlined" onClick={() => openETA(p.row)}>
+                            ETA
+                        </Button>
+                    )}
+                    {canEdit && (
+                        <Tooltip title="Detayları Düzenle">
+                            <IconButton size="small" onClick={() => openEditor(p.row)}>
+                                <EditIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
+                </Stack>
+            ),
+        };
+
+        return [actionsCol, ...baseCols];
+    }, [openEditor, openETA, canEdit, canSeeETA]);
 
     /* sabit UI config */
     const baseInputSX = {
@@ -788,6 +1199,7 @@ export default function ReelAtananSeferler() {
         <Box
             sx={{
                 height: "100dvh",
+                overflow: "hidden",                 // 👈 dış (body) scroll’u kapat
                 display: "grid",
                 gridTemplateRows: "auto auto 1fr",
                 gap: 1.5,
@@ -796,7 +1208,14 @@ export default function ReelAtananSeferler() {
                 color: COLORS.text,
             }}
         >
-            <Helmet><title>AKTİF SEFERLER</title></Helmet>
+
+            <Helmet>
+                <title>AKTİF SEFERLER</title>
+                <style>{`
+    html, body { height: 100%; overflow: hidden; } /* tarayıcı scroll’u kapalı */
+    #root { height: 100%; }
+  `}</style>
+            </Helmet>
 
             {/* Başlık + aksiyonlar */}
             <Stack
@@ -867,79 +1286,174 @@ export default function ReelAtananSeferler() {
 
             {/* Filtreler */}
             <Paper sx={{
-                p: 1.2, borderRadius: 2, display: "grid", gridTemplateColumns: "repeat(12, 1fr)",
-                gap: 1, background: COLORS.surface, border: `1px solid ${COLORS.border}`,
+                p: 1.2,
+                borderRadius: 2,
+                display: "grid",
+                gridTemplateColumns: "repeat(12, 1fr)",
+                gap: 1,
+                background: COLORS.surface,
+                border: `1px solid ${COLORS.border}`,
             }}>
-                <TextField label="Başlangıç" type="date" size="small" value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }}
-                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }} />
-                <TextField label="Bitiş" type="date" size="small" value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)} InputLabelProps={{ shrink: true }}
-                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }} />
-                <TextField label="Sefer No Tipi" select size="small" value={seferNoTipi}
+                <TextField
+                    label="Başlangıç"
+                    type="date"
+                    size="small"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}
+                />
+                <TextField
+                    label="Bitiş"
+                    type="date"
+                    size="small"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}
+                />
+                <TextField
+                    label="Sefer No Tipi"
+                    select
+                    size="small"
+                    value={seferNoTipi}
                     onChange={(e) => setSeferNoTipi(e.target.value)}
-                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}>
+                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}
+                >
                     <MenuItem value="">Tümü</MenuItem>
                     <MenuItem value="BOS">BOS…</MenuItem>
                     <MenuItem value="SFR">SFR…</MenuItem>
                 </TextField>
 
-                <TextField label="Plaka" select size="small" value={plaka}
+                <TextField
+                    label="Plaka"
+                    select
+                    size="small"
+                    value={plaka}
                     onChange={(e) => setPlaka(e.target.value)}
-                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}>
+                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}
+                >
                     <MenuItem value="">Tümü</MenuItem>
-                    {options.plaka.map((v) => (<MenuItem key={v} value={v}>{v}</MenuItem>))}
+                    {options.plaka.map((v) => (
+                        <MenuItem key={v} value={v}>{v}</MenuItem>
+                    ))}
                 </TextField>
 
-                <TextField label="Müşteri" select size="small" value={musteri}
+                {/* >>> EKLENDİ: Sürücü filtresi */}
+                <TextField
+                    label="Sürücü"
+                    select
+                    size="small"
+                    value={surucu}
+                    onChange={(e) => setSurucu(e.target.value)}
+                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}
+                >
+                    <MenuItem value="">Tümü</MenuItem>
+                    {options.surucu_ad_soyad.map((v) => (
+                        <MenuItem key={v} value={v}>{v}</MenuItem>
+                    ))}
+                </TextField>
+                {/* <<< EKLENDİ */}
+
+                <TextField
+                    label="Müşteri"
+                    select
+                    size="small"
+                    value={musteri}
                     onChange={(e) => setMusteri(e.target.value)}
-                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}>
+                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}
+                >
                     <MenuItem value="">Tümü</MenuItem>
-                    {options.musteri_adi.map((v) => (<MenuItem key={v} value={v}>{v}</MenuItem>))}
+                    {options.musteri_adi.map((v) => (
+                        <MenuItem key={v} value={v}>{v}</MenuItem>
+                    ))}
                 </TextField>
 
-                <TextField label="Proje" select size="small" value={proje}
+                <TextField
+                    label="Proje"
+                    select
+                    size="small"
+                    value={proje}
                     onChange={(e) => setProje(e.target.value)}
-                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}>
+                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}
+                >
                     <MenuItem value="">Tümü</MenuItem>
-                    {options.proje_adi.map((v) => (<MenuItem key={v} value={v}>{v}</MenuItem>))}
+                    {options.proje_adi.map((v) => (
+                        <MenuItem key={v} value={v}>{v}</MenuItem>
+                    ))}
                 </TextField>
 
-                <TextField label="Yükleme İl" select size="small" value={yuklemeIl}
+                <TextField
+                    label="Yükleme İl"
+                    select
+                    size="small"
+                    value={yuklemeIl}
                     onChange={(e) => setYuklemeIl(e.target.value)}
-                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}>
+                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}
+                >
                     <MenuItem value="">Tümü</MenuItem>
-                    {options.yukleme_ili.map((v) => (<MenuItem key={v} value={v}>{v}</MenuItem>))}
+                    {options.yukleme_ili.map((v) => (
+                        <MenuItem key={v} value={v}>{v}</MenuItem>
+                    ))}
                 </TextField>
 
-                <TextField label="Teslim İl" select size="small" value={teslimIl}
+                <TextField
+                    label="Teslim İl"
+                    select
+                    size="small"
+                    value={teslimIl}
                     onChange={(e) => setTeslimIl(e.target.value)}
-                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}>
+                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}
+                >
                     <MenuItem value="">Tümü</MenuItem>
-                    {options.teslim_ili.map((v) => (<MenuItem key={v} value={v}>{v}</MenuItem>))}
+                    {options.teslim_ili.map((v) => (
+                        <MenuItem key={v} value={v}>{v}</MenuItem>
+                    ))}
                 </TextField>
 
-                <TextField label="Araç Statü" select size="small" value={aracStatu}
+                <TextField
+                    label="Araç Statü"
+                    select
+                    size="small"
+                    value={aracStatu}
                     onChange={(e) => setAracStatu(e.target.value)}
-                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}>
+                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}
+                >
                     <MenuItem value="">Tümü</MenuItem>
-                    {options.arac_statu.map((v) => (<MenuItem key={v} value={v}>{v}</MenuItem>))}
+                    {options.arac_statu.map((v) => (
+                        <MenuItem key={v} value={v}>{v}</MenuItem>
+                    ))}
                 </TextField>
 
-                <TextField label="Nokta" type="number" size="small" value={noktaSayisi}
+                <TextField
+                    label="Nokta"
+                    type="number"
+                    size="small"
+                    value={noktaSayisi}
                     onChange={(e) => setNoktaSayisi(e.target.value)}
-                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }} />
+                    sx={{ gridColumn: { xs: "span 6", md: "span 2" }, ...baseInputSX }}
+                />
 
-                <TextField label="Ara (metin)" size="small" value={quick}
-                    onChange={(e) => setQuick(e.target.value)} placeholder="metin ara…"
-                    sx={{ gridColumn: { xs: "span 12", md: "span 2" }, ...baseInputSX }} />
+                <TextField
+                    label="Ara (metin)"
+                    size="small"
+                    value={quick}
+                    onChange={(e) => setQuick(e.target.value)}
+                    placeholder="metin ara…"
+                    sx={{ gridColumn: { xs: "span 12", md: "span 2" }, ...baseInputSX }}
+                />
             </Paper>
+
 
             {/* Liste */}
             <Paper sx={{
-                borderRadius: 3, border: `1px solid ${COLORS.border}`, overflow: "hidden",
-                minHeight: 0, display: "grid", background: COLORS.surface,
-            }}>
+                    borderRadius: 3,
+                    border: `1px solid ${COLORS.border}`,
+                    background: COLORS.surface,
+                    // tablo daha kısa görünsün:
+                    height: { xs: 40, md: "70vh" },
+                    overflow: "hidden",
+                    }}>
                 <DataGrid
                     rows={filtered}
                     columns={columns}
@@ -948,8 +1462,8 @@ export default function ReelAtananSeferler() {
                     disableRowSelectionOnClick
                     hideFooter
                     density={dense ? "compact" : "standard"}
-                    rowHeight={dense ? 40 : 46}
-                    columnHeaderHeight={dense ? 46 : 52}
+                    rowHeight={dense ? 34 : 40}
+                    columnHeaderHeight={dense ? 40 : 46}
                     sx={{
                         border: "none",
                         color: COLORS.text,
@@ -1036,14 +1550,16 @@ export default function ReelAtananSeferler() {
                     </Box>
 
                     {/* Satır ekle butonu ve ipucu */}
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                        <Button startIcon={<AddIcon />} onClick={addDetailRow} color="info" variant="contained">
-                            Satır Ekle
-                        </Button>
-                        <Typography variant="body2" sx={{ color: COLORS.textMuted }}>
-                            Tarih ve saati tek alana yazın: <b>gg.aa.yyyy ss:dd</b> (ör: 13.05.2025 09:35)
-                        </Typography>
-                    </Stack>
+                    {canEdit && (
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                            <Button startIcon={<AddIcon />} onClick={addDetailRow} color="info" variant="contained">
+                                Satır Ekle
+                            </Button>
+                            <Typography variant="body2" sx={{ color: COLORS.textMuted }}>
+                                Tarih ve saati tek alana yazın: <b>gg.aa.yyyy ss:dd</b> (ör: 13.05.2025 09:35)
+                            </Typography>
+                        </Stack>
+                    )}
 
                     {/* Nokta kartları */}
                     <Grid container spacing={1.2}>
@@ -1063,20 +1579,24 @@ export default function ReelAtananSeferler() {
                                         subheader={
                                             r.yukleme_ili || r.teslim_ili ? `${r.yukleme_ili ?? ""} → ${r.teslim_ili ?? ""}` : ""
                                         }
-                                        action={
+                                        action={canEdit && (
                                             <Stack direction="row" spacing={0.5}>
                                                 <Tooltip title="Bu satırı kopyala">
-                                                    <IconButton onClick={() => copyDetailRow(i)} size="small" color="info">
-                                                        <ContentCopyIcon fontSize="inherit" />
-                                                    </IconButton>
+                                                    <span>
+                                                        <IconButton onClick={() => copyDetailRow(i)} size="small" color="info">
+                                                            <ContentCopyIcon fontSize="inherit" />
+                                                        </IconButton>
+                                                    </span>
                                                 </Tooltip>
                                                 <Tooltip title="Satırı sil">
-                                                    <IconButton onClick={() => removeDetailRow(i)} size="small" color="error">
-                                                        <DeleteIcon fontSize="inherit" />
-                                                    </IconButton>
+                                                    <span>
+                                                        <IconButton onClick={() => removeDetailRow(i)} size="small" color="error">
+                                                            <DeleteIcon fontSize="inherit" />
+                                                        </IconButton>
+                                                    </span>
                                                 </Tooltip>
                                             </Stack>
-                                        }
+                                        )}
                                     />
                                     <CardContent sx={{ pt: 1.5 }}>
                                         <Box
@@ -1099,61 +1619,206 @@ export default function ReelAtananSeferler() {
                                                     key={key}
                                                     label={label}
                                                     size="small"
-                                                    value={r[key]}
+                                                    value={r[key] ?? ""}
                                                     onChange={(e) => onDetailChange(i, key, e.target.value)}
+                                                    InputLabelProps={{ shrink: true }}
                                                     sx={baseInputSX}
                                                 />
                                             ))}
 
-                                            {[
-                                                ["yukleme_varis", "Yükleme Varış"],
-                                                ["yukleme_cikis", "Yükleme Çıkış"],
-                                                ["teslim_varis", "Teslim Varış"],
-                                                ["teslim_cikis", "Teslim Çıkış"],
-                                            ].map(([key, label]) => (
-                                                <DateTimeOneField
-                                                    key={key}
-                                                    label={label}
-                                                    value={r[key] || ""}
-                                                    onChange={(val) => onDetailChange(i, key, val)}
-                                                    sx={baseInputSX}
-                                                />
-                                            ))}
+                                            <DateTimeOneField
+                                                label="Yükleme Varış"
+                                                value={r.yukleme_varis || ""}
+                                                onChange={(val) => onDetailChange(i, "yukleme_varis", val)}
+                                                sx={baseInputSX}
+                                            />
+                                            <DateTimeOneField
+                                                label="Yükleme Çıkış"
+                                                value={r.yukleme_cikis || ""}
+                                                onChange={(val) => onDetailChange(i, "yukleme_cikis", val)}
+                                                sx={baseInputSX}
+                                            />
+                                            <DateTimeOneField
+                                                label="Teslim Varış"
+                                                value={r.teslim_varis || ""}
+                                                onChange={(val) => onDetailChange(i, "teslim_varis", val)}
+                                                sx={baseInputSX}
+                                            />
+                                            <DateTimeOneField
+                                                label="Teslim Çıkış"
+                                                value={r.teslim_cikis || ""}
+                                                onChange={(val) => onDetailChange(i, "teslim_cikis", val)}
+                                                sx={baseInputSX}
+                                            />
                                         </Box>
                                     </CardContent>
                                 </Card>
                             </Grid>
                         ))}
-
-                        {detailRows.length === 0 && (
-                            <Grid item xs={12}>
-                                <Paper
-                                    variant="outlined"
-                                    sx={{
-                                        p: 2,
-                                        textAlign: "center",
-                                        color: COLORS.textMuted,
-                                        borderColor: COLORS.border,
-                                        background: COLORS.surface2,
-                                    }}
-                                >
-                                    Detay satırı yok. “Satır Ekle” ile başlayın.
-                                </Paper>
-                            </Grid>
-                        )}
                     </Grid>
-
-                    <Divider sx={{ my: 1.5, borderColor: COLORS.border }} />
-                    <Typography variant="caption" sx={{ color: COLORS.textMuted }}>
-                        İpucu: Satır başındaki <b>kopyala</b> ile seri veri girişi çok hızlanır.
-                    </Typography>
                 </DialogContent>
 
-                <DialogActions sx={{ p: 2 }}>
-                    <Button startIcon={<SaveIcon />} onClick={saveDetails} variant="outlined">Kaydet</Button>
-                    <Button startIcon={<FileDownloadDoneIcon />} color="success" variant="contained" onClick={moveToCompleted}>
-                        Tamamlananlara Aktar
+                <DialogActions sx={{ px: 2.5, py: 1.5, gap: 1 }}>
+                    <Button onClick={closeEditor} startIcon={<ArrowBackIosNewIcon />}>
+                        Kapat
                     </Button>
+
+                    {canEdit && (
+                        <Stack direction="row" spacing={1}>
+                            <Button
+                                variant="outlined"
+                                color="secondary"
+                                startIcon={<SaveIcon />}
+                                onClick={async () => {
+                                    try {
+                                        setSaving(true);
+                                        if (editSefer?.id && (seferTarihiYeni || "") !== (editSefer?.sefer_tarihi || "")) {
+                                            const { error: upErr } = await supabase
+                                                .from("seferler")
+                                                .update({ sefer_tarihi: seferTarihiYeni || null })
+                                                .eq("id", editSefer.id);
+                                            if (upErr) throw upErr;
+                                        }
+                                        await saveDetails();
+                                        setRows((prev) =>
+                                            prev.map((r) =>
+                                                r.id === editSefer?.id
+                                                    ? { ...r, sefer_tarihi: seferTarihiYeni || r.sefer_tarihi }
+                                                    : r
+                                            )
+                                        );
+                                    } catch (e) {
+                                        console.error(e);
+                                        setSnack({
+                                            open: true,
+                                            msg: "Kaydetme sırasında hata oluştu.",
+                                            severity: "error",
+                                        });
+                                    } finally {
+                                        setSaving(false);
+                                    }
+                                }}
+                            >
+                                Kaydet
+                            </Button>
+
+                            <Button
+                                variant="contained"
+                                color="success"
+                                startIcon={<FileDownloadDoneIcon />}
+                                onClick={moveToCompleted}
+                            >
+                                Tamamlananlara Aktar
+                            </Button>
+                        </Stack>
+                    )}
+                </DialogActions>
+            </Dialog>
+
+            {/* ETA DİYALOGU */}
+            <Dialog
+                open={etaOpen}
+                onClose={() => setEtaOpen(false)}
+                fullWidth
+                maxWidth="sm"
+                PaperProps={{ sx: { backgroundColor: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.border}` } }}
+            >
+                <DialogTitle sx={{ fontWeight: 900 }}>
+                    ETA Hesabı • {etaRow?.sefer_no || "-"} • {etaRow?.plaka || "-"}
+                </DialogTitle>
+
+                <DialogContent dividers sx={{ backgroundColor: alpha("#fff", 0.01) }}>
+                    <Stack spacing={1.2}>
+                        <Typography variant="body2" sx={{ color: COLORS.textMuted }}>
+                            Hedef: <b>{destinationText}</b>
+                        </Typography>
+
+                        <Typography variant="body2" sx={{ color: COLORS.textMuted }}>
+                            Not: ETA mesafe ve KGM kuralına göre hesaplanır (4,5s + 45dk + 4,5s + 45dk + 11s).
+                        </Typography>
+
+                        {/* Mesafe bilgisi */}
+                        <Typography variant="body2" sx={{ color: COLORS.textMuted }}>
+                            {etaDistanceInfo}
+                        </Typography>
+
+                        {/* >>> değişen kısım: etiket ve fallback */}
+                        <DateTimeOneField
+                            label="Başlangıç (Yükleme Çıkış / Şimdi)"
+                            value={etaStartISO || latestYuklemeCikis || nowLocalISO()}
+                            onChange={(val) => setEtaStartISO(val || latestYuklemeCikis || nowLocalISO())}
+                            sx={baseInputSX}
+                        />
+
+                        <TimeHMField
+                            label="Kalan Sürüş (ss.dd)"
+                            value={driveHM}
+                            onChange={(val) => setDriveHM(val)}
+                            sx={baseInputSX}
+                        />
+
+                        <TextField
+                            label="Başlangıçta mola"
+                            select
+                            size="small"
+                            value={breakSel}
+                            onChange={(e) => setBreakSel(Number(e.target.value))}
+                            helperText="Seçilen mola başlangıca eklenir"
+                            InputLabelProps={{ shrink: true }}
+                            sx={baseInputSX}
+                        >
+                            {BREAK_OPTIONS.map(o => (
+                                <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                            ))}
+                        </TextField>
+
+                        <Divider />
+
+                        <Box
+                            sx={{
+                                p: 1.2,
+                                borderRadius: 2,
+                                border: `1px solid ${COLORS.border}`,
+                                background: COLORS.surface2,
+                            }}
+                        >
+                            {computedETAISO === "__NEED_DISTANCE__" ? (
+                                <Typography variant="body1">
+                                    ETA: <b>Bekleniyor</b> — Mesafe bulunamadı.
+                                </Typography>
+                            ) : computedETAISO === "__WAITING__" ? (
+                                <Typography variant="body1">
+                                    ETA: <b>Bekleniyor</b> — “Yükleme Çıkış” bilgisi girilmemiş.
+                                </Typography>
+                            ) : (
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            <Typography variant="body1">
+                                                ETA: <b>{fromISOToCombined(computedETAISO) || "-"}</b>
+                                            </Typography>
+                                            <Tooltip title="ETA'yı kopyala">
+                                                <span>
+                                                    <IconButton size="small" onClick={copyETA}>
+                                                        <ContentCopyIcon fontSize="small" />
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
+                                        </Stack>
+                            )}
+                        </Box>
+                    </Stack>
+                </DialogContent>
+
+                <DialogActions sx={{ px: 2.5, py: 1.2 }}>
+                    <Stack direction="row" spacing={1}>
+                        <Button onClick={() => setEtaOpen(false)}>Kapat</Button>
+                        <Button
+                            variant="contained"
+                            color="success"
+                            onClick={saveETA}
+                        >
+                            Kaydet
+                        </Button>
+                    </Stack>
                 </DialogActions>
             </Dialog>
         </Box>

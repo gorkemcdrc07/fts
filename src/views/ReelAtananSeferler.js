@@ -1138,9 +1138,27 @@ export default function ReelAtananSeferler() {
     }, [etaRow, etaStartISO, driveHM, etaDetails, etaDistanceKm, breakSel]);
 
     /* grid columns — aksiyon sütunu: Edit ve/veya ETA */
+    /* grid columns — aksiyon sütunu: Edit ve/veya ETA */
     const columns = useMemo(() => {
         const txt = (f, t, w = 170) => ({ field: f, headerName: t, width: w, sortable: true });
 
+        // ETA & Kalan sütunlarını ayrı tanımlıyoruz (yerini dinamik ayarlayacağız)
+        const etaCol = {
+            field: "eta_varis",
+            headerName: "ETA",
+            width: 190,
+            renderCell: (p) => fromISOToCombined(p.row.eta_varis || ""),
+            sortComparator: (a, b) => new Date(a) - new Date(b),
+        };
+        const kalanCol = {
+            field: "kalan_surus_dk",
+            headerName: "Kalan (dk)",
+            width: 120,
+            align: "center",
+            headerAlign: "center",
+        };
+
+        // “baz” kolonlar (ETA ve Kalan hariç)
         const baseCols = [
             {
                 field: "reel_durum",
@@ -1195,12 +1213,10 @@ export default function ReelAtananSeferler() {
                 renderCell: (p) => fromISOToCombined(p.row.atama_tarihi || ""),
                 sortComparator: (a, b) => new Date(a) - new Date(b),
             },
-            { field: "eta_varis", headerName: "ETA", width: 190, renderCell: (p) => fromISOToCombined(p.row.eta_varis || ""), sortComparator: (a, b) => new Date(a) - new Date(b) },
-            { field: "kalan_surus_dk", headerName: "Kalan (dk)", width: 120, align: "center", headerAlign: "center" },
+            // DİKKAT: ETA ve Kalan burada YOK; yeri aşağıda koşullu eklenecek
         ];
 
         const showActions = canEdit || canSeeETA;
-        if (!showActions) return baseCols;
 
         const actionsCol = {
             field: "actions",
@@ -1226,7 +1242,36 @@ export default function ReelAtananSeferler() {
             ),
         };
 
-        return [actionsCol, ...baseCols];
+        // Hedef kullanıcı: buketcimenci
+        const isBuket = normalizeUser(localStorage.getItem("kullaniciAdi")) === "BUKETCIMENCI";
+
+        let cols = [...baseCols];
+
+        if (showActions) {
+            // “İşlem”i başa ekle
+            cols = [actionsCol, ...cols];
+        }
+
+        if (isBuket && showActions) {
+            // “REEL DURUM”dan hemen sonra ETA ve Kalan (dk) ekle
+            const rdIdx = cols.findIndex((c) => c.field === "reel_durum");
+            if (rdIdx !== -1) {
+                cols = [
+                    ...cols.slice(0, rdIdx + 1),
+                    etaCol,
+                    kalanCol,
+                    ...cols.slice(rdIdx + 1),
+                ];
+            } else {
+                // emniyet: bulunamazsa başa yakın ekleyelim
+                cols = [cols[0], etaCol, kalanCol, ...cols.slice(1)];
+            }
+        } else {
+            // Diğer kullanıcılar için mevcut davranış: ETA & Kalan sonda kalsın
+            cols = [...cols, etaCol, kalanCol];
+        }
+
+        return cols;
     }, [openEditor, openETA, canEdit, canSeeETA]);
 
     /* sabit UI config */

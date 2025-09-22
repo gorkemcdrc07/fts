@@ -41,7 +41,6 @@ import AppLayout from "./layout/AppLayout";
 
 // 🔻 Tüm importlar tamamlandıktan sonra LAZY tanımı
 const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler"));
-const SayfaGorunumu = lazy(() => import("./aktifseferler/sayfagorunumu")); // ✅ eklendi
 
 function App() {
     return (
@@ -68,14 +67,7 @@ function App() {
                                     </Suspense>
                                 }
                             />
-                            <Route
-                                path="seferler/gorunum" // ✅ yeni route
-                                element={
-                                    <Suspense fallback={null}>
-                                        <SayfaGorunumu />
-                                    </Suspense>
-                                }
-                            />
+
                             <Route path="siparisler" element={<Siparisler />} />
                             <Route path="tamamlanan-seferler" element={<Tamamlananlar />} />
 

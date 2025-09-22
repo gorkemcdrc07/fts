@@ -742,24 +742,30 @@ export default function ReelAtananSeferler() {
         let hiddenIds = [];
 
         try {
-            userOrder = JSON.parse(
-                localStorage.getItem(ORDER_KEY) ||
-                localStorage.getItem(GENERIC_ORDER_KEY) || "[]"
-            ) || [];
+            userOrder =
+                JSON.parse(
+                    localStorage.getItem(ORDER_KEY) ||
+                    localStorage.getItem(GENERIC_ORDER_KEY) ||
+                    "[]"
+                ) || [];
         } catch { }
 
         try {
-            hiddenIds = JSON.parse(
-                localStorage.getItem(HIDDEN_KEY) ||
-                localStorage.getItem(GENERIC_HIDDEN_KEY) || "[]"
-            ) || [];
+            hiddenIds =
+                JSON.parse(
+                    localStorage.getItem(HIDDEN_KEY) ||
+                    localStorage.getItem(GENERIC_HIDDEN_KEY) ||
+                    "[]"
+                ) || [];
         } catch { }
 
+        // Gizlileri at
         if (hiddenIds.length) {
             const hidden = new Set(hiddenIds);
-            cols = cols.filter(c => !hidden.has(c.field));
+            cols = cols.filter((c) => !hidden.has(c.field));
         }
 
+        // Kullanıcı sırası
         if (userOrder.length) {
             const idx = new Map(userOrder.map((k, i) => [k, i]));
             cols = [...cols].sort((a, b) => {
@@ -769,8 +775,47 @@ export default function ReelAtananSeferler() {
             });
         }
 
+        // === BURADAN İTİBAREN ZORUNLU YERLEŞTİRME ===
+        const lowerTR = (s) => String(s || "").toLocaleLowerCase("tr-TR");
+        const getHeader = (c) => c.headerName || c.header || "";
+
+        // buildColumns'taki field adlarına göre aday listeleri:
+        // (Gerekiyorsa bu dizilerdeki field adlarını kendi projene göre güncelle.)
+        const findCol = (preferFields = [], headerNeedle = "") => {
+            let c = cols.find((col) => preferFields.includes(col.field));
+            if (c) return c;
+            if (headerNeedle)
+                c = cols.find((col) => lowerTR(getHeader(col)).includes(lowerTR(headerNeedle)));
+            return c;
+        };
+
+        const islem = findCol(["islem", "actions", "_actions"], "işlem"); // İşlem
+        const reel = findCol(["reel_durum"], "reel");                     // REEL DURUM
+        const eta = findCol(["eta_varis", "eta"], "eta");                // ETA
+        const kalan = findCol(["kalan_surus_dk", "kalan", "kalan_dk"], "kalan"); // Kalan (dk)
+
+        if (islem && reel && (eta || kalan)) {
+            // Mevcut listeden ETA ve Kalan'ı (varsa) çıkar
+            const rest = cols.filter(
+                (c) => c.field !== eta?.field && c.field !== kalan?.field
+            );
+
+            // "İşlem" ve "REEL DURUM"un en sondakinden sonra ekleme yapacağız
+            const idxIslem = rest.findIndex((c) => c.field === islem.field);
+            const idxReel = rest.findIndex((c) => c.field === reel.field);
+            const insertAt = Math.max(idxIslem, idxReel) + 1;
+
+            const toInsert = [eta, kalan].filter(Boolean); // sırası: ETA sonra Kalan
+            cols = [
+                ...rest.slice(0, insertAt),
+                ...toInsert,
+                ...rest.slice(insertAt),
+            ];
+        }
+        // === ZORUNLU YERLEŞTİRME BİTTİ ===
+
         return cols;
-        // 👇 viewBump zaten ekli, bırak
+        // viewBump zaten dependency'de
     }, [canEdit, canSeeETA, openETA, openEditor, viewBump]);
 
     /* sabit UI config */

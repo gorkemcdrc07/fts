@@ -1,5 +1,5 @@
 // src/App.js
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 
@@ -12,7 +12,6 @@ import Login from "./Login";
 import Anasayfa from "./Anasayfa";
 import Planlama from "./kullanıcıIslemleri/Planlama";
 import PlakaOnerisi from "./kullanıcıIslemleri/PlakaOnerisi";
-import ReelAtananSeferler from "./views/ReelAtananSeferler";
 import Siparisler from "./kullanıcıIslemleri/Siparisler";
 import Tamamlananlar from "./kullanıcıIslemleri/Tamamlananlar";
 
@@ -34,10 +33,15 @@ import HakedisSeferleri from "./Hakedisler/HakedisSeferleri";
 // KPI & RAPORLAR
 import KpiOlcumu from "./raporlar/kpiOlcumu";
 import YuklemedeBekleme from "./raporlar/yuklemedeBekleme";
-import ProjeLokasyonRaporlari from "./raporlar/ProjeLokasyonRaporlari"; // ✅ Eklendi
+import ProjeLokasyonRaporlari from "./raporlar/ProjeLokasyonRaporlari";
 import Tools from "./raporlar/tools";
+
 // Layout
 import AppLayout from "./layout/AppLayout";
+
+// 🔻 Tüm importlar tamamlandıktan sonra LAZY tanımı
+const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler"));
+const SayfaGorunumu = lazy(() => import("./aktifseferler/sayfagorunumu")); // ✅ eklendi
 
 function App() {
     return (
@@ -54,7 +58,24 @@ function App() {
                             <Route path="anasayfa" element={<Anasayfa />} />
                             <Route path="planlama" element={<Planlama />} />
                             <Route path="plaka-onerisi" element={<PlakaOnerisi />} />
-                            <Route path="seferler" element={<ReelAtananSeferler />} />
+
+                            {/* ReelAtananSeferler lazy yüklendi */}
+                            <Route
+                                path="seferler"
+                                element={
+                                    <Suspense fallback={null}>
+                                        <ReelAtananSeferler />
+                                    </Suspense>
+                                }
+                            />
+                            <Route
+                                path="seferler/gorunum" // ✅ yeni route
+                                element={
+                                    <Suspense fallback={null}>
+                                        <SayfaGorunumu />
+                                    </Suspense>
+                                }
+                            />
                             <Route path="siparisler" element={<Siparisler />} />
                             <Route path="tamamlanan-seferler" element={<Tamamlananlar />} />
 
@@ -78,8 +99,9 @@ function App() {
 
                             {/* Raporlar */}
                             <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
-                            <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} /> {/* ✅ Yeni rota */}
+                            <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
                             <Route path="raporlar/tools" element={<div style={{ padding: 24 }}>ROUTE OK</div>} />
+
                             {/* Varsayılan */}
                             <Route path="*" element={<Navigate to="/anasayfa" replace />} />
                         </Route>

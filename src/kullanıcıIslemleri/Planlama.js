@@ -12,7 +12,6 @@ import {
     Button,
     Typography,
     TextField,
-    MenuItem,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -30,7 +29,7 @@ import {
     LinearProgress,
     Fab,
 } from "@mui/material";
-import { alpha, darken } from "@mui/material/styles";
+import { alpha } from "@mui/material/styles";
 import { DataGrid } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/PlaylistAdd";
 import SaveIcon from "@mui/icons-material/Save";
@@ -50,9 +49,18 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 /* ---------------- helpers ---------------- */
-const getTodayISO = () => new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
-const toUpperTr = (s) => (s || "").toLocaleUpperCase("tr-TR").trim();
 
+// TR uppercase
+const toUpperTr = (s) => (s || "").toLocaleUpperCase("tr-TR").trim();
+const getTodayISO = () => new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+
+// Plaka normalize (görsel)
+const normPlaka = (s) => toUpperTr(String(s || "").trim().replace(/\s+/g, " "));
+
+// Karşılaştırma anahtarı: A-Z0-9 dışında her şeyi at (boşluk, tire vb. kalkar)
+const plakaKey = (s) => toUpperTr(String(s || "")).replace(/[^A-Z0-9]/g, "");
+
+// Debounce
 const useDebounced = (value, delay = 250) => {
     const [v, setV] = useState(value);
     useEffect(() => {
@@ -60,6 +68,28 @@ const useDebounced = (value, delay = 250) => {
         return () => clearTimeout(t);
     }, [value, delay]);
     return v;
+};
+
+// SON NOKTA ve BÖLGE normalizasyonu
+const normalizeSonNoktaAndRegion = (raw) => {
+    const u = toUpperTr(raw || "");
+    let son_nokta = raw || "";
+
+    if (u === "ANTEP") son_nokta = "GAZİANTEP";
+    if (u === "URFA") son_nokta = "ŞANLIURFA";
+
+    let bolge = "";
+    if (u.includes("İSTANBUL AVRUPA")) {
+        bolge = "Marmara Bölgesi";
+    } else if (u.includes("İSTANBUL ANADOLU")) {
+        bolge = "Kocaeli Bölgesi";
+    } else if (u === "TRAKYA") {
+        bolge = "Trakya Bölgesi";
+    } else {
+        bolge = ilToBolgeMap[toUpperTr(son_nokta)] || "";
+    }
+
+    return { son_nokta, bolge };
 };
 
 const ilToBolgeMap = {
@@ -105,7 +135,7 @@ const ilToBolgeMap = {
     ZEYTİNBURNU: "Marmara Bölgesi",
 };
 
-// Bölge renklendirme (Chip)
+// Bölge renklendirme
 const bolgeChip = (bolge) => {
     const map = {
         "Marmara Bölgesi": "primary",
@@ -119,7 +149,7 @@ const bolgeChip = (bolge) => {
     return map[bolge] || "default";
 };
 
-// Boş durum bileşeni
+// Boş durum + Busy overlay
 function NoRowsOverlay() {
     return (
         <Stack height="100%" alignItems="center" justifyContent="center" spacing={1.25}>
@@ -131,8 +161,6 @@ function NoRowsOverlay() {
         </Stack>
     );
 }
-
-// Yükleme overlay'i (grid içi)
 function BusyOverlay() {
     return (
         <Stack height="100%" alignItems="center" justifyContent="center" spacing={1}>
@@ -142,7 +170,7 @@ function BusyOverlay() {
     );
 }
 
-// Grid alanları (persist edilecek sıralama için)
+// Grid alanları
 const alanlar = [
     "sefer_no", "sevk_no", "tarih", "plaka", "ad_soyad", "telefon", "tc",
     "varis_tarihi", "son_nokta", "fatura_musterisi",
@@ -158,16 +186,6 @@ export default function PlanlamaDeluxe() {
     const [filteredRows, setFilteredRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
-
-    // filtreler
-    const [plakalar, setPlakalar] = useState([]);
-    const [bolgeler, setBolgeler] = useState([]);
-    const [plakaFilter, setPlakaFilter] = useState([]); // çoklu seçim
-    const [bolgeFilter, setBolgeFilter] = useState([]); // çoklu seçim
-    const [search, setSearch] = useState("");
-    const debouncedSearch = useDebounced(search, 300);
-    const searchRef = useRef(null);
 
     // görünüm (kolon sırası)
     const [columnOrder, setColumnOrder] = useState([...alanlar]);
@@ -190,14 +208,28 @@ export default function PlanlamaDeluxe() {
     const lastSavedSnapshot = useRef("[]");
     const isDirty = useMemo(() => lastSavedSnapshot.current !== JSON.stringify(rows), [rows]);
 
-    // ⬇️ Sürükle-bırak ve dosya seçici için
+    // drag & drop
     const [dragActive, setDragActive] = useState(false);
     const fileInputRef = useRef(null);
-
     const acceptedExts = [".xlsx", ".xls", ".csv"];
 
     const normalizeHeader = (s = "") =>
         toUpperTr(String(s)).replace(/\s+/g, " ").replace(/\./g, "").trim();
+
+    // filtreler
+    const [plakalar, setPlakalar] = useState([]);
+    const [bolgeler, setBolgeler] = useState([]);
+    const [plakaFilter, setPlakaFilter] = useState([]); // çoklu seçim
+    const [bolgeFilter, setBolgeFilter] = useState([]); // çoklu seçim
+
+    // Autocomplete input metinleri
+    const [plakaInput, setPlakaInput] = useState("");
+    const [bolgeInput, setBolgeInput] = useState("");
+
+    // Arama kutusu
+    const [search, setSearch] = useState("");
+    const searchRef = useRef(null);
+    const debouncedSearch = useDebounced(search, 300);
 
     // Excel başlığı → alan eşleme
     const headerMap = {
@@ -249,23 +281,19 @@ export default function PlanlamaDeluxe() {
         return isNaN(n) ? null : n;
     };
 
-
     /* ---------- keyboard shortcuts ---------- */
     useEffect(() => {
         const onKey = (e) => {
-            // Kaydet: Ctrl/Cmd+S
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
                 e.preventDefault();
                 handleKaydet();
             }
-            // Arama: F
             if (!e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "f") {
                 if (document.activeElement?.tagName !== "INPUT") {
                     e.preventDefault();
                     searchRef.current?.focus();
                 }
             }
-            // Yeni plaka: N
             if (!e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "n") {
                 if (document.activeElement?.tagName !== "INPUT") {
                     e.preventDefault();
@@ -276,6 +304,7 @@ export default function PlanlamaDeluxe() {
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, []);
+
 
     /* ---------- data fetch ---------- */
     const fetchData = useCallback(async () => {
@@ -293,21 +322,28 @@ export default function PlanlamaDeluxe() {
         }
 
         const enriched = (data || []).map((v, index) => {
-            const ilUpper = toUpperTr(v.son_nokta);
-            const bolge = ilToBolgeMap[ilUpper] || v.bolge || "";
+            const { son_nokta, bolge } = normalizeSonNoktaAndRegion(v.son_nokta);
             const tarih = v.tarih || getTodayISO();
             const _rowId = v.id ?? v.sefer_no ?? `tmp-${Date.now()}-${index}`;
-            return { ...v, bolge, tarih, _rowId };
+            return { ...v, son_nokta, bolge: bolge || v.bolge || "", tarih, _rowId };
         });
 
         setRows(enriched);
         setFilteredRows(enriched);
         setBolgeler([...new Set(enriched.map((r) => r.bolge).filter(Boolean))]);
+
+        // ✅ Plaka seçeneklerini doğrudan rows’tan üret
+        const plakalarFromRows = Array.from(
+            new Map(
+                enriched
+                    .filter(r => r?.plaka)
+                    .map(r => [plakaKey(r.plaka), r.plaka])
+            ).values()
+        );
+        setPlakalar(plakalarFromRows);
+
         lastSavedSnapshot.current = JSON.stringify(enriched);
         setLoading(false);
-
-        const { data: plakaData } = await supabase.from("plakalar").select("plaka");
-        if (plakaData) setPlakalar(plakaData.map((d) => d.plaka));
     }, []);
 
     const loadView = useCallback(async () => {
@@ -331,10 +367,29 @@ export default function PlanlamaDeluxe() {
         loadView();
     }, [fetchData, loadView]);
 
+    // ✅ rows değişince plaka Autocomplete options ve seçili plaka tutarlılığı güncelle
+    useEffect(() => {
+        const opts = Array.from(
+            new Map(
+                (rows || [])
+                    .filter(r => r?.plaka)
+                    .map(r => [plakaKey(r.plaka), r.plaka])
+            ).values()
+        );
+        setPlakalar(opts);
+
+        setPlakaFilter(prev =>
+            (prev || []).filter(v => opts.some(o => plakaKey(o) === plakaKey(v)))
+        );
+    }, [rows]);
+
     /* ---------- filtering ---------- */
     useEffect(() => {
         let r = [...rows];
-        if (plakaFilter?.length) r = r.filter((x) => plakaFilter.includes(x.plaka || ""));
+        if (plakaFilter?.length) {
+            const secimler = new Set(plakaFilter.map(plakaKey));
+            r = r.filter((x) => secimler.has(plakaKey(x.plaka)));
+        }
         if (bolgeFilter?.length) r = r.filter((x) => bolgeFilter.includes(x.bolge || ""));
         if (debouncedSearch) {
             const s = debouncedSearch.toLowerCase();
@@ -365,7 +420,7 @@ export default function PlanlamaDeluxe() {
         }
     }, [columnOrder]);
 
-    // ⬇️ Excel satırlarını dahili yapıya çevir
+    // Excel satırlarını dahili yapıya çevir
     const buildRowFromExcel = (obj) => {
         const tarih =
             parseDateLike(obj.tarih ?? obj["TARİH"] ?? obj["Tarih"]);
@@ -387,9 +442,8 @@ export default function PlanlamaDeluxe() {
             obj.tahliye_ilce__tmp,
         ].filter(Boolean);
 
-        const son_nokta = obj.tahliye_il || obj.son_nokta || "";
-        const ilUpper = toUpperTr(son_nokta);
-        const bolge = ilToBolgeMap[ilUpper] || "";
+        const rawSon = obj.tahliye_il || obj.son_nokta || "";
+        const { son_nokta, bolge } = normalizeSonNoktaAndRegion(rawSon);
 
         const base = {
             sefer_no: obj.sefer_no ?? "",
@@ -451,7 +505,6 @@ export default function PlanlamaDeluxe() {
         return tempObjects.map(buildRowFromExcel);
     };
 
-
     /* ---------- excel export ---------- */
     const exportExcel = () => {
         if (!filteredRows.length) {
@@ -483,19 +536,17 @@ export default function PlanlamaDeluxe() {
         saveAs(new Blob([buf], { type: "application/octet-stream" }), "planlama.xlsx");
     };
 
-    /* ---------- toplu güncelle ---------- */
-    const handleTopluGuncelle = () => setGuncelleDialogOpen(true);
     const confirmTopluGuncelle = () => {
         const guncellenmis = filteredRows.map((item) => {
-            const il = toUpperTr(item.tahliye_il);
-            const bolge = ilToBolgeMap[il] || "";
+            const { son_nokta, bolge } = normalizeSonNoktaAndRegion(item.tahliye_il || "");
             const bir_onceki_is = [item.fatura_musterisi, item.yukleme_noktasi, item.tahliye_noktasi]
                 .filter(Boolean)
                 .join(" / ");
+
             return {
                 ...item,
                 bir_onceki_is,
-                son_nokta: item.tahliye_il || "",
+                son_nokta,
                 fatura_musterisi: "",
                 yukleme_noktasi: "",
                 tahliye_noktasi: "",
@@ -504,12 +555,15 @@ export default function PlanlamaDeluxe() {
                 bolge,
             };
         });
+
         const updated = rows.map((r) => guncellenmis.find((g) => g._rowId === r._rowId) || r);
         setRows(updated);
         setGuncelleDialogOpen(false);
         setSnack({ open: true, msg: "Satırlar güncellendi (lokal). Kaydet ile yazılır.", severity: "success" });
     };
+    const handleTopluGuncelle = () => setGuncelleDialogOpen(true);
 
+    /* ---------- dosya içe aktar ---------- */
     const handleFiles = async (files) => {
         const file = files?.[0];
         if (!file) return;
@@ -534,9 +588,15 @@ export default function PlanlamaDeluxe() {
             setFilteredRows(importedRows);
 
             const yeniBolgeler = [...new Set(importedRows.map((r) => r.bolge).filter(Boolean))];
-            const yeniPlakalar = [...new Set(importedRows.map((r) => r.plaka).filter(Boolean))];
-            setBolgeler(yeniBolgeler);
+            const yeniPlakalar = Array.from(
+                new Map(
+                    importedRows
+                        .filter(r => r.plaka)
+                        .map(r => [plakaKey(r.plaka), r.plaka])
+                ).values()
+            );
             setPlakalar(yeniPlakalar);
+            setBolgeler(yeniBolgeler);
 
             setPlakaFilter([]);
             setBolgeFilter([]);
@@ -556,16 +616,8 @@ export default function PlanlamaDeluxe() {
         }
     };
 
-    const onDragOver = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!dragActive) setDragActive(true);
-    };
-    const onDragLeave = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setDragActive(false);
-    };
+    const onDragOver = (e) => { e.preventDefault(); e.stopPropagation(); if (!dragActive) setDragActive(true); };
+    const onDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); };
     const onDrop = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -574,16 +626,14 @@ export default function PlanlamaDeluxe() {
         if (files?.length) handleFiles(files);
     };
 
-
     /* ---------- kaydet (insert/update) ---------- */
     const handleKaydet = async () => {
         setSaving(true);
 
-        // 1) TÜM KAYITLARI SİL
         const { error: delErr } = await supabase
             .from("planlama")
             .delete()
-            .not("id", "is", null); // id IS NOT NULL
+            .not("id", "is", null);
         if (delErr) {
             console.error(delErr);
             setSaving(false);
@@ -591,11 +641,10 @@ export default function PlanlamaDeluxe() {
             return;
         }
 
-        // 2) Normalize + TEKİLLEŞTİR
         const normalizeRow = (item) => {
             const payload = { ...item };
             delete payload._rowId;
-            delete payload.id; // her zaman yeni kayıt
+            delete payload.id;
 
             ["tarih", "varis_tarihi"].forEach((k) => {
                 if (!payload[k]) payload[k] = getTodayISO();
@@ -605,8 +654,9 @@ export default function PlanlamaDeluxe() {
                 }
             });
 
-            const il = toUpperTr(payload.son_nokta);
-            payload.bolge = ilToBolgeMap[il] || payload.bolge || null;
+            const { son_nokta, bolge } = normalizeSonNoktaAndRegion(payload.son_nokta);
+            payload.son_nokta = son_nokta;
+            payload.bolge = bolge || payload.bolge || null;
 
             Object.keys(payload).forEach((k) => {
                 if (payload[k] === undefined || payload[k] === "") payload[k] = null;
@@ -614,7 +664,6 @@ export default function PlanlamaDeluxe() {
             return payload;
         };
 
-        // Son görünen kazansın (Map set ederken son yazılan kalır)
         const map = new Map(); // key: "PLAKA|YYYY-MM-DD"
         for (const r of filteredRows) {
             const p = normalizeRow(r);
@@ -622,16 +671,15 @@ export default function PlanlamaDeluxe() {
             map.set(key, p);
         }
         const payloads = Array.from(map.values());
-        const dropped = filteredRows.length - payloads.length; // kaç tane elendi
+        const dropped = filteredRows.length - payloads.length;
 
-        // 3) UPSERT (onConflict: plaka,tarih) — tekilleştirilmiş veriyi yaz
         const chunkSize = 500;
         try {
             for (let i = 0; i < payloads.length; i += chunkSize) {
                 const slice = payloads.slice(i, i + chunkSize);
                 const { error: upErr } = await supabase
                     .from("planlama")
-                    .upsert(slice, { onConflict: "plaka,tarih" }); // unique’e uygun hedef
+                    .upsert(slice, { onConflict: "plaka,tarih" });
                 if (upErr) throw upErr;
             }
         } catch (e) {
@@ -714,17 +762,21 @@ export default function PlanlamaDeluxe() {
         setSnack({ open: true, msg: "Yeni satır eklendi (lokal). Kaydet ile yazılır.", severity: "success" });
     };
 
-    /* ---------- özet istatistikler ---------- */
-    const stats = useMemo(() => {
-        const toplam = filteredRows.length;
-        const plakalarSet = new Set(filteredRows.map((r) => r.plaka).filter(Boolean));
-        const plakaSayisi = plakalarSet.size;
-        const tonajToplam = filteredRows.reduce((acc, r) => {
-            const n = parseFloat(String(r.tonaj ?? "").replace(",", "."));
-            return acc + (isNaN(n) ? 0 : n);
-        }, 0);
-        return { toplam, plakaSayisi, tonajToplam };
+    /* ---------- bölge sayıları ---------- */
+    const bolgeCounts = useMemo(() => {
+        const m = {};
+        for (const r of filteredRows) {
+            const b = r.bolge || "—";
+            m[b] = (m[b] || 0) + 1;
+        }
+        return m;
     }, [filteredRows]);
+
+    const toggleBolgeFilter = (b) => {
+        setBolgeFilter((prev) =>
+            prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]
+        );
+    };
 
     /* ---------- tamamlama yüzdesi ---------- */
     const completenessOf = (row) => {
@@ -789,13 +841,12 @@ export default function PlanlamaDeluxe() {
                 width: 170,
                 editable: false,
                 valueGetter: (value, row) => row?.bolge ?? "",
-                renderCell: (params) => (
+                renderCell: (params) =>
                     params.value ? (
                         <Chip size="small" label={params.value} color={bolgeChip(params.value)} variant="filled" />
                     ) : (
                         <Typography variant="body2" sx={{ color: "text.secondary" }}>—</Typography>
-                    )
-                ),
+                    ),
             },
             {
                 field: "tamam",
@@ -825,8 +876,9 @@ export default function PlanlamaDeluxe() {
     /* ---------- DataGrid edit akışı ---------- */
     const processRowUpdate = useCallback((newRow, oldRow) => {
         if (newRow.son_nokta !== oldRow.son_nokta) {
-            const il = toUpperTr(newRow.son_nokta);
-            newRow.bolge = ilToBolgeMap[il] || "";
+            const { son_nokta, bolge } = normalizeSonNoktaAndRegion(newRow.son_nokta);
+            newRow.son_nokta = son_nokta;
+            newRow.bolge = bolge;
         }
         return newRow;
     }, []);
@@ -849,6 +901,8 @@ export default function PlanlamaDeluxe() {
     const clearFilters = () => {
         setPlakaFilter([]);
         setBolgeFilter([]);
+        setPlakaInput("");
+        setBolgeInput("");
         setSearch("");
     };
 
@@ -881,7 +935,6 @@ export default function PlanlamaDeluxe() {
                     "linear-gradient(180deg, #050816 0%, #0B1220 100%)",
             }}
         >
-
             <Helmet>
                 <title>PLANLAMA</title>
             </Helmet>
@@ -894,7 +947,6 @@ export default function PlanlamaDeluxe() {
                 spacing={1}
             >
                 <Stack direction="row" alignItems="center" spacing={1.25}>
-                    {/* ⬇️ Navigasyon butonları */}
                     <Tooltip title="Geri">
                         <IconButton
                             onClick={() => navigate(-1)}
@@ -927,9 +979,6 @@ export default function PlanlamaDeluxe() {
                         >
                             Planlama
                         </Typography>
-                        <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                            Canlı düzenleme • çoklu filtre • hızlı düzenleme çekmecesi • Excel aktarım • kısayollar (Ctrl/⌘+S, F, N)
-                        </Typography>
                     </Stack>
                 </Stack>
 
@@ -946,49 +995,64 @@ export default function PlanlamaDeluxe() {
                     <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportExcel}>
                         Excel
                     </Button>
-                    <Button variant="outlined" startIcon={<KeyboardIcon />} onClick={() => setSnack({ open: true, msg: "Kısayollar: Kaydet (Ctrl/⌘+S), Arama (F), Yeni (N)", severity: "info" })}>
+                    <Button
+                        variant="outlined"
+                        startIcon={<KeyboardIcon />}
+                        onClick={() =>
+                            setSnack({ open: true, msg: "Kısayollar: Kaydet (Ctrl/⌘+S), Arama (F), Yeni (N)", severity: "info" })
+                        }
+                    >
                         Kısayollar
                     </Button>
                 </Stack>
             </Stack>
 
-            {/* Özet İstatistikler */}
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-                {[{
-                    label: "Toplam Kayıt",
-                    value: stats.toplam,
-                    chip: "Tümü",
-                }, {
-                    label: "Farklı Plaka",
-                    value: stats.plakaSayisi,
-                    chip: "Benzersiz",
-                }, {
-                    label: "Toplam Tonaj",
-                    value: stats.tonajToplam.toLocaleString("tr-TR"),
-                    chip: "ton",
-                }].map((card, i) => (
-                    <Paper key={i}
-                        sx={{
-                            p: 1.25,
-                            flex: 1,
-                            borderRadius: 2,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 1,
-                            background: `linear-gradient(180deg, ${alpha("#ffffff", 0.06)} 0%, ${alpha("#ffffff", 0.03)} 100%)`,
-                            border: "1px solid rgba(255,255,255,0.06)",
-                            boxShadow: `inset 0 1px 0 ${alpha("#fff", 0.08)}`,
-                        }}
-                    >
-                        <Stack>
-                            <Typography variant="overline" sx={{ opacity: 0.7 }}>{card.label}</Typography>
-                            <Typography variant="h5" fontWeight={800}>{card.value}</Typography>
-                        </Stack>
-                        <Chip label={card.chip} size="small" color={i === 2 ? "success" : i === 1 ? "info" : "default"} />
-                    </Paper>
-                ))}
-            </Stack>
+            {/* Bölge panelleri */}
+            <Box sx={{ overflowX: "auto", pb: 1 }}>
+                <Stack direction="row" spacing={1.25} sx={{ minWidth: 560 }}>
+                    {Object.entries(bolgeCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([b, count]) => (
+                            <Paper
+                                key={b}
+                                onClick={() => toggleBolgeFilter?.(b)}
+                                sx={{
+                                    p: 1.25,
+                                    minWidth: 220,
+                                    borderRadius: 2,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    gap: 1,
+                                    cursor: "pointer",
+                                    background: `linear-gradient(180deg, ${alpha("#ffffff", 0.06)} 0%, ${alpha("#ffffff", 0.03)} 100%)`,
+                                    border: "1px solid rgba(255,255,255,0.06)",
+                                    boxShadow: `inset 0 1px 0 ${alpha("#fff", 0.08)}`,
+                                    transition: "transform .12s ease",
+                                    "&:hover": { transform: "translateY(-2px)" },
+                                }}
+                            >
+                                <Stack sx={{ minWidth: 0 }}>
+                                    <Typography variant="overline" sx={{ opacity: 0.7 }}>Bölge</Typography>
+                                    <Typography
+                                        variant="subtitle1"
+                                        fontWeight={800}
+                                        noWrap
+                                        title={b}
+                                        sx={{ display: "flex", alignItems: "center", gap: .5 }}
+                                    >
+                                        {b}
+                                        <Chip size="small" label="filtrele" color={bolgeChip(b)} variant="outlined" sx={{ ml: .5 }} />
+                                    </Typography>
+                                </Stack>
+                                <Stack alignItems="flex-end">
+                                    <Typography variant="overline" sx={{ opacity: 0.7 }}>Adet</Typography>
+                                    <Typography variant="h5" fontWeight={800}>{count}</Typography>
+                                </Stack>
+                            </Paper>
+                        ))}
+                </Stack>
+            </Box>
 
             {/* Filtreler */}
             <Paper
@@ -1005,25 +1069,41 @@ export default function PlanlamaDeluxe() {
             >
                 <Autocomplete
                     multiple
-                    options={plakalar}
-                    value={plakaFilter}
-                    onChange={(_, v) => setPlakaFilter(v)}
+                    options={(plakalar || []).filter(Boolean)}
+                    value={(plakaFilter || []).filter(Boolean)}
+                    onChange={(_, v) => setPlakaFilter((v || []).filter(Boolean))}
+                    inputValue={plakaInput}
+                    onInputChange={(_, v) => setPlakaInput(v ?? "")}
+                    getOptionLabel={(opt) => String(opt ?? "")}
+                    isOptionEqualToValue={(opt, val) => {
+                        if (opt == null || val == null) return opt === val;
+                        return plakaKey(opt) === plakaKey(val);
+                    }}
                     size="small"
-                    renderInput={(params) => <TextField {...params} label="Plaka" placeholder="Seçin" sx={{ minWidth: 220 }} />}
+                    renderInput={(params) => (
+                        <TextField {...params} label="Plaka" placeholder="Seçin" sx={{ minWidth: 220 }} />
+                    )}
                 />
 
                 <Autocomplete
                     multiple
-                    options={bolgeler}
-                    value={bolgeFilter}
-                    onChange={(_, v) => setBolgeFilter(v)}
+                    options={(bolgeler || []).filter(Boolean)}
+                    value={(bolgeFilter || []).filter(Boolean)}
+                    onChange={(_, v) => setBolgeFilter((v || []).filter(Boolean))}
+                    inputValue={bolgeInput}
+                    onInputChange={(_, v) => setBolgeInput(v ?? "")}
+                    getOptionLabel={(opt) => String(opt ?? "")}
+                    isOptionEqualToValue={(opt, val) => opt === val}
                     size="small"
-                    renderInput={(params) => <TextField {...params} label="Bölge" placeholder="Seçin" sx={{ minWidth: 220 }} />}
+                    renderInput={(params) => (
+                        <TextField {...params} label="Bölge" placeholder="Seçin" sx={{ minWidth: 220 }} />
+                    )}
                 />
+
+                <Chip label={`${filteredRows.length} kayıt`} color="default" variant="outlined" sx={{ ml: 0.5 }} />
 
                 <Box sx={{ flex: 1 }} />
 
-                {/* Arama kutusu */}
                 <TextField
                     inputRef={searchRef}
                     size="small"
@@ -1045,7 +1125,7 @@ export default function PlanlamaDeluxe() {
                         </Button>
                     </span>
                 </Tooltip>
-                {/* İçe Aktar (Excel/CSV) */}
+
                 <input
                     ref={fileInputRef}
                     type="file"
@@ -1054,15 +1134,10 @@ export default function PlanlamaDeluxe() {
                     onChange={(e) => handleFiles(e.target.files)}
                 />
                 <Tooltip title="Excel/CSV içe aktar">
-                    <Button
-                        variant="outlined"
-                        startIcon={<DownloadIcon />}
-                        onClick={() => fileInputRef.current?.click()}
-                    >
+                    <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => fileInputRef.current?.click()}>
                         İçe Aktar
                     </Button>
                 </Tooltip>
-
             </Paper>
 
             {/* DataGrid */}
@@ -1132,216 +1207,219 @@ export default function PlanlamaDeluxe() {
                         "& .MuiDataGrid-row:hover .MuiDataGrid-cell": {
                             backgroundColor: alpha("#22D3EE", 0.06),
                         },
-                        // bölge bazlı sol şerit
                         "& .row-east .MuiDataGrid-cell": { boxShadow: `inset 3px 0 0 ${alpha("#ef4444", 0.9)}` },
-                        "& .row-aegean .MuiDataGrid-cell": { boxShadow: `inset 3px 0 0 ${alpha("#22c55e", 0.9)}` },
-                        "& .row-marmara .MuiDataGrid-cell": { boxShadow: `inset 3px 0 0 ${alpha("#3b82f6", 0.9)}` },
-                        "& .row-blacksea .MuiDataGrid-cell": { boxShadow: `inset 3px 0 0 ${alpha("#8b5cf6", 0.9)}` },
-                        "& .row-central .MuiDataGrid-cell": { boxShadow: `inset 3px 0 0 ${alpha("#f59e0b", 0.9)}` },
-                    }}
-                />
-            </Paper>
-
-            {/* Sticky Save Bar */}
-            {isDirty && (
-                <Paper elevation={0}
-                    sx={{
-                        position: "sticky",
-                        bottom: 0,
-                        p: 1,
-                        borderRadius: 2,
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        background: `linear-gradient(180deg, ${alpha("#0ea5e9", 0.16)} 0%, ${alpha("#0ea5e9", 0.08)} 100%)`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 1,
-                    }}
-                >
-                    <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography fontWeight={700}>Kaydedilmemiş değişiklikler var</Typography>
-                        <Chip size="small" label={`${rows.length} satır`} />
-                    </Stack>
-                    <Stack direction="row" spacing={1}>
-                        <Button onClick={revertRows}>Geri Al</Button>
-                        <Button variant="contained" startIcon={<SaveIcon />} onClick={handleKaydet}>Kaydet</Button>
-                    </Stack>
+                            "& .row-aegean .MuiDataGrid-cell": { boxShadow: `inset 3px 0 0 ${alpha("#22c55e", 0.9)}` },
+                            "& .row-marmara .MuiDataGrid-cell": { boxShadow: `inset 3px 0 0 ${alpha("#3b82f6", 0.9)}` },
+                            "& .row-blacksea .MuiDataGrid-cell": { boxShadow: `inset 3px 0 0 ${alpha("#8b5cf6", 0.9)}` },
+                            "& .row-central .MuiDataGrid-cell": { boxShadow: `inset 3px 0 0 ${alpha("#f59e0b", 0.9)}` },
+                        }}
+                    />
                 </Paper>
-            )}
 
-            {/* Sağ alt hızlı ekleme (FAB) */}
-            <Fab color="primary" onClick={openPlakaDialog}
-                sx={{ position: "fixed", right: 24, bottom: 24, boxShadow: 6 }}
-                aria-label="yeni satır"
-            >
-                <AddIcon />
-            </Fab>
-
-            {/* Kaydetme sırasında bloklayıcı */}
-            <Backdrop open={saving} sx={{ color: "#fff", zIndex: (t) => t.zIndex.drawer + 1 }}>
-                <CircularProgress color="inherit" />
-                <Typography sx={{ ml: 2 }}>Kaydediliyor…</Typography>
-            </Backdrop>
-
-            {/* Yeni Plaka Dialog */}
-            <Dialog open={plakaDialogOpen} onClose={() => setPlakaDialogOpen(false)} fullWidth maxWidth="sm">
-                <DialogTitle>Yeni Plaka Ekle</DialogTitle>
-                <DialogContent sx={{ pt: 1 }}>
-                    <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-                        <TextField
-                            label="Plaka"
-                            value={yeniPlaka.plaka}
-                            onChange={(e) => setYeniPlaka((p) => ({ ...p, plaka: e.target.value }))}
-                            autoFocus
-                        />
-                        <TextField
-                            label="Ad Soyad"
-                            value={yeniPlaka.ad_soyad}
-                            onChange={(e) => setYeniPlaka((p) => ({ ...p, ad_soyad: e.target.value }))}
-                        />
-                        <TextField
-                            label="Telefon"
-                            value={yeniPlaka.telefon}
-                            onChange={(e) => setYeniPlaka((p) => ({ ...p, telefon: e.target.value }))}
-                            placeholder="05xx xxx xx xx"
-                        />
-                        <TextField
-                            label="TC"
-                            value={yeniPlaka.tc}
-                            onChange={(e) => setYeniPlaka((p) => ({ ...p, tc: e.target.value }))}
-                        />
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setPlakaDialogOpen(false)}>İptal</Button>
-                    <Button variant="contained" onClick={saveYeniPlaka}>
-                        Kaydet
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Toplu Güncelle Onay */}
-            <Dialog open={guncelleDialogOpen} onClose={() => setGuncelleDialogOpen(false)}>
-                <DialogTitle>Güncelleme Onayı</DialogTitle>
-                <DialogContent>
-                    <Typography>Tüm kayıtlar güncellenecek. Devam etmek istiyor musunuz?</Typography>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setGuncelleDialogOpen(false)}>İptal</Button>
-                    <Button variant="contained" onClick={confirmTopluGuncelle}>
-                        Evet, Güncelle
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Hızlı Düzenleme Çekmecesi */}
-            <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}
-                PaperProps={{ sx: { width: 420, p: 2, gap: 1 } }}
-            >
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Typography variant="h6" fontWeight={800}>Hızlı Düzenle</Typography>
-                    <IconButton onClick={() => setDrawerOpen(false)}><CloseIcon /></IconButton>
-                </Stack>
-                <Divider sx={{ my: 1 }} />
-                {activeEditRow ? (
-                    <Stack spacing={1.25}>
-                        {[
-                            ["sefer_no", "Sefer No"],
-                            ["sevk_no", "Sevk No"],
-                            ["tarih", "Tarih"],
-                            ["varis_tarihi", "Varış Tarihi"],
-                            ["plaka", "Plaka"],
-                            ["ad_soyad", "Ad Soyad"],
-                            ["telefon", "Telefon"],
-                            ["tc", "TC"],
-                            ["son_nokta", "Son Nokta"],
-                            ["tahliye_il", "Tahliye İl"],
-                            ["fatura_musterisi", "Fatura Müşterisi"],
-                            ["yukleme_noktasi", "Yükleme Noktası"],
-                            ["tahliye_noktasi", "Tahliye Noktası"],
-                            ["tonaj", "Tonaj"],
-                            ["bir_onceki_is", "Bir Önceki İş"],
-                        ].map(([k, label]) => (
-                            <TextField key={k}
-                                label={label}
-                                value={activeEditRow?.[k] ?? ""}
-                                onChange={(e) => {
-                                    const val = e.target.value;
-                                    setActiveEditRow((r) => {
-                                        const next = { ...r, [k]: val };
-                                        if (k === "son_nokta") {
-                                            const il = toUpperTr(val);
-                                            next.bolge = ilToBolgeMap[il] || "";
-                                        }
-                                        return next;
-                                    });
-                                }}
-                                size="small"
-                            />
-                        ))}
-
+                {/* Sticky Save Bar */}
+                {isDirty && (
+                    <Paper elevation={0}
+                        sx={{
+                            position: "sticky",
+                            bottom: 0,
+                            p: 1,
+                            borderRadius: 2,
+                            border: "1px solid rgba(255,255,255,0.08)",
+                            background: `linear-gradient(180deg, ${alpha("#0ea5e9", 0.16)} 0%, ${alpha("#0ea5e9", 0.08)} 100%)`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 1,
+                        }}
+                    >
                         <Stack direction="row" spacing={1} alignItems="center">
-                            <Typography variant="body2" sx={{ color: "text.secondary" }}>Doluluk:</Typography>
-                            <CircularProgress variant="determinate" value={completenessOf(activeEditRow)} size={22} />
-                            <Typography variant="caption">%{completenessOf(activeEditRow)}</Typography>
+                            <Typography fontWeight={700}>Kaydedilmemiş değişiklikler var</Typography>
+                            <Chip size="small" label={`${rows.length} satır`} />
                         </Stack>
-
                         <Stack direction="row" spacing={1}>
-                            <Button onClick={() => setDrawerOpen(false)}>Kapat</Button>
-                            <Button variant="contained" onClick={applyDrawerChanges}>Uygula</Button>
+                            <Button onClick={revertRows}>Geri Al</Button>
+                            <Button variant="contained" startIcon={<SaveIcon />} onClick={handleKaydet}>Kaydet</Button>
                         </Stack>
-                    </Stack>
-                ) : (
-                    <Typography>Bir satır seçin…</Typography>
+                    </Paper>
                 )}
-            </Drawer>
 
-            {/* Drag & Drop Overlay */}
-            {dragActive && (
-                <Box
-                    sx={{
-                        position: "fixed",
-                        inset: 0,
-                        zIndex: (t) => t.zIndex.modal + 1,
-                        backgroundColor: alpha("#000", 0.5),
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        border: "3px dashed rgba(255,255,255,0.5)",
-                    }}
-                    onDragOver={onDragOver}
-                    onDragLeave={onDragLeave}
-                    onDrop={onDrop}
+                {/* Sağ alt hızlı ekleme (FAB) */}
+                <Fab color="primary" onClick={openPlakaDialog}
+                    sx={{ position: "fixed", right: 24, bottom: 24, boxShadow: 6 }}
+                    aria-label="yeni satır"
                 >
-                    <Stack spacing={1} alignItems="center">
-                        <DownloadIcon sx={{ fontSize: 52, opacity: 0.85 }} />
-                        <Typography variant="h6" fontWeight={800}>Dosyayı buraya bırak</Typography>
-                        <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                            .xlsx, .xls veya .csv desteklenir
-                        </Typography>
+                    <AddIcon />
+                </Fab>
+
+                {/* Kaydetme sırasında bloklayıcı */}
+                <Backdrop open={saving} sx={{ color: "#fff", zIndex: (t) => t.zIndex.drawer + 1 }}>
+                    <CircularProgress color="inherit" />
+                    <Typography sx={{ ml: 2 }}>Kaydediliyor…</Typography>
+                </Backdrop>
+
+                {/* Yeni Plaka Dialog */}
+                <Dialog open={plakaDialogOpen} onClose={() => setPlakaDialogOpen(false)} fullWidth maxWidth="sm">
+                    <DialogTitle>Yeni Plaka Ekle</DialogTitle>
+                    <DialogContent sx={{ pt: 1 }}>
+                        <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+                            <TextField
+                                label="Plaka"
+                                value={yeniPlaka.plaka}
+                                onChange={(e) => setYeniPlaka((p) => ({ ...p, plaka: e.target.value }))}
+                                autoFocus
+                            />
+                            <TextField
+                                label="Ad Soyad"
+                                value={yeniPlaka.ad_soyad}
+                                onChange={(e) => setYeniPlaka((p) => ({ ...p, ad_soyad: e.target.value }))}
+                            />
+                            <TextField
+                                label="Telefon"
+                                value={yeniPlaka.telefon}
+                                onChange={(e) => setYeniPlaka((p) => ({ ...p, telefon: e.target.value }))}
+                                placeholder="05xx xxx xx xx"
+                            />
+                            <TextField
+                                label="TC"
+                                value={yeniPlaka.tc}
+                                onChange={(e) => setYeniPlaka((p) => ({ ...p, tc: e.target.value }))}
+                            />
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setPlakaDialogOpen(false)}>İptal</Button>
+                        <Button variant="contained" onClick={saveYeniPlaka}>
+                            Kaydet
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+
+                {/* Toplu Güncelle Onay */}
+                <Dialog open={guncelleDialogOpen} onClose={() => setGuncelleDialogOpen(false)}>
+                    <DialogTitle>Güncelleme Onayı</DialogTitle>
+                    <DialogContent>
+                        <Typography>Tüm kayıtlar güncellenecek. Devam etmek istiyor musunuz?</Typography>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setGuncelleDialogOpen(false)}>İptal</Button>
+                        <Button variant="contained" onClick={confirmTopluGuncelle}>
+                            Evet, Güncelle
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+
+                {/* Hızlı Düzenleme Çekmecesi */}
+                <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}
+                    PaperProps={{ sx: { width: 420, p: 2, gap: 1 } }}
+                >
+                    <Stack direction="row" alignItems="center" justifyContent="space-between">
+                        <Typography variant="h6" fontWeight={800}>Hızlı Düzenle</Typography>
+                        <IconButton onClick={() => setDrawerOpen(false)}><CloseIcon /></IconButton>
                     </Stack>
-                </Box>
-            )}
+                    <Divider sx={{ my: 1 }} />
+                    {activeEditRow ? (
+                        <Stack spacing={1.25}>
+                            {[
+                                ["sefer_no", "Sefer No"],
+                                ["sevk_no", "Sevk No"],
+                                ["tarih", "Tarih"],
+                                ["varis_tarihi", "Varış Tarihi"],
+                                ["plaka", "Plaka"],
+                                ["ad_soyad", "Ad Soyad"],
+                                ["telefon", "Telefon"],
+                                ["tc", "TC"],
+                                ["son_nokta", "Son Nokta"],
+                                ["tahliye_il", "Tahliye İl"],
+                                ["fatura_musterisi", "Fatura Müşterisi"],
+                                ["yukleme_noktasi", "Yükleme Noktası"],
+                                ["tahliye_noktasi", "Tahliye Noktası"],
+                                ["tonaj", "Tonaj"],
+                                ["bir_onceki_is", "Bir Önceki İş"],
+                            ].map(([k, label]) => (
+                                <TextField key={k}
+                                    label={label}
+                                    value={activeEditRow?.[k] ?? ""}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setActiveEditRow((r) => {
+                                            const next = { ...r, [k]: val };
+                                            if (k === "son_nokta") {
+                                                const { son_nokta, bolge } = normalizeSonNoktaAndRegion(val);
+                                                next.son_nokta = son_nokta;
+                                                next.bolge = bolge;
+                                            }
+                                            return next;
+                                        });
+                                    }}
+                                    size="small"
+                                />
+                            ))}
+
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <Typography variant="body2" sx={{ color: "text.secondary" }}>Doluluk:</Typography>
+                                <CircularProgress variant="determinate" value={completenessOf(activeEditRow)} size={22} />
+                                <Typography variant="caption">%{completenessOf(activeEditRow)}</Typography>
+                            </Stack>
+
+                            <Stack direction="row" spacing={1}>
+                                <Button onClick={() => setDrawerOpen(false)}>Kapat</Button>
+                                <Button variant="contained" onClick={applyDrawerChanges}>Uygula</Button>
+                            </Stack>
+                        </Stack>
+                    ) : (
+                        <Typography>Bir satır seçin…</Typography>
+                    )}
+                </Drawer>
+
+                {/* Drag & Drop Overlay */}
+                {dragActive && (
+                    <Box
+                        sx={{
+                            position: "fixed",
+                            inset: 0,
+                            zIndex: (t) => t.zIndex.modal + 1,
+                            backgroundColor: alpha("#000", 0.5),
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            border: "3px dashed rgba(255,255,255,0.5)",
+                        }}
+                        onDragOver={onDragOver}
+                        onDragLeave={onDragLeave}
+                        onDrop={onDrop}
+                    >
+                        <Stack spacing={1} alignItems="center">
+                            <DownloadIcon sx={{ fontSize: 52, opacity: 0.85 }} />
+                            <Typography variant="h6" fontWeight={800}>Dosyayı buraya bırak</Typography>
+                            <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                                .xlsx, .xls veya .csv desteklenir
+                            </Typography>
+                        </Stack>
+                    </Box>
+                )}
 
 
-            {/* Snackbar */}
-            <Snackbar
-                open={snack.open}
-                autoHideDuration={3000}
-                onClose={() => setSnack((s) => ({ ...s, open: false, action: null }))}
-                anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-            >
-                <Alert
+                {/* Snackbar */}
+                <Snackbar
+                    open={snack.open}
+                    autoHideDuration={3000}
                     onClose={() => setSnack((s) => ({ ...s, open: false, action: null }))}
-                    severity={snack.severity}
-                    variant="filled"
-                    sx={{ width: "100%" }}
-                    action={snack.action}
+                    anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
                 >
-                    {snack.msg}
-                </Alert>
-            </Snackbar>
-        </Box>
-    );
+                    <Alert
+                        onClose={() => setSnack((s) => ({ ...s, open: false, action: null }))}
+                        severity={snack.severity}
+                        variant="filled"
+                        sx={{ width: "100%" }}
+                        action={snack.action}
+                    >
+                        {snack.msg}
+                    </Alert>
+                </Snackbar>
+            </Box>
+        );
     }
+    
+
+    
 

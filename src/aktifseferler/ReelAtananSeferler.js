@@ -50,7 +50,7 @@ import {
     addMinutesISO,
     normalizeISO,
 } from "./utils/datetime";
-import { formatPhone, ellipsize, userCanEdit, userCanSeeETA } from "./utils/format";
+import { formatPhone, ellipsize } from "./utils/format";
 import {
     AVG_SPEED_KMPH,
     BLOCK_MIN,
@@ -85,7 +85,6 @@ const GENERIC_HIDDEN_KEY = `aktifseferler.hiddenColumns.GENERIC`;
 const LIST_PATH = "/aktifseferler";        // sende liste hangi path'teyse onu yaz
 const VIEW_PATH = `${LIST_PATH}/gorunum`;  // görünüm sayfası
 
-
 /* Diyaloglar (mevcutta var) */
 const EditorDialog = lazy(() => import("./dialogs/EditorDialog"));
 const EtaDialog = lazy(() => import("./dialogs/EtaDialog"));
@@ -98,8 +97,16 @@ function TimeHMField(props) {
     return <TextField type="time" size="small" inputProps={{ step: 60 }} InputLabelProps={{ shrink: true }} {...props} />;
 }
 
-const canEdit = userCanEdit(localStorage.getItem("kullaniciAdi"));
-const canSeeETA = userCanSeeETA(localStorage.getItem("kullaniciAdi"));
+/* ======= YETKİ KURALI (burada kesin tanımlıyoruz) ======= */
+const _rawUser = (localStorage.getItem("kullaniciAdi") || "");
+const _userKey = _rawUser.normalize("NFKC").toLocaleLowerCase("tr-TR").replace(/\s+/g, "");
+const isSelin = _userKey === "selin" || _userKey === "sel\u0131n"; // güvenlik için
+const isAdmin = _userKey === "admin";
+const isBekir = _userKey === "bekirakcagoz";
+
+// Kural: SELİN → sadece düzenle; admin & bekir → düzenle + ETA; diğerleri → sadece ETA
+const canEdit = isSelin || isAdmin || isBekir;
+const canSeeETA = !isSelin; // Selin hariç herkes ETA görebilir
 
 export default function ReelAtananSeferler() {
     const [viewBump, setViewBump] = useState(localStorage.getItem(VIEW_BUMP_KEY) || "0");
@@ -780,7 +787,6 @@ export default function ReelAtananSeferler() {
         const getHeader = (c) => c.headerName || c.header || "";
 
         // buildColumns'taki field adlarına göre aday listeleri:
-        // (Gerekiyorsa bu dizilerdeki field adlarını kendi projene göre güncelle.)
         const findCol = (preferFields = [], headerNeedle = "") => {
             let c = cols.find((col) => preferFields.includes(col.field));
             if (c) return c;

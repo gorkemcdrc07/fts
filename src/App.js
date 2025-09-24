@@ -39,7 +39,10 @@ import Tools from "./raporlar/tools";
 // Layout
 import AppLayout from "./layout/AppLayout";
 
-// 🔻 Tüm importlar tamamlandıktan sonra LAZY tanımı
+// Analiz sayfası
+import Analiz from "./planlamaIslemleri/analiz";
+
+// Lazy sayfa (importlardan SONRA tanımla)
 const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler"));
 
 function App() {
@@ -55,7 +58,12 @@ function App() {
                         {/* App Layout içinde tüm sayfalar */}
                         <Route element={<AppLayout />}>
                             <Route path="anasayfa" element={<Anasayfa />} />
+
+                            {/* Planlama */}
                             <Route path="planlama" element={<Planlama />} />
+                            {/* Detay: Analiz */}
+                            <Route path="planlama/analiz" element={<Analiz />} />
+
                             <Route path="plaka-onerisi" element={<PlakaOnerisi />} />
 
                             {/* ReelAtananSeferler lazy yüklendi */}

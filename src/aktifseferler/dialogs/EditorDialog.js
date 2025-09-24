@@ -287,7 +287,7 @@ export default function EditorDialog(props) {
                                         />
                                         <DateTimeSingleField
                                             label="Teslim Çıkış"
-                                            value={r.teslim_cicis || ""}
+                                            value={r.teslim_cikis || ""}
                                             onChange={(v) => onDetailChange(i, "teslim_cikis", v)}
                                             baseInputSX={baseInputSX}
                                         />

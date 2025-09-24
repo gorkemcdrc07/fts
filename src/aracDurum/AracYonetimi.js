@@ -33,7 +33,7 @@ import {
     CircularProgress,
     Badge,
 } from "@mui/material";
-import { alpha } from "@mui/material/styles";
+import { alpha, darken } from "@mui/material/styles";
 import {
     Add as AddIcon,
     FilterList as FilterListIcon,
@@ -47,11 +47,19 @@ import {
     HomeOutlined as HomeIcon,
     Refresh as RefreshIcon,
     Clear as ClearIcon,
+    DirectionsCarFilled as CarIcon,
+    WarningAmber as WarningIcon,
+    CheckCircle as CheckIcon,
+    DoDisturb as RemovedIcon,
 } from "@mui/icons-material";
 
-import { DataGrid, GridToolbar } from "@mui/x-data-grid";
+import {
+    DataGrid,
+    GridToolbar,
+    gridClasses,
+} from "@mui/x-data-grid";
 
-/* ===================== Sabitler & Yardımcılar ===================== */
+/* ===================== Görsel Sabitler ===================== */
 const HOME_PATH = "/anasayfa";
 
 const BASE_WIDTH = 1920;
@@ -60,13 +68,16 @@ const MAX_SCALE = Infinity;
 
 const GRADIENT_BG =
     "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.15), transparent 40%)," +
-    "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.20), transparent 50%)," +
-    "linear-gradient(180deg, #050816 0%, #0B1220 100%)";
+    "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.25), transparent 50%)," +
+    "linear-gradient(180deg, #050816 0%, #0A1020 100%)";
 
 const glass = (opacityTop = 0.92, opacityBottom = 0.75) => ({
     background: `linear-gradient(180deg, rgba(15,23,42,${opacityTop}) 0%, rgba(15,23,42,${opacityBottom}) 100%)`,
-    backdropFilter: "blur(10px)",
+    backdropFilter: "blur(12px)",
     border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow:
+        "0 10px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
+    borderRadius: 16,
 });
 
 /* ===================== Ölçekleme: Zoom'dan Bağımsız ===================== */
@@ -124,7 +135,6 @@ function ScaleToFit({ children }) {
 }
 
 /* ===================== Util Fonksiyonlar ===================== */
-
 const BOS_FORM = {
     plaka: "",
     treyler: "",
@@ -164,6 +174,10 @@ function turkiyeSaatISOString() {
     return turkiyeSaati.toISOString();
 }
 
+function safeLower(v) {
+    return (v ?? "").toString().toLowerCase();
+}
+
 // localStorage helper
 function useLocalStorage(key, initial) {
     const [value, setValue] = useState(() => {
@@ -192,6 +206,50 @@ function useDebounced(value, delay = 300) {
     return debounced;
 }
 
+/* ===================== Yardımcı Bileşenler ===================== */
+function SubtleDivider({ sx }) {
+    return (
+        <Divider sx={{ my: 1.5, borderColor: "rgba(255,255,255,0.08)", ...sx }} />
+    );
+}
+
+function EmptyState({ title = "Kayıt bulunamadı", caption = "Filtreleri değiştirerek tekrar deneyin." }) {
+    return (
+        <Stack alignItems="center" justifyContent="center" sx={{ height: "100%", py: 6 }}>
+            <Box
+                sx={{
+                    width: 84,
+                    height: 84,
+                    borderRadius: "50%",
+                    display: "grid",
+                    placeItems: "center",
+                    background: alpha("#22D3EE", 0.1),
+                    border: "1px solid " + alpha("#22D3EE", 0.3),
+                    mb: 2,
+                }}
+            >
+                <CarIcon />
+            </Box>
+            <Typography variant="h6" sx={{ opacity: 0.9, mb: 0.5 }}>{title}</Typography>
+            <Typography variant="body2" color="text.secondary">{caption}</Typography>
+        </Stack>
+    );
+}
+
+function Section({ title, right, sx, children }) {
+    return (
+        <Paper sx={{ p: 2, borderRadius: 2, ...glass(0.08, 0.02), ...sx }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                <Typography variant="subtitle2" sx={{ letterSpacing: 0.3, opacity: 0.85 }}>
+                    {title}
+                </Typography>
+                {right}
+            </Stack>
+            {children}
+        </Paper>
+    );
+}
+
 /* ===================== Ana Bileşen ===================== */
 export default function AracYonetimiMUI() {
     const navigate = useNavigate();
@@ -203,11 +261,16 @@ export default function AracYonetimiMUI() {
     const debouncedSearch = useDebounced(globalSearch, 250);
     const [drawerOpen, setDrawerOpen] = useState(false);
 
-    // Detaylı filtreler (bolge, plaka, surucu)
+    // DataGrid kalıcılık
+    const [density, setDensity] = useLocalStorage("aracGridDensity", "compact"); // compact/standard/comfortable
+    const [colVis, setColVis] = useLocalStorage("aracColVis", {});
+    const [pinnedCols, setPinnedCols] = useLocalStorage("aracPinned", { left: ["plaka", "treyler", "surucu_adi"], right: ["__actions"] });
+
+    // Detaylı filtreler
     const FILTER_DEFAULTS = { bolge: "", plaka: "", surucu: "" };
     const [filters, setFilters] = useLocalStorage("aracFilters", FILTER_DEFAULTS);
 
-    // LocalStorage'ta eski yapılar varsa anahtarları tamamla (migration)
+    // Migration
     useEffect(() => {
         setFilters((f) => ({ ...FILTER_DEFAULTS, ...(f || {}) }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -216,6 +279,7 @@ export default function AracYonetimiMUI() {
     const clearFilters = () => setFilters(FILTER_DEFAULTS);
 
     const [form, setForm] = useState(BOS_FORM);
+    const [formErrors, setFormErrors] = useState({});
     const [editId, setEditId] = useState(null);
     const [duzenleAcik, setDuzenleAcik] = useState(false);
 
@@ -245,6 +309,29 @@ export default function AracYonetimiMUI() {
         verileriGetir();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Klavye kısayolları
+    useEffect(() => {
+        const onKey = (e) => {
+            const isMac = navigator.platform.toUpperCase().includes("MAC");
+            const metaK = (isMac && e.metaKey && e.key.toLowerCase() === "k") || (!isMac && e.ctrlKey && e.key.toLowerCase() === "k");
+            if (metaK) {
+                e.preventDefault();
+                const el = document.getElementById("global-search-input");
+                el?.focus();
+                el?.select();
+            }
+            if (e.key.toLowerCase() === "n") handleYeniEkle();
+            if (e.key.toLowerCase() === "r") verileriGetir();
+            if (e.key === "/") {
+                const quick = document.querySelector('input[placeholder*="Quick filter"]');
+                quick?.focus();
+                e.preventDefault();
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, []); // eslint-disable-line
 
     const verileriGetir = useCallback(async () => {
         setLoading(true);
@@ -294,23 +381,15 @@ export default function AracYonetimiMUI() {
         if (tab === "aktif") liste = liste.filter((a) => a.statu !== "ÇIKARILDI");
         if (tab === "pasif") liste = liste.filter((a) => a.statu === "ÇIKARILDI");
 
-        // Detaylı filtreler (güvenli okuma)
-        const fBolge = (filters?.bolge ?? "").trim().toLowerCase();
-        const fPlaka = (filters?.plaka ?? "").trim().toLowerCase();
-        const fSurucu = (filters?.surucu ?? "").trim().toLowerCase();
+        const fBolge = safeLower(filters?.bolge).trim();
+        const fPlaka = safeLower(filters?.plaka).trim();
+        const fSurucu = safeLower(filters?.surucu).trim();
 
-        if (fBolge) {
-            liste = liste.filter((a) => (a.bolge || "").toLowerCase().includes(fBolge));
-        }
-        if (fPlaka) {
-            liste = liste.filter((a) => (a.plaka || "").toLowerCase().includes(fPlaka));
-        }
-        if (fSurucu) {
-            liste = liste.filter((a) => (a.surucu_adi || "").toLowerCase().includes(fSurucu));
-        }
+        if (fBolge) liste = liste.filter((a) => safeLower(a.bolge).includes(fBolge));
+        if (fPlaka) liste = liste.filter((a) => safeLower(a.plaka).includes(fPlaka));
+        if (fSurucu) liste = liste.filter((a) => safeLower(a.surucu_adi).includes(fSurucu));
 
-        // Üst genel arama
-        const q = (debouncedSearch ?? "").trim().toLowerCase();
+        const q = safeLower(debouncedSearch).trim();
         if (q) {
             liste = liste.filter((a) =>
                 [
@@ -332,12 +411,12 @@ export default function AracYonetimiMUI() {
                     a.odak_k1,
                     a.statu,
                 ]
-                    .map((v) => (v || "").toString().toLowerCase())
+                    .map((v) => safeLower(v))
                     .some((v) => v.includes(q))
             );
         }
         return liste;
-    }, [tumAraclar, tab, debouncedSearch, filters]); // filters bağımlılığı mevcut
+    }, [tumAraclar, tab, debouncedSearch, filters]);
 
     const aktifSayisi = useMemo(() => tumAraclar.filter((a) => a.statu !== "ÇIKARILDI").length, [tumAraclar]);
     const pasifSayisi = useMemo(() => tumAraclar.filter((a) => a.statu === "ÇIKARILDI").length, [tumAraclar]);
@@ -349,20 +428,41 @@ export default function AracYonetimiMUI() {
 
     const handleYeniEkle = useCallback(() => {
         setForm(BOS_FORM);
+        setFormErrors({});
         setEditId(null);
         setDuzenleAcik(true);
     }, []);
 
     const temizleVeKapat = useCallback(() => {
         setForm(BOS_FORM);
+        setFormErrors({});
         setEditId(null);
         setDuzenleAcik(false);
+    }, []);
+
+    const validateForm = useCallback((f) => {
+        const errs = {};
+        if (!f.plaka?.trim()) errs.plaka = "Plaka zorunludur.";
+        if (!f.cekici_muayene) errs.cekici_muayene = "Tarih gerekli";
+        if (!f.dorse_muayene) errs.dorse_muayene = "Tarih gerekli";
+        if (!f.trafik_sigorta) errs.trafik_sigorta = "Tarih gerekli";
+        if (f.surucu_telefon && !/^\+?\d[\d\s-]{7,}$/.test(f.surucu_telefon)) {
+            errs.surucu_telefon = "Telefon formatını kontrol edin.";
+        }
+        return errs;
     }, []);
 
     const handleSubmit = useCallback(
         async (e) => {
             e?.preventDefault?.();
             const kullanici = getMevcutKullanici();
+
+            const errs = validateForm(form);
+            setFormErrors(errs);
+            if (Object.keys(errs).length) {
+                openSnack("Lütfen zorunlu alanları doldurun.", "warning");
+                return;
+            }
 
             if (editId) {
                 const mevcut = tumAraclar.find((a) => a.id === editId) || {};
@@ -399,7 +499,7 @@ export default function AracYonetimiMUI() {
                 } else openSnack("Ekleme başarısız", "error");
             }
         },
-        [editId, form, openSnack, temizleVeKapat, tumAraclar, verileriGetir]
+        [editId, form, openSnack, temizleVeKapat, tumAraclar, verileriGetir, validateForm]
     );
 
     const handleDuzenle = useCallback(
@@ -428,6 +528,7 @@ export default function AracYonetimiMUI() {
                 gps_sim_kart_no: arac.gps_sim_kart_no || "",
                 odak_k1: arac.odak_k1 || "",
             });
+            setFormErrors({});
             setEditId(arac.id);
             setDuzenleAcik(true);
         },
@@ -558,15 +659,16 @@ export default function AracYonetimiMUI() {
             {
                 field: "statu",
                 headerName: "Statü",
-                minWidth: 140,
+                minWidth: 160,
                 flex: 0.9,
                 renderCell: ({ value }) => {
                     const label = value || "Aktif";
                     const isRemoved = label === "ÇIKARILDI";
                     const isWarning = /kesintiden/.test(label || "");
+                    const icon = isRemoved ? <RemovedIcon sx={{ fontSize: 16, mr: 0.5 }} /> : isWarning ? <WarningIcon sx={{ fontSize: 16, mr: 0.5 }} /> : <CheckIcon sx={{ fontSize: 16, mr: 0.5 }} />;
                     return (
                         <Chip
-                            label={label}
+                            label={<Box sx={{ display: "flex", alignItems: "center" }}>{icon}{label}</Box>}
                             size="small"
                             color={isRemoved ? "error" : isWarning ? "warning" : "success"}
                             variant={isRemoved ? "outlined" : "filled"}
@@ -579,7 +681,7 @@ export default function AracYonetimiMUI() {
                 headerName: "İşlem",
                 sortable: false,
                 filterable: false,
-                minWidth: 160,
+                minWidth: 170,
                 flex: 0.9,
                 align: "right",
                 renderCell: ({ row }) => (
@@ -613,6 +715,15 @@ export default function AracYonetimiMUI() {
         [araclar]
     );
 
+    // Aktif filtre rozetleri
+    const activeFilterChips = useMemo(() => {
+        const chips = [];
+        if (filters?.bolge) chips.push({ k: "bolge", label: `Bölge: ${filters.bolge}` });
+        if (filters?.plaka) chips.push({ k: "plaka", label: `Plaka: ${filters.plaka}` });
+        if (filters?.surucu) chips.push({ k: "surucu", label: `Sürücü: ${filters.surucu}` });
+        return chips;
+    }, [filters]);
+
     return (
         <ScaleToFit>
             <Helmet>
@@ -620,7 +731,19 @@ export default function AracYonetimiMUI() {
             </Helmet>
 
             {/* APP BAR */}
-            <AppBar position="static" color="transparent" elevation={0} sx={{ borderRadius: 2, ...glass(0.92, 0.75), mx: 1, mt: 1 }}>
+            <AppBar
+                position="static"
+                color="transparent"
+                elevation={0}
+                sx={{
+                    borderRadius: 2,
+                    ...glass(0.92, 0.7),
+                    mx: 1,
+                    mt: 1,
+                    backgroundImage:
+                        "linear-gradient(90deg, rgba(139,92,246,0.16), rgba(34,211,238,0.16))",
+                }}
+            >
                 <Toolbar>
                     <Typography
                         variant="h6"
@@ -631,6 +754,7 @@ export default function AracYonetimiMUI() {
                             WebkitBackgroundClip: "text",
                             WebkitTextFillColor: "transparent",
                             letterSpacing: 0.3,
+                            userSelect: "none",
                         }}
                     >
                         Araç Yönetimi
@@ -638,7 +762,7 @@ export default function AracYonetimiMUI() {
 
                     <Stack direction="row" spacing={1} alignItems="center">
                         {/* Yenile */}
-                        <Tooltip title="Yenile">
+                        <Tooltip title="Yenile (R)">
                             <span>
                                 <IconButton onClick={verileriGetir} disabled={loading}>
                                     {loading ? <CircularProgress size={18} /> : <RefreshIcon />}
@@ -647,7 +771,7 @@ export default function AracYonetimiMUI() {
                         </Tooltip>
 
                         {/* Filtreler */}
-                        <Tooltip title="Filtreler">
+                        <Tooltip title="Filtreler (Çekmece)">
                             <IconButton onClick={() => setDrawerOpen(true)}>
                                 <FilterListIcon />
                             </IconButton>
@@ -677,46 +801,32 @@ export default function AracYonetimiMUI() {
             {/* KPI Kartları */}
             <Grid container spacing={2} sx={{ mt: 2, px: 1 }}>
                 <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 2, borderRadius: 2, ...glass(0.08, 0.02) }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                            <Box>
-                                <Typography variant="body2" color="text.secondary">
-                                    AKTİF ARAÇLAR
-                                </Typography>
-                                <Typography variant="h4" sx={{ mt: 0.5 }}>
-                                    {aktifSayisi}
-                                </Typography>
-                            </Box>
-                            <Chip label="Aktif" size="small" color="success" />
-                        </Stack>
-                    </Paper>
+                    <Section
+                        title="AKTİF ARAÇLAR"
+                        right={<Chip icon={<CheckIcon />} label="Aktif" size="small" color="success" />}
+                    >
+                        <Typography variant="h4" sx={{ mt: 0.5 }}>{aktifSayisi}</Typography>
+                    </Section>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 2, borderRadius: 2, ...glass(0.08, 0.02) }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                            <Box>
-                                <Typography variant="body2" color="text.secondary">
-                                    ÇIKARILAN ARAÇLAR
-                                </Typography>
-                                <Typography variant="h4" sx={{ mt: 0.5 }}>
-                                    {pasifSayisi}
-                                </Typography>
-                            </Box>
-                            <Chip label="Pasif" color="error" variant="outlined" size="small" />
-                        </Stack>
-                    </Paper>
+                    <Section
+                        title="ÇIKARILAN ARAÇLAR"
+                        right={<Chip icon={<RemovedIcon />} label="Pasif" color="error" variant="outlined" size="small" />}
+                    >
+                        <Typography variant="h4" sx={{ mt: 0.5 }}>{pasifSayisi}</Typography>
+                    </Section>
                 </Grid>
             </Grid>
 
-            {/* Sekmeler + üst arama */}
-            <Paper sx={{ p: 2, mt: 2, mx: 1, borderRadius: 2, ...glass(0.04, 0.02) }}>
+            {/* Sekmeler + üst arama + aktif filtre rozetleri */}
+            <Paper sx={{ p: 2, mt: 2, mx: 1, borderRadius: 2, ...glass(0.06, 0.03) }}>
                 <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} md={6}>
                         <Tabs
                             value={tab}
                             onChange={(_, v) => setTab(v)}
                             sx={{
-                                "& .MuiTab-root": { fontWeight: 700, minHeight: 40, borderRadius: 2, mr: 1 },
+                                "& .MuiTab-root": { fontWeight: 700, minHeight: 40, borderRadius: 2, mr: 1, px: 2 },
                                 "& .Mui-selected": { backgroundColor: alpha("#ffffff", 0.06) },
                                 "& .MuiTabs-indicator": { height: 3, borderRadius: 1 },
                             }}
@@ -728,10 +838,11 @@ export default function AracYonetimiMUI() {
                     </Grid>
                     <Grid item xs={12} md={6}>
                         <TextField
+                            id="global-search-input"
                             fullWidth
                             value={globalSearch ?? ""}
                             onChange={(e) => setGlobalSearch(e.target.value)}
-                            placeholder="Genel arama: araç, sürücü, bölge…"
+                            placeholder="Genel arama (⌘/Ctrl + K): araç, sürücü, bölge…"
                             InputProps={{
                                 startAdornment: (
                                     <InputAdornment position="start">
@@ -754,6 +865,26 @@ export default function AracYonetimiMUI() {
                             }}
                         />
                     </Grid>
+
+                    {/* Aktif filtre rozetleri */}
+                    {activeFilterChips.length > 0 && (
+                        <Grid item xs={12}>
+                            <Stack direction="row" spacing={1} flexWrap="wrap">
+                                {activeFilterChips.map((c) => (
+                                    <Chip
+                                        key={c.k}
+                                        label={c.label}
+                                        onDelete={() => setFilters((f) => ({ ...(f || {}), [c.k]: "" }))}
+                                        variant="outlined"
+                                        size="small"
+                                    />
+                                ))}
+                                <Button size="small" onClick={clearFilters} startIcon={<ClearIcon />} sx={{ ml: 0.5 }}>
+                                    Hepsini temizle
+                                </Button>
+                            </Stack>
+                        </Grid>
+                    )}
                 </Grid>
             </Paper>
 
@@ -775,12 +906,26 @@ export default function AracYonetimiMUI() {
                             rows={rows}
                             columns={columns}
                             getRowId={(r) => r.id}
-                            density="compact"
+                            density={density}
+                            onDensityChange={(d) => setDensity(d)}
                             disableRowSelectionOnClick
                             pagination={false}
                             hideFooter
                             loading={loading}
-                            slots={{ toolbar: GridToolbar }}
+                            columnVisibilityModel={colVis}
+                            onColumnVisibilityModelChange={(m) => setColVis(m)}
+                            pinnedColumns={pinnedCols}
+                            onPinnedColumnsChange={(m) => setPinnedCols(m)}
+                            slots={{
+                                toolbar: GridToolbar,
+                                noRowsOverlay: () => <EmptyState />,
+                                noResultsOverlay: () => <EmptyState title="Sonuç bulunamadı" caption="Arama & filtreleri kontrol edin." />,
+                                loadingOverlay: () => (
+                                    <Stack alignItems="center" justifyContent="center" sx={{ height: "100%" }}>
+                                        <CircularProgress />
+                                    </Stack>
+                                ),
+                            }}
                             slotProps={{
                                 toolbar: {
                                     showQuickFilter: true,
@@ -788,10 +933,16 @@ export default function AracYonetimiMUI() {
                                     printOptions: { disableToolbarButton: true },
                                 },
                             }}
+                            getRowClassName={(params) => {
+                                const s = params.row?.statu || "";
+                                if (s === "ÇIKARILDI") return "row-removed";
+                                if (/kesintiden/.test(s)) return "row-warning";
+                                return "";
+                            }}
                             sx={{
                                 border: "none",
                                 height: "100%",
-                                "& .MuiDataGrid-columnHeaders": {
+                                [`& .${gridClasses.columnHeaders}`]: {
                                     background: "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
                                     color: "#C8D1E6",
                                     borderBottomColor: "rgba(255,255,255,0.10)",
@@ -806,6 +957,13 @@ export default function AracYonetimiMUI() {
                                 },
                                 "& .MuiDataGrid-row:hover .MuiDataGrid-cell": {
                                     backgroundColor: alpha("#8B5CF6", 0.10),
+                                    transition: "background-color 120ms ease",
+                                },
+                                "& .row-removed .MuiDataGrid-cell": {
+                                    backgroundColor: alpha("#ef4444", 0.08),
+                                },
+                                "& .row-warning .MuiDataGrid-cell": {
+                                    backgroundColor: alpha("#f59e0b", 0.08),
                                 },
                                 "& .MuiDataGrid-overlayWrapper": {
                                     background: "transparent",
@@ -838,13 +996,13 @@ export default function AracYonetimiMUI() {
                             <CloseIcon />
                         </IconButton>
                     </Stack>
-                    <Divider sx={{ mb: 2, borderColor: "rgba(255,255,255,0.12)" }} />
+                    <SubtleDivider />
 
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Not: Tablo araç çubuğundan (Quick filter / Columns / Filters / Density) anlık filtreleme yapabilirsiniz.
+                        İpucu: Tablo araç çubuğundan (Quick filter / Columns / Filters / Density) hızla filtreleme yapabilirsiniz.
                     </Typography>
 
-                    {/* FİLTRE KONTROLLERİ: Bölge, Plaka, Sürücü */}
+                    {/* FİLTRE KONTROLLERİ */}
                     <Stack spacing={2}>
                         <TextField
                             label="Bölge"
@@ -879,6 +1037,18 @@ export default function AracYonetimiMUI() {
                             </Button>
                         </Stack>
                     </Stack>
+
+                    <SubtleDivider sx={{ mt: 2 }} />
+
+                    {/* Statü efsanesi */}
+                    <Stack spacing={1}>
+                        <Typography variant="subtitle2" sx={{ opacity: 0.8 }}>Statü Renkleri</Typography>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                            <Chip size="small" color="success" label="Aktif" />
+                            <Chip size="small" color="warning" label="Kesinti sonrası" />
+                            <Chip size="small" color="error" variant="outlined" label="Çıkarıldı" />
+                        </Stack>
+                    </Stack>
                 </Box>
             </Drawer>
 
@@ -887,11 +1057,32 @@ export default function AracYonetimiMUI() {
                 <DialogTitle>{editId ? "Araç Bilgilerini Güncelle" : "Yeni Araç Bilgisi"}</DialogTitle>
                 <DialogContent>
                     <Grid container spacing={2} sx={{ mt: 0 }}>
-                        <Grid item xs={12} md={4}><TextField fullWidth name="plaka" value={form.plaka} onChange={handleChange} label="Plaka" required /></Grid>
+                        <Grid item xs={12} md={4}>
+                            <TextField
+                                fullWidth
+                                name="plaka"
+                                value={form.plaka}
+                                onChange={handleChange}
+                                label="Plaka"
+                                required
+                                error={!!formErrors.plaka}
+                                helperText={formErrors.plaka || ""}
+                            />
+                        </Grid>
                         <Grid item xs={12} md={4}><TextField fullWidth name="treyler" value={form.treyler} onChange={handleChange} label="Treyler" /></Grid>
                         <Grid item xs={12} md={4}><TextField fullWidth name="surucu_adi" value={form.surucu_adi} onChange={handleChange} label="Sürücü Adı" /></Grid>
 
-                        <Grid item xs={12} md={4}><TextField fullWidth name="surucu_telefon" value={form.surucu_telefon} onChange={handleChange} label="Telefon" /></Grid>
+                        <Grid item xs={12} md={4}>
+                            <TextField
+                                fullWidth
+                                name="surucu_telefon"
+                                value={form.surucu_telefon}
+                                onChange={handleChange}
+                                label="Telefon"
+                                error={!!formErrors.surucu_telefon}
+                                helperText={formErrors.surucu_telefon || ""}
+                            />
+                        </Grid>
                         <Grid item xs={12} md={4}><TextField fullWidth name="surucu_tc" value={form.surucu_tc} onChange={handleChange} label="TC" /></Grid>
                         <Grid item xs={12} md={4}><TextField fullWidth name="ikamet_adresi" value={form.ikamet_adresi} onChange={handleChange} label="İkamet Adresi" /></Grid>
 
@@ -899,9 +1090,36 @@ export default function AracYonetimiMUI() {
                         <Grid item xs={12} md={4}><TextField fullWidth name="dorse_ruhsat_no" value={form.dorse_ruhsat_no} onChange={handleChange} label="Dorse Ruhsat No" /></Grid>
                         <Grid item xs={12} md={4}><TextField fullWidth name="tedarikci_isim" value={form.tedarikci_isim} onChange={handleChange} label="Tedarikçi İsim" /></Grid>
 
-                        <Grid item xs={12} md={4}><TextField fullWidth type="date" name="cekici_muayene" value={form.cekici_muayene} onChange={handleChange} label="Çekici Muayene" InputLabelProps={{ shrink: true }} required /></Grid>
-                        <Grid item xs={12} md={4}><TextField fullWidth type="date" name="dorse_muayene" value={form.dorse_muayene} onChange={handleChange} label="Dorse Muayene" InputLabelProps={{ shrink: true }} required /></Grid>
-                        <Grid item xs={12} md={4}><TextField fullWidth type="date" name="trafik_sigorta" value={form.trafik_sigorta} onChange={handleChange} label="Trafik Sigorta" InputLabelProps={{ shrink: true }} required /></Grid>
+                        <Grid item xs={12} md={4}>
+                            <TextField
+                                fullWidth
+                                type="date"
+                                name="cekici_muayene"
+                                value={form.cekici_muayene}
+                                onChange={handleChange}
+                                label="Çekici Muayene"
+                                InputLabelProps={{ shrink: true }}
+                                required
+                                error={!!formErrors.cekici_muayene}
+                                helperText={formErrors.cekici_muayene || ""}
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                            <TextField
+                                fullWidth type="date" name="dorse_muayene" value={form.dorse_muayene} onChange={handleChange}
+                                label="Dorse Muayene" InputLabelProps={{ shrink: true }} required
+                                error={!!formErrors.dorse_muayene}
+                                helperText={formErrors.dorse_muayene || ""}
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                            <TextField
+                                fullWidth type="date" name="trafik_sigorta" value={form.trafik_sigorta} onChange={handleChange}
+                                label="Trafik Sigorta" InputLabelProps={{ shrink: true }} required
+                                error={!!formErrors.trafik_sigorta}
+                                helperText={formErrors.trafik_sigorta || ""}
+                            />
+                        </Grid>
 
                         <Grid item xs={12} md={4}><TextField fullWidth type="number" name="arac_yil" value={form.arac_yil || ""} onChange={handleChange} label="Araç Yılı" /></Grid>
                         <Grid item xs={12} md={4}><TextField fullWidth type="number" name="dorse_yil" value={form.dorse_yil || ""} onChange={handleChange} label="Dorse Yılı" /></Grid>

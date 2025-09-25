@@ -44,7 +44,7 @@
     "react-scripts": "^5.0.1",
     "react-select": "^5.10.1",
     "react-toastify": "^11.0.5",
-    "recharts": "2.12.7",
+    "recharts": "^2.15.4",
     "reselect": "4.1.8",
     "web-vitals": "^2.1.4",
     "xlsx": "^0.18.5"

@@ -283,7 +283,7 @@ export default function EditorDialog(props) {
                                             label="Teslim Giriş"
                                             value={r.teslim_varis || ""}
                                             onChange={(v) => onDetailChange(i, "teslim_varis", v)}
-                                            baseInputSX={baseInputSX}
+                                            baseInputSX={baseInputSX}NP
                                         />
                                         <DateTimeSingleField
                                             label="Teslim Çıkış"

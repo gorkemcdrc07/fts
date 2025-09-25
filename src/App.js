@@ -34,13 +34,11 @@ import HakedisSeferleri from "./Hakedisler/HakedisSeferleri";
 import KpiOlcumu from "./raporlar/kpiOlcumu";
 import YuklemedeBekleme from "./raporlar/yuklemedeBekleme";
 import ProjeLokasyonRaporlari from "./raporlar/ProjeLokasyonRaporlari";
-import Tools from "./raporlar/tools";
+// Eğer gerçek Tools bileşeniniz varsa üst satırın yorumunu kaldırıp alttaki "ROUTE OK" div'i yerine <Tools /> kullanın
+// import Tools from "./raporlar/tools";
 
 // Layout
 import AppLayout from "./layout/AppLayout";
-
-// Analiz sayfası
-import Analiz from "./planlamaIslemleri/analiz";
 
 // Lazy sayfa (importlardan SONRA tanımla)
 const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler"));
@@ -61,8 +59,8 @@ function App() {
 
                             {/* Planlama */}
                             <Route path="planlama" element={<Planlama />} />
-                            {/* Detay: Analiz */}
-                            <Route path="planlama/analiz" element={<Analiz />} />
+                            {/* Analiz sayfası kaldırıldı: import ve route SİLİNDİ */}
+                            {/* <Route path="planlama/analiz" element={<Analiz />} /> */}
 
                             <Route path="plaka-onerisi" element={<PlakaOnerisi />} />
 
@@ -70,7 +68,7 @@ function App() {
                             <Route
                                 path="seferler"
                                 element={
-                                    <Suspense fallback={null}>
+                                    <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
                                         <ReelAtananSeferler />
                                     </Suspense>
                                 }
@@ -100,7 +98,10 @@ function App() {
                             {/* Raporlar */}
                             <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
                             <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
+                            {/* Tools bileşeniniz yoksa placeholder kullanın */}
                             <Route path="raporlar/tools" element={<div style={{ padding: 24 }}>ROUTE OK</div>} />
+                            {/* Tools bileşeni varsa üst satır yerine şunu kullanın: */}
+                            {/* <Route path="raporlar/tools" element={<Tools />} /> */}
 
                             {/* Varsayılan */}
                             <Route path="*" element={<Navigate to="/anasayfa" replace />} />

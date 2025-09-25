@@ -1,5 +1,5 @@
 // src/kullanıcıIslemleri/Planlama-Deluxe.jsx
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback, Suspense, lazy } from "react";
 import { supabase } from "../supabaseClient";
 import { Helmet } from "react-helmet-async";
 import { useNavigate } from "react-router-dom";
@@ -43,14 +43,41 @@ import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
+/* ---------------- Sefer Detay Panel (lazy) ---------------- */
+// ← Path’i kendi proje yapınıza göre güncelleyin
+const SeferDetayPanel = lazy(() => import("./planlamaDetay/SeferDetayPanel"));
+
 /* ---------------- helpers ---------------- */
 
 // TR uppercase
 const toUpperTr = (s) => (s || "").toLocaleUpperCase("tr-TR").trim();
 const getTodayISO = () => new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+// "YYYY-MM-DD" → "GG.AA.YYYY" çevirir
+// "YYYY-MM-DD" | Date | "GG.AA.YYYY" → "GG.AA.YYYY"
+const formatDateTR = (val) => {
+    if (!val) return "";
+    try {
+        // Excel seri numarası gelirse kabaca Date'e çevir
+        if (typeof val === "number" && window?.XLSX?.SSF?.parse_date_code) {
+            const d = window.XLSX.SSF.parse_date_code(val);
+            const dt = new Date(d.y, (d.m || 1) - 1, d.d || 1);
+            if (!isNaN(dt)) {
+                return dt.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" });
+            }
+        }
+        const d = new Date(val);
+        if (isNaN(d)) return String(val);
+        return d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    } catch {
+        return String(val);
+    }
+};
 
 // Plaka normalize (görsel)
 const normPlaka = (s) => toUpperTr(String(s || "").trim().replace(/\s+/g, " "));
+// "63AEV854-26VR217" -> "63AEV854"
+const primaryPlaka = (s) => normPlaka(String(s || "")).split("-")[0].trim();
+
 
 // Karşılaştırma anahtarı: A-Z0-9 dışında her şeyi at (boşluk, tire vb. kalkar)
 const plakaKey = (s) => toUpperTr(String(s || "")).replace(/[^A-Z0-9]/g, "");
@@ -72,6 +99,7 @@ const normalizeSonNoktaAndRegion = (raw) => {
 
     if (u === "ANTEP") son_nokta = "GAZİANTEP";
     if (u === "URFA") son_nokta = "ŞANLIURFA";
+    if (u === "MARAŞ") son_nokta = "KAHRAMANMARAŞ";
 
     let bolge = "";
     if (u.includes("İSTANBUL AVRUPA")) {
@@ -127,7 +155,7 @@ const ilToBolgeMap = {
     FATİH: "Marmara Bölgesi", GAZİOSMANPAŞA: "Marmara Bölgesi", GÜNGÖREN: "Marmara Bölgesi",
     KAĞITHANE: "Marmara Bölgesi", KÜÇÜKÇEKMECE: "Marmara Bölgesi", SARIYER: "Marmara Bölgesi",
     SİLİVRİ: "Marmara Bölgesi", SULTANGAZİ: "Marmara Bölgesi", ŞİŞLİ: "Marmara Bölgesi",
-    ZEYTİNBURNU: "Marmara Bölgesi",
+    ZEYTİNBURNU: "Marmara Bölgesi", AKSARAY: "İç Anadolu Bölgesi"
 };
 
 // Bölge renklendirme
@@ -198,6 +226,10 @@ export default function PlanlamaDeluxe() {
     // sağ çekmece: hızlı düzenleme
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [activeEditRow, setActiveEditRow] = useState(null);
+
+    // Sefer Detay Panel state
+    const [detayOpen, setDetayOpen] = useState(false);
+    const [detayContext, setDetayContext] = useState(null);
 
     // değişiklik takibi (sticky kaydet barı)
     const lastSavedSnapshot = useRef("[]");
@@ -319,8 +351,9 @@ export default function PlanlamaDeluxe() {
         const enriched = (data || []).map((v, index) => {
             const { son_nokta, bolge } = normalizeSonNoktaAndRegion(v.son_nokta);
             const tarih = v.tarih || getTodayISO();
+            const varis_tarihi = v.varis_tarihi || v.tarih || tarih; // <-- fallback
             const _rowId = v.id ?? v.sefer_no ?? `tmp-${Date.now()}-${index}`;
-            return { ...v, son_nokta, bolge: bolge || v.bolge || "", tarih, _rowId };
+            return { ...v, son_nokta, bolge: bolge || v.bolge || "", tarih, varis_tarihi, _rowId };
         });
 
         setRows(enriched);
@@ -672,12 +705,14 @@ export default function PlanlamaDeluxe() {
         setYeniPlaka({ plaka: "", ad_soyad: "", telefon: "", tc: "" });
         setPlakaDialogOpen(true);
     };
-    const saveYeniPlaka = async () => {
+
+    const saveYeniPlaka = () => {
         const { plaka, ad_soyad, telefon, tc } = yeniPlaka;
         if (!plaka || !ad_soyad || !telefon || !tc) {
             setSnack({ open: true, msg: "Tüm alanlar zorunlu.", severity: "warning" });
             return;
         }
+
         const yeni = {
             sefer_no: "",
             sevk_no: "",
@@ -696,50 +731,19 @@ export default function PlanlamaDeluxe() {
             telefon,
             tc,
         };
+
         const _rowId = `tmp-${Date.now()}`;
-        setRows([{ ...yeni, _rowId }, ...rows]);
+        setRows(prev => [{ ...yeni, _rowId }, ...prev]);
         setPlakaDialogOpen(false);
         setSnack({ open: true, msg: "Yeni satır eklendi (lokal). Kaydet ile yazılır.", severity: "success" });
     };
 
-    /* ---------- Detay: analiz.js çalıştır ---------- */
-    const runAnaliz = useCallback(() => {
-        // İstersen burada grid/filtre bağlamını aktar
-        window.ANALIZ_CONTEXT = {
-            tarih: getTodayISO(),
-            toplamKayit: filteredRows.length,
-        };
 
-        // Daha önce eklenmiş mi?
-        if (document.getElementById("analiz-js-loader")) {
-            try {
-                window.startAnaliz?.();
-                setSnack({ open: true, msg: "analiz.js çalıştırıldı.", severity: "success" });
-            } catch (e) {
-                console.error(e);
-                setSnack({ open: true, msg: "analiz.js çalıştırılamadı.", severity: "error" });
-            }
-            return;
-        }
-
-        const s = document.createElement("script");
-        s.id = "analiz-js-loader";
-        s.src = "/analiz.js"; // public/analiz.js içinde olmalı
-        s.async = true;
-        s.onload = () => {
-            try {
-                window.startAnaliz?.();
-                setSnack({ open: true, msg: "analiz.js yüklendi ve çalıştırıldı.", severity: "success" });
-            } catch (e) {
-                console.error(e);
-                setSnack({ open: true, msg: "analiz.js yüklendi ama çalıştırma hatası.", severity: "error" });
-            }
-        };
-        s.onerror = () => {
-            setSnack({ open: true, msg: "analiz.js yüklenemedi (404/bağlantı).", severity: "error" });
-        };
-        document.body.appendChild(s);
-    }, [filteredRows.length]);
+    /* ---------- Sefer Detay Panelini aç ---------- */
+    const openSeferDetay = useCallback((row) => {
+        setDetayContext(row);
+        setDetayOpen(true);
+    }, []);
 
     /* ---------- bölge sayıları ---------- */
     const bolgeCounts = useMemo(() => {
@@ -767,12 +771,6 @@ export default function PlanlamaDeluxe() {
         return Math.round((filled / keys.length) * 100);
     };
 
-    /* ---------- Detay sayfasına git (varsa) ---------- */
-    const goDetay = useCallback((row) => {
-        const tarih = row?.tarih || getTodayISO();
-        navigate(`/planlama/analiz?tarih=${encodeURIComponent(tarih)}`);
-    }, [navigate]);
-
     /* ---------- DataGrid kolonları ---------- */
     const columns = useMemo(() => {
         const textCol = (field, headerName, width = 160, editable = true, extra = {}) => ({
@@ -793,7 +791,7 @@ export default function PlanlamaDeluxe() {
                 renderCell: (params) => (
                     <Stack direction="row" spacing={1}>
                         <Tooltip title="Detay">
-                            <IconButton size="small" onClick={() => goDetay(params.row)}>
+                            <IconButton size="small" onClick={() => openSeferDetay(params.row)}>
                                 <InfoOutlinedIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
@@ -807,12 +805,18 @@ export default function PlanlamaDeluxe() {
             },
             textCol("sefer_no", "Sefer No", 140),
             textCol("sevk_no", "Sevk No", 140),
-            textCol("tarih", "Tarih", 120),
+            textCol("tarih", "Tarih", 120, true, {
+                renderCell: (params) => <>{formatDateTR(params.row?.tarih)}</>,
+                valueGetter: (_, row) => row?.tarih ?? null,
+            }),
             textCol("plaka", "Plaka", 120, false),
             textCol("ad_soyad", "Ad Soyad", 160, false),
             textCol("telefon", "Telefon", 140, false),
             textCol("tc", "TC", 120, false),
-            textCol("varis_tarihi", "Varış Tarihi", 120),
+            textCol("varis_tarihi", "Varış Tarihi", 120, true, {
+                renderCell: (params) => <>{formatDateTR(params.row?.varis_tarihi)}</>,
+                valueGetter: (_, row) => row?.varis_tarihi ?? null,
+            }),
             textCol("son_nokta", "Son Nokta", 160),
             textCol("fatura_musterisi", "Fatura Müşterisi", 180),
             textCol("yukleme_noktasi", "Yükleme Noktası", 200),
@@ -848,7 +852,7 @@ export default function PlanlamaDeluxe() {
                 ),
             },
         ];
-    }, [goDetay]);
+    }, [openSeferDetay]);
 
     // Kolon sırası
     const orderedColumns = useMemo(() => {
@@ -860,11 +864,22 @@ export default function PlanlamaDeluxe() {
 
     /* ---------- DataGrid edit akışı ---------- */
     const processRowUpdate = useCallback((newRow, oldRow) => {
+        // SON NOKTA -> BÖLGE
         if (newRow.son_nokta !== oldRow.son_nokta) {
             const { son_nokta, bolge } = normalizeSonNoktaAndRegion(newRow.son_nokta);
             newRow.son_nokta = son_nokta;
             newRow.bolge = bolge;
         }
+
+        // "gg.aa.yyyy" girilirse ISO'ya çevir
+        ["tarih", "varis_tarihi"].forEach((k) => {
+            const val = newRow?.[k];
+            if (typeof val === "string" && /\b\d{1,2}\.\d{1,2}\.\d{4}\b/.test(val)) {
+                const iso = parseDateLike(val);
+                if (iso) newRow[k] = iso;
+            }
+        });
+
         return newRow;
     }, []);
 
@@ -979,8 +994,10 @@ export default function PlanlamaDeluxe() {
                         variant="outlined"
                         startIcon={<InfoOutlinedIcon />}
                         onClick={() => {
-                            const today = new Date().toISOString().slice(0, 10);
-                            navigate(`/planlama/analiz?tarih=${encodeURIComponent(today)}`);
+                            // Listedeki ilk (veya seçili) kaydın detayını açalım
+                            const row = filteredRows[0];
+                            if (row) openSeferDetay(row);
+                            else setSnack({ open: true, msg: "Gösterilecek kayıt yok.", severity: "info" });
                         }}
                     >
                         Detay
@@ -1132,7 +1149,12 @@ export default function PlanlamaDeluxe() {
                     hidden
                     onChange={(e) => handleFiles(e.target.files)}
                 />
-                {/* İçe aktar butonu istenmediği için kaldırdık */}
+                <Button
+                    variant="outlined"
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    Dosya İçe Aktar
+                </Button>
             </Paper>
 
             {/* DataGrid */}
@@ -1393,6 +1415,21 @@ export default function PlanlamaDeluxe() {
                     <Typography>Bir satır seçin…</Typography>
                 )}
             </Drawer>
+
+            {/* Sefer Detay Panel (lazy) */}
+            <Suspense fallback={null}>
+                {detayOpen && (
+                    <SeferDetayPanel
+                        open={detayOpen}
+                        onClose={() => setDetayOpen(false)}
+                        /* Projenizde hangi isimle bekleniyorsa onu da gönderin */
+                        sefer={detayContext}
+                        row={detayContext}
+                        data={detayContext}
+                        plaka={primaryPlaka(detayContext?.plaka)}
+                    />
+                )}
+            </Suspense>
 
             {/* Drag & Drop Overlay */}
             {dragActive && (

@@ -235,8 +235,6 @@ function Navbar() {
                 <div className="navbar-left">
                     {/* Yer tutucu veya marka */}
                     <div className="brand">
-                        <span className="brand-dot" />
-                        <span className="brand-text">Görev Paneli</span>
                     </div>
                 </div>
 

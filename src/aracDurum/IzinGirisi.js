@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
 import * as XLSX from "xlsx";
@@ -7,6 +7,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import { useNavigate } from "react-router-dom";
 
+// MUI
 import {
     ThemeProvider,
     createTheme,
@@ -35,21 +36,18 @@ import {
     DialogActions,
     Autocomplete,
     Box,
-    alpha,
+    Badge,
     Card,
     CardContent,
-    Badge,
     LinearProgress,
 } from "@mui/material";
-
+import { alpha } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
 import DownloadIcon from "@mui/icons-material/Download";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CloseIcon from "@mui/icons-material/Close";
-import ViewWeekIcon from "@mui/icons-material/ViewWeek";
-import DensityMediumIcon from "@mui/icons-material/DensityMedium";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ArrowBackIcon from "@mui/icons-material/ArrowBackIosNew";
 import HomeIcon from "@mui/icons-material/HomeOutlined";
@@ -68,43 +66,46 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 
 dayjs.locale("tr");
 
-/* ===================== (YENİ) Ekrana Sığdırma Sarmalayıcısı ===================== */
-// importların hemen altı
-const HOME_PATH = "/anasayfa"; // sizde neyse: "/dashboard" vb.
+/* ===================== Zoom’dan Bağımsız Ekrana Sığdırma (Kesinti ile aynı) ===================== */
+const HOME_PATH = "/anasayfa";
+const BASE_WIDTH = 1920;
+const BASE_HEIGHT = 1080;
+const MAX_SCALE = Infinity;
 
-const BASE_WIDTH = 1750;
-const BASE_HEIGHT = 960;
-function useScaleToFit(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = 1.25) {
+function useContainerScale(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = MAX_SCALE) {
+    const ref = useRef(null);
     const [scale, setScale] = useState(1);
-    useEffect(() => {
-        const compute = () => {
-            const vw = window.innerWidth;
-            const vh = window.innerHeight;
-            const s = Math.min(vw / baseW, vh / baseH, maxScale);
-            setScale(s);
-        };
-        compute();
-        window.addEventListener("resize", compute);
-        const mq = window.matchMedia?.(`(resolution: ${window.devicePixelRatio}dppx)`);
-        const onChange = () => compute();
-        mq?.addEventListener?.("change", onChange);
-        return () => {
-            window.removeEventListener("resize", compute);
-            mq?.removeEventListener?.("change", onChange);
-        };
+
+    useLayoutEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const ro = new ResizeObserver((entries) => {
+            const cr = entries[0].contentRect;
+            const availW = Math.max(0, cr.width);
+            const availH = Math.max(0, cr.height);
+            const s = Math.min(availW / baseW, availH / baseH, maxScale);
+            setScale(Number.isFinite(s) && s > 0 ? s : 1);
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
     }, [baseW, baseH, maxScale]);
-    return scale;
+
+    return [ref, scale];
 }
-function ScaleToFit({ children }: { children: React.ReactNode }) {
-    const scale = useScaleToFit();
+
+function ScaleToFit({ children }) {
+    const [ref, scale] = useContainerScale(BASE_WIDTH, BASE_HEIGHT, MAX_SCALE);
+
     return (
         <Box
+            ref={ref}
             sx={{
-                width: "100dvw",
+                width: "100%",
                 height: "100dvh",
                 overflow: "hidden",
                 display: "grid",
-                placeItems: "center",
+                justifyItems: "start",
+                alignItems: "start",
                 background:
                     "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.15), transparent 40%)," +
                     "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.20), transparent 50%)," +
@@ -117,6 +118,8 @@ function ScaleToFit({ children }: { children: React.ReactNode }) {
                     height: `${BASE_HEIGHT}px`,
                     transform: `scale(${scale})`,
                     transformOrigin: "top left",
+                    overflow: "hidden",
+                    transition: "transform 150ms",
                 }}
             >
                 {children}
@@ -125,7 +128,7 @@ function ScaleToFit({ children }: { children: React.ReactNode }) {
     );
 }
 
-/* ===================== Türkçe grid metinleri ===================== */
+/* ===================== DataGrid TR ===================== */
 const GRID_TR = {
     noRowsLabel: "Kayıt bulunmuyor",
     noResultsOverlayLabel: "Sonuç bulunamadı",
@@ -165,8 +168,8 @@ const BOS_FORM = {
     aciklama: "",
 };
 const IZIN_TURLERI = ["İzin", "Bakım İzni", "Mazeret İzni"];
-const getMevcutKullanici = () =>
-    localStorage.getItem("kullanici") || "Bilinmeyen Kullanıcı";
+
+const getMevcutKullanici = () => localStorage.getItem("kullanici") || "Bilinmeyen Kullanıcı";
 
 const hesaplaGunSayisi = (baslangicStr, bitisStr) => {
     if (!baslangicStr || !bitisStr) return 0;
@@ -174,12 +177,12 @@ const hesaplaGunSayisi = (baslangicStr, bitisStr) => {
     const d2 = new Date(bitisStr);
     d1.setHours(0, 0, 0, 0);
     d2.setHours(0, 0, 0, 0);
-    const fark = (d2 - d1) / (1000 * 60 * 60 * 24);
+    const fark = (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24);
     return fark > 0 ? fark : 0;
 };
+
 // DataGrid güvenli yardımcılar
-const safeGetVal = (arg) =>
-    arg && typeof arg === "object" && "value" in arg ? arg.value : arg;
+const safeGetVal = (arg) => (arg && typeof arg === "object" && "value" in arg ? arg.value : arg);
 const safeDateValueGetter = (arg) => {
     const v = safeGetVal(arg);
     if (!v) return null;
@@ -194,7 +197,7 @@ const safeDateValueFormatter = (arg) => {
     return d.isValid() ? d.format("DD.MM.YYYY") : "-";
 };
 
-/* ===================== Tema (gelişmiş, modern) ===================== */
+/* ===================== Tema (Kesinti ile aynı) ===================== */
 const theme = createTheme({
     palette: {
         mode: "dark",
@@ -206,15 +209,11 @@ const theme = createTheme({
     },
     shape: { borderRadius: 16 },
     typography: {
-        fontFamily:
-            'Inter, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-        h4: { fontWeight: 800, letterSpacing: 0.2 },
+        fontFamily: 'Inter, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         button: { textTransform: "none", fontWeight: 700 },
     },
     components: {
-        MuiPaper: {
-            styleOverrides: { root: { backgroundImage: "none" } },
-        },
+        MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
         MuiButton: {
             styleOverrides: {
                 root: {
@@ -229,11 +228,9 @@ const theme = createTheme({
                 paper: {
                     background:
                         "linear-gradient(180deg, rgba(10,16,30,0.95) 0%, rgba(10,16,30,0.85) 100%)",
-                    boxShadow:
-                        "0 10px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)",
+                    boxShadow: "0 10px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)",
                     backdropFilter: "blur(10px)",
                     border: "1px solid rgba(255,255,255,0.06)",
-                    maxHeight: "90dvh",
                 },
             },
         },
@@ -244,7 +241,7 @@ const theme = createTheme({
     },
 });
 
-/* ============= Özelleştirilmiş Toolbar ============= */
+/* ============= Toolbar (Kesinti ile aynı görünüm) ============= */
 function CustomToolbar({ onRefresh, onExport, onFilters }) {
     return (
         <GridToolbarContainer
@@ -257,40 +254,24 @@ function CustomToolbar({ onRefresh, onExport, onFilters }) {
                 zIndex: 1,
                 background:
                     "linear-gradient(180deg, rgba(15,23,42,0.9) 0%, rgba(15,23,42,0.6) 100%)",
-                backdropFilter: "blur(6px)",
                 borderBottom: "1px solid rgba(255,255,255,0.08)",
+                backdropFilter: "blur(6px)",
             }}
         >
-            <GridToolbarColumnsButton startIcon={<ViewWeekIcon />} />
-            <GridToolbarDensitySelector startIcon={<DensityMediumIcon />} />
+            <GridToolbarColumnsButton />
+            <GridToolbarDensitySelector />
             <Box sx={{ flexGrow: 1 }} />
-            <GridToolbarQuickFilter
-                debounceMs={300}
-                quickFilterParser={(v) =>
-                    v
-                        .split(",")
-                        .map((s) => s.trim())
-                        .filter(Boolean)
-                }
-                sx={{
-                    "& .MuiInputBase-root": {
-                        borderRadius: 2,
-                        backgroundColor: alpha("#ffffff", 0.04),
-                    },
-                }}
-            />
+            <GridToolbarQuickFilter debounceMs={300} />
             <Tooltip title="Filtreler">
                 <IconButton onClick={onFilters}>
                     <FilterListIcon />
                 </IconButton>
             </Tooltip>
-            <Tooltip title="Yenile">
-                <IconButton onClick={onRefresh}>
-                    <RefreshIcon />
-                </IconButton>
-            </Tooltip>
             <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExport}>
                 Excel
+            </Button>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={onRefresh}>
+                Yenile
             </Button>
         </GridToolbarContainer>
     );
@@ -314,7 +295,7 @@ export default function IzinGirisiModern() {
     const [filtreDrawer, setFiltreDrawer] = useState(false);
 
     // form
-    const [form, setForm] = useState(BOS_FORM);
+    const [form, setForm] = useState({ ...BOS_FORM });
     const [formOpen, setFormOpen] = useState(false);
     const [duzenlemeId, setDuzenlemeId] = useState(null);
 
@@ -338,8 +319,6 @@ export default function IzinGirisiModern() {
         eklenme_tarihi: "",
     });
 
-    const [mevcutAylar, setMevcutAylar] = useState([]);
-
     const openSnack = (msg, severity = "success") =>
         setSnack({ open: true, msg, severity });
 
@@ -350,30 +329,14 @@ export default function IzinGirisiModern() {
     }, []);
 
     useEffect(() => {
-        const uniq = new Set(
-            izinler
-                .filter((i) => i.baslangic_tarihi)
-                .map((i) => dayjs(i.baslangic_tarihi).format("YYYY-MM"))
-        );
-        const list = Array.from(uniq).map((ym) => ({
-            value: ym,
-            label: dayjs(ym + "-01").format("MMMM YYYY"),
-        }));
-        setMevcutAylar(list);
-    }, [izinler]);
-
-    useEffect(() => {
         if (formSubmitBekliyor) {
             setFormSubmitBekliyor(false);
             handleSubmit();
         }
     }, [formSubmitBekliyor]);
 
-    /* ===================== Derived UI Counts ===================== */
+    /* ===================== KPI ===================== */
     const toplamKayit = izinler.length;
-    const eksikKayit = izinler.filter(
-        (r) => !r.yukleme_tarihi || !r.is_basi_tarihi
-    ).length;
     const buAy = izinler.filter(
         (r) => r.baslangic_tarihi && dayjs(r.baslangic_tarihi).isSame(dayjs(), "month")
     ).length;
@@ -388,21 +351,11 @@ export default function IzinGirisiModern() {
         if (!error) {
             const cleaned = (data || []).map((r) => ({
                 ...r,
-                baslangic_tarihi: r["baslangic_tarihi"]
-                    ? String(r["baslangic_tarihi"]).slice(0, 10)
-                    : null,
-                bitis_tarihi: r["bitis_tarihi"]
-                    ? String(r["bitis_tarihi"]).slice(0, 10)
-                    : null,
-                is_basi_tarihi: r["is_basi_tarihi"]
-                    ? String(r["is_basi_tarihi"]).slice(0, 10)
-                    : null,
-                yukleme_tarihi: r["yukleme_tarihi"]
-                    ? String(r["yukleme_tarihi"]).slice(0, 10)
-                    : null,
-                eklenme_tarihi: r["eklenme_tarihi"]
-                    ? String(r["eklenme_tarihi"]).slice(0, 10)
-                    : null,
+                baslangic_tarihi: r["baslangic_tarihi"] ? String(r["baslangic_tarihi"]).slice(0, 10) : null,
+                bitis_tarihi: r["bitis_tarihi"] ? String(r["bitis_tarihi"]).slice(0, 10) : null,
+                is_basi_tarihi: r["is_basi_tarihi"] ? String(r["is_basi_tarihi"]).slice(0, 10) : null,
+                yukleme_tarihi: r["yukleme_tarihi"] ? String(r["yukleme_tarihi"]).slice(0, 10) : null,
+                eklenme_tarihi: r["eklenme_tarihi"] ? String(r["eklenme_tarihi"]).slice(0, 10) : null,
             }));
             setIzinler(cleaned);
         } else {
@@ -439,14 +392,12 @@ export default function IzinGirisiModern() {
     };
 
     const handlePlakaSecimi = (value) => {
-        const secilen = plakaListesi.find(
-            (p) => `${p.plaka} - ${p.treyler}` === value
-        );
+        const secilen = plakaListesi.find((p) => `${p.plaka} - ${p.treyler}` === value);
 
         if (secilen) {
             setForm((prev) => ({
                 ...prev,
-                plaka_treyler: value,
+                plaka_treyler: value || "",
                 surucu_adi: secilen.surucu_adi || "",
                 surucu_telefon: secilen.surucu_telefon || "",
                 surucu_tc: secilen.surucu_tc || "",
@@ -457,7 +408,7 @@ export default function IzinGirisiModern() {
     };
 
     const handleYeniIzin = () => {
-        setForm(BOS_FORM);
+        setForm({ ...BOS_FORM });
         setDuzenlemeId(null);
         setFormOpen(true);
     };
@@ -522,15 +473,13 @@ export default function IzinGirisiModern() {
         const yukleme = form.yukleme_tarihi ? new Date(form.yukleme_tarihi) : null;
         const isBasi = form.is_basi_tarihi ? new Date(form.is_basi_tarihi) : null;
         if (!yukleme || !isBasi) return false;
-        const farkGun = Math.ceil((yukleme - isBasi) / (1000 * 60 * 60 * 24));
+        const farkGun = Math.ceil((yukleme.getTime() - isBasi.getTime()) / (1000 * 60 * 60 * 24));
         return farkGun > 0;
     };
 
-    // >>> GÜNCELLENDİ: gün/aylık izin sınırı kontrolleri kaldırıldı
     const handleSubmit = async () => {
         const kullanici = getMevcutKullanici();
 
-        // Eğer yükleme tarihi iş başından sonra ise, kesinti diyalogunu göster
         if (kesintiGerekirMi() && !formSubmitBekliyor) {
             setKesintiOpen(true);
             return;
@@ -557,13 +506,12 @@ export default function IzinGirisiModern() {
             return;
         }
 
-        // Kesinti kaydı gerekiyorsa oluştur
         const yukleme = form.yukleme_tarihi ? new Date(form.yukleme_tarihi) : null;
         const isBasi = form.is_basi_tarihi ? new Date(form.is_basi_tarihi) : null;
         if (kesintiBilgisi.neden && kesintiBilgisi.tur && isBasi && yukleme) {
             const kesintiGunSayisi = Math.max(
                 0,
-                Math.ceil((yukleme - isBasi) / (1000 * 60 * 60 * 24))
+                Math.ceil((yukleme.getTime() - isBasi.getTime()) / (1000 * 60 * 60 * 24))
             );
 
             await supabase
@@ -589,7 +537,7 @@ export default function IzinGirisiModern() {
         }
 
         openSnack(duzenlemeId ? "Kayıt güncellendi." : "Kayıt eklendi.");
-        setForm(BOS_FORM);
+        setForm({ ...BOS_FORM });
         setDuzenlemeId(null);
         setKesintiBilgisi({ neden: "", tur: "" });
         setKesintiOpen(false);
@@ -607,24 +555,14 @@ export default function IzinGirisiModern() {
             PLAKA: i.plaka_treyler,
             SÜRÜCÜ: i.surucu_adi,
             "İZİN TÜRÜ": i.izin_turu,
-            BAŞLANGIÇ: i.baslangic_tarihi
-                ? dayjs(i.baslangic_tarihi).format("DD.MM.YYYY")
-                : "-",
-            BİTİŞ: i["bitis_tarihi"]
-                ? dayjs(i["bitis_tarihi"]).format("DD.MM.YYYY")
-                : "-",
-            "İŞ BAŞI TARİHİ": i.is_basi_tarihi
-                ? dayjs(i.is_basi_tarihi).format("DD.MM.YYYY")
-                : "-",
-            "YÜKLEME TARİHİ": i.yukleme_tarihi
-                ? dayjs(i.yukleme_tarihi).format("DD.MM.YYYY")
-                : "-",
+            BAŞLANGIÇ: i.baslangic_tarihi ? dayjs(i.baslangic_tarihi).format("DD.MM.YYYY") : "-",
+            BİTİŞ: i["bitis_tarihi"] ? dayjs(i["bitis_tarihi"]).format("DD.MM.YYYY") : "-",
+            "İŞ BAŞI TARİHİ": i.is_basi_tarihi ? dayjs(i.is_basi_tarihi).format("DD.MM.YYYY") : "-",
+            "YÜKLEME TARİHİ": i.yukleme_tarihi ? dayjs(i.yukleme_tarihi).format("DD.MM.YYYY") : "-",
             "TOPLAM GÜN": i.gun_sayisi,
             AÇIKLAMA: i.aciklama,
             "İZİN VEREN": i.ekleyen_kullanici,
-            "İZİN VERİLEN TARİH": i.eklenme_tarihi
-                ? dayjs(i.eklenme_tarihi).format("DD.MM.YYYY")
-                : "-",
+            "İZİN VERİLEN TARİH": i.eklenme_tarihi ? dayjs(i.eklenme_tarihi).format("DD.MM.YYYY") : "-",
         }));
 
         const ws = XLSX.utils.json_to_sheet(worksheetData);
@@ -637,15 +575,13 @@ export default function IzinGirisiModern() {
     /* ===================== Filtering ===================== */
     const filtrelenmisIzinler = useMemo(() => {
         const matches = (item, key, val) =>
-            val === "" ||
-            String(item[key] || "").toLowerCase().includes(String(val).toLowerCase());
+            val === "" || String(item[key] || "").toLowerCase().includes(String(val).toLowerCase());
 
         return izinler.filter((i) => {
             const ayOk =
                 !filtreler.baslangic_tarihi ||
                 (i.baslangic_tarihi &&
-                    dayjs(i.baslangic_tarihi).format("YYYY-MM") ===
-                    filtreler.baslangic_tarihi);
+                    dayjs(i.baslangic_tarihi).format("YYYY-MM") === filtreler.baslangic_tarihi);
 
             const diger =
                 matches(i, "plaka_treyler", filtreler.plaka_treyler) &&
@@ -654,8 +590,7 @@ export default function IzinGirisiModern() {
                 matches(i, "bitis_tarihi", filtreler.bitis_tarihi) &&
                 matches(i, "is_basi_tarihi", filtreler.is_basi_tarihi) &&
                 matches(i, "yukleme_tarihi", filtreler.yukleme_tarihi) &&
-                (filtreler.gun_sayisi === "" ||
-                    Number(i.gun_sayisi) === Number(filtreler.gun_sayisi)) &&
+                (filtreler.gun_sayisi === "" || Number(i.gun_sayisi) === Number(filtreler.gun_sayisi)) &&
                 matches(i, "aciklama", filtreler.aciklama) &&
                 matches(i, "ekleyen_kullanici", filtreler.ekleyen_kullanici) &&
                 matches(i, "eklenme_tarihi", filtreler.eklenme_tarihi);
@@ -740,11 +675,7 @@ export default function IzinGirisiModern() {
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Sil">
-                        <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => handleSil(params.row.id)}
-                        >
+                        <IconButton size="small" color="error" onClick={() => handleSil(params.row.id)}>
                             <DeleteIcon fontSize="inherit" />
                         </IconButton>
                     </Tooltip>
@@ -759,181 +690,159 @@ export default function IzinGirisiModern() {
             <CssBaseline />
             <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <ScaleToFit>
-                    <Helmet>
-                        <title>İZİN GİRİŞLERİ</title>
-                    </Helmet>
-
                     <Container
                         maxWidth={false}
                         disableGutters
-                        sx={{
-                            height: "100%",
-                            p: 2,
-                            boxSizing: "border-box",
-                            background: "transparent",
-                            display: "flex",
-                            flexDirection: "column",
-                            minHeight: 0,
-                        }}
+                        sx={{ width: 1920, height: 1080, mx: "auto", p: 2, boxSizing: "border-box" }}
                     >
-                        <Stack
-                            direction={{ xs: "column", md: "row" }}
-                            alignItems={{ xs: "flex-start", md: "center" }}
-                            justifyContent="space-between"
-                            gap={2}
-                            sx={{ flexShrink: 0 }}
-                        >
-                            <Stack>
-                                <Typography
-                                    variant="h4"
-                                    fontWeight={800}
-                                    sx={{
-                                        background: "linear-gradient(90deg,#E879F9,#22D3EE)",
-                                        WebkitBackgroundClip: "text",
-                                        WebkitTextFillColor: "transparent",
-                                    }}
-                                >
-                                    İzin Girişleri
-                                </Typography>
-                            </Stack>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                                {/* EKLENDİ: Geri & Anasayfa */}
-                                <Button
-                                    variant="text"
-                                    startIcon={<ArrowBackIcon />}
-                                    onClick={() => navigate(-1)}
-                                >
-                                    Geri
-                                </Button>
-                                <Button
-                                    variant="text"
-                                 startIcon={<HomeIcon />}
-                                 onClick={() => navigate(HOME_PATH)} >
-                                Anasayfa
-                            </Button>
-                                <Button
-                                    variant="outlined"
-                                    startIcon={<FilterListIcon />}
-                                    onClick={() => setFiltreDrawer(true)}
-                                >
-                                    Filtreler
-                                </Button>
-                                <Button
-                                    variant="outlined"
-                                    startIcon={<DownloadIcon />}
-                                    onClick={exportToExcel}
-                                >
-                                    Excel'e Aktar
-                                </Button>
-                                <Button
-                                    variant="contained"
-                                    startIcon={<AddIcon />}
-                                    onClick={handleYeniIzin}
-                                >
-                                    Yeni İzin
-                                </Button>
-                            </Stack>
-                        </Stack>
+                        <Helmet>
+                            <title>İZİN GİRİŞLERİ</title>
+                        </Helmet>
 
-                        <Grid container spacing={2} sx={{ flexShrink: 0, mt: 1 }}>
-                            {[
-                                { label: "Toplam Kayıt", value: toplamKayit, color: "primary" },
-                                { label: "Bu Ay", value: buAy, color: "secondary" },
-                                { label: "Eksik Bilgili", value: eksikKayit, color: "error" },
-                            ].map((kpi, idx) => (
-                                <Grid item xs={12} sm={6} md={4} key={idx}>
-                                    <Card
+                        <Stack spacing={2} sx={{ height: "100%", minHeight: 0 }}>
+                            {/* Header + Actions */}
+                            <Stack
+                                direction={{ xs: "column", md: "row" }}
+                                alignItems={{ xs: "flex-start", md: "center" }}
+                                justifyContent="space-between"
+                                gap={2}
+                                sx={{ mb: 1.5 }}
+                            >
+                                <Stack>
+                                    <Typography
+                                        variant="h4"
+                                        fontWeight={800}
                                         sx={{
-                                            borderRadius: 3,
-                                            minWidth: 220,
-                                            background: `linear-gradient(180deg, ${alpha(
-                                                "#ffffff",
-                                                0.04
-                                            )} 0%, ${alpha("#ffffff", 0.02)} 100%)`,
-                                            border: "1px solid rgba(255,255,255,0.06)",
+                                            background: "linear-gradient(90deg,#E879F9,#22D3EE)",
+                                            WebkitBackgroundClip: "text",
+                                            WebkitTextFillColor: "transparent",
                                         }}
                                     >
-                                        <CardContent>
-                                            <Stack
-                                                direction="row"
-                                                alignItems="center"
-                                                justifyContent="space-between"
-                                            >
-                                                <Typography variant="subtitle2" color="text.secondary">
-                                                    {kpi.label}
+                                        İzin Girişleri
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                        Kayıtları yönetin, filtreleyin ve dışa aktarın.
+                                    </Typography>
+                                </Stack>
+
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
+                                        Geri
+                                    </Button>
+                                    <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
+                                        Anasayfa
+                                    </Button>
+                                    <Button variant="outlined" startIcon={<FilterListIcon />} onClick={() => setFiltreDrawer(true)}>
+                                        Filtreler
+                                    </Button>
+                                    <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportToExcel}>
+                                        Excel'e Aktar
+                                    </Button>
+                                    <Button variant="contained" startIcon={<AddIcon />} onClick={handleYeniIzin}>
+                                        Yeni İzin
+                                    </Button>
+                                </Stack>
+                            </Stack>
+
+                            {/* KPI Cards */}
+                            <Grid container spacing={2}>
+                                {[
+                                    { label: "Toplam Kayıt", value: toplamKayit, color: "primary" },
+                                    { label: "Bu Ay", value: buAy, color: "secondary" },
+                                ].map((kpi, idx) => (
+                                    <Grid item xs={12} sm={6} md={3} key={idx}>
+                                        <Card
+                                            sx={{
+                                                borderRadius: 3,
+                                                background: `linear-gradient(180deg, ${alpha("#ffffff", 0.04)} 0%, ${alpha(
+                                                    "#ffffff",
+                                                    0.02
+                                                )} 100%)`,
+                                                border: "1px solid rgba(255,255,255,0.06)",
+                                                height: "100%",
+                                                minWidth: 220,
+                                            }}
+                                        >
+                                            <CardContent>
+                                                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                                                    <Typography variant="subtitle2" color="text.secondary">
+                                                        {kpi.label}
+                                                    </Typography>
+                                                    <Badge color={kpi.color} variant="dot" overlap="circular" />
+                                                </Stack>
+                                                <Typography variant="h4" mt={0.5} fontWeight={800}>
+                                                    {kpi.value}
                                                 </Typography>
-                                                <Badge color={kpi.color} variant="dot" overlap="circular" />
-                                            </Stack>
-                                            <Typography variant="h4" mt={0.5} fontWeight={800}>
-                                                {kpi.value}
-                                            </Typography>
-                                            <LinearProgress
-                                                sx={{ mt: 2, height: 6, borderRadius: 3 }}
-                                                color={kpi.color}
-                                                variant="determinate"
-                                                value={100}
-                                            />
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                            ))}
-                        </Grid>
+                                                <LinearProgress sx={{ mt: 2, height: 6, borderRadius: 3 }} color={kpi.color} variant="determinate" value={100} />
+                                            </CardContent>
+                                        </Card>
+                                    </Grid>
+                                ))}
+                            </Grid>
 
-                        <Box sx={{ flexShrink: 0, mt: 2 }}>
-                            <Paper
-                                sx={{
-                                    height: "65vh",
-                                    borderRadius: 3,
-                                    overflow: "hidden",
-                                    border: "1px solid rgba(255,255,255,0.06)",
-                                }}
-                            >
-                                {loading && <LinearProgress />}
-                                <DataGrid
-                                    style={{ height: "100%" }}
-                                    rows={filtrelenmisIzinler}
-                                    columns={columns}
-                                    getRowId={(r) => r.id}
-                                    loading={loading}
-                                    disableRowSelectionOnClick
-                                    pagination={false}
-                                    hideFooter
-                                    density="compact"
-                                    rowHeight={44}
-                                    columnHeaderHeight={44}
-                                    localeText={GRID_TR}
-                                    slots={{
-                                        toolbar: () => (
-                                            <CustomToolbar
-                                                onRefresh={verileriGetir}
-                                                onExport={exportToExcel}
-                                                onFilters={() => setFiltreDrawer(true)}
-                                            />
-                                        ),
-                                    }}
+                            {/* Grid */}
+                            <Box sx={{ mt: 2 }}>
+                                <Paper
                                     sx={{
-                                        border: "none",
-                                        "& .MuiDataGrid-columnHeaders": {
-                                            background:
-                                                "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
-                                            color: "#C8D1E6",
-                                            borderBottomColor: "rgba(255,255,255,0.08)",
-                                            fontWeight: 700,
-                                        },
-                                        "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": {
-                                            backgroundColor: "rgba(255,255,255,0.02)",
-                                        },
-                                        "& .MuiDataGrid-cell": {
-                                            borderBottomColor: "rgba(255,255,255,0.06)",
-                                        },
-                                        "& .MuiDataGrid-row:hover .MuiDataGrid-cell": {
-                                            backgroundColor: "rgba(139,92,246,0.10)",
-                                        },
+                                        height: 710,
+                                        borderRadius: 3,
+                                        border: "1px solid rgba(255,255,255,0.06)",
                                     }}
-                                />
-                            </Paper>
-                        </Box>
+                                >
+                                    {loading && <LinearProgress />}
 
+                                    <Box sx={{ height: "100%", overflow: "auto", pb: 1 }}>
+                                        <DataGrid
+                                            style={{ height: "100%" }}
+                                            rows={filtrelenmisIzinler}
+                                            columns={columns}
+                                            getRowId={(r) => r.id}
+                                            loading={loading}
+                                            disableRowSelectionOnClick
+                                            pagination={false}
+                                            hideFooter
+                                            density="compact"
+                                            rowHeight={44}
+                                            columnHeaderHeight={86}
+                                            localeText={GRID_TR}
+                                            slots={{
+                                                toolbar: () => (
+                                                    <CustomToolbar
+                                                        onFilters={() => setFiltreDrawer(true)}
+                                                        onExport={exportToExcel}
+                                                        onRefresh={verileriGetir}
+                                                    />
+                                                ),
+                                            }}
+                                            sx={{
+                                                border: "none",
+                                                pb: 0.5,
+                                                "& .MuiDataGrid-columnHeaders": {
+                                                    background:
+                                                        "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
+                                                    color: "#C8D1E6",
+                                                    borderBottomColor: "rgba(255,255,255,0.08)",
+                                                    fontWeight: 700,
+                                                    alignItems: "stretch",
+                                                },
+                                                "& .MuiDataGrid-columnHeader": { py: 0.5 },
+                                                "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": {
+                                                    backgroundColor: "rgba(255,255,255,0.02)",
+                                                },
+                                                "& .MuiDataGrid-cell": {
+                                                    borderBottomColor: "rgba(255,255,255,0.06)",
+                                                },
+                                                "& .MuiDataGrid-row:hover .MuiDataGrid-cell": {
+                                                    backgroundColor: "rgba(139,92,246,0.10)",
+                                                },
+                                            }}
+                                        />
+                                    </Box>
+                                </Paper>
+                            </Box>
+                        </Stack>
+
+                        {/* Filtre Drawer */}
                         <Drawer
                             anchor="right"
                             open={filtreDrawer}
@@ -950,11 +859,7 @@ export default function IzinGirisiModern() {
                                 },
                             }}
                         >
-                            <Stack
-                                direction="row"
-                                alignItems="center"
-                                justifyContent="space-between"
-                            >
+                            <Stack direction="row" alignItems="center" justifyContent="space-between">
                                 <Typography variant="h6">Detaylı Filtreler</Typography>
                                 <IconButton onClick={() => setFiltreDrawer(false)}>
                                     <CloseIcon />
@@ -967,23 +872,15 @@ export default function IzinGirisiModern() {
                                     freeSolo
                                     options={plakaListesi.map((p) => `${p.plaka} - ${p.treyler}`)}
                                     value={filtreler.plaka_treyler}
-                                    onChange={(_, v) =>
-                                        setFiltreler((p) => ({ ...p, plaka_treyler: v || "" }))
-                                    }
-                                    onInputChange={(_, v) =>
-                                        setFiltreler((p) => ({ ...p, plaka_treyler: v || "" }))
-                                    }
-                                    renderInput={(params) => (
-                                        <TextField {...params} label="Plaka - Treyler" fullWidth />
-                                    )}
+                                    onChange={(_, v) => setFiltreler((p) => ({ ...p, plaka_treyler: v || "" }))}
+                                    onInputChange={(_, v) => setFiltreler((p) => ({ ...p, plaka_treyler: v || "" }))}
+                                    renderInput={(params) => <TextField {...params} label="Plaka - Treyler" fullWidth />}
                                 />
 
                                 <TextField
                                     label="Sürücü"
                                     value={filtreler.surucu_adi}
-                                    onChange={(e) =>
-                                        setFiltreler((p) => ({ ...p, surucu_adi: e.target.value }))
-                                    }
+                                    onChange={(e) => setFiltreler((p) => ({ ...p, surucu_adi: e.target.value }))}
                                     fullWidth
                                 />
 
@@ -991,39 +888,23 @@ export default function IzinGirisiModern() {
                                     freeSolo
                                     options={IZIN_TURLERI}
                                     value={filtreler.izin_turu}
-                                    onChange={(_, v) =>
-                                        setFiltreler((p) => ({ ...p, izin_turu: v || "" }))
-                                    }
-                                    onInputChange={(_, v) =>
-                                        setFiltreler((p) => ({ ...p, izin_turu: v || "" }))
-                                    }
-                                    renderInput={(params) => (
-                                        <TextField {...params} label="İzin Türü" fullWidth />
-                                    )}
+                                    onChange={(_, v) => setFiltreler((p) => ({ ...p, izin_turu: v || "" }))}
+                                    onInputChange={(_, v) => setFiltreler((p) => ({ ...p, izin_turu: v || "" }))}
+                                    renderInput={(params) => <TextField {...params} label="İzin Türü" fullWidth />}
                                 />
 
-                                <FormControl fullWidth>
-                                    <InputLabel>Başlangıç (Ay)</InputLabel>
-                                    <Select
-                                        label="Başlangıç (Ay)"
-                                        value={filtreler.baslangic_tarihi}
-                                        onChange={(e) =>
-                                            setFiltreler((p) => ({
-                                                ...p,
-                                                baslangic_tarihi: e.target.value,
-                                            }))
-                                        }
-                                    >
-                                        <MenuItem value="">(Hepsi)</MenuItem>
-                                        {mevcutAylar
-                                            .sort((a, b) => a.value.localeCompare(b.value))
-                                            .map((ay, idx) => (
-                                                <MenuItem key={idx} value={ay.value}>
-                                                    {ay.label}
-                                                </MenuItem>
-                                            ))}
-                                    </Select>
-                                </FormControl>
+                                <DatePicker
+                                    label="Başlangıç (Ay)"
+                                    views={["year", "month"]}
+                                    value={filtreler.baslangic_tarihi ? dayjs(filtreler.baslangic_tarihi) : null}
+                                    onChange={(d) =>
+                                        setFiltreler((p) => ({
+                                            ...p,
+                                            baslangic_tarihi: d ? dayjs(d).format("YYYY-MM") : "",
+                                        }))
+                                    }
+                                    slotProps={{ textField: { fullWidth: true } }}
+                                />
 
                                 <DatePicker
                                     label="Bitiş Tarihi"
@@ -1039,9 +920,7 @@ export default function IzinGirisiModern() {
 
                                 <DatePicker
                                     label="İş Başı Tarihi"
-                                    value={
-                                        filtreler.is_basi_tarihi ? dayjs(filtreler.is_basi_tarihi) : null
-                                    }
+                                    value={filtreler.is_basi_tarihi ? dayjs(filtreler.is_basi_tarihi) : null}
                                     onChange={(d) =>
                                         setFiltreler((p) => ({
                                             ...p,
@@ -1053,9 +932,7 @@ export default function IzinGirisiModern() {
 
                                 <DatePicker
                                     label="Yükleme Tarihi"
-                                    value={
-                                        filtreler.yukleme_tarihi ? dayjs(filtreler.yukleme_tarihi) : null
-                                    }
+                                    value={filtreler.yukleme_tarihi ? dayjs(filtreler.yukleme_tarihi) : null}
                                     onChange={(d) =>
                                         setFiltreler((p) => ({
                                             ...p,
@@ -1069,17 +946,13 @@ export default function IzinGirisiModern() {
                                     label="Toplam Gün"
                                     type="number"
                                     value={filtreler.gun_sayisi}
-                                    onChange={(e) =>
-                                        setFiltreler((p) => ({ ...p, gun_sayisi: e.target.value }))
-                                    }
+                                    onChange={(e) => setFiltreler((p) => ({ ...p, gun_sayisi: e.target.value }))}
                                     fullWidth
                                 />
                                 <TextField
                                     label="Açıklama"
                                     value={filtreler.aciklama}
-                                    onChange={(e) =>
-                                        setFiltreler((p) => ({ ...p, aciklama: e.target.value }))
-                                    }
+                                    onChange={(e) => setFiltreler((p) => ({ ...p, aciklama: e.target.value }))}
                                     fullWidth
                                 />
                                 <TextField
@@ -1117,29 +990,22 @@ export default function IzinGirisiModern() {
                                     >
                                         Temizle
                                     </Button>
-                                    <Button
-                                        fullWidth
-                                        variant="contained"
-                                        onClick={() => setFiltreDrawer(false)}
-                                    >
+                                    <Button fullWidth variant="contained" onClick={() => setFiltreDrawer(false)}>
                                         Uygula
                                     </Button>
                                 </Stack>
                             </Stack>
                         </Drawer>
 
+                        {/* Form Dialog */}
                         <Dialog
                             open={formOpen}
                             onClose={() => setFormOpen(false)}
-                            maxWidth="md"
+                            maxWidth="xl"
                             fullWidth
                         >
                             <DialogTitle sx={{ pb: 0 }}>
-                                <Stack
-                                    direction="row"
-                                    alignItems="center"
-                                    justifyContent="space-between"
-                                >
+                                <Stack direction="row" alignItems="center" justifyContent="space-between">
                                     <Stack>
                                         <Typography variant="h6" fontWeight={800}>
                                             {duzenlemeId ? "Kaydı Düzenle" : "Yeni İzin"}
@@ -1157,173 +1023,133 @@ export default function IzinGirisiModern() {
                             <DialogContent
                                 dividers
                                 sx={{
-                                    mt: 1,
+                                    mt: 2,
                                     borderTop: "1px solid rgba(255,255,255,0.06)",
+                                    display: "grid",
+                                    gap: 3,
+                                    gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
+                                    p: 3,
                                 }}
                             >
-                                <Grid container spacing={2.2}>
-                                    <Grid item xs={12} md={6}>
-                                        <Autocomplete
-                                            size="small"
-                                            freeSolo
-                                            autoSelect
-                                            options={plakaListesi.map((p) => `${p.plaka} - ${p.treyler}`)}
-                                            value={form.plaka_treyler}
-                                            onChange={(_, v) => handlePlakaSecimi(v || "")}
-                                            onInputChange={(_, v) => handlePlakaSecimi(v || "")}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="Plaka - Treyler"
-                                                    fullWidth
-                                                    required
-                                                    helperText="Araç plaka ve treyler"
-                                                />
-                                            )}
-                                        />
-                                    </Grid>
-
-                                    <Grid item xs={12} md={6}>
+                                <Autocomplete
+                                    size="small"
+                                    freeSolo
+                                    autoSelect
+                                    options={plakaListesi.map((p) => `${p.plaka} - ${p.treyler}`)}
+                                    value={form.plaka_treyler}
+                                    onChange={(_, v) => handlePlakaSecimi(v || "")}
+                                    onInputChange={(_, v) => handlePlakaSecimi(v || "")}
+                                    renderInput={(params) => (
                                         <TextField
-                                            size="small"
-                                            label="Sürücü Adı"
-                                            placeholder="Ad Soyad"
-                                            value={form.surucu_adi}
-                                            onChange={(e) => handleFormChange("surucu_adi", e.target.value)}
+                                            {...params}
+                                            label="Plaka - Treyler *"
                                             fullWidth
+                                            required
+                                            helperText="Araç plaka ve treyler"
                                         />
-                                    </Grid>
+                                    )}
+                                    sx={{ gridColumn: { xs: "1", md: "1 / span 2" } }}
+                                />
 
-                                    <Grid item xs={12} md={4}>
-                                        <Autocomplete
-                                            size="small"
-                                            freeSolo
-                                            options={IZIN_TURLERI}
-                                            value={form.izin_turu}
-                                            onChange={(_, v) => handleFormChange("izin_turu", v || "")}
-                                            onInputChange={(_, v) => handleFormChange("izin_turu", v || "")}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="İzin Türü"
-                                                    required
-                                                    fullWidth
-                                                    helperText="İzin, Bakım İzni, Mazeret"
-                                                />
-                                            )}
-                                        />
-                                    </Grid>
+                                <TextField
+                                    size="small"
+                                    label="Sürücü Adı"
+                                    placeholder="Ad Soyad"
+                                    value={form.surucu_adi}
+                                    onChange={(e) => handleFormChange("surucu_adi", e.target.value)}
+                                    fullWidth
+                                />
 
-                                    <Grid item xs={12} md={4}>
-                                        <DatePicker
-                                            label="Başlangıç *"
-                                            value={form.baslangic_tarihi ? dayjs(form.baslangic_tarihi) : null}
-                                            onChange={(d) =>
-                                                handleFormChange(
-                                                    "baslangic_tarihi",
-                                                    d ? dayjs(d).format("YYYY-MM-DD") : ""
-                                                )
-                                            }
-                                            slotProps={{
-                                                textField: {
-                                                    fullWidth: true,
-                                                    required: true,
-                                                    size: "small",
-                                                    helperText: "İzin başlangıç tarihi",
-                                                },
-                                            }}
-                                        />
-                                    </Grid>
-
-                                    <Grid item xs={12} md={4}>
-                                        <DatePicker
-                                            label="Bitiş *"
-                                            value={form.bitis_tarihi ? dayjs(form.bitis_tarihi) : null}
-                                            onChange={(d) =>
-                                                handleFormChange(
-                                                    "bitis_tarihi",
-                                                    d ? dayjs(d).format("YYYY-MM-DD") : ""
-                                                )
-                                            }
-                                            slotProps={{
-                                                textField: {
-                                                    fullWidth: true,
-                                                    required: true,
-                                                    size: "small",
-                                                    helperText: "İzin bitiş tarihi",
-                                                },
-                                            }}
-                                        />
-                                    </Grid>
-
-                                    <Grid item xs={12} md={4}>
-                                        <DatePicker
-                                            label="İş Başı"
-                                            value={form.is_basi_tarihi ? dayjs(form.is_basi_tarihi) : null}
-                                            onChange={(d) =>
-                                                handleFormChange(
-                                                    "is_basi_tarihi",
-                                                    d ? dayjs(d).format("YYYY-MM-DD") : ""
-                                                )
-                                            }
-                                            slotProps={{
-                                                textField: {
-                                                    fullWidth: true,
-                                                    size: "small",
-                                                    helperText: "Otomatik: bitiş + 1 gün",
-                                                },
-                                            }}
-                                        />
-                                    </Grid>
-
-                                    <Grid item xs={12} md={4}>
-                                        <DatePicker
-                                            label="Yükleme"
-                                            value={form.yukleme_tarihi ? dayjs(form.yukleme_tarihi) : null}
-                                            onChange={(d) =>
-                                                handleFormChange(
-                                                    "yukleme_tarihi",
-                                                    d ? dayjs(d).format("YYYY-MM-DD") : ""
-                                                )
-                                            }
-                                            slotProps={{
-                                                textField: {
-                                                    fullWidth: true,
-                                                    size: "small",
-                                                    helperText: "Opsiyonel",
-                                                },
-                                            }}
-                                        />
-                                    </Grid>
-
-                                    <Grid item xs={12} md={4}>
+                                <Autocomplete
+                                    size="small"
+                                    freeSolo
+                                    options={IZIN_TURLERI}
+                                    value={form.izin_turu}
+                                    onChange={(_, v) => handleFormChange("izin_turu", v || "")}
+                                    onInputChange={(_, v) => handleFormChange("izin_turu", v || "")}
+                                    renderInput={(params) => (
                                         <TextField
-                                            size="small"
-                                            label="Gün Sayısı"
-                                            value={form.gun_sayisi || ""}
+                                            {...params}
+                                            label="İzin Türü *"
+                                            required
                                             fullWidth
-                                            disabled
-                                            helperText="Başlangıç ve bitişten hesaplanır"
+                                            helperText="İzin, Bakım İzni, Mazeret"
                                         />
-                                    </Grid>
+                                    )}
+                                />
 
-                                    <Grid item xs={12}>
-                                        <TextField
-                                            size="small"
-                                            label="Açıklama"
-                                            value={form.aciklama}
-                                            onChange={(e) => handleFormChange("aciklama", e.target.value)}
-                                            fullWidth
-                                            multiline
-                                            minRows={3}
-                                            placeholder="Gerekçe ve notlar..."
-                                        />
-                                    </Grid>
-                                </Grid>
+                                <DatePicker
+                                    label="Başlangıç *"
+                                    value={form.baslangic_tarihi ? dayjs(form.baslangic_tarihi) : null}
+                                    onChange={(d) => handleFormChange("baslangic_tarihi", d ? dayjs(d).format("YYYY-MM-DD") : "")}
+                                    slotProps={{
+                                        textField: {
+                                            fullWidth: true,
+                                            required: true,
+                                            size: "small",
+                                            helperText: "İzin başlangıç tarihi",
+                                        },
+                                    }}
+                                />
+
+                                <DatePicker
+                                    label="Bitiş *"
+                                    value={form.bitis_tarihi ? dayjs(form.bitis_tarihi) : null}
+                                    onChange={(d) => handleFormChange("bitis_tarihi", d ? dayjs(d).format("YYYY-MM-DD") : "")}
+                                    slotProps={{
+                                        textField: {
+                                            fullWidth: true,
+                                            required: true,
+                                            size: "small",
+                                            helperText: "İzin bitiş tarihi",
+                                        },
+                                    }}
+                                />
+
+                                <DatePicker
+                                    label="İş Başı"
+                                    value={form.is_basi_tarihi ? dayjs(form.is_basi_tarihi) : null}
+                                    onChange={(d) => handleFormChange("is_basi_tarihi", d ? dayjs(d).format("YYYY-MM-DD") : "")}
+                                    slotProps={{
+                                        textField: {
+                                            fullWidth: true,
+                                            size: "small",
+                                            helperText: "Otomatik: bitiş + 1 gün",
+                                        },
+                                    }}
+                                />
+
+                                <DatePicker
+                                    label="Yükleme"
+                                    value={form.yukleme_tarihi ? dayjs(form.yukleme_tarihi) : null}
+                                    onChange={(d) => handleFormChange("yukleme_tarihi", d ? dayjs(d).format("YYYY-MM-DD") : "")}
+                                    slotProps={{
+                                        textField: {
+                                            fullWidth: true,
+                                            size: "small",
+                                            helperText: "Opsiyonel",
+                                        },
+                                    }}
+                                />
+
+                                <TextField size="small" label="Gün Sayısı" value={form.gun_sayisi || ""} fullWidth disabled />
+
+                                <TextField
+                                    size="small"
+                                    label="Açıklama"
+                                    value={form.aciklama}
+                                    onChange={(e) => handleFormChange("aciklama", e.target.value)}
+                                    fullWidth
+                                    multiline
+                                    minRows={6}
+                                    placeholder="Gerekçe ve notlar..."
+                                    sx={{ gridColumn: { xs: "1", md: "1 / -1" } }}
+                                />
                             </DialogContent>
 
                             <DialogActions
                                 sx={{
+                                    p: 3,
                                     position: "sticky",
                                     bottom: 0,
                                     background:
@@ -1331,19 +1157,16 @@ export default function IzinGirisiModern() {
                                     borderTop: "1px solid rgba(255,255,255,0.06)",
                                 }}
                             >
-                                <Button
-                                    variant="contained"
-                                    onClick={handleSubmit}
-                                    sx={{ px: 3, py: 1.2 }}
-                                >
+                                <Button variant="contained" onClick={handleSubmit} size="large" sx={{ px: 4, py: 1.5 }}>
                                     {duzenlemeId ? "Güncelle" : "Kaydet"}
                                 </Button>
-                                <Button variant="text" onClick={() => setFormOpen(false)}>
+                                <Button variant="text" onClick={() => setFormOpen(false)} size="large">
                                     Kapat
                                 </Button>
                             </DialogActions>
                         </Dialog>
 
+                        {/* Kesinti Diyaloğu */}
                         <Dialog open={kesintiOpen} onClose={() => setKesintiOpen(false)}>
                             <DialogTitle>Kesinti Tespiti</DialogTitle>
                             <DialogContent dividers>
@@ -1354,9 +1177,7 @@ export default function IzinGirisiModern() {
                                             <Select
                                                 label="Kesinti Nedeni"
                                                 value={kesintiBilgisi.neden}
-                                                onChange={(e) =>
-                                                    setKesintiBilgisi((p) => ({ ...p, neden: e.target.value }))
-                                                }
+                                                onChange={(e) => setKesintiBilgisi((p) => ({ ...p, neden: e.target.value }))}
                                             >
                                                 <MenuItem value="Tedarikçi Kaynaklı">Tedarikçi Kaynaklı</MenuItem>
                                                 <MenuItem value="Odak Kaynaklı">Odak Kaynaklı</MenuItem>
@@ -1370,9 +1191,7 @@ export default function IzinGirisiModern() {
                                             <Select
                                                 label="Kesinti Türü"
                                                 value={kesintiBilgisi.tur}
-                                                onChange={(e) =>
-                                                    setKesintiBilgisi((p) => ({ ...p, tur: e.target.value }))
-                                                }
+                                                onChange={(e) => setKesintiBilgisi((p) => ({ ...p, tur: e.target.value }))}
                                             >
                                                 <MenuItem value="Bakım">Bakım</MenuItem>
                                                 <MenuItem value="Servis">Servis</MenuItem>
@@ -1384,28 +1203,13 @@ export default function IzinGirisiModern() {
                                     </Grid>
 
                                     <Grid item xs={12} md={6}>
-                                        <TextField
-                                            label="Plaka - Treyler"
-                                            value={form.plaka_treyler}
-                                            fullWidth
-                                            disabled
-                                        />
+                                        <TextField label="Plaka - Treyler" value={form.plaka_treyler} fullWidth disabled />
                                     </Grid>
                                     <Grid item xs={12} md={3}>
-                                        <TextField
-                                            label="Başlangıç"
-                                            value={form.is_basi_tarihi || ""}
-                                            fullWidth
-                                            disabled
-                                        />
+                                        <TextField label="Başlangıç" value={form.is_basi_tarihi || ""} fullWidth disabled />
                                     </Grid>
                                     <Grid item xs={12} md={3}>
-                                        <TextField
-                                            label="Bitiş"
-                                            value={form.yukleme_tarihi || ""}
-                                            fullWidth
-                                            disabled
-                                        />
+                                        <TextField label="Bitiş" value={form.yukleme_tarihi || ""} fullWidth disabled />
                                     </Grid>
                                 </Grid>
                             </DialogContent>

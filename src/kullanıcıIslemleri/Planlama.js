@@ -1,5 +1,6 @@
 // src/kullanıcıIslemleri/Planlama-Deluxe.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback, Suspense, lazy } from "react";
+import * as XLSX from "xlsx";
 import { supabase } from "../supabaseClient";
 import { Helmet } from "react-helmet-async";
 import { useNavigate } from "react-router-dom";
@@ -58,8 +59,8 @@ const formatDateTR = (val) => {
     if (!val) return "";
     try {
         // Excel seri numarası gelirse kabaca Date'e çevir
-        if (typeof val === "number" && window?.XLSX?.SSF?.parse_date_code) {
-            const d = window.XLSX.SSF.parse_date_code(val);
+        if (typeof val === "number" && XLSX?.SSF?.parse_date_code) {
+            const d = XLSX.SSF.parse_date_code(val);
             const dt = new Date(d.y, (d.m || 1) - 1, d.d || 1);
             if (!isNaN(dt)) {
                 return dt.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -288,7 +289,7 @@ export default function PlanlamaDeluxe() {
         }
         if (typeof v === "number") {
             // XLSX.SSF might not exist in all builds
-            const dec = window?.XLSX?.SSF?.parse_date_code ? window.XLSX.SSF.parse_date_code(v) : null;
+            const dec = XLSX?.SSF?.parse_date_code ? XLSX.SSF.parse_date_code(v) : null;
             if (dec) {
                 const y = String(dec.y).padStart(4, "0");
                 const m = String(dec.m).padStart(2, "0");
@@ -502,7 +503,7 @@ export default function PlanlamaDeluxe() {
 
     const parseWorkbookToRows = (wb) => {
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const aoa = window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
+        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
         if (!aoa.length) return [];
 
         const headersRaw = (aoa[0] || []).map((h) => normalizeHeader(h));
@@ -548,7 +549,7 @@ export default function PlanlamaDeluxe() {
 
         try {
             const data = await file.arrayBuffer();
-            const wb = window.XLSX.read(data, { type: "array" });
+            const wb = XLSX.read(data, { type: "array" });
             const importedRows = parseWorkbookToRows(wb);
 
             if (!importedRows.length) {

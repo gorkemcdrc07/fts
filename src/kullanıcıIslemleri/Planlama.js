@@ -47,6 +47,7 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 /* ---------------- Sefer Detay Panel (lazy) ---------------- */
 // ← Path’i kendi proje yapınıza göre güncelleyin
 const SeferDetayPanel = lazy(() => import("./planlamaDetay/SeferDetayPanel"));
+const SiparisAnaliz = lazy(() => import("./planlamaDetay/SiparisAnaliz"));
 
 /* ---------------- helpers ---------------- */
 
@@ -231,6 +232,11 @@ export default function PlanlamaDeluxe() {
     // Sefer Detay Panel state
     const [detayOpen, setDetayOpen] = useState(false);
     const [detayContext, setDetayContext] = useState(null);
+
+    // Sipariş Analiz panel state
+    const [analizOpen, setAnalizOpen] = useState(false);
+    const [analizContext, setAnalizContext] = useState(null);
+
 
     // değişiklik takibi (sticky kaydet barı)
     const lastSavedSnapshot = useRef("[]");
@@ -746,6 +752,13 @@ export default function PlanlamaDeluxe() {
         setDetayOpen(true);
     }, []);
 
+    /* ---------- Sipariş Analiz panelini aç ---------- */
+    const openSiparisAnaliz = useCallback((row) => {
+        setAnalizContext(row);
+        setAnalizOpen(true);
+    }, []);
+
+
     /* ---------- bölge sayıları ---------- */
     const bolgeCounts = useMemo(() => {
         const m = {};
@@ -792,7 +805,7 @@ export default function PlanlamaDeluxe() {
                 renderCell: (params) => (
                     <Stack direction="row" spacing={1}>
                         <Tooltip title="Detay">
-                            <IconButton size="small" onClick={() => openSeferDetay(params.row)}>
+                            <IconButton size="small" onClick={() => openSiparisAnaliz(params.row)}>
                                 <InfoOutlinedIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
@@ -995,11 +1008,11 @@ export default function PlanlamaDeluxe() {
                         variant="outlined"
                         startIcon={<InfoOutlinedIcon />}
                         onClick={() => {
-                            // Listedeki ilk (veya seçili) kaydın detayını açalım
                             const row = filteredRows[0];
-                            if (row) openSeferDetay(row);
+                            if (row) openSiparisAnaliz(row);
                             else setSnack({ open: true, msg: "Gösterilecek kayıt yok.", severity: "info" });
                         }}
+
                     >
                         Detay
                     </Button>
@@ -1431,6 +1444,73 @@ export default function PlanlamaDeluxe() {
                     />
                 )}
             </Suspense>
+            {/* Sipariş Analiz — Merkezde Modern Modal */}
+            <Dialog
+                open={analizOpen}
+                onClose={() => setAnalizOpen(false)}
+                fullWidth
+                maxWidth="lg"
+                PaperProps={{
+                    sx: (t) => ({
+                        borderRadius: 3,
+                        overflow: "hidden",
+                        backdropFilter: "blur(8px)",
+                        background:
+                            "linear-gradient(180deg, rgba(15,23,42,0.96) 0%, rgba(2,6,23,0.96) 100%)",
+                        boxShadow: `0 24px 64px ${alpha("#000", 0.55)}`,
+                        border: "1px solid rgba(255,255,255,0.06)",
+                    }),
+                }}
+            >
+                {/* Başlık barı */}
+                <Stack
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    sx={{
+                        px: 2,
+                        py: 1.25,
+                        borderBottom: "1px solid rgba(255,255,255,0.08)",
+                        background:
+                            "linear-gradient(180deg, rgba(34,211,238,0.08) 0%, rgba(34,211,238,0.02) 100%)",
+                    }}
+                >
+                    <Typography variant="h6" fontWeight={800}>
+                        Sipariş Analiz
+                    </Typography>
+                    <IconButton onClick={() => setAnalizOpen(false)} size="small">
+                        <CloseIcon />
+                    </IconButton>
+                </Stack>
+
+                {/* İçerik */}
+                <Box sx={{ p: 2.25 }}>
+                    <Suspense
+                        fallback={
+                            <Box sx={{ p: 3, textAlign: "center" }}>
+                                <CircularProgress size={26} />
+                                <Typography variant="body2" sx={{ mt: 1 }}>
+                                    Yükleniyor…
+                                </Typography>
+                            </Box>
+                        }
+                    >
+                        <SiparisAnaliz
+                            /* İstersen kalsın: iç komponent bazı aksiyonlarda onClose isteyebilir */
+                            open={analizOpen}
+                            onClose={() => setAnalizOpen(false)}
+                            /* Veri prop’ları */
+                            sefer={analizContext}
+                            row={analizContext}
+                            data={analizContext}
+                            plaka={primaryPlaka(analizContext?.plaka)}
+                        />
+                    </Suspense>
+                </Box>
+            </Dialog>
+
+
+
 
             {/* Drag & Drop Overlay */}
             {dragActive && (

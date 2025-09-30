@@ -130,6 +130,7 @@ export default function Sidebar(props) {
                 "/hakedis/tedarikci-masraf",
                 "/hakedis/arac-cari-ve-fiyat",
                 "/hakedis/hakedis-seferleri",
+                "/hakedis/hamaliye",
             ])
         );
         setAfyonMenuAcik(anyStartsWith(["/afyon/seferler", "/afyon/araclar"]));
@@ -178,6 +179,7 @@ export default function Sidebar(props) {
             { ad: "Tedarikçi Masraf", yol: "/hakedis/tedarikci-masraf", ikon: <PaidIcon /> },
             { ad: "Araç Cari & Fiyat", yol: "/hakedis/arac-cari-ve-fiyat", ikon: <CreditCardIcon /> },
             { ad: "Hakediş Seferleri", yol: "/hakedis/hakedis-seferleri", ikon: <ReceiptLongIcon /> },
+            { ad: "Hamaliye", yol: "/hakedis/hamaliye", ikon: <PaidIcon /> },
         ],
         []
     );

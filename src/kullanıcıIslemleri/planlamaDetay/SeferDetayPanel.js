@@ -384,12 +384,6 @@ export default function SeferDetayPanel({ open, onClose, plaka }) {
             { field: "teslim_noktasi", headerName: "Teslim Noktası", width: 200 },
             { field: "teslim_ili", headerName: "Teslim İli", width: 140 },
             { field: "teslim_ilcesi", headerName: "Teslim İlçesi", width: 160 },
-            {
-                field: "eta",
-                headerName: "ETA",
-                width: 130,
-                renderCell: (p) => <>{formatDateTR(p.row?.eta)}</>,
-            },
             { field: "bolge", headerName: "Bölge", width: 160 },
         ],
         []
@@ -399,7 +393,18 @@ export default function SeferDetayPanel({ open, onClose, plaka }) {
     const regionChartData = stats.topRegions.map((x) => ({ name: x.name || "—", value: x.count }));
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+        <Dialog
+            open={open}
+            onClose={onClose}
+            fullWidth
+            maxWidth="xl"   // lg yerine xl
+            PaperProps={{
+                sx: {
+                    width: "96vw",   // ekranın %96’sı kadar geniş
+                    maxWidth: 1600,  // en fazla 1600px (istersen 1800 yapabilirsin)
+                },
+            }}
+        >
             <DialogTitle>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
                     <Stack direction="row" spacing={1} alignItems="center">
@@ -420,6 +425,7 @@ export default function SeferDetayPanel({ open, onClose, plaka }) {
                     </Stack>
                 </Stack>
             </DialogTitle>
+
 
             <Divider />
             <DialogContent sx={{ p: 2 }}>

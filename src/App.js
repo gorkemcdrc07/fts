@@ -29,6 +29,7 @@ import TumGorevler from "./views/Gorevler/TumGorevler";
 import TedarikciMasraf from "./Hakedisler/TedarikciMasraf";
 import AracCariVeFiyat from "./Hakedisler/AracCariVeFiyat";
 import HakedisSeferleri from "./Hakedisler/HakedisSeferleri";
+import Hamaliye from "./Hakedisler/Hamaliye";  // ✅ EKLE
 
 // KPI & RAPORLAR
 import KpiOlcumu from "./raporlar/kpiOlcumu";
@@ -91,6 +92,7 @@ function App() {
                             <Route path="hakedis/tedarikci-masraf" element={<TedarikciMasraf />} />
                             <Route path="hakedis/arac-cari-ve-fiyat" element={<AracCariVeFiyat />} />
                             <Route path="hakedis/hakedis-seferleri" element={<HakedisSeferleri />} />
+                            <Route path="hakedis/hamaliye" element={<Hamaliye />} />  {/* ✅ EKLE */}
 
                             {/* KPI */}
                             <Route path="raporlar/kpi-olcumu" element={<KpiOlcumu />} />

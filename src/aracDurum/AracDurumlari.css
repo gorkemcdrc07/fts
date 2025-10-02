@@ -1,0 +1,66 @@
+/* Kart görünümü */
+.pretty-card {
+    border-radius: 14px !important;
+    border: 1px solid var(--mui-palette-divider, rgba(255,255,255,.12)) !important;
+    backdrop-filter: saturate(120%) blur(2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.03);
+}
+
+/* Scroll sadece tablo içinde */
+.table-scroll {
+    max-height: 500px;
+    overflow: auto; /* hem yatay hem dikey */
+    border: 1px solid var(--mui-palette-divider, rgba(255,255,255,.12));
+    border-radius: 10px;
+}
+
+/* Tablo stili */
+.pretty-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+}
+
+    .pretty-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        font-weight: 700;
+        color: var(--mui-palette-text-primary, #e8eaed);
+        background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+        border-bottom: 1px solid rgba(255,255,255,.12);
+        padding: 8px 10px !important;
+        white-space: nowrap;
+    }
+
+    .pretty-table td {
+        padding: 8px 10px !important;
+        border-bottom: 1px solid rgba(255,255,255,.06);
+        color: var(--mui-palette-text-secondary, #c7cbd1);
+    }
+
+    .pretty-table th,
+    .pretty-table td {
+        border-right: 1px dashed rgba(255,255,255,.06);
+    }
+
+        .pretty-table th:last-child,
+        .pretty-table td:last-child {
+            border-right: none;
+        }
+
+    /* Zebra + hover */
+    .pretty-table tbody tr:nth-of-type(even) td {
+        background: color-mix(in srgb, var(--mui-palette-background-paper, #0b1320) 92%, #fff 8%);
+    }
+
+    .pretty-table tbody tr:hover td {
+        background: color-mix(in srgb, var(--mui-palette-background-paper, #0b1320) 88%, #fff 12%);
+    }
+
+/* Uzun metinler kibar kısalsın */
+.ellipsis {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

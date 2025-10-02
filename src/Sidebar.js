@@ -110,7 +110,12 @@ export default function Sidebar(props) {
             ])
         );
         setAracMenuAcik(
-            anyStartsWith(["/arac/yonetim", "/arac/izin-girisi", "/arac/kesinti-girisi"])
+            anyStartsWith([
+                "/arac/yonetim",
+                "/arac/izin-girisi",
+                "/arac/kesinti-girisi",
+                "/arac/durumlari"   // ✅ eklendi
+            ])
         );
         setRaporMenuAcik(
             anyStartsWith([
@@ -152,6 +157,7 @@ export default function Sidebar(props) {
 
     const aracAltMenuler = useMemo(
         () => [
+            { ad: "Araç Durumları", yol: "/arac/durumlari", ikon: <DirectionsCarIcon /> }, // ✅ yeni
             { ad: "Araç Yönetimi", yol: "/arac/yonetim", ikon: <DirectionsCarIcon /> },
             { ad: "İzin Girişi", yol: "/arac/izin-girisi", ikon: <CalendarMonthIcon /> },
             { ad: "Kesinti Girişi", yol: "/arac/kesinti-girisi", ikon: <ContentCutIcon /> },

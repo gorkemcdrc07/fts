@@ -22,20 +22,20 @@ import { supabase } from "../supabaseClient";
 const PLATE_FIELDS = "id, plaka, treyler, surucu_adi";
 
 const COLUMNS = [
-    { key: "created_at", label: "created_at" },
-    { key: "gelir_gider", label: "prim_hamaliye" },
-    { key: "sefer_no", label: "sefer_no" },
-    { key: "plaka", label: "plaka" },
-    { key: "treyler", label: "treyler" },
-    { key: "tarih", label: "tarih" },
-    { key: "surucu", label: "surucu" },
-    { key: "yukleme_musteri", label: "yukleme_musteri" },
-    { key: "fatura_musteri", label: "fatura_musteri" },
-    { key: "bolge_palet_sayisi", label: "bolge_palet_sayisi", numeric: true },
-    { key: "odenen_tutar", label: "odenen_tutar", numeric: true },
-    { key: "palet_sayisi", label: "palet_sayisi", numeric: true },
-    { key: "donem", label: "donem" },
-    { key: "kullanici_adi", label: "kullanici_adi" },
+    { key: "created_at", label: "OLUŞTURULMA" },
+    { key: "gelir_gider", label: "PRİM/HAMALİYE" },
+    { key: "sefer_no", label: "SEFER NO" },
+    { key: "plaka", label: "PLAKA" },
+    { key: "treyler", label: "TREYLER" },
+    { key: "tarih", label: "TARİH" },
+    { key: "surucu", label: "SÜRÜCÜ" },
+    { key: "yukleme_musteri", label: "YÜKLEME MÜŞTERİ" },
+    { key: "fatura_musteri", label: "FATURA MÜŞTERİ" },
+    { key: "bolge_palet_sayisi", label: "BÖLGE PALET", numeric: true },
+    { key: "odenen_tutar", label: "ÖDENEN TUTAR", numeric: true },
+    { key: "palet_sayisi", label: "PALET SAYISI", numeric: true },
+    { key: "donem", label: "DÖNEM" },
+    { key: "kullanici_adi", label: "KULLANICI ADI" },
 ];
 
 function formatTRYInput(val) {

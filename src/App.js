@@ -19,6 +19,7 @@ import Tamamlananlar from "./kullanıcıIslemleri/Tamamlananlar";
 import AracYonetimi from "./aracDurum/AracYonetimi";
 import IzinGirisi from "./aracDurum/IzinGirisi";
 import KesintiGirisi from "./aracDurum/KesintiGirisi";
+import AracDurumlari from "./aracDurum/AracDurumlari"; // ✅ YENİ
 
 // Görevler
 import GorevAta from "./views/Gorevler/GorevAta";
@@ -79,6 +80,7 @@ function App() {
                             <Route path="tamamlanan-seferler" element={<Tamamlananlar />} />
 
                             {/* Araç Durumları */}
+                            <Route path="arac/durumlari" element={<AracDurumlari />} />   {/* ✅ YENİ */}
                             <Route path="arac/yonetim" element={<AracYonetimi />} />
                             <Route path="arac/izin-girisi" element={<IzinGirisi />} />
                             <Route path="arac/kesinti-girisi" element={<KesintiGirisi />} />

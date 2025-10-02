@@ -838,10 +838,29 @@ export default function ReelAtananSeferler() {
         "& .MuiFormLabel-root.Mui-focused": { color: COLORS.textMuted },
     };
 
-    // Senkronizasyon yetkisi (basit kural)
+    // Senkronizasyon yetkisi (sağlam kural)
     const canSync = (() => {
-        const name = (localStorage.getItem("kullaniciAdi") || "").toUpperCase();
-        return name === "ADMIN" || name === "SELİN";
+        const makeKey = (s = "") =>
+            s
+                .normalize("NFKC")
+                .toLocaleLowerCase("tr-TR")
+                .trim()
+                .replace(/\s+/g, "")           // tüm boşlukları sil
+                .replace(/@.*/, "")            // e-posta ise @ sonrası domaini at
+                .replace(/[^a-z0-9\u00e7\u011f\u0131\u00f6\u015f\u00fc]/g, ""); // TR harfleri dışı sembolleri temizle
+
+        const raw = localStorage.getItem("kullaniciAdi") || "";
+        const key = makeKey(raw);
+
+        // izinliler: küçük harf, boşluksuz, TR-locale
+        const allowed = new Set([
+            "admin",
+            "selin", "sel\u0131n",      // SELİN / SELIN varyasyonları
+            "bekirakcagoz",
+            "buketcimenci",
+        ]);
+
+        return allowed.has(key);
     })();
 
     /* --------------- RENDER --------------- */

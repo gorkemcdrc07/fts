@@ -1,6 +1,6 @@
 /* ===================== DÜZ & MODERN TABLO TASARIMI ===================== */
-/* Bu dosyayı AracCariVeFiyat.css olarak tamamen değiştirin. */
 /* Zebra yok; tek renk satır + hafif hover, sticky başlık, dark-mode desteği. */
+/* Zoom/pencere değişiminde akışkan ölçek: font, padding ve sütun genişliği clamp() ile. */
 
 :root {
     --bg: #f3f4f6;
@@ -10,12 +10,22 @@
     --border: #e5e7eb;
     --accent: #2563eb;
     --accent-weak: #eef2ff;
-    --row: #ffffff; /* tüm satırların rengi */
-    --row-hover: #f8fafc; /* hover rengi */
-    --head-bg: #f7f7fb; /* thead arka planı */
-
+    --row: #ffffff;
+    --row-hover: #f8fafc;
+    --head-bg: #f7f7fb;
     --radius: 12px;
     --shadow: 0 6px 20px rgba(0,0,0,.06);
+    /* Akışkan tipografi ve aralıklar */
+    --fs-base: clamp(0.78rem, 0.72rem + 0.35vw, 0.95rem);
+    --fs-sm: clamp(0.72rem, 0.66rem + 0.30vw, 0.90rem);
+    --fs-lg: clamp(0.95rem, 0.86rem + 0.40vw, 1.15rem);
+    --pad-cell-y: clamp(6px, 0.35vh, 10px);
+    --pad-cell-x: clamp(6px, 0.6vw, 12px);
+    --pad-head-y: clamp(8px, 0.6vh, 12px);
+    --pad-head-x: clamp(8px, 0.8vw, 14px);
+    /* Sütun genişlikleri akışkan sınırlar (hücre max-width’ü için) */
+    --col-max: clamp(8rem, 16vw, 20rem);
+    --col-max-narrow: clamp(6rem, 12vw, 14rem);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -34,10 +44,10 @@
     }
 }
 
-/* Global: sayfa scroll'unu kilitle, yalnızca tablo-wrap scroll alsın */
+/* Global: sayfa scroll'unu kilitle, yalnız tablo-wrap scroll alsın */
 html, body, #root {
     height: 100%;
-    overflow: hidden;
+    overflow: hidden
 }
 
 /* ============ Sayfa / Kart ============ */
@@ -49,7 +59,7 @@ html, body, #root {
     color: var(--text);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: hidden
 }
 
 .acf-card {
@@ -61,14 +71,14 @@ html, body, #root {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
-    padding: 16px;
+    padding: 16px
 }
 
 /* ============ Üst Çubuk ============ */
 .acf-title {
-    font-size: 18px;
+    font-size: var(--fs-lg);
     font-weight: 700;
-    margin: 0 0 10px;
+    margin: 0 0 10px
 }
 
 .acf-toolbar {
@@ -76,75 +86,62 @@ html, body, #root {
     gap: 12px;
     align-items: center;
     flex-wrap: wrap;
-    margin-bottom: 12px;
+    margin-bottom: 12px
 }
 
 .acf-meta {
     margin-left: auto;
     color: var(--muted);
-    font-size: 14px;
+    font-size: var(--fs-sm)
 }
 
 /* Arama */
 .acf-search {
     padding: 10px 12px;
-    min-width: 280px;
+    min-width: clamp(180px, 28vw, 320px);
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--card);
     color: var(--text);
     outline: none;
     transition: border-color .15s, box-shadow .15s;
+    font-size: var(--fs-base)
 }
 
     .acf-search::placeholder {
-        color: var(--muted);
+        color: var(--muted)
     }
 
     .acf-search:focus {
         border-color: var(--accent);
-        box-shadow: 0 0 0 4px var(--accent-weak);
+        box-shadow: 0 0 0 4px var(--accent-weak)
     }
 
 /* ============ Tablo Alanı (sadece burası kayar) ============ */
 .acf-table-wrap {
     flex: 0 0 auto;
-    height: clamp(420px, 60vh, 720px);
-    overflow-y: auto;
-    overflow-x: auto; /* <--- değişti (hidden yerine auto) */
+    height: clamp(420px, 60vh, 72vh);
+    overflow: auto;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--card);
     -webkit-overflow-scrolling: touch;
-}
-
-    /* scrollbar dokunuşu */
-    .acf-table-wrap::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
-    }
-
-    .acf-table-wrap::-webkit-scrollbar-thumb {
-        background: var(--border);
-        border-radius: 10px;
-    }
-
-    .acf-table-wrap:hover::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-    }
-
-body[data-theme="dark"] .acf-table-wrap:hover::-webkit-scrollbar-thumb {
-    background: #334155;
+    inline-size: min(100%, 100vw - 40px); /* zoom/pencere için güvenli genişlik */
+    box-sizing: border-box;
+    margin: 0 auto;
+    padding: 0
 }
 
 /* ============ Tablo ============ */
 .acf-table {
-    width: 100%;
-    min-width: 100px; /* <--- tabloyu daha geniş yapar */
-    table-layout: auto; /* <--- fixed yerine auto */
+    inline-size: 100%;
+    table-layout: fixed; /* sütunlar akışkan, taşma kontrolü */
     border-collapse: collapse;
     color: var(--text);
+    font-size: var(--fs-base);
+    /* Safari zoom senkronu için küçük bir min-width kaldırıldı */
 }
+
     /* Başlık */
     .acf-table thead th {
         position: sticky;
@@ -153,91 +150,137 @@ body[data-theme="dark"] .acf-table-wrap:hover::-webkit-scrollbar-thumb {
         background: var(--head-bg);
         border-bottom: 1px solid var(--border);
         text-align: left;
-        padding: 10px 12px;
+        padding: var(--pad-head-y) var(--pad-head-x);
         font-weight: 600;
         white-space: nowrap;
         user-select: none;
+        font-size: var(--fs-base)
     }
 
     /* Satırlar (ZEBRA YOK) */
     .acf-table tbody tr {
-        background: var(--row);
+        background: var(--row)
     }
 
         .acf-table tbody tr:hover {
-            background: var(--row-hover);
+            background: var(--row-hover)
         }
 
     .acf-table tbody td {
-        padding: 10px 12px;
+        padding: var(--pad-cell-y) var(--pad-cell-x);
         border-bottom: 1px solid var(--border);
         vertical-align: middle;
-        white-space: nowrap;
+        font-size: var(--fs-sm);
+        white-space: normal;
+        max-width: var(--col-max); /* metin sarılır, zoom’da sütun daralabilir */
         overflow: hidden;
         text-overflow: ellipsis;
+        word-wrap: break-word
     }
+
+/* Belirli dar sütunlar için yardımcı sınıf (ID, gün vb.) */
+.acf-col-narrow {
+    max-width: var(--col-max-narrow)
+}
 
 /* Sıralanabilir başlık ipucu */
 .acf-th-sortable {
-    cursor: pointer;
+    cursor: pointer
 }
 
     .acf-th-sortable:hover {
-        color: var(--accent);
+        color: var(--accent)
     }
 
 /* Hizalama yardımcıları */
 .acf-num {
     text-align: right;
-    font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums
 }
 
 .acf-center {
-    text-align: center;
+    text-align: center
 }
 
 .acf-ellipsis {
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: nowrap
 }
 
 /* Checkbox’lar */
 .acf-table input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--accent);
+    inline-size: clamp(16px, 1.3vw, 18px);
+    block-size: clamp(16px, 1.3vw, 18px);
+    accent-color: var(--accent)
 }
 
 /* Butonlar (satır içi) */
 .acf-table td button {
-    padding: 6px 10px;
+    padding: clamp(4px, 0.5vh, 8px) clamp(8px, 0.9vw, 12px);
     border-radius: 8px;
     border: 1px solid var(--border);
     background: #f3f4f6;
     color: #111827;
     font-weight: 600;
+    font-size: var(--fs-sm)
 }
 
     .acf-table td button:hover {
-        filter: brightness(0.97);
+        filter: brightness(0.97)
     }
 
     .acf-table td button[disabled] {
         opacity: .6;
-        cursor: not-allowed;
+        cursor: not-allowed
     }
 
 body[data-theme="dark"] .acf-table td button {
     background: #111827;
     color: #e5e7eb;
-    border-color: #374151;
+    border-color: #374151
 }
 
-/* Mobil */
-@media (max-width: 768px) {
+/* Konteyner tabanlı ölçekleme */
+.acf-table-wrap {
+    container-type: inline-size; /* ← önemli */
+}
+
+/* Tablo içinde metin/padding aşırı zoom’da da küçülsün */
+.acf-scale {
+    font-size: clamp(8px, 1.05cqw, var(--fs-base));
+}
+
+    .acf-scale thead th {
+        padding: clamp(6px, 0.7cqh, var(--pad-head-y)) clamp(6px, 1.1cqw, var(--pad-head-x));
+        font-size: clamp(9px, 1.05cqw, var(--fs-base));
+    }
+
+    .acf-scale tbody td {
+        padding: clamp(4px, 0.6cqh, var(--pad-cell-y)) clamp(4px, 1.0cqw, var(--pad-cell-x));
+        font-size: clamp(8px, 1.0cqw, var(--fs-sm));
+        max-width: clamp(6rem, 22cqw, var(--col-max));
+    }
+
+
+/* Mobil/orta kırılımlar: akışkan değerler zaten ölçekliyor; ekstra sıkı sınırlar: */
+@media (max-width:1200px) {
+    .acf-table thead th, .acf-table tbody td {
+        max-width: clamp(7rem, 14vw, 16rem)
+    }
+}
+
+@media (max-width:768px) {
     .acf-search {
-        min-width: 180px;
-        flex: 1;
+        min-width: 160px;
+        flex: 1
+    }
+
+    .acf-table thead th, .acf-table tbody td {
+        max-width: clamp(6rem, 22vw, 12rem)
+    }
+
+    .acf-table-wrap {
+        inline-size: min(100%, 100vw - 16px)
     }
 }

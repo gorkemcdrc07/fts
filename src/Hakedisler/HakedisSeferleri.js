@@ -825,6 +825,45 @@ export default function HakedisSeferleri({ onFileReady }) {
         }
     };
 
+    // Excel'e Aktar
+    const handleExportExcel = async () => {
+        if (!rows.length) return;
+        const mod = await import("xlsx");
+        const XLSX = mod.default ?? mod;
+
+        // Başlık + veri
+        const aoa = [DISPLAY_HEADERS];
+        rows.forEach((r) => {
+            aoa.push(DISPLAY_HEADERS.map((h) => {
+                const v = r[h];
+                if (h === "Sefer Tarihi") return v instanceof Date ? toISODate(v) : String(v ?? "");
+                if (h === "TMSDespatchId" || h === "Cari ID") return toPlainDigits(v);
+                if (["Aylık Kira", "Aylık sürücü", "Hak Ediş Kira", "Hak Ediş Sürücü", "Sefer Kira Maliyeti", "Sefer Sürücü Maliyeti"].includes(h)) return Number(v ?? 0);
+                if (h === "Toplam KM" || h === "Çalışma Günü") return Number(v ?? 0);
+                return v ?? "";
+            }));
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        ws["!autofilter"] = { ref: `A1:${String.fromCharCode(65 + DISPLAY_HEADERS.length - 1)}1` };
+        ws["!cols"] = DISPLAY_HEADERS.map(() => ({ wch: 16 }));
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Hakediş Seferleri");
+        const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+        const blob = new Blob([wbout], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "hakedis_seferleri.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div className="hs-card fade-in">
             {/* Üst Bar */}
@@ -958,6 +997,16 @@ export default function HakedisSeferleri({ onFileReady }) {
                                 title={!rows.length ? "Önce Yükle ile verileri getir" : "Reel’e aktar"}
                             >
                                 {exporting ? "Aktarılıyor..." : "Reel’e Aktar"}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleExportExcel}
+                                className="btn btn-secondary"
+                                disabled={!rows.length}
+                                title="Excel'e aktar"
+                            >
+                                Excel'e Aktar
                             </button>
 
                             <button type="button" onClick={resetState} className="btn-remove">
@@ -1109,6 +1158,16 @@ export default function HakedisSeferleri({ onFileReady }) {
                             </tbody>
                         </table>
                     </div>
+                    <div style={{ marginTop: 16, textAlign: "right" }}>
+            <button
+                type="button"
+                onClick={handleExportExcel}
+                className="btn btn-primary"
+                style={{ minWidth: 160 }}
+            >
+                Excel’e Aktar
+            </button>
+        </div>
                 </div>
             )}
         </div>

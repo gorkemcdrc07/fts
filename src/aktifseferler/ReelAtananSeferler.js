@@ -243,6 +243,23 @@ export default function ReelAtananSeferler() {
         };
     };
 
+    // 🔹 İlk bacak (ilk yükleme → ilk teslim) için O/D
+    const pickFirstLegOD = (row, detay = []) => {
+        const first = (arr) => (arr.length ? arr[0] : "");
+
+        // satırdaki kolonlar birden fazla değer içeriyorsa ilkini al
+        const yIl = first(splitCell(row.yukleme_ili || "")) || first(splitCell(detay[0]?.yukleme_ili || ""));
+        const yIlce = first(splitCell(row.yukleme_ilcesi || "")) || first(splitCell(detay[0]?.yukleme_ilcesi || ""));
+        const tIl = first(splitCell(row.teslim_ili || "")) || first(splitCell(detay[0]?.teslim_ili || ""));
+        const tIlce = first(splitCell(row.teslim_ilcesi || "")) || first(splitCell(detay[0]?.teslim_ilcesi || ""));
+
+        return { yIl, yIlce, tIl, tIlce };
+    };
+
+    // 🔹 İlk bacağın başlangıcı: ilk detayın yükleme_çıkış zamanı
+    const getFirstLegStartISO = (arr = []) => normalizeISO(arr[0]?.yukleme_cikis) || null;
+
+
     /* listele */
     const listData = useCallback(async () => {
         setLoading(true);
@@ -377,13 +394,12 @@ export default function ReelAtananSeferler() {
 
             // Detaylar kaydedildi -> ETA otomatik güncelle
             try {
-                const latest = getLatestYuklemeCikisISO(detailRows);
-                if (editSefer?.id && latest) {
-                    const { yIl, yIlce, tIl, tIlce } = pickOD(editSefer || {}, detailRows);
+                const firstStart = getFirstLegStartISO(detailRows);
+                if (editSefer?.id && firstStart) {
+                    const { yIl, yIlce, tIl, tIlce } = pickFirstLegOD(editSefer || {}, detailRows);
                     const mesafeRaw = await fetchMesafe({ yIl, yIlce, tIl, tIlce });
                     const km = parseMesafeKm(mesafeRaw);
                     if (km) {
-                        // mevcut kayıtta kalan_surus_dk oku
                         const { data: srow } = await supabase
                             .from("seferler")
                             .select("kalan_surus_dk")
@@ -391,7 +407,7 @@ export default function ReelAtananSeferler() {
                             .maybeSingle();
                         const remain = Number(srow?.kalan_surus_dk) || BLOCK_MIN;
 
-                        const newETA = computeETAWithKGM(km, latest, remain);
+                        const newETA = computeETAWithKGM(km, firstStart, remain);
                         await updateSefer(editSefer.id, { eta_varis: newETA, kayit_zamani: new Date().toISOString() });
                         setRows((prev) => prev.map((r) => (r.id === editSefer.id ? { ...r, eta_varis: newETA } : r)));
                     }
@@ -442,6 +458,9 @@ export default function ReelAtananSeferler() {
                 kayit_zamani: new Date().toISOString(),
                 atama_yapan_kullanici: seferAna.atama_yapan_kullanici ?? null,
                 atama_tarihi: seferAna.atama_tarihi ?? null,
+                eta_varis: seferAna.eta_varis ?? null,
+                kalan_surus_dk: seferAna.kalan_surus_dk ?? null,
+                eta_mola_dk: seferAna.eta_mola_dk ?? null,
             };
 
             // detay payload
@@ -600,12 +619,14 @@ export default function ReelAtananSeferler() {
                 }
 
                 setEtaDetails(detay);
-                const latest = getLatestYuklemeCikisISO(detay);
-                setEtaStartISO(latest || nowLocalISO());
 
-                // MESAFE
+                // 1️⃣ İlk bacak başlangıcı
+                const firstStart = getFirstLegStartISO(detay);
+                setEtaStartISO(firstStart || nowLocalISO());
+
+                // 2️⃣ İlk bacak için mesafe (ilk yükleme ➜ ilk teslim)
                 try {
-                    const { yIl, yIlce, tIl, tIlce } = pickOD(row, detay);
+                    const { yIl, yIlce, tIl, tIlce } = pickFirstLegOD(row, detay);
                     const mesafeRaw = await fetchMesafe({ yIl, yIlce, tIl, tIlce });
                     const km = parseMesafeKm(mesafeRaw);
                     if (km) {
@@ -665,21 +686,22 @@ export default function ReelAtananSeferler() {
     }, [etaRow]);
 
     const latestYuklemeCikis = useMemo(() => getLatestYuklemeCikisISO(etaDetails), [etaDetails]);
+    const firstLegStartISO = useMemo(() => getFirstLegStartISO(etaDetails), [etaDetails]);
+
 
     const computedETAISO = useMemo(() => {
         try {
-            const latest = getLatestYuklemeCikisISO(etaDetails);
-            if (!latest) return "__WAITING__";
             if (!etaDistanceKm) return "__NEED_DISTANCE__";
+            const base0 = etaStartISO || firstLegStartISO;
+            if (!base0) return "__WAITING__";
 
-            const base0 = etaStartISO || latest;
             const base = addMinutesISO(base0, Number(breakSel) || 0);
             const initialRemain = parseHHMMtoMin(driveHM) || BLOCK_MIN;
             return computeETAWithKGM(etaDistanceKm, base, initialRemain);
         } catch {
             return "";
         }
-    }, [etaStartISO, driveHM, etaDetails, etaDistanceKm, breakSel]);
+    }, [etaStartISO, driveHM, etaDetails, etaDistanceKm, breakSel, firstLegStartISO]);
 
     const destinationText = useMemo(() => {
         if (!etaRow) return "-";
@@ -708,10 +730,10 @@ export default function ReelAtananSeferler() {
             const id = await getSeferIdByNo(etaRow);
             if (!id) throw new Error("Sefer kaydı bulunamadı.");
 
-            const latest = getLatestYuklemeCikisISO(etaDetails);
-            const canCompute = !!(etaDistanceKm && (etaStartISO || latest));
+            const firstStart = getFirstLegStartISO(etaDetails);
+            const canCompute = !!(etaDistanceKm && (etaStartISO || firstStart));
 
-            const base0 = etaStartISO || latest || nowLocalISO();
+            const base0 = etaStartISO || firstStart || nowLocalISO();
             const base = addMinutesISO(base0, Number(breakSel) || 0);
             const initialRemain = parseHHMMtoMin(driveHM) || BLOCK_MIN;
 
@@ -1110,7 +1132,7 @@ export default function ReelAtananSeferler() {
                         DateTimeOneField={DateTimeOneField}
                         TimeHMField={TimeHMField}
                         BREAK_OPTIONS={BREAK_OPTIONS}
-                        latestYuklemeCikis={latestYuklemeCikis}
+                        latestYuklemeCikis={firstLegStartISO}
                         nowLocalISO={nowLocalISO}
                         baseInputSX={baseInputSX}
                         etaStartISO={etaStartISO}

@@ -13,13 +13,15 @@ import Anasayfa from "./Anasayfa";
 import Planlama from "./kullanıcıIslemleri/Planlama";
 import PlakaOnerisi from "./kullanıcıIslemleri/PlakaOnerisi";
 import Siparisler from "./kullanıcıIslemleri/Siparisler";
-import Tamamlananlar from "./kullanıcıIslemleri/Tamamlananlar";
+// ❌ ESKİ: import Tamamlananlar from "./kullanıcıIslemleri/Tamamlananlar";
+// ✅ YENİ:
+import TamamlananlarPage from "./tamamlananseferler/TamamlananlarPage";
 
 // Araç Durumları
 import AracYonetimi from "./aracDurum/AracYonetimi";
 import IzinGirisi from "./aracDurum/IzinGirisi";
 import KesintiGirisi from "./aracDurum/KesintiGirisi";
-import AracDurumlari from "./aracDurum/AracDurumlari"; // ✅ YENİ
+import AracDurumlari from "./aracDurum/AracDurumlari";
 
 // Görevler
 import GorevAta from "./views/Gorevler/GorevAta";
@@ -30,20 +32,19 @@ import TumGorevler from "./views/Gorevler/TumGorevler";
 import TedarikciMasraf from "./Hakedisler/TedarikciMasraf";
 import AracCariVeFiyat from "./Hakedisler/AracCariVeFiyat";
 import HakedisSeferleri from "./Hakedisler/HakedisSeferleri";
-import Hamaliye from "./Hakedisler/Hamaliye";  // ✅ EKLE
+import Hamaliye from "./Hakedisler/Hamaliye";
 
 // KPI & RAPORLAR
 import KpiOlcumu from "./raporlar/kpiOlcumu";
 import YuklemedeBekleme from "./raporlar/yuklemedeBekleme";
 import ProjeLokasyonRaporlari from "./raporlar/ProjeLokasyonRaporlari";
-// Eğer gerçek Tools bileşeniniz varsa üst satırın yorumunu kaldırıp alttaki "ROUTE OK" div'i yerine <Tools /> kullanın
-// import Tools from "./raporlar/tools";
 
 // Layout
 import AppLayout from "./layout/AppLayout";
 
-// Lazy sayfa (importlardan SONRA tanımla)
+// Lazy sayfalar
 const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler"));
+const SiparisAnaliz = lazy(() => import("./kullanıcıIslemleri/planlamaDetay/SiparisAnaliz"));
 
 function App() {
     return (
@@ -61,12 +62,10 @@ function App() {
 
                             {/* Planlama */}
                             <Route path="planlama" element={<Planlama />} />
-                            {/* Analiz sayfası kaldırıldı: import ve route SİLİNDİ */}
-                            {/* <Route path="planlama/analiz" element={<Analiz />} /> */}
 
                             <Route path="plaka-onerisi" element={<PlakaOnerisi />} />
 
-                            {/* ReelAtananSeferler lazy yüklendi */}
+                            {/* ReelAtananSeferler lazy */}
                             <Route
                                 path="seferler"
                                 element={
@@ -77,10 +76,13 @@ function App() {
                             />
 
                             <Route path="siparisler" element={<Siparisler />} />
-                            <Route path="tamamlanan-seferler" element={<Tamamlananlar />} />
+
+                            {/* ❌ ESKİ: <Route path="tamamlanan-seferler" element={<Tamamlananlar />} /> */}
+                            {/* ✅ YENİ: */}
+                            <Route path="tamamlanan-seferler" element={<TamamlananlarPage />} />
 
                             {/* Araç Durumları */}
-                            <Route path="arac/durumlari" element={<AracDurumlari />} />   {/* ✅ YENİ */}
+                            <Route path="arac/durumlari" element={<AracDurumlari />} />
                             <Route path="arac/yonetim" element={<AracYonetimi />} />
                             <Route path="arac/izin-girisi" element={<IzinGirisi />} />
                             <Route path="arac/kesinti-girisi" element={<KesintiGirisi />} />
@@ -94,7 +96,7 @@ function App() {
                             <Route path="hakedis/tedarikci-masraf" element={<TedarikciMasraf />} />
                             <Route path="hakedis/arac-cari-ve-fiyat" element={<AracCariVeFiyat />} />
                             <Route path="hakedis/hakedis-seferleri" element={<HakedisSeferleri />} />
-                            <Route path="hakedis/hamaliye" element={<Hamaliye />} />  {/* ✅ EKLE */}
+                            <Route path="hakedis/hamaliye" element={<Hamaliye />} />
 
                             {/* KPI */}
                             <Route path="raporlar/kpi-olcumu" element={<KpiOlcumu />} />
@@ -102,10 +104,17 @@ function App() {
                             {/* Raporlar */}
                             <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
                             <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
-                            {/* Tools bileşeniniz yoksa placeholder kullanın */}
                             <Route path="raporlar/tools" element={<div style={{ padding: 24 }}>ROUTE OK</div>} />
-                            {/* Tools bileşeni varsa üst satır yerine şunu kullanın: */}
-                            {/* <Route path="raporlar/tools" element={<Tools />} /> */}
+
+                            {/* KOCAELİ kartı için hedef route */}
+                            <Route
+                                path="siparis-analiz"
+                                element={
+                                    <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
+                                        <SiparisAnaliz />
+                                    </Suspense>
+                                }
+                            />
 
                             {/* Varsayılan */}
                             <Route path="*" element={<Navigate to="/anasayfa" replace />} />

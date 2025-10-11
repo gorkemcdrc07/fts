@@ -18,21 +18,42 @@ export default function EtaDialog(props) {
     const {
         open, onClose, COLORS, etaRow, vehicleText, driverText, jobText, originText, destinationText, etaDistanceInfo,
         DateTimeOneField, TimeHMField, BREAK_OPTIONS, latestYuklemeCikis, nowLocalISO, baseInputSX,
-        etaStartISO, setEtaStartISO, driveHM, setDriveHM, breakSel, setBreakSel, computedETAISO, fromISOToCombined, copyETA, saveETA
+        etaStartISO, setEtaStartISO, driveHM, setDriveHM, breakSel, setBreakSel,
+        computedETAISO, fromISOToCombined, copyETA, saveETA
     } = props;
 
     const theme = useTheme();
     const glam = makeGlam(theme, COLORS);
     const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
+    // dk taşmasını düzelt: "02:90" -> "03:30", negatifleri sıfırla
     const normalizeHM = (raw) => {
-        const [h = "", m = ""] = String(raw || "").split(":");
-        const hh = String(parseInt(h || "0", 10)).padStart(2, "0");
-        const mm = String(parseInt(m || "0", 10)).padStart(2, "0");
+        const [h = "0", m = "0"] = String(raw || "").split(":");
+        let H = parseInt(h, 10); if (Number.isNaN(H) || H < 0) H = 0;
+        let M = parseInt(m, 10); if (Number.isNaN(M) || M < 0) M = 0;
+        if (M >= 60) { H += Math.floor(M / 60); M = M % 60; }
+        const hh = String(H).padStart(2, "0");
+        const mm = String(M).padStart(2, "0");
         return `${hh}:${mm}`;
     };
+
     const handleHMBlur = (e) => setDriveHM(normalizeHM(e.target.value));
-    const onCopy = async () => { await Promise.resolve(copyETA()); };
+
+    // dk -> "SS:DD" dönüşümü (kayıtlı kalan_surus_dk için)
+    const minToHM = (m) => {
+        const n = Number(m) || 0;
+        const hh = String(Math.floor(n / 60)).padStart(2, "0");
+        const mm = String(n % 60).padStart(2, "0");
+        return `${hh}:${mm}`;
+    };
+
+    // break select için güvenli değer
+    const safeBreakValue =
+        typeof breakSel === "number" && !Number.isNaN(breakSel)
+            ? breakSel
+            : (etaRow?.eta_mola_dk ?? 0);
+
+    const onCopy = () => { copyETA(); };
 
     return (
         <Dialog
@@ -111,7 +132,7 @@ export default function EtaDialog(props) {
                     {/* KGM notu */}
                     <Box sx={glam.section}>
                         <Typography variant="caption" color="text.secondary">
-                            Not: ETA KGM kuralına göre hesaplanır (4,5s + 45dk + 4,5s + 45dk + 11s).
+                            Not: ETA KGM kuralına göre hesaplanır (4,5s + 45dk + 4,5s + 11s).
                         </Typography>
                         {etaDistanceInfo && (
                             <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
@@ -120,14 +141,14 @@ export default function EtaDialog(props) {
                         )}
                     </Box>
 
-                    {/* Form — kill pill scope ile elips tamamen kalkar */}
+                    {/* Form */}
                     <Box sx={[glam.formGroup, glam.killPillScope]}>
                         <Stack spacing={0}>
                             <Box sx={{ p: { xs: 1, sm: 1.25 } }}>
                                 <DateTimeOneField
                                     label="Başlangıç (Yükleme Çıkış / Şimdi)"
                                     value={etaStartISO || latestYuklemeCikis || nowLocalISO()}
-                                    onChange={(e) => setEtaStartISO(e.target.value || latestYuklemeCikis || nowLocalISO())}
+                                    onChange={(e) => setEtaStartISO((e?.target?.value) || latestYuklemeCikis || nowLocalISO())}
                                     size="small"
                                     InputLabelProps={{ shrink: true }}
                                     sx={[glam.input]}
@@ -140,7 +161,7 @@ export default function EtaDialog(props) {
                             <Box sx={{ p: { xs: 1, sm: 1.25 } }}>
                                 <TimeHMField
                                     label="Kalan Sürüş (ss:dd)"
-                                    value={driveHM}
+                                    value={driveHM || minToHM(etaRow?.kalan_surus_dk)}
                                     onChange={(e) => setDriveHM(e.target.value)}
                                     onBlur={handleHMBlur}
                                     size="small"
@@ -158,8 +179,8 @@ export default function EtaDialog(props) {
                                     label="Başlangıçta mola"
                                     select
                                     size="small"
-                                    value={breakSel}
-                                    onChange={(e) => setBreakSel(Number(e.target.value))}
+                                    value={safeBreakValue}
+                                    onChange={(e) => setBreakSel(Number(e.target.value) || 0)}
                                     helperText="Seçilen mola başlangıca eklenir"
                                     InputLabelProps={{ shrink: true }}
                                     sx={[glam.input]}
@@ -183,7 +204,11 @@ export default function EtaDialog(props) {
                                     ETA: {fromISOToCombined(computedETAISO) || "-"}
                                 </Typography>
                                 <Tooltip title="ETA'yı kopyala">
-                                    <span><IconButton size="small" onClick={onCopy}><ContentCopyIcon fontSize="small" /></IconButton></span>
+                                    <span>
+                                        <IconButton size="small" onClick={onCopy}>
+                                            <ContentCopyIcon fontSize="small" />
+                                        </IconButton>
+                                    </span>
                                 </Tooltip>
                             </Stack>
                         )}

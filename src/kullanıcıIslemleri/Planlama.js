@@ -45,7 +45,6 @@ import CloseIcon from "@mui/icons-material/Close";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 /* ---------------- Sefer Detay Panel (lazy) ---------------- */
-// ← Path’i kendi proje yapınıza göre güncelleyin
 const SeferDetayPanel = lazy(() => import("./planlamaDetay/SeferDetayPanel"));
 const SiparisAnaliz = lazy(() => import("./planlamaDetay/SiparisAnaliz"));
 
@@ -93,6 +92,9 @@ const useDebounced = (value, delay = 250) => {
     }, [value, delay]);
     return v;
 };
+const isKocaeli = (name) =>
+    toUpperTr(name).includes("KOCAELİ");
+
 
 // SON NOKTA ve BÖLGE normalizasyonu
 const normalizeSonNoktaAndRegion = (raw) => {
@@ -236,7 +238,6 @@ export default function PlanlamaDeluxe() {
     // Sipariş Analiz panel state
     const [analizOpen, setAnalizOpen] = useState(false);
     const [analizContext, setAnalizContext] = useState(null);
-
 
     // değişiklik takibi (sticky kaydet barı)
     const lastSavedSnapshot = useRef("[]");
@@ -462,7 +463,7 @@ export default function PlanlamaDeluxe() {
                 obj.varis_tarihi ??
                 obj["VARIŞ TARİHİ"] ??
                 obj["VARIS TARIHI"] ??
-                obj["VARIŞ TARİH"] ??
+                obj["VARİŞ TARİH"] ??
                 obj["TARİH_2"]
             ) || null;
 
@@ -866,7 +867,7 @@ export default function PlanlamaDeluxe() {
                 ),
             },
         ];
-    }, [openSeferDetay]);
+    }, [openSeferDetay, openSiparisAnaliz]);
 
     // Kolon sırası
     const orderedColumns = useMemo(() => {
@@ -996,25 +997,12 @@ export default function PlanlamaDeluxe() {
                     </Stack>
                 </Stack>
 
-                {/* BURADA sadece Kaydet, Güncelle, Detay */}
                 <Stack direction="row" spacing={1} flexWrap="wrap">
                     <Button variant="contained" startIcon={<SaveIcon />} onClick={handleKaydet}>
                         Kaydet
                     </Button>
                     <Button variant="outlined" startIcon={<TuneIcon />} onClick={() => setGuncelleDialogOpen(true)}>
                         Güncelle
-                    </Button>
-                    <Button
-                        variant="outlined"
-                        startIcon={<InfoOutlinedIcon />}
-                        onClick={() => {
-                            const row = filteredRows[0];
-                            if (row) openSiparisAnaliz(row);
-                            else setSnack({ open: true, msg: "Gösterilecek kayıt yok.", severity: "info" });
-                        }}
-
-                    >
-                        Detay
                     </Button>
                 </Stack>
             </Stack>
@@ -1027,7 +1015,15 @@ export default function PlanlamaDeluxe() {
                         .map(([b, count]) => (
                             <Paper
                                 key={b}
-                                onClick={() => toggleBolgeFilter?.(b)}
+                                onClick={() => {
+                                    // >>> DEĞİŞTİ: KOCAELİ kartı panel olarak SiparisAnaliz'i açsın
+                                    if (isKocaeli(b)) {
+                                        setAnalizContext({ bolge: b });
+                                        setAnalizOpen(true);
+                                    } else {
+                                        toggleBolgeFilter?.(b);
+                                    }
+                                }}
                                 sx={{
                                     p: 1.25,
                                     minWidth: 220,
@@ -1037,16 +1033,14 @@ export default function PlanlamaDeluxe() {
                                     justifyContent: "space-between",
                                     gap: 1,
                                     cursor: "pointer",
-                                    background: `linear-gradient(180deg, ${alpha("#ffffff", 0.06)} 0%, ${alpha(
-                                        "#ffffff",
-                                        0.03
-                                    )} 100%)`,
+                                    background: `linear-gradient(180deg, ${alpha("#ffffff", 0.06)} 0%, ${alpha("#ffffff", 0.03)} 100%)`,
                                     border: "1px solid rgba(255,255,255,0.06)",
                                     boxShadow: `inset 0 1px 0 ${alpha("#fff", 0.08)}`,
                                     transition: "transform .12s ease",
                                     "&:hover": { transform: "translateY(-2px)" },
                                 }}
                             >
+
                                 <Stack sx={{ minWidth: 0 }}>
                                     <Typography variant="overline" sx={{ opacity: 0.7 }}>
                                         Bölge
@@ -1436,7 +1430,6 @@ export default function PlanlamaDeluxe() {
                     <SeferDetayPanel
                         open={detayOpen}
                         onClose={() => setDetayOpen(false)}
-                        /* Projenizde hangi isimle bekleniyorsa onu da gönderin */
                         sefer={detayContext}
                         row={detayContext}
                         data={detayContext}
@@ -1444,6 +1437,7 @@ export default function PlanlamaDeluxe() {
                     />
                 )}
             </Suspense>
+
             {/* Sipariş Analiz — Merkezde Modern Modal */}
             <Dialog
                 open={analizOpen}
@@ -1476,7 +1470,7 @@ export default function PlanlamaDeluxe() {
                     }}
                 >
                     <Typography variant="h6" fontWeight={800}>
-                        Sipariş Analiz
+                        {`Sipariş Analiz${analizContext?.bolge ? " — " + analizContext.bolge : ""}`}
                     </Typography>
                     <IconButton onClick={() => setAnalizOpen(false)} size="small">
                         <CloseIcon />
@@ -1496,10 +1490,8 @@ export default function PlanlamaDeluxe() {
                         }
                     >
                         <SiparisAnaliz
-                            /* İstersen kalsın: iç komponent bazı aksiyonlarda onClose isteyebilir */
                             open={analizOpen}
                             onClose={() => setAnalizOpen(false)}
-                            /* Veri prop’ları */
                             sefer={analizContext}
                             row={analizContext}
                             data={analizContext}
@@ -1508,9 +1500,6 @@ export default function PlanlamaDeluxe() {
                     </Suspense>
                 </Box>
             </Dialog>
-
-
-
 
             {/* Drag & Drop Overlay */}
             {dragActive && (

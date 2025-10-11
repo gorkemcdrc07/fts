@@ -179,11 +179,12 @@ export default function EditorDialog(props) {
                 }
             }}
         >
+            {/* Başlık: Typography'leri inline yaparak <h6> in <h2> uyarısını çözüyoruz */}
             <DialogTitle sx={{ fontWeight: 900 }}>
-                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                <Typography variant="h6" component="span" sx={{ fontWeight: 900 }}>
                     {editSefer?.sefer_no || "-"} • {editSefer?.plaka || "-"} • {editSefer?.musteri_adi || "-"}
                 </Typography>
-                <Typography variant="caption" sx={{ color: COLORS.textMuted }}>
+                <Typography variant="caption" component="span" sx={{ color: COLORS.textMuted, ml: 1 }}>
                     {computeAracStatu(detailRows) || "—"}
                 </Typography>
             </DialogTitle>
@@ -252,8 +253,14 @@ export default function EditorDialog(props) {
                                 />
                                 <CardContent sx={{ pt: 1.5 }}>
                                     <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 1 }}>
-                                        {[["proje_adi", "Proje Adı"], ["yukleme_noktasi", "Yükleme Noktası"], ["yukleme_ili", "Yükleme İl"],
-                                        ["yukleme_ilcesi", "Yükleme İlçe"], ["teslim_noktasi", "Teslim Noktası"], ["teslim_ili", "Teslim İl"], ["teslim_ilcesi", "Teslim İlçe"],
+                                        {[
+                                            ["proje_adi", "Proje Adı"],
+                                            ["yukleme_noktasi", "Yükleme Noktası"],
+                                            ["yukleme_ili", "Yükleme İl"],
+                                            ["yukleme_ilcesi", "Yükleme İlçe"],
+                                            ["teslim_noktasi", "Teslim Noktası"],
+                                            ["teslim_ili", "Teslim İl"],
+                                            ["teslim_ilcesi", "Teslim İlçe"],
                                         ].map(([k, l]) => (
                                             <TextField
                                                 key={k}
@@ -266,7 +273,7 @@ export default function EditorDialog(props) {
                                             />
                                         ))}
 
-                                        {/* Tarih/Saat alanları */}
+                                        {/* Tarih/Saat alanları — DİKKAT: map bloğunun İÇİNDE! */}
                                         <DateTimeSingleField
                                             label="Yükleme Giriş"
                                             value={r.yukleme_varis || ""}
@@ -283,7 +290,7 @@ export default function EditorDialog(props) {
                                             label="Teslim Giriş"
                                             value={r.teslim_varis || ""}
                                             onChange={(v) => onDetailChange(i, "teslim_varis", v)}
-                                            baseInputSX={baseInputSX}NP
+                                            baseInputSX={baseInputSX}
                                         />
                                         <DateTimeSingleField
                                             label="Teslim Çıkış"

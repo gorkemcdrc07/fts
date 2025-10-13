@@ -1,268 +1,669 @@
-import React, { useMemo } from "react";
-import { motion } from "framer-motion";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
-import utc from "dayjs/plugin/utc";
-import timezone from "dayjs/plugin/timezone";
+// src/aktifseferler/dashboard.jsx
+import * as React from "react";
+import {
+    Box, Stack, Typography, Chip, IconButton, Divider, Collapse, Tooltip,
+    LinearProgress, Paper, ButtonBase, useTheme, Container, TextField, MenuItem,
+    Switch, FormControlLabel, Button, ToggleButton, ToggleButtonGroup, Dialog,
+    DialogTitle, DialogContent, DialogActions, Table, TableHead, TableRow,
+    TableCell, TableBody, CircularProgress
+} from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import DirectionsCarFilledIcon from "@mui/icons-material/DirectionsCarFilled";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import TimelineIcon from "@mui/icons-material/Timeline";
+import FilterListIcon from "@mui/icons-material/FilterList";
+import ViewModuleIcon from "@mui/icons-material/ViewModule";
+import TableRowsIcon from "@mui/icons-material/TableRows";
+import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
+import { alpha } from "@mui/material/styles";
+import { supabase } from "../supabaseClient";
 
-// Dayjs setup
-dayjs.extend(relativeTime);
-dayjs.extend(utc);
-dayjs.extend(timezone);
-
-/**
- * Dashboard (üst bilgi/özet alanı)
- *
- * Kullanım:
- *  <Dashboard
- *    seferler={rowsFromAPI}
- *    nowTz="Europe/Istanbul"
- *    getKapandi={(s) => Boolean(s.kapandi || s.kapanis_tarihi)}
- *    etaField="eta_cikis" // (opsiyonel; default: 'eta_cikis')
- *    detayAccessor={(s) => s.sefer_detaylari}
- *    onFilterStage={(stage) => setLocalFilter(stage)} // (opsiyonel)
- *  />
- *
- * Beklenen alanlar (örn.):
- *  - eta_cikis: ISO string veya "DD.MM.YYYY HH:mm" gibi parse edilebilir tarih
- *  - sefer_detaylari: { yukleme_varis?, yukleme_cikis?, teslim_varis?, teslim_cikis? }
- *  - kapandi/kapanis_tarihi vb.: seferin kapanıp kapanmadığı
- */
-
-function parseDateFlex(value, tz = "Europe/Istanbul") {
-    if (!value) return null;
-    // dayjs, ISO'yu zaten parse ediyor; TR formatlarını da deneyelim
-    const tryFormats = [
-        "DD.MM.YYYY HH:mm",
-        "DD.MM.YYYY H:mm",
-        "YYYY-MM-DD HH:mm",
-        "YYYY-MM-DDTHH:mm",
-        "YYYY-MM-DDTHH:mm:ssZ",
-        "YYYY-MM-DDTHH:mm:ss.SSSZ",
-    ];
-    let d = dayjs.tz(value, tz);
-    if (d.isValid()) return d;
-    for (const f of tryFormats) {
-        d = dayjs.tz(dayjs(value, f), tz);
-        if (d.isValid()) return d;
-    }
-    return null;
+/* ---------- Helpers ---------- */
+const fmt = (iso) => {
+    if (!iso) return "-";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "-";
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${dd}.${mm} ${hh}:${mi}`;
+};
+const isToday = (iso) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return false;
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+};
+const minToHM = (m) => {
+    const mm = Math.max(0, Math.round(m || 0));
+    const h = Math.floor(mm / 60);
+    const r = mm % 60;
+    if (h && r) return `${h} saat ${r} dakika`;
+    if (h) return `${h} saat`;
+    return `${r} dakika`;
+};
+const ON_TIME_TOL_MIN = 15;
+function riskOfLate(minutesLate) {
+    if (minutesLate >= 6 * 60) return { lvl: "kritik", color: "error" };
+    if (minutesLate >= 60) return { lvl: "yüksek", color: "warning" };
+    if (minutesLate >= 15) return { lvl: "orta", color: "secondary" };
+    return { lvl: "düşük", color: "default" };
 }
+const statusPalette = (theme) => ({
+    red: theme.palette.mode === "dark" ? "#ef4444" : "#dc2626",
+    amber: theme.palette.mode === "dark" ? "#f59e0b" : "#d97706",
+    blue: theme.palette.mode === "dark" ? "#3b82f6" : "#2563eb",
+    mint: theme.palette.mode === "dark" ? "#10b981" : "#059669",
+});
 
-function computeStage(detay = {}) {
-    // Aşamayı belirle (en ileriden geri doğru):
-    if (detay.teslim_cikis) return "COMPLETED"; // teslimat çıkışı yapılmış -> iş tamam
-    if (detay.teslim_varis) return "DELIVERY_ARRIVED"; // teslimata varılmış
-    if (detay.yukleme_cikis) return "IN_TRANSIT"; // yüklemeden çıkılmış -> yolda
-    if (detay.yukleme_varis) return "PICKUP_ARRIVED"; // yüklemeye varılmış
-    return "ASSIGNED"; // henüz ilerleme yok
-}
-
-function stageMeta(stage) {
-    switch (stage) {
-        case "COMPLETED":
-            return { label: "Tamamlandı", badge: "bg-emerald-100 text-emerald-800", row: "bg-emerald-50" };
-        case "DELIVERY_ARRIVED":
-            return { label: "Teslim Varış", badge: "bg-sky-100 text-sky-800", row: "bg-sky-50" };
-        case "IN_TRANSIT":
-            return { label: "Yolda", badge: "bg-amber-100 text-amber-800", row: "bg-amber-50" };
-        case "PICKUP_ARRIVED":
-            return { label: "Yükleme Varış", badge: "bg-indigo-100 text-indigo-800", row: "bg-indigo-50" };
-        default:
-            return { label: "Atandı", badge: "bg-zinc-100 text-zinc-800", row: "bg-white" };
-    }
-}
-
-function isDelayed(sefer, opts) {
-    const { tz = "Europe/Istanbul", etaField = "eta_cikis", getKapandi } = opts;
-    const eta = parseDateFlex(sefer?.[etaField], tz);
-    if (!eta) return false;
-    const kapandi = typeof getKapandi === "function" ? getKapandi(sefer) : Boolean(sefer?.kapandi || sefer?.kapanis || sefer?.kapanis_tarihi || sefer?.kapandi_mi);
-    return !kapandi && eta.isBefore(dayjs.tz(tz));
-}
-
-export function getRowClass(sefer, opts = {}) {
-    const detay = (typeof opts.detayAccessor === "function" ? opts.detayAccessor(sefer) : sefer?.sefer_detaylari) || {};
-    const stage = computeStage(detay);
-    const meta = stageMeta(stage);
-    const delayed = isDelayed(sefer, opts);
-    return [
-        meta.row,
-        delayed ? "ring-2 ring-red-400" : "",
-    ]
-        .filter(Boolean)
-        .join(" ");
-}
-
-export default function Dashboard({
-    seferler = [],
-    nowTz = "Europe/Istanbul",
-    etaField = "eta_cikis",
-    getKapandi,
-    detayAccessor,
-    onFilterStage,
-}) {
-    const now = dayjs.tz(nowTz);
-
-    const stats = useMemo(() => {
-        const base = {
-            total: 0,
-            delayed: 0,
-            byStage: {
-                ASSIGNED: 0,
-                PICKUP_ARRIVED: 0,
-                IN_TRANSIT: 0,
-                DELIVERY_ARRIVED: 0,
-                COMPLETED: 0,
-            },
-        };
-
-        const items = seferler.map((s) => {
-            const detay = (typeof detayAccessor === "function" ? detayAccessor(s) : s?.sefer_detaylari) || {};
-            const stage = computeStage(detay);
-            const delayed = isDelayed(s, { tz: nowTz, etaField, getKapandi });
-            return { sefer: s, stage, delayed, detay };
-        });
-
-        for (const it of items) {
-            base.total += 1;
-            base.byStage[it.stage] += 1;
-            if (it.delayed) base.delayed += 1;
-        }
-
-        return { ...base, items };
-    }, [seferler, nowTz, etaField, getKapandi, detayAccessor]);
-
-    const cards = [
-        {
-            key: "total",
-            title: "Toplam Sefer",
-            value: stats.total,
-            desc: "Aktif atamalar",
-        },
-        {
-            key: "delayed",
-            title: "Gecikme",
-            value: stats.delayed,
-            desc: "ETA'sı geçti / kapanmadı",
-            emphasis: true,
-        },
-    ];
-
-    const stageOrder = [
-        "ASSIGNED",
-        "PICKUP_ARRIVED",
-        "IN_TRANSIT",
-        "DELIVERY_ARRIVED",
-        "COMPLETED",
-    ];
-
+/* ---------- Bölüm başlığı ---------- */
+function SectionHeader({ icon, title, count, expanded, onToggle, color = "inherit", hint, rightSlot }) {
+    const theme = useTheme();
     return (
-        <div className="w-full space-y-5">
-            {/* Üst sayaçlar */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {cards.map((c, i) => (
-                    <motion.div
-                        key={c.key}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.05 }}
-                        className={`rounded-2xl border p-4 shadow-sm ${c.emphasis ? "bg-red-50 border-red-200" : "bg-white"}`}
+        <Box
+            sx={{
+                position: "relative",
+                borderRadius: 2.5,
+                overflow: "hidden",
+                "&::before": {
+                    content: '""',
+                    position: "absolute",
+                    inset: 0,
+                    background:
+                        theme.palette.mode === "dark"
+                            ? "linear-gradient(90deg, rgba(59,130,246,0.08), rgba(147,51,234,0.08))"
+                            : "linear-gradient(90deg, rgba(59,130,246,0.08), rgba(16,185,129,0.08))",
+                    pointerEvents: "none",
+                },
+                border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                backdropFilter: "blur(6px)",
+            }}
+        >
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 1.25, py: 1 }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                    <Box
+                        sx={{
+                            width: 26, height: 26, borderRadius: 1.5, display: "grid", placeItems: "center",
+                            background: "linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04))",
+                            border: `1px solid ${alpha(theme.palette.common.white, 0.18)}`,
+                            boxShadow: `inset 0 0 0 1px ${alpha(theme.palette.common.white, 0.12)}`
+                        }}
                     >
-                        <div className="text-sm text-zinc-500">{c.title}</div>
-                        <div className={`mt-1 text-2xl font-semibold ${c.emphasis ? "text-red-700" : "text-zinc-900"}`}>{c.value}</div>
-                        <div className="text-xs text-zinc-500 mt-1">{c.desc}</div>
-                    </motion.div>
-                ))}
-                {stageOrder.map((sKey, i) => {
-                    const meta = stageMeta(sKey);
-                    return (
-                        <motion.div
-                            key={sKey}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: (i + cards.length) * 0.05 }}
-                            className="rounded-2xl border p-4 shadow-sm bg-white"
-                        >
-                            <div className="text-sm text-zinc-500">{meta.label}</div>
-                            <div className="mt-1 text-2xl font-semibold text-zinc-900">{stats.byStage[sKey]}</div>
-                            <div className={`inline-block mt-2 px-2 py-0.5 text-xs rounded-full ${meta.badge}`}>{sKey}</div>
-                        </motion.div>
-                    );
-                })}
-            </div>
+                        {icon}
+                    </Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 900, letterSpacing: 0.2, color }}>
+                        {title}
+                    </Typography>
+                    <Chip
+                        size="small"
+                        label={count}
+                        sx={{
+                            fontWeight: 800, borderRadius: 1.25,
+                            background: theme.palette.mode === "dark" ? alpha("#93c5fd", 0.12) : alpha(theme.palette.primary.main, 0.08),
+                            border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`
+                        }}
+                    />
+                    {hint ? (
+                        <Tooltip title={hint} arrow>
+                            <Box sx={{ ml: 0.5, width: 10, height: 10, borderRadius: "50%", bgcolor: color, opacity: 0.6 }} />
+                        </Tooltip>
+                    ) : null}
+                </Stack>
 
-            {/* Geciken seferler kısa liste */}
-            {stats.delayed > 0 && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="rounded-2xl border border-red-200 bg-red-50 p-4"
-                >
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <div className="font-semibold text-red-700">Geciken Seferler</div>
-                            <div className="text-xs text-red-700/80">Şu an itibarıyla: {now.format("DD.MM.YYYY HH:mm")}</div>
-                        </div>
-                        {typeof onFilterStage === "function" && (
-                            <button
-                                onClick={() => onFilterStage("DELAYED")}
-                                className="text-xs rounded-lg border border-red-400 px-2 py-1 text-red-700 hover:bg-red-100"
-                            >
-                                Tabloyu Gecikmelere Filtrele
-                            </button>
-                        )}
-                    </div>
-                    <div className="mt-3 grid gap-2 md:grid-cols-2">
-                        {stats.items
-                            .filter((it) => it.delayed)
-                            .slice(0, 6)
-                            .map((it, idx) => (
-                                <div key={idx} className="rounded-xl bg-white/60 backdrop-blur border border-red-200 p-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="font-medium text-zinc-800">Sefer #{it.sefer?.id ?? it.sefer?.sefer_no ?? idx + 1}</div>
-                                        <span className="text-xs text-red-700">ETA geçti</span>
-                                    </div>
-                                    <div className="text-xs text-zinc-600 mt-1">
-                                        ETA Çıkış: {parseDateFlex(it.sefer?.[etaField])?.format("DD.MM.YYYY HH:mm") || "-"}
-                                    </div>
-                                </div>
-                            ))}
-                    </div>
-                </motion.div>
-            )}
-
-            {/* Aşama lejandı */}
-            <div className="rounded-2xl border p-4 bg-white">
-                <div className="text-sm font-semibold text-zinc-800">Aşama Renkleri</div>
-                <div className="mt-2 grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
-                    {stageOrder.map((sKey) => {
-                        const meta = stageMeta(sKey);
-                        return (
-                            <div key={sKey} className={`rounded-xl border p-3 ${meta.row}`}>
-                                <div className="font-medium text-zinc-800">{meta.label}</div>
-                                <div className="text-zinc-600 mt-1">Satır arkaplanı: <span className={`px-2 py-0.5 rounded ${meta.badge}`}>{sKey}</span></div>
-                            </div>
-                        );
-                    })}
-                    <div className="rounded-xl border p-3 bg-white ring-2 ring-red-400">
-                        <div className="font-medium text-zinc-800">Gecikme</div>
-                        <div className="text-zinc-600 mt-1">ETA geçti & kapatılmadı → kırmızı halka</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+                <Stack direction="row" spacing={1} alignItems="center">
+                    {rightSlot}
+                    <IconButton size="small" onClick={onToggle}>
+                        <ExpandMoreIcon sx={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "0.2s" }} />
+                    </IconButton>
+                </Stack>
+            </Stack>
+        </Box>
     );
 }
 
-/**
- * Yardımcı: tablodaki satıra className uygulamak için.
- * Örnek kullanım (ReelAtananSeferler.js içinde):
- *
- *   <tr className={getRowClass(row, {
- *     tz: 'Europe/Istanbul',
- *     etaField: 'eta_cikis',
- *     getKapandi: (s) => Boolean(s.kapandi || s.kapanis_tarihi),
- *     detayAccessor: (s) => s.sefer_detaylari,
- *   })}>
- */
+/* ---------- Modern rozet ---------- */
+function NoteBadge({ title = "Açıklama mevcut" }) {
+    return (
+        <Tooltip title={title}>
+            <Box sx={{
+                position: "absolute", top: 0, left: 0, width: 0, height: 0,
+                borderTop: "22px solid transparent", borderRight: "22px solid transparent",
+                "&::after": {
+                    content: '""', position: "absolute", top: 0, left: 0, width: 32, height: 32,
+                    transform: "translate(-16px, -16px) rotate(45deg)", borderRadius: 1.25,
+                    background: "linear-gradient(135deg, rgba(168,85,247,0.95) 0%, rgba(34,211,238,0.95) 100%)",
+                    boxShadow: "0 8px 20px rgba(99,102,241,0.45), inset 0 0 0 1px rgba(255,255,255,0.5)"
+                }
+            }}>
+                <Box sx={{
+                    position: "absolute", top: 2.5, left: 2.5, width: 18, height: 18, display: "grid", placeItems: "center",
+                    transform: "translateY(-50%) translateX(-50%)"
+                }}>
+                    <AutoAwesomeRoundedIcon sx={{ fontSize: 14, color: "#fff" }} />
+                </Box>
+            </Box>
+        </Tooltip>
+    );
+}
+
+/* ---------- Kart ---------- */
+function RowCard({ title, subtitle, chips = [], onClick, color = "inherit", dense, hasNote }) {
+    const theme = useTheme();
+    return (
+        <ButtonBase onClick={onClick} sx={{ width: "100%", textAlign: "left", borderRadius: 2.5 }}>
+            <Box sx={{
+                position: "relative", borderRadius: 2.5, p: 0.8,
+                background: `linear-gradient(140deg, ${alpha(theme.palette.primary.main, 0.18)}, ${alpha(theme.palette.secondary.main, 0.18)})`
+            }}>
+                <Paper
+                    elevation={0}
+                    sx={{
+                        position: "relative", px: 1.25, py: dense ? 0.75 : 1, borderRadius: 2,
+                        border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+                        background: alpha(theme.palette.background.paper, 0.7), backdropFilter: "blur(6px)",
+                        transition: "transform .14s ease, box-shadow .14s ease, border-color .14s ease",
+                        boxShadow: `0 4px 18px ${alpha(theme.palette.common.black, 0.12)}`,
+                        "&:hover": { transform: "translateY(-2px)", borderColor: alpha(theme.palette.text.primary, 0.25), boxShadow: `0 10px 26px ${alpha(theme.palette.common.black, 0.16)}` }
+                    }}
+                >
+                    {hasNote && <NoteBadge />}
+                    <Stack direction="row" alignItems="center" spacing={1.25}>
+                        <Box sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: color, boxShadow: `0 0 0 3px ${alpha(color, 0.15)}`, mt: 0.25 }} />
+                        <Stack sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 800, letterSpacing: 0.2, overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {title}
+                            </Typography>
+                            <Typography variant="caption" sx={{ opacity: 0.75 }}>{subtitle}</Typography>
+                        </Stack>
+                        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
+                            {chips}
+                        </Stack>
+                    </Stack>
+                </Paper>
+            </Box>
+        </ButtonBase>
+    );
+}
+
+/* ---------- Grid helper ---------- */
+function GridList({ items, render, pageSize = 12 }) {
+    const [page, setPage] = React.useState(1);
+    const total = items.length;
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    const start = (page - 1) * pageSize;
+    const slice = items.slice(start, start + pageSize);
+
+    return (
+        <Stack spacing={1}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1.1 }}>{slice.map(render)}</Box>
+            {pages > 1 && (
+                <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ pt: 0.5 }}>
+                    <Button size="small" variant="outlined" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Önceki</Button>
+                    <Typography variant="caption">{page} / {pages}</Typography>
+                    <Button size="small" variant="outlined" disabled={page === pages} onClick={() => setPage((p) => Math.min(pages, p + 1))}>Sonraki</Button>
+                </Stack>
+            )}
+        </Stack>
+    );
+}
+
+/* ---------- ANA DASHBOARD ---------- */
+export default function Dashboard({ rows = [], onOpenRow, onAskReason, reasonNos = new Set(), bump }) {
+    const theme = useTheme();
+    const sp = statusPalette(theme);
+
+    const byId = React.useMemo(() => {
+        const m = new Map();
+        rows.forEach((r) => m.set(r.id ?? r.sefer_no, r));
+        return m;
+    }, [rows]);
+
+    const bySeferNo = React.useMemo(() => {
+        const m = new Map();
+        rows.forEach((r) => {
+            const k = (r.sefer_no || "").toString().trim();
+            if (k) m.set(k, r);
+        });
+        return m;
+    }, [rows]);
+
+    const deliveredCompare = React.useMemo(() => {
+        const out = [];
+        rows.forEach((r) => {
+            const eta = r?.eta ? new Date(r.eta) : null;
+            const teslimVarisISO = r?.detay?.teslim_varis || null;
+            const tv = teslimVarisISO ? new Date(teslimVarisISO) : null;
+            if (!eta || !tv) return;
+            const diffMin = Math.round((tv - eta) / 60000);
+            let durum = "zamanında";
+            if (diffMin > ON_TIME_TOL_MIN) durum = "gecikme";
+            else if (diffMin < -ON_TIME_TOL_MIN) durum = "erken";
+            out.push({ ...r, teslim_varis: teslimVarisISO, eta_diff_min: diffMin, durum });
+        });
+        return out;
+    }, [rows]);
+    const deliveredNotOnEta = React.useMemo(() => deliveredCompare.filter((x) => x.durum !== "zamanında"), [deliveredCompare]);
+
+    const liveLate = React.useMemo(
+        () => rows.filter((r) => r?.eta).map((r) => ({ ...r, etaDate: new Date(r.eta) })).filter((r) => r.etaDate.getTime() < Date.now()),
+        [rows]
+    );
+    const etaMissingToday = React.useMemo(() => rows.filter((r) => !r?.eta && r?.sefer_tarihi && isToday(r.sefer_tarihi)), [rows]);
+
+    /* --------- LOG GÖRÜNÜRLÜĞÜ: sadece kendi logunu gör --------- */
+    const normalizeUser = (s = "") =>
+        s.normalize("NFKC").toLocaleLowerCase("tr-TR").replace(/\s+/g, "");
+    const meRaw = localStorage.getItem("kullaniciAdi") || "-";
+    const me = normalizeUser(meRaw);
+    // tüm logları görme yetkisi olan kullanıcılar
+    const ALL_VIEWERS = new Set(["admin", "bekirakcagoz"]);
+    const isAllViewer = ALL_VIEWERS.has(me);
+
+    const recentLogs = React.useMemo(() => {
+        try {
+            const all = JSON.parse(localStorage.getItem("aktifseferler.logs") || "[]");
+            const todays = all.filter((x) => isToday(x.ts));
+            const visible = isAllViewer
+                ? todays
+                : todays.filter((l) => normalizeUser(l.user || "-") === me);
+            return visible.slice(0, 10);
+        } catch {
+            return [];
+        }
+    }, [rows.length, bump, isAllViewer, me]);
+
+    const [openDelivered, setOpenDelivered] = React.useState(false);
+    const [openLive, setOpenLive] = React.useState(false);
+    const [openMissing, setOpenMissing] = React.useState(false);
+    const [openLogs, setOpenLogs] = React.useState(false);
+
+    const [onlyHigh, setOnlyHigh] = React.useState(false);
+    const [sortKey, setSortKey] = React.useState("lateDesc");
+    const [dense, setDense] = React.useState(true);
+    const [view, setView] = React.useState("grid");
+
+    const hasNote = React.useCallback(
+        (sefer_no) => {
+            const sn = (sefer_no || "").toString().trim();
+            return sn && reasonNos.has(sn);
+        },
+        [reasonNos]
+    );
+
+    const prepare = React.useCallback(
+        (arr, kind) => {
+            let list = [...arr];
+            if (kind === "live") {
+                list = list.map((r) => {
+                    const lateMin = Math.max(0, Math.round((Date.now() - r.etaDate.getTime()) / 60000));
+                    const rk = riskOfLate(lateMin);
+                    return { ...r, __lateMin: lateMin, __risk: rk };
+                });
+                if (onlyHigh) list = list.filter((x) => ["yüksek", "kritik"].includes(x.__risk.lvl));
+                if (sortKey === "lateDesc") list.sort((a, b) => b.__lateMin - a.__lateMin);
+                if (sortKey === "etaAsc") list.sort((a, b) => a.etaDate - b.etaDate);
+                if (sortKey === "codeAsc") list.sort((a, b) => String(a.sefer_no).localeCompare(String(b.sefer_no)));
+            }
+            if (kind === "delivered") {
+                list = list.map((r) => {
+                    const lateMin = Math.abs(r.eta_diff_min);
+                    const overdue = r.eta_diff_min > 0 ? lateMin : 0;
+                    const rk = riskOfLate(overdue);
+                    return { ...r, __lateMin: overdue, __risk: rk };
+                });
+                if (onlyHigh) list = list.filter((x) => ["yüksek", "kritik"].includes(x.__risk.lvl));
+                if (sortKey === "lateDesc") list.sort((a, b) => b.__lateMin - a.__lateMin);
+                if (sortKey === "etaAsc") list.sort((a, b) => new Date(a.teslim_varis) - new Date(b.teslim_varis));
+                if (sortKey === "codeAsc") list.sort((a, b) => String(a.sefer_no).localeCompare(String(b.sefer_no)));
+            }
+            return list;
+        },
+        [onlyHigh, sortKey]
+    );
+
+    /* ---------- RAPOR PANELİ ---------- */
+    const [reportOpen, setReportOpen] = React.useState(false);
+    const [reportTitle, setReportTitle] = React.useState("");
+    const [reportKind, setReportKind] = React.useState(null); // "live" | "delivered"
+    const [reportRows, setReportRows] = React.useState([]);
+    const [reportLoading, setReportLoading] = React.useState(false);
+
+    const openReport = async (kind) => {
+        if (kind === "live") {
+            const list = prepare(liveLate, "live");
+            const nos = Array.from(new Set(list.map((r) => (r.sefer_no || "").toString().trim()).filter(Boolean)));
+
+            setReportTitle("Rapor • Şu an geç görünenler");
+            setReportKind("live");
+            setReportOpen(true);
+            setReportLoading(true);
+            try {
+                let rowsOut = [];
+                if (nos.length) {
+                    const { data, error } = await supabase
+                        .from("eta_gecikme_nedenleri")
+                        .select("sefer_no,kategori,aciklama,kaydeden,kayit_zamani,sefer_tarihi,eta_varis,gecikme_suresi_dk")
+                        .in("sefer_no", nos)
+                        .order("kayit_zamani", { ascending: false });
+
+                    if (error) throw error;
+
+                    rowsOut = (data || []).map((r) => {
+                        const base = bySeferNo.get((r.sefer_no || "").toString().trim()) || {};
+                        return {
+                            sefer_no: r.sefer_no,
+                            plaka: base.plaka || "-",
+                            surucu: base.surucu_ad_soyad || "-",
+                            kategori: r.kategori || "-",
+                            aciklama: r.aciklama || "-",
+                            kaydeden: r.kaydeden || "-",
+                            kayit_zamani: r.kayit_zamani || null,
+                            sefer_tarihi: r.sefer_tarihi || null,
+                            eta: r.eta_varis || null,
+                            gecikme_dk: typeof r.gecikme_suresi_dk === "number" ? r.gecikme_suresi_dk : null,
+                        };
+                    });
+                }
+                setReportRows(rowsOut);
+            } catch (e) {
+                setReportRows([]);
+                console.error("Rapor (live) fetch error:", e?.message || e);
+            } finally {
+                setReportLoading(false);
+            }
+            return;
+        }
+
+        if (kind === "delivered") {
+            const list = prepare(deliveredNotOnEta, "delivered");
+            const mapped = list.map((r) => ({
+                sefer_no: r.sefer_no,
+                plaka: r.plaka || "-",
+                surucu: r.surucu_ad_soyad || "-",
+                eta: r.eta,
+                teslim_varis: r.teslim_varis,
+                fark_dk: r.eta_diff_min,
+                durum: r.durum,
+                risk: riskOfLate(r.eta_diff_min > 0 ? Math.abs(r.eta_diff_min) : 0).lvl,
+            }));
+            setReportRows(mapped);
+            setReportTitle("Rapor • Teslim varış ≠ ETA");
+            setReportKind("delivered");
+            setReportOpen(true);
+        }
+    };
+
+    /* ---------- Excel (CSV) aktar ---------- */
+    const csvEscape = (val) => {
+        const s = String(val ?? "");
+        if (/[;"\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+    };
+    const downloadCSV = (filename, headers, rows) => {
+        const sep = ";";
+        const headerLine = headers.map(csvEscape).join(sep);
+        const lines = rows.map((r) => r.map(csvEscape).join(sep));
+        const csv = [headerLine, ...lines].join("\r\n");
+        const bom = "\uFEFF";
+        const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+    };
+    const exportToExcel = () => {
+        if (!reportRows.length || !reportKind) return;
+        const pad = (n) => String(n).padStart(2, "0");
+        const ts = new Date();
+        if (reportKind === "live") {
+            const headers = ["Sefer No", "Plaka", "Şoför", "Kategori", "Açıklama", "ETA", "Gecikme (saat/dk)", "Kaydeden", "Kayıt Zamanı"];
+            const rows = reportRows.map((r) => [
+                r.sefer_no || "-", r.plaka || "-", r.surucu || "-", r.kategori || "-",
+                r.aciklama || "-", fmt(r.eta), minToHM(r.gecikme_dk ?? 0), r.kaydeden || "-", fmt(r.kayit_zamani)
+            ]);
+            const name = `rapor_gec_gorunenler_${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}`;
+            downloadCSV(name, headers, rows);
+        } else {
+            const headers = ["Sefer No", "Plaka", "Şoför", "ETA", "Teslim Varış", "Fark (saat/dk)", "Durum", "Risk"];
+            const rows = reportRows.map((r) => [
+                r.sefer_no || "-", r.plaka || "-", r.surucu || "-", fmt(r.eta), fmt(r.teslim_varis),
+                minToHM(Math.abs(r.fark_dk ?? 0)), (r.durum || "-").toString().toUpperCase(), r.risk || "-"
+            ]);
+            const name = `rapor_teslim_eta_fark_${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}`;
+            downloadCSV(name, headers, rows);
+        }
+    };
+
+    /* ---------- UI ---------- */
+    function Controls() {
+        return (
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ xs: "flex-start", md: "center" }}
+                sx={{
+                    pb: 0.5, px: 0.75, pt: 0.75, borderRadius: 2, border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+                    background: alpha(theme.palette.background.paper, 0.5), backdropFilter: "blur(6px)"
+                }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                    <FilterListIcon fontSize="small" />
+                    <FormControlLabel control={<Switch size="small" checked={onlyHigh} onChange={(e) => setOnlyHigh(e.target.checked)} />}
+                        label={<Typography variant="caption">Sadece yüksek/kritik</Typography>} />
+                </Stack>
+
+                <TextField select size="small" value={sortKey} onChange={(e) => setSortKey(e.target.value)} label="Sırala" sx={{ minWidth: 180 }}>
+                    <MenuItem value="lateDesc">Gecikme (azalan)</MenuItem>
+                    <MenuItem value="etaAsc">ETA / Teslim (artan)</MenuItem>
+                    <MenuItem value="codeAsc">Sefer No (A→Z)</MenuItem>
+                </TextField>
+
+                <FormControlLabel control={<Switch size="small" checked={dense} onChange={(e) => setDense(e.target.checked)} />}
+                    label={<Typography variant="caption">Sıkı görünüm</Typography>} />
+
+                <Box sx={{ flex: 1 }} />
+
+                <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, v) => v && setView(v)}
+                    sx={{ background: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.8)}`, borderRadius: 2 }}>
+                    <ToggleButton value="grid" sx={{ px: 1.2 }}><ViewModuleIcon fontSize="small" /></ToggleButton>
+                    <ToggleButton value="list" sx={{ px: 1.2 }}><TableRowsIcon fontSize="small" /></ToggleButton>
+                </ToggleButtonGroup>
+            </Stack>
+        );
+    }
+
+    return (
+        <Container maxWidth="lg" disableGutters>
+            <Stack spacing={1.25}>
+                <SectionHeader
+                    icon={<AccessTimeIcon fontSize="small" />}
+                    title="Şu an geç görünenler"
+                    count={liveLate.length}
+                    expanded={openLive}
+                    onToggle={() => setOpenLive((v) => !v)}
+                    color={sp.amber}
+                    rightSlot={<Button size="small" variant="outlined" onClick={() => openReport("live")}>Raporla</Button>}
+                />
+                <Collapse in={openLive} unmountOnExit>
+                    <Controls />
+                    {(() => {
+                        const list = prepare(liveLate, "live");
+                        const renderItem = (r) => {
+                            const chips = [
+                                <Chip key="risk" size="small" label={`Risk: ${r.__risk.lvl}`} color={r.__risk.color}
+                                    variant={r.__risk.color === "default" ? "outlined" : "filled"} />,
+                                <Chip key="late" size="small" label={`+${minToHM(r.__lateMin)}`} variant="outlined" color="warning" />,
+                            ];
+                            const full = byId.get(r.id ?? r.sefer_no) || r;
+                            return (
+                                <RowCard key={r.id ?? r.sefer_no} title={r.sefer_no || "-"} subtitle={`ETA: ${fmt(r.eta)}`}
+                                    chips={chips} color={sp.amber} dense={dense} hasNote={hasNote(r.sefer_no)}
+                                    onClick={() => { onOpenRow && onOpenRow(full, { readOnly: true }); onAskReason && onAskReason(full); }} />
+                            );
+                        };
+                        return view === "grid" ? <GridList items={list} render={renderItem} pageSize={12} /> : <Stack spacing={0.9}>{list.map(renderItem)}</Stack>;
+                    })()}
+                </Collapse>
+
+                <Divider sx={{ opacity: 0.08 }} />
+
+                <SectionHeader
+                    icon={<CheckCircleOutlineIcon fontSize="small" />}
+                    title="Teslim varış ≠ ETA"
+                    count={deliveredNotOnEta.length}
+                    expanded={openDelivered}
+                    onToggle={() => setOpenDelivered((v) => !v)}
+                    color={sp.red}
+                    hint="Gerçek teslim zamanı ile kayıtlı ETA farkı"
+                    rightSlot={<Button size="small" variant="outlined" color="error" onClick={() => openReport("delivered")}>Raporla</Button>}
+                />
+                <Collapse in={openDelivered} unmountOnExit>
+                    <Controls />
+                    {(() => {
+                        const list = prepare(deliveredNotOnEta, "delivered");
+                        const renderItem = (r) => {
+                            const chips = [
+                                <Chip key="state" size="small" label={r.durum.toUpperCase()} color={r.durum === "gecikme" ? "error" : "success"} />,
+                                <Chip key="risk" size="small" label={`Risk: ${r.__risk.lvl}`} color={r.__risk.color}
+                                    variant={r.__risk.color === "default" ? "outlined" : "filled"} />,
+                                <Chip key="diff" size="small" variant="outlined" label={`${r.eta_diff_min > 0 ? "+" : ""}${minToHM(Math.abs(r.eta_diff_min))}`} />,
+                            ];
+                            return (
+                                <RowCard key={r.id ?? r.sefer_no}
+                                    title={r.sefer_no || "-"} subtitle={`ETA: ${fmt(r.eta)} • Teslim: ${fmt(r.teslim_varis)}`}
+                                    chips={chips} color={sp.red} dense={dense} hasNote={hasNote(r.sefer_no)}
+                                    onClick={() => onOpenRow && onOpenRow(byId.get(r.id ?? r.sefer_no) || r)} />
+                            );
+                        };
+                        return view === "grid" ? <GridList items={list} render={renderItem} pageSize={12} /> : <Stack spacing={0.9}>{list.map(renderItem)}</Stack>;
+                    })()}
+                </Collapse>
+
+                <Divider sx={{ opacity: 0.08 }} />
+
+                <SectionHeader
+                    icon={<DirectionsCarFilledIcon fontSize="small" />}
+                    title="ETA eksik (bugün)"
+                    count={etaMissingToday.length}
+                    expanded={openMissing}
+                    onToggle={() => setOpenMissing((v) => !v)}
+                    color={sp.blue}
+                />
+                <Collapse in={openMissing} unmountOnExit>
+                    {etaMissingToday.length === 0 ? (
+                        <Typography variant="caption" sx={{ opacity: 0.7, px: 0.5 }}>Bugün için eksik ETA yok.</Typography>
+                    ) : (
+                        <GridList
+                            items={etaMissingToday}
+                            render={(r) => (
+                                <RowCard key={r.id ?? r.sefer_no} title={r.sefer_no || "-"} subtitle={`Sefer Tarihi: ${fmt(r.sefer_tarihi)}`}
+                                    chips={[<Chip key="tag" size="small" label="ETA YOK" variant="outlined" />]}
+                                    color={sp.blue} dense={dense} hasNote={hasNote(r.sefer_no)}
+                                    onClick={() => onOpenRow && onOpenRow(byId.get(r.id ?? r.sefer_no) || r)} />
+                            )}
+                            pageSize={12}
+                        />
+                    )}
+                </Collapse>
+
+                <Divider sx={{ opacity: 0.08 }} />
+
+                <SectionHeader
+                    icon={<TimelineIcon fontSize="small" />}
+                    title="Bugün güncellenen alanlar (son 10)"
+                    count={recentLogs.length}
+                    expanded={openLogs}
+                    onToggle={() => setOpenLogs((v) => !v)}
+                    color={sp.mint}
+                />
+                <Collapse in={openLogs} unmountOnExit>
+                    {recentLogs.length === 0 ? (
+                        <Typography variant="caption" sx={{ opacity: 0.7, px: 0.5 }}>Bugün için log kaydı yok.</Typography>
+                    ) : (
+                        <GridList
+                            items={recentLogs}
+                            render={(l, i) => (
+                                <RowCard key={`${l.ts}-${i}`} title={l.sefer_no || "-"}
+                                    subtitle={`${l.user} • ${fmt(l.ts)} • ${l.action}${l.fields?.length ? ` [${l.fields.join(", ")}]` : ""}`}
+                                    chips={[]} color={sp.mint} dense={dense} hasNote={hasNote(l.sefer_no)}
+                                    onClick={() => {
+                                        const found = rows.find((r) => (r.sefer_no || "").toString() === (l.sefer_no || "").toString()) || null;
+                                        if (found && onOpenRow) onOpenRow(found);
+                                    }} />
+                            )}
+                            pageSize={12}
+                        />
+                    )}
+                </Collapse>
+
+                <Box sx={{ mt: 0.5 }}>
+                    <LinearProgress sx={{ height: 2, borderRadius: 6, opacity: 0.18 }} />
+                </Box>
+            </Stack>
+
+            {/* ---------- RAPOR DİYALOĞU ---------- */}
+            <Dialog open={reportOpen} onClose={() => setReportOpen(false)} fullWidth maxWidth="lg"
+                PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}>
+                <DialogTitle sx={{ fontWeight: 900, display: "flex", alignItems: "center", gap: 1 }}>
+                    {reportTitle}
+                    {reportLoading && <CircularProgress size={16} sx={{ ml: 0.5 }} />}
+                </DialogTitle>
+                <DialogContent dividers sx={{ p: 0 }}>
+                    <Box sx={{ maxHeight: 560, overflow: "auto" }}>
+                        <Table size="small" stickyHeader>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell sx={{ fontWeight: 800 }}>Sefer No</TableCell>
+                                    <TableCell sx={{ fontWeight: 800 }}>Plaka</TableCell>
+                                    <TableCell sx={{ fontWeight: 800 }}>Şoför</TableCell>
+                                    {reportKind === "live" ? <TableCell sx={{ fontWeight: 800 }}>Kategori</TableCell> : null}
+                                    {reportKind === "live" ? <TableCell sx={{ fontWeight: 800 }}>Açıklama</TableCell> : null}
+                                    <TableCell sx={{ fontWeight: 800 }}>ETA</TableCell>
+                                    {reportKind === "delivered" ? <TableCell sx={{ fontWeight: 800 }}>Teslim Varış</TableCell> : null}
+                                    <TableCell sx={{ fontWeight: 800 }}>{reportKind === "delivered" ? "Fark (saat/dk)" : "Gecikme (saat/dk)"}</TableCell>
+                                    {reportKind === "delivered" ? <TableCell sx={{ fontWeight: 800 }}>Durum</TableCell> : null}
+                                    <TableCell sx={{ fontWeight: 800 }}>{reportKind === "live" ? "Kaydeden" : "Risk"}</TableCell>
+                                    {reportKind === "live" ? <TableCell sx={{ fontWeight: 800 }}>Kayıt Zamanı</TableCell> : null}
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {reportRows.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={9}>
+                                            <Typography variant="body2" sx={{ opacity: 0.7, p: 2 }}>
+                                                Kayıt bulunamadı.
+                                            </Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    reportRows.map((r, i) => (
+                                        <TableRow key={`${r.sefer_no}-${i}`} hover>
+                                            <TableCell>{r.sefer_no}</TableCell>
+                                            <TableCell>{r.plaka || "-"}</TableCell>
+                                            <TableCell>{r.surucu || "-"}</TableCell>
+                                            {reportKind === "live" ? <TableCell>{r.kategori}</TableCell> : null}
+                                            {reportKind === "live" ? <TableCell>{r.aciklama}</TableCell> : null}
+                                            <TableCell>{fmt(r.eta)}</TableCell>
+                                            {reportKind === "delivered" ? <TableCell>{fmt(r.teslim_varis)}</TableCell> : null}
+                                            <TableCell>{reportKind === "delivered" ? minToHM(Math.abs(r.fark_dk ?? 0)) : minToHM(r.gecikme_dk ?? 0)}</TableCell>
+                                            {reportKind === "delivered" ? <TableCell>{r.durum?.toUpperCase?.() || "-"}</TableCell> : null}
+                                            <TableCell>{reportKind === "live" ? r.kaydeden : r.risk}</TableCell>
+                                            {reportKind === "live" ? <TableCell>{fmt(r.kayit_zamani)}</TableCell> : null}
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={exportToExcel} variant="contained" disabled={!reportRows.length}>
+                        Excel’e aktar
+                    </Button>
+                    <Button onClick={() => setReportOpen(false)}>Kapat</Button>
+                </DialogActions>
+            </Dialog>
+        </Container>
+    );
+}

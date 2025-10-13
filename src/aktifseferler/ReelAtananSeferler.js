@@ -94,29 +94,59 @@ function TimeHMField(props) {
     return <TextField type="time" size="small" inputProps={{ step: 60 }} InputLabelProps={{ shrink: true }} {...props} />;
 }
 
-/* ======= YETKİ ======= */
-const _rawUser = localStorage.getItem("kullaniciAdi") || "";
+/* ======= YETKİ (ROL TABANLI) ======= */
+// Rolü al
+const rawRole =
+    (localStorage.getItem("rol") || localStorage.getItem("role") || "").trim();
 
-// Kullanıcı adını sağlamlaştır: e-posta domainini at, TR karakterleri koru, boşluk/özel karakterleri temizle
-const makeKey = (s = "") =>
-    s
-        .normalize("NFKC")
-        .toLocaleLowerCase("tr-TR")
-        .trim()
-        .replace(/\s+/g, "")
-        .replace(/@.*/, "") // e-posta domainini at
-        .replace(/[^a-z0-9\u00e7\u011f\u0131\u00f6\u015f\u00fc]/g, ""); // TR harfleri dışı temizle
+// Türkçe normalize + büyük harfe
+const normalizeRole = (s = "") =>
+    s.normalize("NFKC").toLocaleUpperCase("tr-TR").replace(/\s+/g, "");
 
-const _userKey = makeKey(_rawUser);
+const roleKey = normalizeRole(rawRole);
 
-// Roller
-const POWER_USERS = new Set(["admin", "bekirakcagoz"]);          // tüm butonlar (Edit + ETA)
-const EDIT_ONLY = new Set(["selin", "sel\u0131n"]);             // sadece Edit
-const ETA_ONLY = new Set(["buketcimenci", "selcuk", "mert", "ferhat"]); // sadece ETA
+// Sabitler
+const ROLES = {
+    TAKIP: "TAKİP",
+    OPERASYON: "OPERASYON",
+    YONETICI: "YÖNETİCİ",
+};
 
-// Yetkiler
-export const canEdit = POWER_USERS.has(_userKey) || EDIT_ONLY.has(_userKey);
-export const canSeeETA = POWER_USERS.has(_userKey) || ETA_ONLY.has(_userKey);
+// Bazı sistemler noktasız/diakritiksiz yazabilir; İKİ VERSİYONU da kabul et
+const alias = (r) => {
+    const k = normalizeRole(r);
+    if (k === "YÖNETİCİ" || k === "YONETICI") return ROLES.YONETICI;
+    if (k === "OPERASYON") return ROLES.OPERASYON;
+    if (k === "TAKİP" || k === "TAKIP") return ROLES.TAKIP;
+    return ""; // bilinmeyen rol
+};
+
+const resolvedRole = alias(roleKey);
+
+/* ---- KULLANICI ADI (normalize) ---- */
+const rawUser = (localStorage.getItem("kullaniciAdi") || "").trim();
+const normalizeUser = (s = "") =>
+    s.normalize("NFKC").toLocaleUpperCase("tr-TR").replace(/\s+/g, "");
+const userKey = normalizeUser(rawUser);
+
+/* ---- Buton GÖRÜNÜRLÜĞÜ: herkes görsün ---- */
+export const canEdit = true;
+export const canSeeETA = true;
+
+/* ---- Senkronizasyon yetkisi: sadece YÖNETİCİ ---- */
+export const canSync = resolvedRole === ROLES.YONETICI;
+
+/* ---- AÇMA İZNİ (iş mantığı) ---- */
+const isManager = resolvedRole === ROLES.YONETICI;
+
+// Düzenle: sadece SELİN (SELIN) & rol TAKİP, ya da YÖNETİCİ
+export const mayOpenEdit =
+    isManager || (resolvedRole === ROLES.TAKIP && ["SELİN", "SELIN"].includes(userKey));
+
+// ETA: sadece {Mert, FerhatKarisli, selcuk, buketcimenci} & rol OPERASYON, ya da YÖNETİCİ
+const ETA_USER_SET = new Set(["MERT", "FERHATKARISLI", "SELCUK", "BUKETCIMENCI"]);
+export const mayOpenETA =
+    isManager || (resolvedRole === ROLES.OPERASYON && ETA_USER_SET.has(userKey));
 
 /* ---- yardımcı: UUID kontrolü ---- */
 const isUUID = (v) =>
@@ -580,8 +610,8 @@ export default function ReelAtananSeferler() {
     /* ===== ETA PANELİ ===== */
     const openEditor = useCallback(
         async (row, aktarModu = false) => {
-            if (!canEdit) {
-                setSnack({ open: true, msg: "Bu işlemi yapma yetkiniz yok.", severity: "warning" });
+            if (!mayOpenEdit) {
+                setSnack({ open: true, msg: "Düzenleyi açma yetkiniz yok.", severity: "warning" });
                 return;
             }
             setEditSefer(row);
@@ -657,13 +687,13 @@ export default function ReelAtananSeferler() {
                 });
             }
         },
-        [canEdit]
+        [mayOpenEdit]
     );
 
     const openETA = useCallback(
         async (row) => {
-            if (!canSeeETA) {
-                setSnack({ open: true, msg: "ETA panelini görüntüleme yetkiniz yok.", severity: "warning" });
+            if (!mayOpenETA) {
+                setSnack({ open: true, msg: "ETA panelini açma yetkiniz yok.", severity: "warning" });
                 return;
             }
 
@@ -720,8 +750,8 @@ export default function ReelAtananSeferler() {
                     const mesafeRaw = await fetchMesafe({ yIl, yIlce, tIl, tIlce });
                     const km = parseMesafeKm(mesafeRaw);
                     if (km) {
-                        setEtaDistanceKm(km);
                         const safMin = Math.round((km / AVG_SPEED_KMPH) * 60);
+                        setEtaDistanceKm(km);
                         setEtaDistanceInfo(
                             `${km.toFixed(0)} km • saf sürüş ~ ${Math.floor(safMin / 60)}s ${String(safMin % 60).padStart(2, "0")}d @ ${AVG_SPEED_KMPH} km/s`
                         );
@@ -739,7 +769,7 @@ export default function ReelAtananSeferler() {
                 setEtaStartISO(nowLocalISO());
             }
         },
-        [canSeeETA]
+        [mayOpenETA]
     );
 
     // Özet metinleri
@@ -869,57 +899,98 @@ export default function ReelAtananSeferler() {
     useEffect(() => {
         let cancelled = false;
 
-        const base = filtered.map(r => ({
+        const base = filtered.map((r) => ({
             id: r.id ?? r._rid ?? null,
             sefer_no: r.sefer_no,
             eta: r.eta_varis || null,
             sefer_tarihi: r.sefer_tarihi || null,
-            detay: undefined
+            detay: undefined,
         }));
         setDashRows(base);
 
         const take = base.slice(0, 30);
         (async () => {
             try {
-                const filled = await Promise.all(take.map(async (row) => {
-                    const id = row.id || null;
-                    if (!id) return row;
-                    try {
-                        const det = await loadDetaylar(id);
-                        const pick = (x) => x ?? "";
-                        const latestAt = (arr) => {
-                            const ts = (arr || []).map(d => new Date(d.kayit_zamani)).filter(d => !isNaN(d));
-                            if (!ts.length) return null;
-                            ts.sort((a, b) => a - b);
-                            return ts[ts.length - 1].toISOString();
-                        };
-                        const last = (det && det.length) ? det[det.length - 1] : {};
-                        return {
-                            ...row,
-                            detay: {
-                                yukleme_varis: pick(last.yukleme_varis),
-                                yukleme_varis_at: latestAt(det),
-                                yukleme_cikis: pick(last.yukleme_cikis),
-                                yukleme_cikis_at: latestAt(det),
-                                teslim_varis: pick(last.teslim_varis),
-                                teslim_varis_at: latestAt(det),
-                                teslim_cikis: pick(last.teslim_cikis),
-                                teslim_cikis_at: latestAt(det),
-                            }
-                        };
-                    } catch {
-                        return row;
-                    }
-                }));
+                const filled = await Promise.all(
+                    take.map(async (row) => {
+                        const id = row.id || null;
+                        if (!id) return row;
+
+                        try {
+                            const det = await loadDetaylar(id);
+
+                            const pick = (x) => x ?? "";
+                            const latestAt = (arr) => {
+                                const ts = (arr || [])
+                                    .map((d) => new Date(d.kayit_zamani))
+                                    .filter((d) => !isNaN(d));
+                                if (!ts.length) return null;
+                                ts.sort((a, b) => a - b);
+                                return ts[ts.length - 1].toISOString();
+                            };
+
+                            // --- KRİTİK: Detayları nokta_sirasi’na göre sırala
+                            const ordered = Array.isArray(det)
+                                ? [...det].sort(
+                                    (a, b) =>
+                                        (a?.nokta_sirasi ?? 0) - (b?.nokta_sirasi ?? 0)
+                                )
+                                : [];
+
+                            // 1. nokta gerçekten ilk eleman olsun
+                            const firstByIndex = (ordered && ordered.length) ? ordered[0] : {};
+                            // Ek garanti: teslim_varis dolu olan ilk kaydı ara; yoksa index'teki kalsın
+                            const firstByData =
+                                ordered.find((d) => String(d?.teslim_varis || "").trim()) ||
+                                firstByIndex;
+
+                            // Görünümleri bozmamak için “son” kaydı da koru
+                            const last =
+                                (ordered && ordered.length)
+                                    ? ordered[ordered.length - 1]
+                                    : {};
+
+                            return {
+                                ...row,
+                                detay: {
+                                    // 1. nokta (sadece bunlara bakacağız)
+                                    first_yukleme_varis: firstByData?.yukleme_varis ?? "",
+                                    first_yukleme_cikis: firstByData?.yukleme_cikis ?? "",
+                                    first_teslim_varis: firstByData?.teslim_varis ?? "",
+                                    first_teslim_giris: firstByData?.teslim_varis ?? "", // alias (dashboard tarafı da bakabilir)
+                                    first_teslim_cikis: firstByData?.teslim_cikis ?? "",
+
+                                    // mevcut son kayıtlar (diğer görünümler bozulmasın)
+                                    yukleme_varis: pick(last?.yukleme_varis),
+                                    yukleme_varis_at: latestAt(ordered),
+                                    yukleme_cikis: pick(last?.yukleme_cikis),
+                                    yukleme_cikis_at: latestAt(ordered),
+                                    teslim_varis: pick(last?.teslim_varis),
+                                    teslim_varis_at: latestAt(ordered),
+                                    teslim_cikis: pick(last?.teslim_cikis),
+                                    teslim_cikis_at: latestAt(ordered),
+                                },
+                            };
+                        } catch {
+                            return row;
+                        }
+                    })
+                );
+
                 if (!cancelled) {
                     const rest = base.slice(take.length);
                     setDashRows([...filled, ...rest]);
                 }
-            } catch { /* silent */ }
+            } catch {
+                /* silent */
+            }
         })();
 
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+        };
     }, [filtered]);
+
 
     /* grid columns (+ açıklama ikonu) */
     const ORDER_KEY = `aktifseferler.columnOrder.${(localStorage.getItem("kullaniciAdi") || "GENERIC").toUpperCase()}`;
@@ -1044,21 +1115,9 @@ export default function ReelAtananSeferler() {
         "& .MuiFormLabel-root.Mui-focused": { color: COLORS.textMuted },
     };
 
-    // Senkronizasyon yetkisi
-    const canSync = (() => {
-        const makeKey = (s = "") =>
-            s
-                .normalize("NFKC")
-                .toLocaleLowerCase("tr-TR")
-                .trim()
-                .replace(/\s+/g, "")
-                .replace(/@.*/, "")
-                .replace(/[^a-z0-9\u00e7\u011f\u0131\u00f6\u015f\u00fc]/g, "");
-        const raw = localStorage.getItem("kullaniciAdi") || "";
-        const key = makeKey(raw);
-        const allowed = new Set(["admin", "selin", "sel\u0131n", "bekirakcagoz", "buketcimenci"]);
-        return allowed.has(key);
-    })();
+
+    
+    
 
     /* === GECİKME SEBEBİ KAYDET (UUID fix + duplicate guard) === */
     const saveLateReason = async () => {
@@ -1229,17 +1288,19 @@ export default function ReelAtananSeferler() {
                         enrichRows={enrichRows}
                     />
 
-                    <SenkronizeEtButton
-                        startDate={startDate}
-                        endDate={endDate}
-                        canSync={canSync}
-                        setLoading={setLoading}
-                        setSuccessCount={setSuccessCount}
-                        setShowSuccess={setShowSuccess}
-                        setRows={setRows}
-                        setSnack={setSnack}
-                        enrichRows={enrichRows}
-                    />
+                    {canSync && (
+                        <SenkronizeEtButton
+                            startDate={startDate}
+                            endDate={endDate}
+                            canSync={canSync}
+                            setLoading={setLoading}
+                            setSuccessCount={setSuccessCount}
+                            setShowSuccess={setShowSuccess}
+                            setRows={setRows}
+                            setSnack={setSnack}
+                            enrichRows={enrichRows}
+                        />
+                    )}
                 </Stack>
             </Stack>
 

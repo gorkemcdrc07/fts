@@ -247,10 +247,27 @@ export default function Dashboard({ rows = [], onOpenRow, onAskReason, reasonNos
     }, [rows]);
     const deliveredNotOnEta = React.useMemo(() => deliveredCompare.filter((x) => x.durum !== "zamanında"), [deliveredCompare]);
 
-    const liveLate = React.useMemo(
-        () => rows.filter((r) => r?.eta).map((r) => ({ ...r, etaDate: new Date(r.eta) })).filter((r) => r.etaDate.getTime() < Date.now()),
-        [rows]
-    );
+    const liveLate = React.useMemo(() => {
+        const now = Date.now();
+        return rows
+            .filter((r) => !!r?.eta)
+            .map((r) => ({ ...r, etaDate: new Date(r.eta) }))
+            .filter((r) => {
+                // 1. noktanın teslim_varis’i girilmişse GELMESİN
+                const firstTV =
+                    r?.detay?.first_teslim_varis ??
+                    r?.detay?.first_teslim_giris ??   // alias
+                    r?.detay?.ilk_teslim_varis ??     // eski ad
+                    r?.detay?.first_teslim_varis_hint ?? // <-- ipucu; detay tam yüklenmemiş olsa da çalışır
+                    null;
+
+                // Sadece doluluğa bak (tarih parse etmeye gerek yok)
+                if (String(firstTV || "").trim()) return false;
+
+                // sadece ETA’yı aşanlar gelsin
+                return r.etaDate.getTime() < now;
+            });
+    }, [rows]);
     const etaMissingToday = React.useMemo(() => rows.filter((r) => !r?.eta && r?.sefer_tarihi && isToday(r.sefer_tarihi)), [rows]);
 
     /* --------- LOG GÖRÜNÜRLÜĞÜ: sadece kendi logunu gör --------- */

@@ -29,8 +29,7 @@ import {
 
 /** Lojistik SVG Sahnesi */
 function LogisticsScene() {
-    // Kamyon path’i için stroke-dash anim ayarları
-    const dash = 680; // çizgi uzunluğu tahmini (path uzunluğuna göre ayarla)
+    const dash = 680;
     return (
         <Box
             aria-hidden
@@ -49,7 +48,6 @@ function LogisticsScene() {
                 preserveAspectRatio="xMidYMid slice"
                 style={{ display: "block" }}
             >
-                {/* Arkaplan grid */}
                 <defs>
                     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
                         <path d="M40 0H0V40" fill="none" stroke="rgba(255,255,255,0.12)" />
@@ -71,13 +69,9 @@ function LogisticsScene() {
                     </filter>
                 </defs>
 
-                {/* Gradient katmanı */}
                 <rect x="0" y="0" width="1440" height="900" fill="url(#grad)" />
-
-                {/* Grid katmanı */}
                 <rect x="0" y="0" width="1440" height="900" fill="url(#grid)" />
 
-                {/* Dağınık “depo kutuları” */}
                 {[[180, 180], [240, 540], [1080, 200], [1280, 520], [820, 740], [420, 720]].map(([x, y], i) => (
                     <g key={i} transform={`translate(${x} ${y})`} opacity="0.7">
                         <rect x="-16" y="-16" width="32" height="32" rx="6" fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.35)" />
@@ -85,7 +79,6 @@ function LogisticsScene() {
                     </g>
                 ))}
 
-                {/* Konum pinleri */}
                 {[[220, 200], [1180, 540], [860, 760], [460, 740]].map(([x, y], i) => (
                     <g key={i + "pin"} transform={`translate(${x} ${y})`} filter="url(#glow)">
                         <circle r="8" fill="#34D399" />
@@ -93,7 +86,6 @@ function LogisticsScene() {
                     </g>
                 ))}
 
-                {/* Rota Eğrisi */}
                 <path
                     id="routePath"
                     d="M 200 220
@@ -108,7 +100,6 @@ function LogisticsScene() {
                     opacity="0.9"
                 />
 
-                {/* Rotadaki hareketli “ışık” efekti */}
                 <motion.path
                     d="M 200 220
              C 420 80, 860 160, 1180 560
@@ -125,23 +116,19 @@ function LogisticsScene() {
                     opacity="0.65"
                 />
 
-                {/* Kamyon grubu: rota boyunca hareket eden küçük ikon */}
                 <motion.g
                     transform="translate(0,0) scale(1)"
                     initial={{ offsetDistance: "0%" }}
                     animate={{ offsetDistance: "100%" }}
                     transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
                     style={{
-                        offsetPath:
-                            "path('M 200 220 C 420 80, 860 160, 1180 560 S 920 820, 460 760')",
+                        offsetPath: "path('M 200 220 C 420 80, 860 160, 1180 560 S 920 820, 460 760')",
                     }}
                 >
-                    {/* Kamyon gövdesi */}
                     <g transform="translate(-12,-12)">
                         <rect x="0" y="4" width="26" height="16" rx="3" fill="#1F2937" />
                         <rect x="18" y="0" width="18" height="16" rx="3" fill="#3B82F6" />
                         <rect x="22" y="3" width="6" height="5" rx="1" fill="white" />
-                        {/* Tekerler */}
                         <circle cx="6" cy="22" r="4" fill="#111827" stroke="white" strokeWidth="1" />
                         <circle cx="22" cy="22" r="4" fill="#111827" stroke="white" strokeWidth="1" />
                     </g>
@@ -159,6 +146,21 @@ function Login() {
     const [loading, setLoading] = useState(false);
     const [showPass, setShowPass] = useState(false);
     const navigate = useNavigate();
+
+    // Rol normalizasyonu: TAKİP / OPERASYON / YÖNETİCİ varyantlarını tekleştir
+    const normalizeRole = (s = "") =>
+        s
+            .normalize("NFKC")
+            .toLocaleUpperCase("tr-TR")
+            .replace(/\s+/g, "");
+
+    const aliasRole = (s = "") => {
+        const k = normalizeRole(s);
+        if (k === "YONETICI") return "YÖNETİCİ"; // noktasız girilmişse de tekleştir
+        if (k === "OPERASYON") return "OPERASYON";
+        if (k === "TAKIP") return "TAKİP";
+        return k || "";
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -192,19 +194,24 @@ function Login() {
 
             // Boşsa giriş formundaki bilgileri kullan
             const reelUserToSave = reelUserCol || (kullaniciAdi || "").trim();
-            const reelPassToSave = reelPassCol || sifre;
+            const reelPassToUse = reelPassCol || sifre;
+
+            // --- ROL NORMALİZASYONU ---
+            const resolvedRole = aliasRole(data.rol || "");
 
             // Oturum bilgileri (mevcut anahtarlar korunur)
             localStorage.setItem("kullaniciAdi", data.kullaniciAdi || "");
             localStorage.setItem("kullanici", data.kullanici || "");
-            localStorage.setItem("rol", data.rol || "");
+            localStorage.setItem("rol", resolvedRole);     // Örn: "TAKİP" | "OPERASYON" | "YÖNETİCİ"
+            localStorage.setItem("roleKey", resolvedRole); // Okunması kolay sabit
             localStorage.setItem("kullaniciId", String(data.id ?? ""));
             localStorage.setItem("girisYapanKullanici", JSON.stringify(data));
             localStorage.setItem("profilFotograf", data.profil_fotograf || "");
 
             // REEL bilgileri
             localStorage.setItem("Reel-kullanici", reelUserToSave);
-            localStorage.setItem("Reel-sifre", reelPassToSave);
+            // Güvenlik: şifreyi localStorage yerine sessionStorage'a yazalım
+            sessionStorage.setItem("Reel-sifre", reelPassToUse);
 
             navigate("/anasayfa");
         } catch (err) {
@@ -259,8 +266,7 @@ function Login() {
                         bgcolor: (t) =>
                             t.palette.mode === "dark" ? "rgba(17,23,41,0.65)" : "rgba(255,255,255,0.85)",
                         border: (t) =>
-                            `1px solid ${t.palette.mode === "dark" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.06)"
-                            }`,
+                            `1px solid ${t.palette.mode === "dark" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.06)"}`,
                     }}
                 >
                     <Stack direction={{ xs: "column", md: "row" }} sx={{ minHeight: { xs: "auto", md: 480 } }}>
@@ -272,8 +278,7 @@ function Login() {
                             sx={{
                                 flex: 1,
                                 p: { xs: 3, md: 5 },
-                                background:
-                                    "linear-gradient(135deg, rgba(59,130,246,0.16), rgba(52,211,153,0.14))",
+                                background: "linear-gradient(135deg, rgba(59,130,246,0.16), rgba(52,211,153,0.14))",
                                 backdropFilter: "blur(2px)",
                             }}
                         >

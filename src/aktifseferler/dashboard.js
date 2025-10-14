@@ -247,28 +247,34 @@ export default function Dashboard({ rows = [], onOpenRow, onAskReason, reasonNos
     }, [rows]);
     const deliveredNotOnEta = React.useMemo(() => deliveredCompare.filter((x) => x.durum !== "zamanında"), [deliveredCompare]);
 
+    // === ŞU AN GEÇ GÖRÜNENLER (ilk bacak kuralı) ===
     const liveLate = React.useMemo(() => {
         const now = Date.now();
         return rows
             .filter((r) => !!r?.eta)
             .map((r) => ({ ...r, etaDate: new Date(r.eta) }))
+            .filter((r) => !Number.isNaN(r.etaDate.getTime()))
             .filter((r) => {
-                // 1. noktanın teslim_varis’i girilmişse GELMESİN
+                // ETA aşılmış olmalı
+                if (r.etaDate.getTime() >= now) return false;
+
+                // hızlı bayrak: EditorDialog’daki 1.nokta teslim_varis doluysa gösterme
+                if (r?.first_has_teslim_varis === true) return false;
+
+                // detay üzerinden emniyetli kontrol (geriye dönük alan adları dahil)
+                const d = r?.detay ?? {};
                 const firstTV =
-                    r?.detay?.first_teslim_varis ??
-                    r?.detay?.first_teslim_giris ??   // alias
-                    r?.detay?.ilk_teslim_varis ??     // eski ad
-                    r?.detay?.first_teslim_varis_hint ?? // <-- ipucu; detay tam yüklenmemiş olsa da çalışır
-                    null;
-
-                // Sadece doluluğa bak (tarih parse etmeye gerek yok)
-                if (String(firstTV || "").trim()) return false;
-
-                // sadece ETA’yı aşanlar gelsin
-                return r.etaDate.getTime() < now;
+                    d.first_teslim_varis ??
+                    d.first_teslim_giris ??  // alias
+                    d.ilk_teslim_varis ??    // eski ad olasılığı
+                    "";
+                return String(firstTV || "").trim().length === 0;
             });
     }, [rows]);
-    const etaMissingToday = React.useMemo(() => rows.filter((r) => !r?.eta && r?.sefer_tarihi && isToday(r.sefer_tarihi)), [rows]);
+    const etaMissingToday = React.useMemo(
+        () => rows.filter((r) => !r?.eta && r?.sefer_tarihi && isToday(r.sefer_tarihi)),
+        [rows]
+    );
 
     /* --------- LOG GÖRÜNÜRLÜĞÜ: sadece kendi logunu gör --------- */
     const normalizeUser = (s = "") =>

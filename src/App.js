@@ -45,7 +45,7 @@ import AppLayout from "./layout/AppLayout";
 // Lazy sayfalar
 const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler"));
 const SiparisAnaliz = lazy(() => import("./kullanıcıIslemleri/planlamaDetay/SiparisAnaliz"));
-
+const AdminPanel = lazy(() => import("./adminPanel/adminPanel"));
 function App() {
     return (
         <HelmetProvider>
@@ -65,7 +65,7 @@ function App() {
 
                             <Route path="plaka-onerisi" element={<PlakaOnerisi />} />
 
-                            {/* ReelAtananSeferler lazy */}
+                            {/* ReelAtananSeferler (lazy) */}
                             <Route
                                 path="seferler"
                                 element={
@@ -112,6 +112,16 @@ function App() {
                                 element={
                                     <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
                                         <SiparisAnaliz />
+                                    </Suspense>
+                                }
+                            />
+
+                            {/* Admin Panel */}
+                            <Route
+                                path="admin"
+                                element={
+                                    <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
+                                        <AdminPanel />
                                     </Suspense>
                                 }
                             />

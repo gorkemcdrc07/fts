@@ -19,7 +19,10 @@ export default function EtaDialog(props) {
         open, onClose, COLORS, etaRow, vehicleText, driverText, jobText, originText, destinationText, etaDistanceInfo,
         DateTimeOneField, TimeHMField, BREAK_OPTIONS, latestYuklemeCikis, nowLocalISO, baseInputSX,
         etaStartISO, setEtaStartISO, driveHM, setDriveHM, breakSel, setBreakSel,
-        computedETAISO, fromISOToCombined, copyETA, saveETA
+        computedETAISO, fromISOToCombined, copyETA, saveETA,
+        // ---- yetkiler:
+        mayOpenETA = false,
+        canETA = false,
     } = props;
 
     const theme = useTheme();
@@ -36,10 +39,8 @@ export default function EtaDialog(props) {
         const mm = String(M).padStart(2, "0");
         return `${hh}:${mm}`;
     };
-
     const handleHMBlur = (e) => setDriveHM(normalizeHM(e.target.value));
 
-    // dk -> "SS:DD" dönüşümü (kayıtlı kalan_surus_dk için)
     const minToHM = (m) => {
         const n = Number(m) || 0;
         const hh = String(Math.floor(n / 60)).padStart(2, "0");
@@ -47,7 +48,6 @@ export default function EtaDialog(props) {
         return `${hh}:${mm}`;
     };
 
-    // break select için güvenli değer
     const safeBreakValue =
         typeof breakSel === "number" && !Number.isNaN(breakSel)
             ? breakSel
@@ -153,22 +153,24 @@ export default function EtaDialog(props) {
                                     InputLabelProps={{ shrink: true }}
                                     sx={[glam.input]}
                                     fullWidth
+                                    disabled={!canETA}
                                 />
                             </Box>
 
                             <Divider />
 
                             <Box sx={{ p: { xs: 1, sm: 1.25 } }}>
-                                <TimeHMField
+                                <TextField
                                     label="Kalan Sürüş (ss:dd)"
                                     value={driveHM || minToHM(etaRow?.kalan_surus_dk)}
                                     onChange={(e) => setDriveHM(e.target.value)}
-                                    onBlur={handleHMBlur}
+                                    onBlur={(e) => setDriveHM(normalizeHM(e.target.value))}
                                     size="small"
                                     inputProps={{ maxLength: 5 }}
                                     InputLabelProps={{ shrink: true }}
                                     sx={[glam.input]}
                                     fullWidth
+                                    disabled={!canETA}
                                 />
                             </Box>
 
@@ -179,12 +181,13 @@ export default function EtaDialog(props) {
                                     label="Başlangıçta mola"
                                     select
                                     size="small"
-                                    value={safeBreakValue}
+                                    value={typeof breakSel === "number" && !Number.isNaN(breakSel) ? breakSel : (etaRow?.eta_mola_dk ?? 0)}
                                     onChange={(e) => setBreakSel(Number(e.target.value) || 0)}
                                     helperText="Seçilen mola başlangıca eklenir"
                                     InputLabelProps={{ shrink: true }}
                                     sx={[glam.input]}
                                     fullWidth
+                                    disabled={!canETA}
                                 >
                                     {BREAK_OPTIONS.map(o => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
                                 </TextField>
@@ -192,7 +195,7 @@ export default function EtaDialog(props) {
                         </Stack>
                     </Box>
 
-                    {/* ETA */}
+                    {/* ETA sonucu */}
                     <Box sx={glam.etaPanel}>
                         {computedETAISO === "__NEED_DISTANCE__" ? (
                             <Typography variant="body1"><b>ETA:</b> Bekleniyor — Mesafe bulunamadı.</Typography>
@@ -205,7 +208,7 @@ export default function EtaDialog(props) {
                                 </Typography>
                                 <Tooltip title="ETA'yı kopyala">
                                     <span>
-                                        <IconButton size="small" onClick={onCopy}>
+                                        <IconButton size="small" onClick={() => { /* kopyalama izni serbest bırakılabilir */ return onCopy(); }}>
                                             <ContentCopyIcon fontSize="small" />
                                         </IconButton>
                                     </span>
@@ -230,14 +233,22 @@ export default function EtaDialog(props) {
                 }}
             >
                 <Button onClick={onClose}>Kapat</Button>
-                <Button
-                    variant="contained"
-                    color="success"
-                    onClick={saveETA}
-                    sx={{ fontWeight: 800, textTransform: "none" }}
-                >
-                    Kaydet
-                </Button>
+
+                {/* Görünürlük ve işlem yetkisi ayrı */}
+                {mayOpenETA && (
+                    <Button
+                        variant="contained"
+                        color="success"
+                        disabled={!canETA}
+                        onClick={() => {
+                            if (!canETA) return;
+                            saveETA();
+                        }}
+                        sx={{ fontWeight: 800, textTransform: "none" }}
+                    >
+                        Kaydet
+                    </Button>
+                )}
             </DialogActions>
         </Dialog>
     );

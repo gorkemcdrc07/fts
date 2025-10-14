@@ -118,20 +118,17 @@ function LogisticsScene() {
 
                 <motion.g
                     transform="translate(0,0) scale(1)"
-                    initial={{ offsetDistance: "0%" }}
-                    animate={{ offsetDistance: "100%" }}
-                    transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
                     style={{
-                        offsetPath: "path('M 200 220 C 420 80, 860 160, 1180 560 S 920 820, 460 760')",
+                        offsetPath:
+                            "path('M 200 220 C 420 80, 860 160, 1180 560 S 920 820, 460 760')",
+                        offsetDistance: "var(--od)",   // DOM prop değil, style ile
+                        willChange: "offset-distance",
+                        "--od": "0%",
                     }}
+                    animate={{ "--od": ["0%", "100%"] }}
+                    transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
                 >
-                    <g transform="translate(-12,-12)">
-                        <rect x="0" y="4" width="26" height="16" rx="3" fill="#1F2937" />
-                        <rect x="18" y="0" width="18" height="16" rx="3" fill="#3B82F6" />
-                        <rect x="22" y="3" width="6" height="5" rx="1" fill="white" />
-                        <circle cx="6" cy="22" r="4" fill="#111827" stroke="white" strokeWidth="1" />
-                        <circle cx="22" cy="22" r="4" fill="#111827" stroke="white" strokeWidth="1" />
-                    </g>
+                    {/* içerik */}
                 </motion.g>
             </svg>
         </Box>
@@ -147,7 +144,7 @@ function Login() {
     const [showPass, setShowPass] = useState(false);
     const navigate = useNavigate();
 
-    // Rol normalizasyonu: TAKİP / OPERASYON / YÖNETİCİ varyantlarını tekleştir
+    // Rol normalizasyonu
     const normalizeRole = (s = "") =>
         s
             .normalize("NFKC")
@@ -156,7 +153,7 @@ function Login() {
 
     const aliasRole = (s = "") => {
         const k = normalizeRole(s);
-        if (k === "YONETICI") return "YÖNETİCİ"; // noktasız girilmişse de tekleştir
+        if (k === "YONETICI") return "YÖNETİCİ";
         if (k === "OPERASYON") return "OPERASYON";
         if (k === "TAKIP") return "TAKİP";
         return k || "";
@@ -189,28 +186,30 @@ function Login() {
             }
 
             // REEL alanlarını güvenli şekilde oku
-            const reelUserCol = (data.Reel_kullanici ?? data.reel_kullanici ?? "").toString().trim();
-            const reelPassCol = (data.Reel_sifre ?? data.reel_sifre ?? "").toString().trim();
+            const reelUserCol = (data.Reel_kullanici ?? data.reel_kullanici ?? "")
+                .toString()
+                .trim();
+            const reelPassCol = (data.Reel_sifre ?? data.reel_sifre ?? "")
+                .toString()
+                .trim();
 
             // Boşsa giriş formundaki bilgileri kullan
             const reelUserToSave = reelUserCol || (kullaniciAdi || "").trim();
             const reelPassToUse = reelPassCol || sifre;
 
-            // --- ROL NORMALİZASYONU ---
             const resolvedRole = aliasRole(data.rol || "");
 
-            // Oturum bilgileri (mevcut anahtarlar korunur)
+            // Oturum bilgileri
             localStorage.setItem("kullaniciAdi", data.kullaniciAdi || "");
             localStorage.setItem("kullanici", data.kullanici || "");
-            localStorage.setItem("rol", resolvedRole);     // Örn: "TAKİP" | "OPERASYON" | "YÖNETİCİ"
-            localStorage.setItem("roleKey", resolvedRole); // Okunması kolay sabit
+            localStorage.setItem("rol", resolvedRole);
+            localStorage.setItem("roleKey", resolvedRole);
             localStorage.setItem("kullaniciId", String(data.id ?? ""));
             localStorage.setItem("girisYapanKullanici", JSON.stringify(data));
             localStorage.setItem("profilFotograf", data.profil_fotograf || "");
 
             // REEL bilgileri
             localStorage.setItem("Reel-kullanici", reelUserToSave);
-            // Güvenlik: şifreyi localStorage yerine sessionStorage'a yazalım
             sessionStorage.setItem("Reel-sifre", reelPassToUse);
 
             navigate("/anasayfa");
@@ -245,12 +244,7 @@ function Login() {
 
             <Container
                 maxWidth={false}
-                sx={{
-                    position: "relative",
-                    zIndex: 1,
-                    maxWidth: "980px",
-                    px: { xs: 2, md: 4 },
-                }}
+                sx={{ position: "relative", zIndex: 1, maxWidth: "980px", px: { xs: 2, md: 4 } }}
             >
                 <Paper
                     component={motion.div}

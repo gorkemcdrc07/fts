@@ -13,7 +13,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 
 /* ----------------------------------------------------------------------------- 
-   Yardımcı fonksiyonlar
+   Yardımcılar (tarih alanı)
 ----------------------------------------------------------------------------- */
 function digitsOnly(s) {
     return (s || "").replace(/\D+/g, "");
@@ -37,10 +37,8 @@ function validateParts(dd, MM, yyyy, HH, mm) {
 
     const pad2 = (x) => (isNaN(x) ? "" : String(x).padStart(2, "0"));
     const padY = (x) => (isNaN(x) ? "" : String(x));
-
     return { dd: pad2(d), MM: pad2(m), yyyy: padY(y), HH: pad2(h), mm: pad2(mi) };
 }
-
 function formatFromDigits(digs) {
     const d = digs.slice(0, 2);
     const m = digs.slice(2, 4);
@@ -56,19 +54,14 @@ function formatFromDigits(digs) {
     if (min) out += ":" + min;
     return out;
 }
-
 function normalizeFormattedToDigits(v) {
     return digitsOnly(v).slice(0, 12);
 }
-
 function toLocalISOString(d) {
     const pad = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 }
 
-/* ----------------------------------------------------------------------------- 
-   DateTimeSingleField: tek alanda gg.aa.yyyy ss:dd
------------------------------------------------------------------------------ */
 function DateTimeSingleField({
     label,
     value,
@@ -82,20 +75,13 @@ function DateTimeSingleField({
     const [text, setText] = React.useState("");
     const [touched, setTouched] = React.useState(false);
 
-    // ISO → TR format (görüntüleme)
     React.useEffect(() => {
-        if (!value) {
-            setText("");
-            return;
-        }
-
+        if (!value) { setText(""); return; }
         if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
             const d = new Date(value);
             if (!isNaN(d.getTime())) {
                 const pad = (n) => String(n).padStart(2, "0");
-                setText(
-                    `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-                );
+                setText(`${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`);
             } else {
                 setText("");
             }
@@ -123,8 +109,6 @@ function DateTimeSingleField({
                 return;
             }
         }
-
-        // eksikse sadece maskeyi geri gönder
         onChange(masked);
     }
 
@@ -160,7 +144,8 @@ function DateTimeSingleField({
 export default function EditorDialog(props) {
     const {
         open, onClose, COLORS, computeAracStatu, fromISOToCombined, baseInputSX,
-        canEdit, editSefer, detailRows, seferTarihiYeni, setSeferTarihiYeni,
+        canEdit, // <- izin burada
+        editSefer, detailRows, seferTarihiYeni, setSeferTarihiYeni,
         addDetailRow, copyDetailRow, removeDetailRow, onDetailChange,
         onSaveClick, onMoveToCompleted
     } = props;
@@ -179,7 +164,6 @@ export default function EditorDialog(props) {
                 }
             }}
         >
-            {/* Başlık: Typography'leri inline yaparak <h6> in <h2> uyarısını çözüyoruz */}
             <DialogTitle sx={{ fontWeight: 900 }}>
                 <Typography variant="h6" component="span" sx={{ fontWeight: 900 }}>
                     {editSefer?.sefer_no || "-"} • {editSefer?.plaka || "-"} • {editSefer?.musteri_adi || "-"}
@@ -206,6 +190,7 @@ export default function EditorDialog(props) {
                         onChange={(v) => setSeferTarihiYeni(v)}
                         baseInputSX={baseInputSX}
                         required
+                        disabled={!canEdit}
                     />
                 </Box>
 
@@ -270,33 +255,38 @@ export default function EditorDialog(props) {
                                                 onChange={(e) => onDetailChange(i, k, e.target.value)}
                                                 InputLabelProps={{ shrink: true }}
                                                 sx={baseInputSX}
+                                                InputProps={{ readOnly: !canEdit }}
                                             />
                                         ))}
 
-                                        {/* Tarih/Saat alanları — DİKKAT: map bloğunun İÇİNDE! */}
+                                        {/* Tarih/Saat alanları */}
                                         <DateTimeSingleField
                                             label="Yükleme Giriş"
                                             value={r.yukleme_varis || ""}
                                             onChange={(v) => onDetailChange(i, "yukleme_varis", v)}
                                             baseInputSX={baseInputSX}
+                                            disabled={!canEdit}
                                         />
                                         <DateTimeSingleField
                                             label="Yükleme Çıkış"
                                             value={r.yukleme_cikis || ""}
                                             onChange={(v) => onDetailChange(i, "yukleme_cikis", v)}
                                             baseInputSX={baseInputSX}
+                                            disabled={!canEdit}
                                         />
                                         <DateTimeSingleField
                                             label="Teslim Giriş"
                                             value={r.teslim_varis || ""}
                                             onChange={(v) => onDetailChange(i, "teslim_varis", v)}
                                             baseInputSX={baseInputSX}
+                                            disabled={!canEdit}
                                         />
                                         <DateTimeSingleField
                                             label="Teslim Çıkış"
                                             value={r.teslim_cikis || ""}
                                             onChange={(v) => onDetailChange(i, "teslim_cikis", v)}
                                             baseInputSX={baseInputSX}
+                                            disabled={!canEdit}
                                         />
                                     </Box>
                                 </CardContent>

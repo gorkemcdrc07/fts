@@ -4,9 +4,18 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabaseClient";
 
 function Navbar() {
-    // LS okumaları
-    const kullanici = localStorage.getItem("kullanici") || "Kullanıcı";
-    const rol = localStorage.getItem("rol") || "Rol";
+    // ✔ Görünen ad için daha sağlam okuma
+    const rawKullanici = (localStorage.getItem("kullanici") || "").trim();
+    const rawKullaniciAdi = (localStorage.getItem("kullaniciAdi") || "").trim();
+    const displayName = rawKullanici || rawKullaniciAdi || "Kullanıcı";
+
+    // Rol
+    const rol = (localStorage.getItem("rol") || "Rol").toString();
+
+    // Admin izni: sadece admin ve yagiz
+    const usernameForAdminCheck = (rawKullaniciAdi || rawKullanici).toLowerCase();
+    const isAdmin = usernameForAdminCheck === "admin" || usernameForAdminCheck === "yagiz";
+
     const kullaniciIdRaw = localStorage.getItem("kullaniciId");
     const kullaniciId = kullaniciIdRaw ? Number(kullaniciIdRaw) : null;
 
@@ -106,7 +115,6 @@ function Navbar() {
         if (!file) return;
         setSelectedFile(file);
 
-        // önceki blob URL'yi serbest bırak
         if (prevObjectUrlRef.current) {
             URL.revokeObjectURL(prevObjectUrlRef.current);
             prevObjectUrlRef.current = null;
@@ -116,7 +124,6 @@ function Navbar() {
         setProfilResim(previewUrl);
     };
 
-    // component unmount olduğunda olası blob URL sızıntısını temizle
     useEffect(() => {
         return () => {
             if (prevObjectUrlRef.current) {
@@ -128,8 +135,8 @@ function Navbar() {
 
     // Güvenli fallback avatar harfi
     const avatarHarf = useMemo(
-        () => (kullanici?.trim()?.[0] || "K").toUpperCase(),
-        [kullanici]
+        () => (displayName?.trim()?.[0] || "K").toUpperCase(),
+        [displayName]
     );
 
     const handleProfilKaydet = async () => {
@@ -182,7 +189,7 @@ function Navbar() {
             localStorage.setItem("email", email);
             localStorage.setItem("kullaniciAdi", kullaniciAdi);
 
-            if (yeniSifre && kullaniciAdi === kullanici) {
+            if (yeniSifre && kullaniciAdi === (rawKullanici || rawKullaniciAdi)) {
                 const { error: sifreGuncelleHatasi } = await supabase
                     .from("login")
                     .update({ sifre: yeniSifre })
@@ -224,8 +231,7 @@ function Navbar() {
                 <div className="gorev-bildirimi" role="status" aria-live="polite">
                     <span className="gorev-bildirimi-ikon">📝</span>
                     <span>
-                        Size atanmış <strong>{okunmamisGorevSayisi}</strong> yeni göreviniz
-                        var!
+                        Size atanmış <strong>{okunmamisGorevSayisi}</strong> yeni göreviniz var!
                     </span>
                 </div>
             )}
@@ -233,9 +239,7 @@ function Navbar() {
             {/* NAVBAR */}
             <header className="navbar" role="banner">
                 <div className="navbar-left">
-                    {/* Yer tutucu veya marka */}
-                    <div className="brand">
-                    </div>
+                    <div className="brand" />
                 </div>
 
                 <div className="navbar-right">
@@ -247,7 +251,6 @@ function Navbar() {
                         aria-label="Tema değiştir"
                     >
                         {tema === "dark" ? (
-                            /* Sun icon */
                             <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
                                 <path
                                     d="M12 4V2M12 22v-2M4.93 4.93 3.51 3.51M20.49 20.49l-1.42-1.42M4 12H2m20 0h-2M4.93 19.07l-1.42 1.42M20.49 3.51l-1.42 1.42M12 8a4 4 0 100 8 4 4 0 000-8z"
@@ -259,7 +262,6 @@ function Navbar() {
                                 />
                             </svg>
                         ) : (
-                            /* Moon icon */
                             <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
                                 <path
                                     d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"
@@ -273,7 +275,7 @@ function Navbar() {
                         )}
                     </button>
 
-                    {/* Bildirim ikonu + sayı */}
+                    {/* Bildirim */}
                     <div className="notif" aria-label="Bildirimler">
                         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
                             <path
@@ -291,6 +293,23 @@ function Navbar() {
                             </span>
                         )}
                     </div>
+
+                    {isAdmin && (
+                        <button
+                            className="admin-btn modern-admin"
+                            onClick={() => navigate("/admin")}
+                            aria-label="Yönetim Paneli"
+                        >
+                            <span className="admin-pulse" aria-hidden="true" />
+                            <svg className="admin-ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                    d="M12 2l7 4v6c0 5-3.5 9-7 10-3.5-1-7-5-7-10V6l7-4zM9 12l2 2 4-4"
+                                    fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
+                                />
+                            </svg>
+                            <span className="admin-label">Yönetim</span>
+                        </button>
+                    )}
 
                     {/* Avatar + kullanıcı */}
                     <button
@@ -311,8 +330,8 @@ function Navbar() {
                     </button>
 
                     <div className="navbar-id">
-                        <span className="navbar-username" title={kullanici}>
-                            {kullanici.toUpperCase()}
+                        <span className="navbar-username" title={displayName}>
+                            {displayName.toUpperCase()}
                         </span>
                         <span className="navbar-role" title={rol}>
                             {rol.toUpperCase()}
@@ -344,19 +363,15 @@ function Navbar() {
                     aria-modal="true"
                     aria-label="Profil ayarları"
                     onMouseDown={(e) => {
-                        // panel dışına tıklayınca kapat
                         if (e.target.classList.contains("modal-overlay")) {
                             setProfilModalAcik(false);
                         }
                     }}
                 >
-                    {/* ⬇️ Genişlik biraz artırıldı */}
                     <div
                         className="modal-panel"
                         role="document"
-                        style={{
-                            width: "min(92vw, 720px)", // önceki tasarıma göre daha geniş
-                        }}
+                        style={{ width: "min(92vw, 720px)" }}
                     >
                         <div className="modal-head">
                             <h2>👤 Profil</h2>

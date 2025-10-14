@@ -1,16 +1,19 @@
+// src/layout/AppLayout.jsx
 import React, { useState } from "react";
 import { Box, Toolbar } from "@mui/material";
 import { Outlet } from "react-router-dom";
-import Sidebar from "../Sidebar"; // yolu sende böyleyse bırak
-import Navbar from "../Navbar";   // navbar yolu da böyleyse bırak
+import Sidebar from "../Sidebar";   // sende bu yol doğruysa bırak
+import Navbar from "../Navbar";     // sende bu yol doğruysa bırak
+import useCurrentUser from "../auth/useCurrentUser"; // sağ üstte isim için
 
 export default function AppLayout() {
     const [open, setOpen] = useState(true);
+    const { displayName } = useCurrentUser(); // localStorage'dan güvenli okuma
 
     return (
         <>
             {/* Üst sabit navbar */}
-            <Navbar open={open} setOpen={setOpen} />
+            <Navbar open={open} setOpen={setOpen} displayName={displayName} />
 
             {/* Yan yana düzen */}
             <Box sx={{ display: "flex", minHeight: "100vh" }}>

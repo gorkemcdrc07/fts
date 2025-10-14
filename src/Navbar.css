@@ -430,6 +430,84 @@ html, body {
         cursor: not-allowed;
     }
 
+/* --- MODERN ADMIN BUTTON --- */
+.modern-admin {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 8px;
+    padding: 8px 14px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 50%, #22c55e 100%);
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: .2px;
+    box-shadow: 0 6px 18px rgba(7, 89, 133, 0.35), inset 0 0 0 1px rgba(255,255,255,0.05);
+    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+    overflow: hidden;
+}
+
+    /* ikon */
+    .modern-admin .admin-ico {
+        opacity: .95;
+    }
+
+    /* metin */
+    .modern-admin .admin-label {
+        font-size: 13px;
+        text-transform: uppercase;
+    }
+
+    /* parlayan halka/pulse */
+    .modern-admin .admin-pulse {
+        position: absolute;
+        inset: -2px;
+        border-radius: inherit;
+        pointer-events: none;
+        background: radial-gradient( 120px 120px at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,.22), rgba(255,255,255,0) 60% );
+        opacity: 0;
+        transition: opacity .25s ease;
+    }
+
+    /* hover + focus */
+    .modern-admin:hover,
+    .modern-admin:focus-visible {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 24px rgba(7, 89, 133, 0.45), inset 0 0 0 1px rgba(255,255,255,0.06);
+        filter: saturate(1.05);
+    }
+
+        .modern-admin:hover .admin-pulse,
+        .modern-admin:focus-visible .admin-pulse {
+            opacity: 1;
+        }
+
+    /* klavye odağı */
+    .modern-admin:focus-visible {
+        outline: 2px solid rgba(255,255,255,.65);
+        outline-offset: 2px;
+    }
+
+    /* tıklama ripple’ı hissi */
+    .modern-admin:active {
+        transform: translateY(0);
+        filter: brightness(.98);
+    }
+
+/* reduce motion */
+@media (prefers-reduced-motion: reduce) {
+    .modern-admin {
+        transition: none;
+    }
+
+        .modern-admin .admin-pulse {
+            transition: none;
+        }
+}
+
+
 /* =========================
    RESPONSIVE
    ========================= */

@@ -1,0 +1,127 @@
+// src/adminPanel/adminPanel.js
+import React, { useMemo, useState } from "react";
+import {
+    Box, Paper, Tabs, Tab, Typography, Alert, Stack, IconButton, Collapse,
+} from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+
+// Sekmeler
+import UsersTab from "./tabs/UsersTab";
+import RolesTab from "./tabs/RolesTab";
+import UserOverridesTab from "./tabs/UserOverridesTab";
+import LogsTab from "./tabs/LogsTab";
+import SettingsTab from "./tabs/SettingsTab";
+
+/* --- helpers --- */
+function normalizeRole(s = "") {
+    return s.normalize("NFKC").toLocaleUpperCase("tr-TR").replace(/\s+/g, "");
+}
+function safeGetUsername() {
+    const k1 = (localStorage.getItem("kullaniciAdi") || "").trim();
+    const k2 = (localStorage.getItem("kullanici") || "").trim();
+    let k3 = "";
+    try {
+        const obj = JSON.parse(localStorage.getItem("girisYapanKullanici") || "{}");
+        k3 = (obj?.kullaniciAdi || "").trim();
+    } catch { }
+    const pick = (k1 || k2 || k3 || "").toLowerCase();
+    return pick.includes("@") ? pick.split("@")[0] : pick;
+}
+function resolveRole() {
+    const r1 = localStorage.getItem("rol") || "";
+    const r2 = localStorage.getItem("roleKey") || "";
+    const n1 = normalizeRole(r1);
+    const n2 = normalizeRole(r2);
+    return n1 || n2 || "";
+}
+function isAdminUser(u) {
+    const allow = new Set(["admin", "yagiz"]);
+    return allow.has((u || "").toLowerCase());
+}
+function canUseAdminResolved() {
+    const u = safeGetUsername();
+    const role = resolveRole();
+    const byUser = isAdminUser(u);
+    const byRole = role === "YÖNETİCİ" || role === "YONETICI";
+    return { allowed: !!(byUser || byRole), u, role, byUser, byRole };
+}
+
+export default function AdminPanel() {
+    const [tab, setTab] = useState(0);
+    const [dbgOpen, setDbgOpen] = useState(false);
+
+    const gate = useMemo(() => canUseAdminResolved(), []);
+    const { allowed } = gate;
+
+    return (
+        <Box sx={{ p: 3 }}>
+            <Paper
+                elevation={0}
+                sx={{
+                    p: 2.5,
+                    borderRadius: 3,
+                    border: (t) => `1px solid ${t.palette.divider}`,
+                    bgcolor: (t) => t.palette.background.paper,
+                }}
+            >
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                    <Typography variant="h6" fontWeight={800}>Yönetim Paneli</Typography>
+                    <IconButton size="small" onClick={() => setDbgOpen((v) => !v)} aria-label="debug" title="Debug">
+                        <ExpandMoreIcon sx={{ transform: dbgOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "0.2s" }} />
+                    </IconButton>
+                </Stack>
+
+                <Collapse in={dbgOpen} unmountOnExit>
+                    <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5, borderRadius: 2 }}>
+                        <Typography variant="caption" sx={{ display: "block", opacity: 0.8 }}>
+                            <b>Debug</b> – Admin guard hangi değerleri okuyor?
+                        </Typography>
+                        <Typography variant="caption" sx={{ display: "block" }}>
+                            username (resolved): <b>{gate.u || "(boş)"} </b>
+                        </Typography>
+                        <Typography variant="caption" sx={{ display: "block" }}>
+                            role (resolved): <b>{gate.role || "(boş)"} </b>
+                        </Typography>
+                        <Typography variant="caption" sx={{ display: "block" }}>
+                            byUser(admin|yagiz): <b>{String(gate.byUser)}</b> • byRole(YÖNETİCİ): <b>{String(gate.byRole)}</b>
+                        </Typography>
+                    </Paper>
+                </Collapse>
+
+                <Tabs
+                    value={tab}
+                    onChange={(_, v) => setTab(v)}
+                    textColor="primary"
+                    indicatorColor="primary"
+                    sx={{ mb: 2 }}
+                >
+                    <Tab label="Kullanıcılar" />
+                    <Tab label="Roller & Yetkiler" />
+                    <Tab label="Kullanıcı Yetkileri" /> {/* <-- YENİ SEKME */}
+                    <Tab label="Loglar" />
+                    <Tab label="Ayarlar" />
+                </Tabs>
+
+                {!allowed ? (
+                    <Alert severity="warning" variant="filled" sx={{ borderRadius: 2 }}>
+                        Bu alanı görüntüleme yetkiniz yok.
+                    </Alert>
+                ) : (
+                    <>
+                        {tab === 0 && <UsersTab />}
+                        {tab === 1 && <RolesTab />}
+                        {tab === 2 && <UserOverridesTab />}{/* <-- YENİ */}
+                        {tab === 3 && <LogsTab />}
+                        {tab === 4 && <SettingsTab />}
+                    </>
+                )}
+
+                <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center">
+                    <Typography variant="caption" sx={{ opacity: 0.65 }}>
+                        Oturum: <b>{gate.u || "-"}</b> • Rol: <b>{(localStorage.getItem("rol") || localStorage.getItem("roleKey") || "-").toString()}</b>
+                    </Typography>
+                </Stack>
+            </Paper>
+        </Box>
+    );
+}

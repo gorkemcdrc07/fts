@@ -31,7 +31,7 @@ import {
     IconButton,
     Tooltip,
 } from "@mui/material";
-import { DataGrid } from "@mui/x-data-grid";
+import { DataGrid, useGridApiRef } from "@mui/x-data-grid";
 
 /* Icons */
 import ListeleButton from "./butonlar/listele";
@@ -82,7 +82,6 @@ import {
 import Dashboard from "./dashboard";
 import usePermissions from "../auth/usePermissions";
 
-
 /* Diyaloglar */
 const EditorDialog = lazy(() => import("./dialogs/EditorDialog"));
 const EtaDialog = lazy(() => import("./dialogs/EtaDialog"));
@@ -101,17 +100,33 @@ const isUUID = (v) =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 
 export default function ReelAtananSeferler() {
+    /* DataGrid apiRef + kullanıcı anahtarları */
+    const apiRef = useGridApiRef();
+    const USERKEY = (localStorage.getItem("kullaniciAdi") || "GENERIC").toUpperCase();
+    const ORDER_KEY = `aktifseferler.columnOrder.${USERKEY}`;
+    const HIDDEN_KEY = `aktifseferler.hiddenColumns.${USERKEY}`;
+    const GENERIC_ORDER_KEY = `aktifseferler.columnOrder.GENERIC`;
+    const GENERIC_HIDDEN_KEY = `aktifseferler.hiddenColumns.GENERIC`;
+
+    // gizli kolon modelini yükle
+    const [columnVisibilityModel, setColumnVisibilityModel] = useState(() => {
+        try {
+            const hiddenList = JSON.parse(
+                localStorage.getItem(HIDDEN_KEY) ||
+                localStorage.getItem(GENERIC_HIDDEN_KEY) ||
+                "[]"
+            );
+            const m = {};
+            (hiddenList || []).forEach((f) => { m[f] = false; });
+            return m;
+        } catch { return {}; }
+    });
+
     const [viewBump, setViewBump] = useState(localStorage.getItem("aktifseferler.view.bump") || "0");
     useEffect(() => {
         const onStorage = (e) => {
             if (!e) return;
-            if (
-                [
-                    "aktifseferler.view.bump",
-                    `aktifseferler.columnOrder.${(localStorage.getItem("kullaniciAdi") || "GENERIC").toUpperCase()}`,
-                    `aktifseferler.hiddenColumns.${(localStorage.getItem("kullaniciAdi") || "GENERIC").toUpperCase()}`
-                ].includes(e.key)
-            ) {
+            if (["aktifseferler.view.bump", ORDER_KEY, HIDDEN_KEY].includes(e.key)) {
                 setViewBump(String(Date.now()));
             }
         };
@@ -122,6 +137,7 @@ export default function ReelAtananSeferler() {
             window.removeEventListener("storage", onStorage);
             window.removeEventListener("focus", onFocus);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const navigate = useNavigate();
@@ -170,7 +186,8 @@ export default function ReelAtananSeferler() {
     const [dense, setDense] = useState(false);
 
     /* Dashboard visible (persisted) */
-    const [dashOpen, setDashOpen] = useState(false);    useEffect(() => {
+    const [dashOpen, setDashOpen] = useState(false);
+    useEffect(() => {
         localStorage.setItem("aktifseferler.dash.open", dashOpen ? "1" : "0");
     }, [dashOpen]);
 
@@ -178,7 +195,6 @@ export default function ReelAtananSeferler() {
     const [editOpen, setEditOpen] = useState(false);
     const [editSefer, setEditSefer] = useState(null);
     const [detailRows, setDetailRows] = useState([]);
-    // eklendi:
     const [detailRowsOrig, setDetailRowsOrig] = useState([]);
     const [seferTarihiYeni, setSeferTarihiYeni] = useState("");
 
@@ -208,11 +224,7 @@ export default function ReelAtananSeferler() {
         try {
             const all = JSON.parse(localStorage.getItem("aktifseferler.logs") || "[]");
             const user = localStorage.getItem("kullaniciAdi") || "-";
-            all.unshift({
-                ts: new Date().toISOString(),
-                user,
-                ...entry,
-            });
+            all.unshift({ ts: new Date().toISOString(), user, ...entry });
             localStorage.setItem("aktifseferler.logs", JSON.stringify(all.slice(0, 200)));
             setViewBump(String(Date.now()));
         } catch { /* ignore */ }
@@ -273,10 +285,7 @@ export default function ReelAtananSeferler() {
         return id != null ? String(id) : null;
     };
 
-    const getLatestYuklemeCikisISO = (arr = []) => {
-        const ts = arr.map((d) => normalizeISO(d?.yukleme_cikis)).filter(Boolean).sort();
-        return ts.length ? ts[ts.length - 1] : null;
-    };
+    const getFirstLegStartISO = (arr = []) => normalizeISO(arr[0]?.yukleme_cikis) || null;
 
     const pickFirstLegOD = (row, detay = []) => {
         const first = (arr) => (arr.length ? arr[0] : "");
@@ -286,8 +295,6 @@ export default function ReelAtananSeferler() {
         const tIlce = first(splitCell(row.teslim_ilcesi || "")) || first(splitCell(detay[0]?.teslim_ilcesi || ""));
         return { yIl, yIlce, tIl, tIlce };
     };
-
-    const getFirstLegStartISO = (arr = []) => normalizeISO(arr[0]?.yukleme_cikis) || null;
 
     /* listele */
     const listData = useCallback(async () => {
@@ -316,9 +323,7 @@ export default function ReelAtananSeferler() {
         }
     }, [startDate, endDate]);
 
-    useEffect(() => {
-        listData();
-    }, [listData]);
+    useEffect(() => { listData(); }, [listData]);
 
     /* Bu tarih aralığında açıklama girilmiş seferleri getir → rozet için */
     const refreshReasonNos = useCallback(async () => {
@@ -340,9 +345,7 @@ export default function ReelAtananSeferler() {
         }
     }, [startDate, endDate]);
 
-    useEffect(() => {
-        refreshReasonNos();
-    }, [refreshReasonNos, rows.length]);
+    useEffect(() => { refreshReasonNos(); }, [refreshReasonNos, rows.length]);
 
     const filtered = useMemo(() => {
         let r = [...rows].filter((x) => (x.reel_durum || "") !== "EŞLEŞME YOK");
@@ -377,7 +380,6 @@ export default function ReelAtananSeferler() {
         setEditSefer(null);
         setDetailRows([]);
         setSeferTarihiYeni("");
-        // eklendi:
         setDetailRowsOrig([]);
     }, []);
 
@@ -472,7 +474,6 @@ export default function ReelAtananSeferler() {
             }
 
             setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
-            // addLog(...) // kaldırıldı; ayrıntılı log onSaveClick’te atılıyor
         } catch (e) {
             console.error(e);
             setSnack({ open: true, msg: `Kaydetme hatası: ${e?.message || e}`, severity: "error" });
@@ -601,39 +602,34 @@ export default function ReelAtananSeferler() {
                 }));
             }
 
-            setDetailRows(
-                detay.map((d) => ({
-                    ...d,
-                    proje_adi: d.proje_adi ?? "",
-                    yukleme_noktasi: d.yukleme_noktasi ?? "",
-                    yukleme_ili: d.yukleme_ili ?? "",
-                    yukleme_ilcesi: d.yukleme_ilcesi ?? "",
-                    teslim_noktasi: d.teslim_noktasi ?? "",
-                    teslim_ili: d.teslim_ili ?? "",
-                    teslim_ilcesi: d.teslim_ilcesi ?? "",
-                    yukleme_varis: d.yukleme_varis ?? "",
-                    yukleme_cikis: d.yukleme_cikis ?? "",
-                    teslim_varis: d.teslim_varis ?? "",
-                    teslim_cikis: d.teslim_cikis ?? "",
-                }))
-            );
+            setDetailRows(detay.map((d) => ({
+                ...d,
+                proje_adi: d.proje_adi ?? "",
+                yukleme_noktasi: d.yukleme_noktasi ?? "",
+                yukleme_ili: d.yukleme_ili ?? "",
+                yukleme_ilcesi: d.yukleme_ilcesi ?? "",
+                teslim_noktasi: d.teslim_noktasi ?? "",
+                teslim_ili: d.teslim_ili ?? "",
+                teslim_ilcesi: d.teslim_ilcesi ?? "",
+                yukleme_varis: d.yukleme_varis ?? "",
+                yukleme_cikis: d.yukleme_cikis ?? "",
+                teslim_varis: d.teslim_varis ?? "",
+                teslim_cikis: d.teslim_cikis ?? "",
+            })));
 
-            // eklendi: orijinal snapshot
-            setDetailRowsOrig(
-                detay.map((d) => ({
-                    proje_adi: d.proje_adi ?? "",
-                    yukleme_noktasi: d.yukleme_noktasi ?? "",
-                    yukleme_ili: d.yukleme_ili ?? "",
-                    yukleme_ilcesi: d.yukleme_ilcesi ?? "",
-                    teslim_noktasi: d.teslim_noktasi ?? "",
-                    teslim_ili: d.teslim_ili ?? "",
-                    teslim_ilcesi: d.teslim_ilcesi ?? "",
-                    yukleme_varis: d.yukleme_varis ?? "",
-                    yukleme_cikis: d.yukleme_cikis ?? "",
-                    teslim_varis: d.teslim_varis ?? "",
-                    teslim_cikis: d.teslim_cikis ?? "",
-                }))
-            );
+            setDetailRowsOrig(detay.map((d) => ({
+                proje_adi: d.proje_adi ?? "",
+                yukleme_noktasi: d.yukleme_noktasi ?? "",
+                yukleme_ili: d.yukleme_ili ?? "",
+                yukleme_ilcesi: d.yukleme_ilcesi ?? "",
+                teslim_noktasi: d.teslim_noktasi ?? "",
+                teslim_ili: d.teslim_ili ?? "",
+                teslim_ilcesi: d.teslim_ilcesi ?? "",
+                yukleme_varis: d.yukleme_varis ?? "",
+                yukleme_cikis: d.yukleme_cikis ?? "",
+                teslim_varis: d.teslim_varis ?? "",
+                teslim_cikis: d.teslim_cikis ?? "",
+            })));
             setSeferTarihiYeni(row?.sefer_tarihi || "");
 
             if (aktarModu) {
@@ -823,19 +819,25 @@ export default function ReelAtananSeferler() {
             };
 
             let ok = false;
-            try {
-                await updateSefer(id, payload);
-                ok = true;
-            } catch (e) {
-                console.warn("updateSefer hata, fallback:", e?.message || e);
-            }
+            try { await updateSefer(id, payload); ok = true; } catch (e) { console.warn("updateSefer hata, fallback:", e?.message || e); }
             if (!ok) {
                 const { error: upErr } = await supabase.from("seferler").update(payload).eq("id", id);
                 if (upErr) throw upErr;
             }
 
-            setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...payload } : r)));
-            addLog({ action: "ETA kaydedildi", sefer_no: etaRow?.sefer_no || "-", fields: ["eta_varis", "kalan_surus_dk", "eta_mola_dk"] });
+            // YENİ (id, sefer_no veya _rid ile eşleştir):
+            setRows((prev) =>
+                prev.map((r) => {
+                    const matchById = r.id != null && String(r.id) === String(id);
+                    const matchByRid = r._rid != null && String(r._rid) === String(id);
+                    const matchByNo =
+                        etaRow?.sefer_no &&
+                        r.sefer_no &&
+                        String(r.sefer_no).trim() === String(etaRow.sefer_no).trim();
+
+                    return (matchById || matchByRid || matchByNo) ? { ...r, ...payload } : r;
+                })
+            );            addLog({ action: "ETA kaydedildi", sefer_no: etaRow?.sefer_no || "-", fields: ["eta_varis", "kalan_surus_dk", "eta_mola_dk"] });
 
             setSnack({
                 open: true,
@@ -886,38 +888,28 @@ export default function ReelAtananSeferler() {
                                 return ts[ts.length - 1].toISOString();
                             };
 
-                            // --- KRİTİK: Detayları nokta_sirasi’na göre sırala
                             const ordered = Array.isArray(det)
-                                ? [...det].sort(
-                                    (a, b) =>
-                                        (a?.nokta_sirasi ?? 0) - (b?.nokta_sirasi ?? 0)
-                                )
+                                ? [...det].sort((a, b) => (a?.nokta_sirasi ?? 0) - (b?.nokta_sirasi ?? 0))
                                 : [];
 
-                            // 1. nokta gerçekten ilk eleman olsun
                             const firstByIndex = (ordered && ordered.length) ? ordered[0] : {};
-                            // Ek garanti: teslim_varis dolu olan ilk kaydı ara; yoksa index'teki kalsın
                             const firstByData =
                                 ordered.find((d) => String(d?.teslim_varis || "").trim()) ||
                                 firstByIndex;
 
-                            // Görünümleri bozmamak için “son” kaydı da koru
-                            const last =
-                                (ordered && ordered.length)
-                                    ? ordered[ordered.length - 1]
-                                    : {};
+                            const last = (ordered && ordered.length)
+                                ? ordered[ordered.length - 1]
+                                : {};
 
                             return {
                                 ...row,
                                 detay: {
-                                    // 1. nokta (sadece bunlara bakacağız)
                                     first_yukleme_varis: firstByData?.yukleme_varis ?? "",
                                     first_yukleme_cikis: firstByData?.yukleme_cikis ?? "",
                                     first_teslim_varis: firstByData?.teslim_varis ?? "",
-                                    first_teslim_giris: firstByData?.teslim_varis ?? "", // alias (dashboard tarafı da bakabilir)
+                                    first_teslim_giris: firstByData?.teslim_varis ?? "",
                                     first_teslim_cikis: firstByData?.teslim_cikis ?? "",
 
-                                    // mevcut son kayıtlar (diğer görünümler bozulmasın)
                                     yukleme_varis: pick(last?.yukleme_varis),
                                     yukleme_varis_at: latestAt(ordered),
                                     yukleme_cikis: pick(last?.yukleme_cikis),
@@ -943,60 +935,106 @@ export default function ReelAtananSeferler() {
             }
         })();
 
-        return () => {
-            cancelled = true;
-        };
+        return () => { cancelled = true; };
     }, [filtered]);
 
-
     /* grid columns (+ açıklama ikonu) */
-    const ORDER_KEY = `aktifseferler.columnOrder.${(localStorage.getItem("kullaniciAdi") || "GENERIC").toUpperCase()}`;
-    const HIDDEN_KEY = `aktifseferler.hiddenColumns.${(localStorage.getItem("kullaniciAdi") || "GENERIC").toUpperCase()}`;
-    const GENERIC_ORDER_KEY = `aktifseferler.columnOrder.GENERIC`;
-    const GENERIC_HIDDEN_KEY = `aktifseferler.hiddenColumns.GENERIC`;
-
     const columns = useMemo(() => {
         let cols = buildColumns({
             openETA,
             openEditor,
             COLORS,
-            perms: {
-                loading: permsLoading,
-                mayOpenETA,
-                canETA,
-                mayOpenEdit,
-                canEdit,
-            },
+            perms: { loading: permsLoading, mayOpenETA, canETA, mayOpenEdit, canEdit },
         });
 
-        // --- (sende zaten olan column order / hidden / note badge / yerleştirme vs.) ---
-        let userOrder = [];
+        // HIDDEN uygula
         let hiddenIds = [];
-
         try {
-            userOrder =
-                JSON.parse(
-                    localStorage.getItem(ORDER_KEY) ||
-                    localStorage.getItem(GENERIC_ORDER_KEY) ||
-                    "[]"
-                ) || [];
+            hiddenIds = JSON.parse(
+                localStorage.getItem(HIDDEN_KEY) ||
+                localStorage.getItem(GENERIC_HIDDEN_KEY) ||
+                "[]"
+            ) || [];
         } catch { }
-
-        try {
-            hiddenIds =
-                JSON.parse(
-                    localStorage.getItem(HIDDEN_KEY) ||
-                    localStorage.getItem(GENERIC_HIDDEN_KEY) ||
-                    "[]"
-                ) || [];
-        } catch { }
-
         if (hiddenIds.length) {
             const hidden = new Set(hiddenIds);
             cols = cols.filter((c) => !hidden.has(c.field));
         }
 
-        if (userOrder.length) {
+        // ORDER oku
+        let userOrder = [];
+        try {
+            userOrder = JSON.parse(
+                localStorage.getItem(ORDER_KEY) ||
+                localStorage.getItem(GENERIC_ORDER_KEY) ||
+                "[]"
+            ) || [];
+        } catch { }
+        const hasUserOrder = userOrder.length > 0;
+
+        // _note kolonu
+        const noteCol = {
+            field: "_note",
+            headerName: "",
+            width: 46,
+            sortable: false,
+            filterable: false,
+            disableColumnMenu: true,
+            renderCell: (params) => {
+                const sn = (params?.row?.sefer_no || "").toString().trim();
+                if (!sn || !reasonNos.has(sn)) return null;
+                return (
+                    <Tooltip title="Bu sefere açıklama girildi">
+                        <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 9999, background: "#f59e0b" }} />
+                    </Tooltip>
+                );
+            },
+        };
+
+        const lowerTR = (s) => String(s || "").toLocaleLowerCase("tr-TR");
+        const getHeader = (c) => c.headerName || c.header || "";
+        const findCol = (preferFields = [], headerNeedle = "") => {
+            let c = cols.find((col) => preferFields.includes(col.field));
+            if (c) return c;
+            if (headerNeedle) c = cols.find((col) => lowerTR(getHeader(col)).includes(lowerTR(headerNeedle)));
+            return c;
+        };
+
+        // Kullanıcı sırası YOKSA _note'u sefer_no yanına ekle
+        if (!hasUserOrder) {
+            const seferNoCol = findCol(["sefer_no"], "sefer");
+            if (seferNoCol) {
+                const idx2 = cols.findIndex((c) => c.field === seferNoCol.field);
+                const exists = cols.some((c) => c.field === "_note");
+                if (!exists) cols = [...cols.slice(0, idx2 + 1), noteCol, ...cols.slice(idx2 + 1)];
+            } else {
+                if (!cols.some((c) => c.field === "_note")) cols = [noteCol, ...cols];
+            }
+        } else {
+            // kullanıcı sırası varsa, userOrder içinde _note geçiyorsa ekleyelim (yerini sort sonunda alır)
+            if (!cols.some((c) => c.field === "_note") && userOrder.includes("_note")) {
+                cols = [...cols, noteCol];
+            }
+        }
+
+        // Kullanıcı sırası YOKSA ETA/Kalan görsel toparlama yap
+        if (!hasUserOrder) {
+            const islem = findCol(["islem", "actions", "_actions"], "işlem");
+            const reel = findCol(["reel_durum"], "reel");
+            const eta = findCol(["eta_varis", "eta"], "eta");
+            const kalan = findCol(["kalan_surus_dk", "kalan", "kalan_dk"], "kalan");
+            if (islem && reel && (eta || kalan)) {
+                const rest = cols.filter((c) => c.field !== eta?.field && c.field !== kalan?.field);
+                const idxIslem = rest.findIndex((c) => c.field === islem.field);
+                const idxReel = rest.findIndex((c) => c.field === reel.field);
+                const insertAt = Math.max(idxIslem, idxReel) + 1;
+                const toInsert = [eta, kalan].filter(Boolean);
+                cols = [...rest.slice(0, insertAt), ...toInsert, ...rest.slice(insertAt)];
+            }
+        }
+
+        // En sonda: kullanıcı sırası varsa birebir uygula
+        if (hasUserOrder) {
             const idx = new Map(userOrder.map((k, i) => [k, i]));
             cols = [...cols].sort((a, b) => {
                 const ai = idx.has(a.field) ? idx.get(a.field) : Number.POSITIVE_INFINITY;
@@ -1005,32 +1043,10 @@ export default function ReelAtananSeferler() {
             });
         }
 
-        const lowerTR = (s) => String(s || "").toLocaleLowerCase("tr-TR");
-        const getHeader = (c) => c.headerName || c.header || "";
-        const findCol = (preferFields = [], headerNeedle = "") => {
-            let c = cols.find((col) => preferFields.includes(col.field));
-            if (c) return c;
-            if (headerNeedle)
-                c = cols.find((col) => lowerTR(getHeader(col)).includes(lowerTR(headerNeedle)));
-            return c;
-        };
-
-        // açıklama rozeti, yerleştirme vb. senin mevcut kodun burada aynen kalsın
-        // ...
-
         return cols;
     }, [
-        // PERMS bağımlılıkları (görünmezlik sorunu için kritik!)
-        permsLoading,
-        mayOpenETA,
-        canETA,
-        mayOpenEdit,
-        canEdit,
-
-        openETA,
-        openEditor,
-        viewBump,
-        reasonNos,
+        permsLoading, mayOpenETA, canETA, mayOpenEdit, canEdit,
+        openETA, openEditor, viewBump, reasonNos,
     ]);
 
     /* sabit UI config */
@@ -1047,11 +1063,7 @@ export default function ReelAtananSeferler() {
         "& .MuiFormLabel-root.Mui-focused": { color: COLORS.textMuted },
     };
 
-
-    
-    
-
-    /* === GECİKME SEBEBİ KAYDET (UUID fix + duplicate guard) === */
+    /* === GECİKME SEBEBİ KAYDET === */
     const saveLateReason = async () => {
         if (!reasonRow) return;
         const kategori = reasonCat || "";
@@ -1080,7 +1092,7 @@ export default function ReelAtananSeferler() {
                 }
             }
 
-            // --- DUPLICATE GUARD: aynı sefer_no için BUGÜN kayıt varsa engelle ---
+            // BUGÜN aynı sefer_no için kayıt var mı?
             const today = new Date();
             const pad = (n) => String(n).padStart(2, "0");
             const y = today.getFullYear();
@@ -1102,14 +1114,12 @@ export default function ReelAtananSeferler() {
                 setSnack({ open: true, msg: "Bu sefere bugün zaten açıklama girilmiş.", severity: "warning" });
                 return;
             }
-            // -------------------------------------------------------------
 
-            // saveLateReason içinde, payload oluşturduğun yerde:
             const payload = {
                 ...(sefer_id ? { sefer_id } : {}),
                 sefer_no,
-                plaka: reasonRow?.plaka || null,                 // <-- EKLE
-                surucu_ad_soyad: reasonRow?.surucu_ad_soyad || null, // <-- EKLE
+                plaka: reasonRow?.plaka || null,
+                surucu_ad_soyad: reasonRow?.surucu_ad_soyad || null,
                 kategori,
                 aciklama,
                 kaydeden,
@@ -1120,16 +1130,10 @@ export default function ReelAtananSeferler() {
             };
 
             const { error } = await supabase.from("eta_gecikme_nedenleri").insert(payload);
-            if (error) {
-                console.error("eta_gecikme_nedenleri insert failed:", {
-                    code: error.code, message: error.message, details: error.details, hint: error.hint, sefer_id_raw
-                });
-                throw error;
-            }
+            if (error) throw error;
 
             addLog({ action: "Gecikme sebebi kaydedildi", sefer_no, fields: [kategori] });
 
-            // rozet set’ini anında güncelle
             if (sefer_no) {
                 setReasonNos((prev) => {
                     const n = new Set(prev);
@@ -1255,7 +1259,7 @@ export default function ReelAtananSeferler() {
                 surucu={surucu} setSurucu={setSurucu}
             />
 
-            {/* Özet Dashboard (açılır/kapanır) */}
+            {/* Özet Dashboard */}
             <Paper
                 sx={{
                     borderRadius: 3,
@@ -1273,10 +1277,7 @@ export default function ReelAtananSeferler() {
                     </Stack>
                     <IconButton size="small" onClick={() => setDashOpen((v) => !v)}>
                         <ExpandMoreIcon
-                            sx={{
-                                transform: dashOpen ? "rotate(180deg)" : "rotate(0deg)",
-                                transition: "0.2s",
-                            }}
+                            sx={{ transform: dashOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "0.2s" }}
                         />
                     </IconButton>
                 </Stack>
@@ -1311,7 +1312,6 @@ export default function ReelAtananSeferler() {
                 </Collapse>
             </Paper>
 
-
             {/* Liste */}
             <Paper
                 sx={{
@@ -1323,6 +1323,38 @@ export default function ReelAtananSeferler() {
                 }}
             >
                 <DataGrid
+                    /* Sürükle-bırak & görünürlük kaydı */
+                    apiRef={apiRef}
+                    disableColumnReorder={false}
+                    columnVisibilityModel={columnVisibilityModel}
+                    onColumnVisibilityModelChange={(model) => {
+                        setColumnVisibilityModel(model);
+                        try {
+                            const hiddenList = Object.keys(model).filter((k) => model[k] === false);
+                            localStorage.setItem(HIDDEN_KEY, JSON.stringify(hiddenList));
+                            localStorage.setItem("aktifseferler.view.bump", String(Date.now()));
+                        } catch { }
+                    }}
+                    onColumnOrderChange={() => {
+                        try {
+                            const ordered =
+                                apiRef.current.exportState?.().columns?.orderedFields
+                                || apiRef.current?.state?.columns?.orderedFields
+                                || [];
+                            localStorage.setItem(ORDER_KEY, JSON.stringify(ordered));
+                            localStorage.setItem("aktifseferler.view.bump", String(Date.now()));
+                        } catch { }
+                    }}
+                    onStateChange={(state) => {
+                        try {
+                            const ordered = state?.columns?.orderedFields || [];
+                            if (ordered.length) {
+                                localStorage.setItem(ORDER_KEY, JSON.stringify(ordered));
+                                localStorage.setItem("aktifseferler.view.bump", String(Date.now()));
+                            }
+                        } catch { }
+                    }}
+
                     rows={filtered}
                     columns={columns}
                     getRowId={(r) => r._rid}
@@ -1441,8 +1473,7 @@ export default function ReelAtananSeferler() {
                                     )
                                 );
 
-                                // 4) DEĞİŞEN ALANLARI TESPİT ET — sadece şu 4 alan:
-                                // yukleme_varis, yukleme_cikis, teslim_varis, teslim_cikis
+                                // 4) DEĞİŞEN ALANLAR
                                 const timeKeys = ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"];
                                 const changedFields = [];
                                 const detailedChanges = {};
@@ -1453,7 +1484,7 @@ export default function ReelAtananSeferler() {
                                         const beforeVal = String(orig?.[k] ?? "");
                                         const afterVal = String(row?.[k] ?? "");
                                         if (beforeVal !== afterVal) {
-                                            const tag = `${k}[${idx + 1}]`; // satır numarasıyla
+                                            const tag = `${k}[${idx + 1}]`;
                                             changedFields.push(tag);
                                             detailedChanges[tag] = { old: beforeVal || "-", new: afterVal || "-" };
                                         }
@@ -1465,13 +1496,12 @@ export default function ReelAtananSeferler() {
                                     detailedChanges["sefer_tarihi"] = { old: eskiST || "-", new: yeniST || "-" };
                                 }
 
-                                // 5) LOGLA (kullanıcı & zaman addLog’da otomatik)
                                 if (changedFields.length) {
                                     addLog({
                                         action: "Düzenleme kaydedildi",
                                         sefer_no: editSefer?.sefer_no || "-",
-                                        fields: changedFields,    // dashboard’da kısa gösterim
-                                        changes: detailedChanges, // istersen ayrıntı saklanıyor
+                                        fields: changedFields,
+                                        changes: detailedChanges,
                                     });
                                 } else {
                                     addLog({
@@ -1481,7 +1511,7 @@ export default function ReelAtananSeferler() {
                                     });
                                 }
 
-                                // 6) snapshot’ı güncelle (bir sonraki diff doğru olsun)
+                                // 6) snapshot’ı güncelle
                                 setDetailRowsOrig(
                                     detailRows.map((d) => ({
                                         proje_adi: d.proje_adi ?? "",
@@ -1510,7 +1540,6 @@ export default function ReelAtananSeferler() {
                     />
                 </Suspense>
             )}
-
 
             {/* ETA Dialog */}
             {etaOpen && (

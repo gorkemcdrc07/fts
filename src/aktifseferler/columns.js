@@ -42,7 +42,6 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         filterable: false,
         renderCell: (p) => (
             <Stack direction="row" spacing={0.5} alignItems="center">
-                {/* ETA görünürlük: perms yüklenene kadar placeholder olarak göster, disabled */}
                 {(loading || mayOpenETA) && (
                     <Button
                         size="small"
@@ -54,7 +53,6 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
                     </Button>
                 )}
 
-                {/* Edit görünürlük: perms yüklenene kadar placeholder olarak göster, disabled */}
                 {(loading || mayOpenEdit) && (
                     <Tooltip title={loading ? "Yükleniyor..." : (canEdit ? "Detayları Düzenle" : "Düzenleme yetkiniz yok")}>
                         <span>
@@ -127,7 +125,7 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         },
     ];
 
-    // İşlem sütununu başa, ETA/Kalan'ı sona ekle
+    // İşlem başa, ETA/Kalan sona
     cols = [actionsCol, ...cols, etaCol, kalanCol];
 
     return cols;

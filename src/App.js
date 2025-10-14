@@ -13,8 +13,7 @@ import Anasayfa from "./Anasayfa";
 import Planlama from "./kullanıcıIslemleri/Planlama";
 import PlakaOnerisi from "./kullanıcıIslemleri/PlakaOnerisi";
 import Siparisler from "./kullanıcıIslemleri/Siparisler";
-// ❌ ESKİ: import Tamamlananlar from "./kullanıcıIslemleri/Tamamlananlar";
-// ✅ YENİ:
+// ✅ YENİ (eskinin yerine):
 import TamamlananlarPage from "./tamamlananseferler/TamamlananlarPage";
 
 // Araç Durumları
@@ -46,6 +45,8 @@ import AppLayout from "./layout/AppLayout";
 const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler"));
 const SiparisAnaliz = lazy(() => import("./kullanıcıIslemleri/planlamaDetay/SiparisAnaliz"));
 const AdminPanel = lazy(() => import("./adminPanel/adminPanel"));
+const GorunumDuzenle = lazy(() => import("./aktifseferler/GorunumDuzenle")); // 👈 EKLENDİ
+
 function App() {
     return (
         <HelmetProvider>
@@ -62,7 +63,6 @@ function App() {
 
                             {/* Planlama */}
                             <Route path="planlama" element={<Planlama />} />
-
                             <Route path="plaka-onerisi" element={<PlakaOnerisi />} />
 
                             {/* ReelAtananSeferler (lazy) */}
@@ -75,10 +75,19 @@ function App() {
                                 }
                             />
 
+                            {/* Görünüm Düzenle (lazy) */}
+                            <Route
+                                path="aktifseferler/gorunum"
+                                element={
+                                    <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
+                                        <GorunumDuzenle />
+                                    </Suspense>
+                                }
+                            />
+
                             <Route path="siparisler" element={<Siparisler />} />
 
-                            {/* ❌ ESKİ: <Route path="tamamlanan-seferler" element={<Tamamlananlar />} /> */}
-                            {/* ✅ YENİ: */}
+                            {/* Tamamlanan Seferler (yeni sayfa) */}
                             <Route path="tamamlanan-seferler" element={<TamamlananlarPage />} />
 
                             {/* Araç Durumları */}

@@ -2,94 +2,144 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabaseClient";
 import {
-    Box,
-    Paper,
-    Typography,
-    Table,
-    TableHead,
-    TableRow,
-    TableCell,
-    TableBody,
-    TableContainer,
-    Toolbar,
-    Chip,
-    Switch,
-    Tooltip,
-    IconButton,
-    Button,
-    CircularProgress,
-    TextField,
-    InputAdornment,
-    Stack,              // <-- eklendi
+    Box, Paper, Typography, Table, TableHead, TableRow, TableCell, TableBody,
+    TableContainer, Toolbar, Chip, Switch, Tooltip, IconButton, Button,
+    CircularProgress, TextField, InputAdornment, Stack, FormControl, InputLabel,
+    Select, MenuItem,
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SaveIcon from "@mui/icons-material/Save";
 import SearchIcon from "@mui/icons-material/Search";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 
-/** İzin anahtarları (user_permissions & role_permissions ile aynı) */
-const PERM_KEYS = [
-    { key: "can_sync", label: "Senkronize" },
-    { key: "can_edit", label: "Sefer Düzenle" },
-    { key: "can_eta", label: "ETA Gör" },
-    { key: "may_open_edit", label: "Editörü Aç" },
-    { key: "may_open_eta", label: "ETA Paneli Aç" },
+/** EKRANLAR */
+const SCREENS = [
+    { key: "aktif_seferler", name: "Aktif Seferler" },
+    { key: "planlama", name: "Planlama" },
+    { key: "arac_durumlari", name: "Araç Durumları" },
+    { key: "arac_yonetimi", name: "Araç Yönetimi" },
+    { key: "kesinti_yonetimi", name: "Kesinti Yönetimi" },
+    { key: "tedarikci_masraf", name: "Tedarikçi Masraf" },
+    { key: "arac_cari_fiyat", name: "Araç ve Cari Fiyat" },
+    { key: "hakedis_seferleri", name: "Hakediş Seferleri" },
+    { key: "izin_yonetimi", name: "İzin Yönetimi" },
 ];
 
-/** Bazı projelerde upsert sonrası 406 alınabiliyor: fallback .select() */
-async function safeUpsert(table, payload, onConflict) {
-    const { error } = await supabase.from(table).upsert(payload, { onConflict });
+/** Ekrana göre (tek tabloda) gerçek kolonlar */
+const PERM_KEYS_BY_SCREEN = {
+    aktif_seferler: [
+        { key: "aktif_can_sync", label: "Senkronize" },
+        { key: "aktif_can_edit", label: "Sefer Düzenle" },
+        { key: "aktif_can_eta", label: "ETA Gör" },
+        { key: "aktif_may_open_edit", label: "Editörü Aç" },
+        { key: "aktif_may_open_eta", label: "ETA Paneli Aç" },
+    ],
+    planlama: [
+        { key: "pln_update", label: "Güncelle" },
+        { key: "pln_save", label: "Kaydet" },
+        { key: "pln_export_excel", label: "Excel Aktar" },
+        { key: "pln_import_excel", label: "Dosya İçe Aktar" },
+    ],
+    arac_durumlari: [
+        { key: "adur_create", label: "Yeni Kayıt Oluştur" },
+        { key: "adur_edit", label: "Kayıt Düzenle" },
+        { key: "adur_delete", label: "Kayıt Sil" },
+    ],
+    arac_yonetimi: [
+        { key: "ayon_create", label: "Yeni Kayıt Oluştur" },
+        { key: "ayon_edit", label: "Kayıt Düzenle" },
+        { key: "ayon_delete", label: "Kayıt Sil" },
+    ],
+    kesinti_yonetimi: [
+        { key: "kes_create", label: "Yeni Kayıt Oluştur" },
+        { key: "kes_edit", label: "Kayıt Düzenle" },
+        { key: "kes_delete", label: "Kayıt Sil" },
+    ],
+    tedarikci_masraf: [
+        { key: "tdm_create", label: "Yeni Kayıt Oluştur" },
+        { key: "tdm_edit", label: "Kayıt Düzenle" },
+        { key: "tdm_delete", label: "Kayıt Sil" },
+        { key: "tdm_may_open_edit", label: "Masrafı Onayla" },
+    ],
+    arac_cari_fiyat: [
+        { key: "acf_create", label: "Yeni Kayıt Oluştur" },
+        { key: "acf_edit", label: "Kayıt Düzenle" },
+        { key: "acf_delete", label: "Kayıt Sil" },
+    ],
+    hakedis_seferleri: [{ key: "hks_upload", label: "Dosya Yükle" }],
+    // Bu ekran user_permissions'ta yok; UI'da bilgilendirme için görünüyor
+    izin_yonetimi: [
+        { key: "izin_create", label: "Yeni Kayıt Oluştur" },
+        { key: "izin_edit", label: "Kayıt Düzenle" },
+        { key: "izin_delete", label: "Kayıt Sil" },
+    ],
+};
+
+/** Tablo gerçek kolon seti */
+const USER_PERMISSIONS_COLUMNS = new Set([
+    "id", "user_id", "updated_at",
+    "aktif_can_sync", "aktif_can_edit", "aktif_can_eta", "aktif_may_open_edit", "aktif_may_open_eta",
+    "pln_update", "pln_save", "pln_export_excel", "pln_import_excel",
+    "adur_create", "adur_edit", "adur_delete",
+    "ayon_create", "ayon_edit", "ayon_delete",
+    "kes_create", "kes_edit", "kes_delete",
+    "tdm_create", "tdm_edit", "tdm_delete", "tdm_may_open_edit",
+    "acf_create", "acf_edit", "acf_delete",
+    "hks_upload",
+]);
+
+async function upsertUserPermissions(rows) {
+    const { error } = await supabase.from("user_permissions").upsert(rows, { onConflict: "user_id" });
     if (!error) return;
     if (String(error.code) === "406") {
-        const { error: e2 } = await supabase.from(table).upsert(payload, { onConflict }).select();
-        if (e2) throw e2;
-        return;
+        const { error: e2 } = await supabase.from("user_permissions").upsert(rows, { onConflict: "user_id" }).select();
+        if (!e2) return;
+        throw e2;
     }
     throw error;
 }
 
 export default function UserOverridesTab() {
-    const [rows, setRows] = useState([]); // [{user_id, username, name, email, rol, ...permKeys, _hasOverride, _clear}]
+    const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [q, setQ] = useState("");
 
+    const [selectedScreen, setSelectedScreen] = useState(SCREENS[0].key);
+    const permKeys = PERM_KEYS_BY_SCREEN[selectedScreen] || [];
+
+    const allowedKeysForScreen = useMemo(
+        () => permKeys.filter((p) => USER_PERMISSIONS_COLUMNS.has(p.key)).map((p) => p.key),
+        [permKeys]
+    );
+    const overridesSupported = allowedKeysForScreen.length > 0;
+
     const load = async () => {
         setLoading(true);
         try {
-            // 1) Tüm kullanıcılar
             const { data: users, error: e1 } = await supabase
                 .from("login")
-                .select("id, kullaniciAdi, kullanici, email, rol")
-                .order("kullaniciAdi", { ascending: true });
+                .select("id, kullanici, rol")
+                .order("kullanici", { ascending: true });
             if (e1) throw e1;
 
-            // 2) Mevcut kullanıcı overrides
-            const { data: ovrs, error: e2 } = await supabase
-                .from("user_permissions")
-                .select("user_id, can_sync, can_edit, can_eta, may_open_edit, may_open_eta");
+            const { data: ovrs, error: e2 } = await supabase.from("user_permissions").select("*");
             if (e2) throw e2;
 
             const byUser = new Map((ovrs || []).map((o) => [String(o.user_id), o]));
 
             const uiRows = (users || []).map((u) => {
-                const o = byUser.get(String(u.id));
-                return {
+                const o = byUser.get(String(u.id)) || {};
+                const base = {
                     user_id: u.id,
-                    username: u.kullaniciAdi || "",
                     name: u.kullanici || "",
-                    email: u.email || "",
                     rol: u.rol || "",
-                    // override değer varsa al, yoksa null (inherit)
-                    can_sync: o?.can_sync ?? null,
-                    can_edit: o?.can_edit ?? null,
-                    can_eta: o?.can_eta ?? null,
-                    may_open_edit: o?.may_open_edit ?? null,
-                    may_open_eta: o?.may_open_eta ?? null,
-                    _hasOverride: !!o,
+                    _hasOverride: !!byUser.get(String(u.id)),
                     _clear: false,
                 };
+                permKeys.forEach((p) => { base[p.key] = (o[p.key] ?? null); });
+                return base;
             });
 
             setRows(uiRows);
@@ -102,40 +152,29 @@ export default function UserOverridesTab() {
         }
     };
 
-    useEffect(() => {
-        load();
-    }, []);
+    useEffect(() => { load(); }, [selectedScreen]);
 
     const toggle = (user_id, key) => {
         setRows((prev) =>
             prev.map((r) => {
                 if (r.user_id !== user_id) return r;
                 const current = r[key];
-                // null (inherit) -> true, true -> false, false -> true (senin tercihin)
-                const next = current === true ? false : true;
+                const next = current === true ? false : true; // null->true, true->false, false->true
                 return { ...r, [key]: next, _hasOverride: true, _clear: false };
             })
         );
         setDirty(true);
     };
 
+    // Sadece seçili ekrana ait alanları null'a çeker
     const clearRow = (user_id) => {
-        // bu kullanıcı için tüm override’ları sıfırla (inherit)
         setRows((prev) =>
-            prev.map((r) =>
-                r.user_id === user_id
-                    ? {
-                        ...r,
-                        can_sync: null,
-                        can_edit: null,
-                        can_eta: null,
-                        may_open_edit: null,
-                        may_open_eta: null,
-                        _hasOverride: false,
-                        _clear: true, // save’de delete çalıştıracağız
-                    }
-                    : r
-            )
+            prev.map((r) => {
+                if (r.user_id !== user_id) return r;
+                const next = { ...r, _hasOverride: true, _clear: true };
+                permKeys.forEach((p) => { next[p.key] = null; });
+                return next;
+            })
         );
         setDirty(true);
     };
@@ -144,35 +183,25 @@ export default function UserOverridesTab() {
         try {
             setSaving(true);
 
-            const toDelete = rows.filter((r) => r._clear).map((r) => r.user_id);
-            const toUpsert = rows
-                .filter((r) => !r._clear)
-                .filter((r) => {
-                    // en az bir alan true/false ise override satırı yaz
-                    return PERM_KEYS.some((p) => r[p.key] === true || r[p.key] === false);
-                })
-                .map((r) => ({
-                    user_id: r.user_id,
-                    can_sync: r.can_sync,
-                    can_edit: r.can_edit,
-                    can_eta: r.can_eta,
-                    may_open_edit: r.may_open_edit,
-                    may_open_eta: r.may_open_eta,
-                    updated_at: new Date().toISOString(),
-                }));
+            // Bu ekrana ait alanları (true/false/null) net şekilde gönder
+            const toUpsert = rows.map((r) => {
+                const obj = { user_id: r.user_id, updated_at: new Date().toISOString() };
+                allowedKeysForScreen.forEach((k) => {
+                    if (r[k] === true || r[k] === false || r[k] === null) obj[k] = r[k];
+                });
+                return obj;
+            });
 
-            // 1) Sıfırlanacakları sil
-            if (toDelete.length) {
-                const { error: delErr } = await supabase
-                    .from("user_permissions")
-                    .delete()
-                    .in("user_id", toDelete);
-                if (delErr) throw delErr;
+            // Aynı user_id için tek obje kalsın
+            const merged = new Map();
+            for (const o of toUpsert) {
+                const prev = merged.get(o.user_id) || { user_id: o.user_id, updated_at: o.updated_at };
+                merged.set(o.user_id, { ...prev, ...o });
             }
 
-            // 2) Upsert
-            if (toUpsert.length) {
-                await safeUpsert("user_permissions", toUpsert, "user_id");
+            const payload = Array.from(merged.values());
+            if (payload.length) {
+                await upsertUserPermissions(payload); // onConflict: 'user_id'
             }
 
             setDirty(false);
@@ -189,9 +218,7 @@ export default function UserOverridesTab() {
         const needle = q.trim().toLowerCase();
         if (!needle) return rows;
         return rows.filter((r) =>
-            [r.username, r.name, r.email, r.rol]
-                .map((v) => String(v || "").toLowerCase())
-                .some((s) => s.includes(needle))
+            [r.name, r.rol].map((v) => String(v || "").toLowerCase()).some((s) => s.includes(needle))
         );
     }, [rows, q]);
 
@@ -199,49 +226,50 @@ export default function UserOverridesTab() {
         <Paper variant="outlined" sx={{ p: 0, borderRadius: 3, overflow: "hidden" }}>
             <Toolbar
                 sx={{
-                    gap: 1,
-                    px: 2,
-                    py: 1.5,
+                    gap: 1, px: 2, py: 1.5,
                     bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"),
                     borderBottom: (t) => `1px solid ${t.palette.divider}`,
                 }}
             >
-                <Typography variant="subtitle1" fontWeight={800} sx={{ mr: "auto" }}>
-                    Kullanıcı Bazlı Yetkiler (Overrides)
-                </Typography>
+                <Typography variant="subtitle1" fontWeight={800}>Kullanıcı Bazlı Yetkiler (Overrides)</Typography>
+
+                <FormControl size="small" sx={{ minWidth: 220, ml: 2 }}>
+                    <InputLabel id="screen-select-label">Ekran</InputLabel>
+                    <Select
+                        labelId="screen-select-label"
+                        value={selectedScreen}
+                        label="Ekran"
+                        onChange={(e) => setSelectedScreen(e.target.value)}
+                        disabled={saving}
+                    >
+                        {SCREENS.map((s) => <MenuItem key={s.key} value={s.key}>{s.name}</MenuItem>)}
+                    </Select>
+                </FormControl>
 
                 <TextField
                     size="small"
-                    placeholder="Ara: kullanıcı, ad soyad, e-posta, rol…"
+                    placeholder="Ara: ad soyad, rol…"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
-                    InputProps={{
-                        startAdornment: (
-                            <InputAdornment position="start">
-                                <SearchIcon fontSize="small" />
-                            </InputAdornment>
-                        ),
-                    }}
-                    sx={{ width: 340 }}
+                    InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>) }}
+                    sx={{ width: 300, ml: "auto" }}
                 />
 
                 <Chip size="small" label={`Kullanıcı: ${filtered.length}`} />
 
+                {!overridesSupported && (
+                    <Chip size="small" color="warning" variant="outlined" label="Bu ekranda kullanıcı bazlı kolon yok (role geçerli)" />
+                )}
+
                 <Tooltip title="Yenile">
                     <span>
-                        <IconButton onClick={load} disabled={loading || saving}>
+                        <IconButton onClick={() => load()} disabled={loading || saving}>
                             {loading ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
                         </IconButton>
                     </span>
                 </Tooltip>
 
-                <Button
-                    startIcon={<SaveIcon />}
-                    onClick={save}
-                    disabled={!dirty || saving || loading}
-                    variant="contained"
-                    size="small"
-                >
+                <Button startIcon={<SaveIcon />} onClick={save} disabled={!dirty || saving || loading || !overridesSupported} variant="contained" size="small">
                     {saving ? "Kaydediliyor…" : "Kaydet"}
                 </Button>
             </Toolbar>
@@ -250,34 +278,18 @@ export default function UserOverridesTab() {
                 <Table stickyHeader size="small">
                     <TableHead>
                         <TableRow>
-                            <TableCell sx={{ width: 260, fontWeight: 800 }}>Kullanıcı</TableCell>
-                            <TableCell sx={{ fontWeight: 800 }}>Ad Soyad</TableCell>
-                            <TableCell sx={{ fontWeight: 800 }}>E-posta</TableCell>
-                            <TableCell sx={{ fontWeight: 800 }}>Rol</TableCell>
-                            {PERM_KEYS.map((p) => (
-                                <TableCell key={p.key} sx={{ fontWeight: 800 }}>
-                                    {p.label}
-                                </TableCell>
-                            ))}
-                            <TableCell align="right" sx={{ width: 90, fontWeight: 800 }}>
-                                İşlem
-                            </TableCell>
+                            <TableCell sx={{ fontWeight: 800, width: 260 }}>Ad Soyad</TableCell>
+                            <TableCell sx={{ fontWeight: 800, width: 160 }}>Rol</TableCell>
+                            {permKeys.map((p) => (<TableCell key={p.key} sx={{ fontWeight: 800 }}>{p.label}</TableCell>))}
+                            <TableCell align="right" sx={{ width: 90, fontWeight: 800 }}>İşlem</TableCell>
                         </TableRow>
                     </TableHead>
 
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={4 + PERM_KEYS.length + 1}>
-                                    <Box
-                                        sx={{
-                                            py: 3,
-                                            display: "flex",
-                                            gap: 1,
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                        }}
-                                    >
+                                <TableCell colSpan={2 + permKeys.length + 1}>
+                                    <Box sx={{ py: 3, display: "flex", gap: 1, alignItems: "center", justifyContent: "center" }}>
                                         <CircularProgress size={20} />
                                         <Typography>Yükleniyor…</Typography>
                                     </Box>
@@ -285,7 +297,7 @@ export default function UserOverridesTab() {
                             </TableRow>
                         ) : filtered.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4 + PERM_KEYS.length + 1}>
+                                <TableCell colSpan={2 + permKeys.length + 1}>
                                     <Box sx={{ py: 4, textAlign: "center", opacity: 0.7 }}>Sonuç yok.</Box>
                                 </TableCell>
                             </TableRow>
@@ -295,42 +307,39 @@ export default function UserOverridesTab() {
                                     key={r.user_id}
                                     sx={{
                                         "&:nth-of-type(2n) td": {
-                                            bgcolor: (t) =>
-                                                t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)",
+                                            bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)",
                                         },
                                     }}
                                 >
-                                    <TableCell>
-                                        <Typography fontWeight={800}>{r.username || "-"}</Typography>
-                                    </TableCell>
-                                    <TableCell>{r.name || "-"}</TableCell>
-                                    <TableCell>{r.email || "-"}</TableCell>
+                                    <TableCell><Typography fontWeight={800}>{r.name || "-"}</Typography></TableCell>
                                     <TableCell>{r.rol || "-"}</TableCell>
 
-                                    {PERM_KEYS.map((p) => {
+                                    {permKeys.map((p) => {
                                         const val = r[p.key]; // true | false | null
-                                        const checked = val === true; // null -> false görünür
+                                        const checked = val === true;
                                         const isInherited = val === null;
+                                        const isAllowed = USER_PERMISSIONS_COLUMNS.has(p.key);
                                         return (
                                             <TableCell key={p.key}>
                                                 <Stack direction="row" alignItems="center" spacing={1}>
-                                                    <Switch
-                                                        size="small"
-                                                        checked={checked}
-                                                        onChange={() => toggle(r.user_id, p.key)}
-                                                    />
-                                                    {isInherited && (
-                                                        <Typography variant="caption" sx={{ opacity: 0.55 }}>
-                                                            (miras)
-                                                        </Typography>
-                                                    )}
+                                                    <Tooltip title={isAllowed ? "" : "Bu alan user_permissions tablosunda yok."}>
+                                                        <span>
+                                                            <Switch
+                                                                size="small"
+                                                                checked={checked}
+                                                                onChange={() => toggle(r.user_id, p.key)}
+                                                                disabled={!isAllowed}
+                                                            />
+                                                        </span>
+                                                    </Tooltip>
+                                                    {isInherited && <Typography variant="caption" sx={{ opacity: 0.55 }}>(miras)</Typography>}
                                                 </Stack>
                                             </TableCell>
                                         );
                                     })}
 
                                     <TableCell align="right">
-                                        <Tooltip title="Varsayılana sıfırla (override sil)">
+                                        <Tooltip title="Varsayılana (null) çek — sadece bu ekranın alanları">
                                             <span>
                                                 <IconButton size="small" onClick={() => clearRow(r.user_id)}>
                                                     <RestartAltIcon fontSize="small" />

@@ -26,15 +26,10 @@ import {
     CircularProgress,
     Divider,
     Button,
-    Alert,
-    MenuItem,
     Badge,
     Drawer,
     ToggleButtonGroup,
     ToggleButton,
-    Card,
-    CardContent,
-    Grid,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -56,15 +51,21 @@ import {
     ClearAll as ClearAllIcon,
     Tune as TuneIcon,
 } from "@mui/icons-material";
-import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import ArrowBackIcon from "@mui/icons-material/ArrowBackIosNew";
 import HomeIcon from "@mui/icons-material/HomeOutlined";
 
 import { utils as XLSXUtils, writeFile as XLSXWriteFile } from "xlsx";
 
-/* ===================== Helpers ===================== */
+/* ===================== Sabitler & Yetkilendirme ===================== */
 const HOME_PATH = "/anasayfa";
+const SCREEN_KEY = "arac_cari_fiyat"; // 👈 bu ekranın anahtarı (RolesTab / UserOverridesTab'ta da aynı olmalı)
 
+/* Kullanıcı -> Rol -> Rol İzni + Kullanıcı Override birleştirme */
+function coalesceOverride(overrideVal, roleVal) {
+    return overrideVal === true || overrideVal === false ? overrideVal : !!roleVal;
+}
+
+/* ===================== Helpers ===================== */
 function formatTL(value) {
     if (value === null || value === undefined || value === "") return "";
     const num = Number(value);
@@ -141,7 +142,7 @@ export default function AracCariVeFiyat() {
     const [addError, setAddError] = useState(null);
     const [adding, setAdding] = useState(false);
 
-    // Filtreler: modern panel (Drawer)
+    // Filtreler
     const [filters, setFilters] = useState({
         plaka: "",
         cari_id: "",
@@ -155,7 +156,7 @@ export default function AracCariVeFiyat() {
         toplam_max: "",
         calisma_gunu_min: "",
         calisma_gunu_max: "",
-        pasif: "hepsi", // hepsi | aktif | pasif
+        pasif: "hepsi",
         aciklama: "",
         duzenleyen: "",
         tarih_from: "",
@@ -169,6 +170,72 @@ export default function AracCariVeFiyat() {
     const wrapRef = useRef(null);
     const tableRef = useRef(null);
 
+    /* --------- Yetkilendirme Durumu --------- */
+    const [permLoading, setPermLoading] = useState(true);
+    const [perms, setPerms] = useState({
+        canCreate: false,
+        canEdit: false,
+    });
+
+    async function loadPermissions() {
+        try {
+            setPermLoading(true);
+
+            const kullanici = localStorage.getItem("kullanici") || "";
+
+            // 1) kullanıcı
+            const { data: userRow, error: eU } = await supabase
+                .from("login")
+                .select("id, kullanici, rol")
+                .eq("kullanici", kullanici)
+                .maybeSingle();
+            if (eU) throw eU;
+
+            const roleKey = (userRow?.rol || "").toUpperCase();
+
+            // 2) rol id
+            const { data: roleRow, error: eR } = await supabase
+                .from("roles")
+                .select("id,key")
+                .eq("key", roleKey)
+                .maybeSingle();
+            if (eR) throw eR;
+
+            // 3) rol izinleri (bu ekran için)
+            let rolePerm = {};
+            if (roleRow?.id) {
+                const { data: rp, error: eRP } = await supabase
+                    .from("role_permissions")
+                    .select("*")
+                    .eq("screen_key", SCREEN_KEY)
+                    .eq("role_id", roleRow.id)
+                    .maybeSingle();
+                if (eRP) throw eRP;
+                rolePerm = rp || {};
+            }
+
+            // 4) kullanıcı override (bu ekran için)
+            const { data: up, error: eUP } = await supabase
+                .from("user_permissions")
+                .select("*")
+                .eq("screen_key", SCREEN_KEY)
+                .eq("user_id", userRow?.id)
+                .maybeSingle();
+            if (eUP) throw eUP;
+
+            const canCreate = coalesceOverride(up?.arcdur_create, rolePerm?.arcdur_create);
+            const canEdit = coalesceOverride(up?.arcdur_edit, rolePerm?.arcdur_edit);
+
+            setPerms({ canCreate, canEdit });
+        } catch (e) {
+            console.error("perm load error:", e);
+            setPerms({ canCreate: false, canEdit: false });
+        } finally {
+            setPermLoading(false);
+        }
+    }
+
+    /* --------- Ölçekleme --------- */
     useLayoutEffect(() => {
         function fit() {
             const wrap = wrapRef.current;
@@ -179,9 +246,7 @@ export default function AracCariVeFiyat() {
             const tblW = tbl.scrollWidth;              // tablonun doğal genişliği
             const scale = Math.min(1, wrapW / Math.max(1, tblW));
 
-            // CSS değişkenine yaz
             wrap.style.setProperty("--acf-scale", String(scale));
-            // Ölçek sonrası kırpılmayı önlemek için genişliği ters oranda büyüt
             tbl.style.width = scale < 1 ? `calc(100% / var(--acf-scale))` : "100%";
         }
 
@@ -190,7 +255,6 @@ export default function AracCariVeFiyat() {
         if (wrapRef.current) ro.observe(wrapRef.current);
         return () => ro.disconnect();
     }, []);
-
 
     const activeFilterCount = useMemo(() => {
         const { pasif, ...rest } = filters;
@@ -221,6 +285,7 @@ export default function AracCariVeFiyat() {
             }
         };
         run();
+        loadPermissions(); // 👈 yetkileri de getir
         return () => {
             ignore = true;
         };
@@ -337,6 +402,11 @@ export default function AracCariVeFiyat() {
 
     /* --------- Edit Handlers --------- */
     const startEdit = (row) => {
+        if (permLoading) return; // izinler yüklenirken beklet
+        if (!perms.canEdit) {
+            alert("Düzenleme yetkiniz yok.");
+            return;
+        }
         setEditingId(`${row.plaka}-${row.cari_id}`);
         setEditingKey({ plaka: row.plaka, cari_id: row.cari_id });
         setEditData({ ...row });
@@ -348,6 +418,10 @@ export default function AracCariVeFiyat() {
     };
 
     const saveEdit = async () => {
+        if (!perms.canEdit) {
+            alert("Düzenleme yetkiniz yok.");
+            return;
+        }
         try {
             const normalizeMoney = (v) => {
                 const n = parseTLToNumber(v);
@@ -366,13 +440,13 @@ export default function AracCariVeFiyat() {
                 cari_id: newCariId,
                 cari_adi: editData.cari_adi?.trim() || null,
                 arac_sahip: editData.arac_sahip?.trim() || null,
-                odak_arac_calisma_tipi: editData.odak_arac_calisma_tipi?.trim() || null, // EKLENDİ
+                odak_arac_calisma_tipi: editData.odak_arac_calisma_tipi?.trim() || null,
                 aylik_kira: normalizeMoney(editData.aylik_kira),
                 aylik_surucu: normalizeMoney(editData.aylik_surucu),
                 calisma_gunu:
                     editData.calisma_gunu === "" || editData.calisma_gunu == null ? null : Number(editData.calisma_gunu),
 
-                duzenleme_yapan_kullanici: "Admin",
+                duzenleme_yapan_kullanici: localStorage.getItem("kullanici") || "Admin",
                 duzenleme_yapilan_tarih: new Date().toISOString(),
             };
 
@@ -407,43 +481,52 @@ export default function AracCariVeFiyat() {
     const handleAddChange = (key, value) => setAddForm((p) => ({ ...p, [key]: value }));
 
     const addNew = async () => {
+        if (!perms.canCreate) {
+            setAddError("Yeni kayıt ekleme yetkiniz yok.");
+            return;
+        }
         setAddError(null);
+
         if (!addForm.plaka?.trim()) return setAddError("Plaka zorunludur.");
         if (!addForm.cari_id?.trim()) return setAddError("Cari ID zorunludur.");
 
-        const payload = {
-            plaka: addForm.plaka.trim(),
-            cari_id: parseTLToNumber(addForm.cari_id),
-            cari_adi: addForm.cari_adi?.trim() || null,
-            arac_sahip: addForm.arac_sahip?.trim() || null,
-            aylik_kira: parseTLToNumber(addForm.aylik_kira),
-            aylik_surucu: parseTLToNumber(addForm.aylik_surucu),
-            calisma_gunu: parseTLToNumber(addForm.calisma_gunu),
-            pasif: !!addForm.pasif,
-            aciklama: addForm.aciklama?.trim() || null,
-            duzenleme_yapan_kullanici: "Admin",
-            duzenleme_yapilan_tarih: new Date().toISOString(),
-        };
+        setAdding(true);
+        try {
+            const payload = {
+                plaka: addForm.plaka.trim(),
+                cari_id: parseTLToNumber(addForm.cari_id),
+                cari_adi: addForm.cari_adi?.trim() || null,
+                arac_sahip: addForm.arac_sahip?.trim() || null,
+                aylik_kira: parseTLToNumber(addForm.aylik_kira),
+                aylik_surucu: parseTLToNumber(addForm.aylik_surucu),
+                calisma_gunu: parseTLToNumber(addForm.calisma_gunu),
+                pasif: !!addForm.pasif,
+                aciklama: addForm.aciklama?.trim() || null,
+                duzenleme_yapan_kullanici: localStorage.getItem("kullanici") || "Admin",
+                duzenleme_yapilan_tarih: new Date().toISOString(),
+            };
 
-        const { error } = await supabase.from("arac_cari_ve_fiyat").insert([payload]);
-        if (error) {
-            setAddError(error.message || "Kayıt eklenemedi.");
-            return;
+            const { error } = await supabase.from("arac_cari_ve_fiyat").insert([payload]);
+            if (error) throw error;
+
+            setAddForm({
+                plaka: "",
+                cari_id: "",
+                cari_adi: "",
+                arac_sahip: "",
+                aylik_kira: "",
+                aylik_surucu: "",
+                calisma_gunu: "",
+                pasif: false,
+                aciklama: "",
+            });
+            await refetch();
+            setShowAdd(false);
+        } catch (e) {
+            setAddError(e?.message || "Kayıt eklenemedi.");
+        } finally {
+            setAdding(false);
         }
-
-        setAddForm({
-            plaka: "",
-            cari_id: "",
-            cari_adi: "",
-            arac_sahip: "",
-            aylik_kira: "",
-            aylik_surucu: "",
-            calisma_gunu: "",
-            pasif: false,
-            aciklama: "",
-        });
-        await refetch();
-        setShowAdd(false);
     };
 
     /* --------- Excel Export --------- */
@@ -486,7 +569,7 @@ export default function AracCariVeFiyat() {
             { wch: 10 },
             { wch: 28 },
             { wch: 20 },
-            { wch: 14 },
+            { wch: 20 },
             { wch: 14 },
             { wch: 14 },
             { wch: 14 },
@@ -500,7 +583,7 @@ export default function AracCariVeFiyat() {
         XLSXWriteFile(wb, `arac_cari_fiyat_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
-    /* --------- UI bits (YENİ: daha büyük ve modern) --------- */
+    /* --------- UI bits --------- */
     const SortIcon = ({ col }) => {
         if (sortBy.key !== col) return <ImportExport fontSize="inherit" sx={{ opacity: 0.6 }} />;
         return sortBy.dir === "asc" ? <ArrowUpward fontSize="inherit" /> : <ArrowDownward fontSize="inherit" />;
@@ -515,9 +598,9 @@ export default function AracCariVeFiyat() {
                 whiteSpace: "nowrap",
                 fontWeight: 900,
                 cursor: "pointer",
-                fontSize: 15.5,                // ↑ başlık fontu büyütüldü
+                fontSize: 15.5,
                 letterSpacing: 0.2,
-                py: 1.25,                      // ↑ başlık yüksekliği
+                py: 1.25,
                 ...props?.sx,
             }}
         >
@@ -558,7 +641,7 @@ export default function AracCariVeFiyat() {
         </Badge>
     );
 
-    // Top toolbar (modern & daha büyük)
+    // Top toolbar
     const TopToolbar = (
         <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ xs: "stretch", md: "center" }}>
             <TextField
@@ -599,9 +682,26 @@ export default function AracCariVeFiyat() {
             <Button variant="contained" color="primary" startIcon={<DownloadIcon />} onClick={exportToExcel} size="medium">
                 Excel’e Aktar
             </Button>
-            <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => setShowAdd(true)} size="medium">
-                Yeni Kayıt
-            </Button>
+
+            {/* Yeni Kayıt — Yetki kontrollü */}
+            <Tooltip title={perms.canCreate ? "" : "Yeni kayıt ekleme yetkiniz yok"}>
+                <span>
+                    <Button
+                        variant="contained"
+                        color="secondary"
+                        startIcon={<AddIcon />}
+                        onClick={() => {
+                            if (!perms.canCreate) return;
+                            setShowAdd(true);
+                        }}
+                        size="medium"
+                        disabled={!perms.canCreate || permLoading}
+                    >
+                        Yeni Kayıt
+                    </Button>
+                </span>
+            </Tooltip>
+
             <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} size="medium">
                 Geri
             </Button>
@@ -670,7 +770,7 @@ export default function AracCariVeFiyat() {
                     <Paper
                         elevation={10}
                         sx={{
-                            borderRadius: 5,                     // ↑ daha yumuşak
+                            borderRadius: 5,
                             overflow: "hidden",
                             backdropFilter: "blur(10px)",
                             border: (t) => `1px solid ${t.palette.divider}`,
@@ -722,7 +822,19 @@ export default function AracCariVeFiyat() {
                                         )}
                                         {err && <Chip label={`Hata: ${err}`} color="error" variant="outlined" sx={{ height: 28 }} />}
                                         {!loading && !err && <Chip label={`Toplam: ${sorted.length}`} variant="outlined" sx={{ height: 28 }} />}
-                                        {onlyActive && <Chip color="success" label="Sadece Aktif" size="small" />}
+
+                                        {permLoading ? (
+                                            <Chip size="small" variant="outlined" label="Yetkiler yükleniyor…" sx={{ height: 24 }} />
+                                        ) : (
+                                            <>
+                                                {!perms.canCreate && (
+                                                    <Chip size="small" variant="outlined" label="Yeni Kayıt: Kapalı" />
+                                                )}
+                                                {!perms.canEdit && (
+                                                    <Chip size="small" variant="outlined" label="Düzenleme: Kapalı" />
+                                                )}
+                                            </>
+                                        )}
                                     </Stack>
                                 </Stack>
                                 {TopToolbar}
@@ -734,7 +846,7 @@ export default function AracCariVeFiyat() {
 
                         {/* Table */}
                         <TableContainer
-                            ref={wrapRef}  // ← sarmalayıcıya ref
+                            ref={wrapRef}
                             sx={{
                                 maxHeight: "78vh",
                                 width: "100%",
@@ -742,22 +854,21 @@ export default function AracCariVeFiyat() {
                             }}
                         >
                             <Table
-                                ref={tableRef}               // ← tabloya ref
+                                ref={tableRef}
                                 className="acf-table acf-scale"
                                 stickyHeader
                                 size="medium"
                                 sx={{
-                                    // minWidth: 2200,          // ← zaten kaldırıldı
                                     width: "100%",
-                                    tableLayout: "fixed",       // ← metin sarma + daha iyi sığma
+                                    tableLayout: "fixed",
                                     "& thead th": {
                                         bgcolor: (t) =>
                                             t.palette.mode === "dark" ? t.palette.background.default : "#f3f6ff",
                                     },
                                     "& td, & th": {
                                         fontSize: "clamp(10px, 1vw, 15px)",
-                                        wordBreak: "break-word",   // ← uzun kelimeleri kır
-                                        whiteSpace: "normal",      // ← tek satıra zorlamayı bırak
+                                        wordBreak: "break-word",
+                                        whiteSpace: "normal",
                                     },
                                     "& td": {
                                         py: "clamp(0.4rem, 0.8vh, 1.1rem)",
@@ -770,7 +881,6 @@ export default function AracCariVeFiyat() {
                                     },
                                 }}
                             >
-
                                 <TableHead>
                                     <TableRow>
                                         {headerCell("Plaka", "plaka")}
@@ -941,7 +1051,7 @@ export default function AracCariVeFiyat() {
                                                     <Typography noWrap>{r.aciklama}</Typography>
                                                 </TableCell>
 
-                                                {/* İşlem */}
+                                                {/* İşlem — Yetki kontrollü */}
                                                 <TableCell>
                                                     {isEditing ? (
                                                         <Stack direction="row" spacing={1}>
@@ -950,7 +1060,7 @@ export default function AracCariVeFiyat() {
                                                                     <IconButton
                                                                         color="primary"
                                                                         onClick={saveEdit}
-                                                                        disabled={savingId === editingId}
+                                                                        disabled={savingId === editingId || !perms.canEdit || permLoading}
                                                                         size="small"
                                                                     >
                                                                         <CheckIcon />
@@ -971,9 +1081,13 @@ export default function AracCariVeFiyat() {
                                                             </Tooltip>
                                                         </Stack>
                                                     ) : (
-                                                        <Tooltip title="Satırı düzenle">
+                                                        <Tooltip title={perms.canEdit ? "Satırı düzenle" : "Düzenleme yetkiniz yok"}>
                                                             <span>
-                                                                <IconButton onClick={() => startEdit(r)} size="small">
+                                                                <IconButton
+                                                                    onClick={() => startEdit(r)}
+                                                                    size="small"
+                                                                    disabled={!perms.canEdit || permLoading}
+                                                                >
                                                                     <EditIcon />
                                                                 </IconButton>
                                                             </span>
@@ -996,29 +1110,29 @@ export default function AracCariVeFiyat() {
                                             </TableCell>
                                         </TableRow>
                                     )}
-                                    </TableBody>
+                                </TableBody>
 
-                                    <TableFooter>
-                                        <TableRow
-                                            sx={{
-                                                "& td": {
-                                                    fontWeight: 900,
-                                                    fontSize: 15,
-                                                    bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "#eef3ff"),
-                                                    borderTop: (t) => `2px solid ${t.palette.divider}`,
-                                                    py: 1.25,
-                                                },
-                                            }}
-                                        >
-                                            <TableCell colSpan={5}>Toplam (filtrelenmiş veride)</TableCell>
-                                            <TableCell align="right">{formatTL(totals.kira)}</TableCell>
-                                            <TableCell align="right">{formatTL(totals.surucu)}</TableCell>
-                                            <TableCell align="right">{formatTL(totals.toplam)}</TableCell>
-                                            <TableCell align="center">—</TableCell>
-                                            <TableCell align="center">—</TableCell>
-                                            <TableCell colSpan={4}> </TableCell>
-                                        </TableRow>
-                                    </TableFooter>
+                                <TableFooter>
+                                    <TableRow
+                                        sx={{
+                                            "& td": {
+                                                fontWeight: 900,
+                                                fontSize: 15,
+                                                bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "#eef3ff"),
+                                                borderTop: (t) => `2px solid ${t.palette.divider}`,
+                                                py: 1.25,
+                                            },
+                                        }}
+                                    >
+                                        <TableCell colSpan={5}>Toplam (filtrelenmiş veride)</TableCell>
+                                        <TableCell align="right">{formatTL(totals.kira)}</TableCell>
+                                        <TableCell align="right">{formatTL(totals.surucu)}</TableCell>
+                                        <TableCell align="right">{formatTL(totals.toplam)}</TableCell>
+                                        <TableCell align="center">—</TableCell>
+                                        <TableCell align="center">—</TableCell>
+                                        <TableCell colSpan={4}> </TableCell>
+                                    </TableRow>
+                                </TableFooter>
                             </Table>
                         </TableContainer>
                     </Paper>
@@ -1032,7 +1146,7 @@ export default function AracCariVeFiyat() {
                 onClose={() => setDrawerOpen(false)}
                 PaperProps={{
                     sx: {
-                        width: { xs: "100%", sm: 520 },               // ↑ genişlik artırıldı
+                        width: { xs: "100%", sm: 520 },
                         p: 2,
                         borderTopLeftRadius: 18,
                         borderBottomLeftRadius: 18,
@@ -1050,13 +1164,7 @@ export default function AracCariVeFiyat() {
                     </IconButton>
                 </Stack>
 
-                {/* ——— (İÇERİK AYNI) ——— */}
-                {/* ... Drawer içeriği değişmedi ... */}
-                {/* Sadece Paper’ın alt barda ufak düzen */}
-                <Stack spacing={2} sx={{ pb: 10 }}>
-                    {/* mevcut kartlarınız burada aynen kalıyor */}
-                    {/* Genel / Tutar Aralıkları / Diğer kartları */}
-                </Stack>
+                {/* (Filtre içerikleri mevcut kodunuzla aynı kalabilir) */}
 
                 <Paper
                     elevation={6}
@@ -1093,7 +1201,7 @@ export default function AracCariVeFiyat() {
                 </Paper>
             </Drawer>
 
-            {/* ========== Yeni Kayıt (Dialog) ========== */}
+            {/* ========== Yeni Kayıt (Dialog) — Yetki kontrollü ========== */}
             <Dialog
                 open={showAdd}
                 onClose={() => setShowAdd(false)}
@@ -1103,14 +1211,77 @@ export default function AracCariVeFiyat() {
             >
                 <DialogTitle sx={{ fontWeight: 900 }}>Yeni Kayıt Ekle</DialogTitle>
                 <DialogContent dividers>
-                    {/* ——— (DİYALOG İÇERİĞİ AYNI) ——— */}
-                    {/* Form alanlarının tamamı aynı kaldı */}              
+                    {addError && (
+                        <Box sx={{ mb: 2 }}>
+                            <Chip color="error" variant="outlined" label={addError} />
+                        </Box>
+                    )}
+                    <Stack spacing={2}>
+                        <TextField
+                            label="Plaka"
+                            value={addForm.plaka}
+                            onChange={(e) => handleAddChange("plaka", e.target.value)}
+                            required
+                        />
+                        <TextField
+                            label="Cari ID"
+                            value={addForm.cari_id}
+                            onChange={(e) => handleAddChange("cari_id", e.target.value)}
+                            required
+                            inputMode="numeric"
+                        />
+                        <TextField
+                            label="Cari Adı"
+                            value={addForm.cari_adi}
+                            onChange={(e) => handleAddChange("cari_adi", e.target.value)}
+                        />
+                        <TextField
+                            label="Araç Sahibi"
+                            value={addForm.arac_sahip}
+                            onChange={(e) => handleAddChange("arac_sahip", e.target.value)}
+                        />
+                        <TextField
+                            label="Aylık Kira"
+                            value={addForm.aylik_kira}
+                            onChange={(e) => handleAddChange("aylik_kira", formatTLForTyping(e.target.value))}
+                            inputMode="decimal"
+                        />
+                        <TextField
+                            label="Aylık Sürücü"
+                            value={addForm.aylik_surucu}
+                            onChange={(e) => handleAddChange("aylik_surucu", formatTLForTyping(e.target.value))}
+                            inputMode="decimal"
+                        />
+                        <TextField
+                            label="Çalışma Günü"
+                            value={addForm.calisma_gunu}
+                            onChange={(e) => handleAddChange("calisma_gunu", e.target.value)}
+                            inputMode="numeric"
+                        />
+                        <TextField
+                            label="Açıklama"
+                            value={addForm.aciklama}
+                            onChange={(e) => handleAddChange("aciklama", e.target.value)}
+                            multiline
+                            minRows={2}
+                        />
+                    </Stack>
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
                     <Button onClick={() => setShowAdd(false)}>Vazgeç</Button>
-                    <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={addNew} disabled={adding}>
-                        {adding ? "Ekleniyor..." : "Ekle"}
-                    </Button>
+                    <Tooltip title={perms.canCreate ? "" : "Yeni kayıt ekleme yetkiniz yok"}>
+                        <span>
+                            <Button
+                                variant="contained"
+                                color="secondary"
+                                startIcon={<AddIcon />}
+                                onClick={addNew}
+                                disabled={adding || !perms.canCreate || permLoading}
+                            >
+                                {adding ? "Ekleniyor..." : "Ekle"}
+                            </Button>
+                        </span>
+                    </Tooltip>
                 </DialogActions>
             </Dialog>
         </Box>

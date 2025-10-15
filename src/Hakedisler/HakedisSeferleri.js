@@ -1,13 +1,17 @@
 // src/Hakedisler/HakedisSeferleri.js
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useRef, useState, useEffect } from "react";
 import "./HakedisSeferleri.css";
-import { supabase } from "../supabaseClient"; // ← yolunu düzenle
-import { useNavigate } from "react-router-dom"; // 👈 eklendi
+import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@mui/material";
 import { HomeOutlined as HomeIcon } from "@mui/icons-material";
 
+/** Ekran anahtarı & izin anahtarı */
+const SCREEN_KEY = "hakedis_seferleri";
+const UPLOAD_COL = "arcdur_create"; // dosya ekleme izni için
+
 /** Kullanıcı şablon başlıkları (Excel) */
-const HOME_PATH = "/anasayfa"; // sizde hangi rota ise: "/dashboard" vb.
+const HOME_PATH = "/anasayfa";
 
 const TEMPLATE_HEADERS = [
     "Sefer Tarihi",
@@ -55,10 +59,10 @@ const normalize = (s) =>
 /** Metni TR formatından sayıya çevirir (YUVARLAMA YOK) */
 const toNumber = (v) => {
     if (v === null || v === undefined || v === "") return null;
-    if (typeof v === "number") return Number.isFinite(v) ? v : null; // yuvarlama yok
+    if (typeof v === "number") return Number.isFinite(v) ? v : null;
     const s = String(v).trim().replace(/\./g, "").replace(",", ".");
     const n = Number(s);
-    return Number.isFinite(n) ? n : null; // yuvarlama yok
+    return Number.isFinite(n) ? n : null;
 };
 
 /** API'ye gönderilecek ondalık (varsayılan 2 hane) değeri güvenli üretir */
@@ -66,8 +70,8 @@ const toApiDecimal2 = (v, digits = 2) => {
     const n = toNumber(v);
     if (n === null) return { number: 0, cents: 0, string: (0).toFixed(digits) };
     const factor = 10 ** digits;
-    const cents = Math.round(n * factor); // ölçekli tam sayı (digits=2 ise kuruş)
-    const fixed = (cents / factor).toFixed(digits); // "123.45" veya "123.4567"
+    const cents = Math.round(n * factor);
+    const fixed = (cents / factor).toFixed(digits);
     return { number: Number(fixed), cents, string: fixed };
 };
 
@@ -78,7 +82,7 @@ const toApiDecimal = (v, digits = 2) => {
     if (n === null) return { number: z, scaled: 0, string: (0).toFixed(digits) };
     const factor = 10 ** digits;
     const scaled = Math.round(n * factor);
-    const fixed = (scaled / factor).toFixed(digits); // "123.4567" gibi
+    const fixed = (scaled / factor).toFixed(digits);
     return { number: Number(fixed), scaled, string: fixed };
 };
 
@@ -136,12 +140,9 @@ const roundN = (x, n = 4) => {
 };
 
 /* ---------------------- TOKEN ÖNBELLEK / YENİLEME ---------------------- */
-// Basit token cache (module scope)
 let tokenCache = { value: "", obtainedAt: 0 };
-// Token 5 dakikada bir değişiyorsa 4. dakikada önleyici yenileyelim
 const TOKEN_MAX_AGE_MS = 4 * 60 * 1000;
 
-/** localStorage'dan REEL bilgileriyle TMS'e login olup token döner (temizlenmiş) */
 async function loginToTMSWithLocalReelCreds() {
     const userName = (localStorage.getItem("Reel-kullanici") || "").trim();
     const password = localStorage.getItem("Reel-sifre") || "";
@@ -206,16 +207,11 @@ async function fetchWithTimeout(url, opts = {}, timeoutMs = 30000) {
     }
 }
 
-async function resilientPost(
-    url,
-    body,
-    { maxRetries = 3, baseDelay = 200 } = {}
-) {
+async function resilientPost(url, body, { maxRetries = 3, baseDelay = 200 } = {}) {
     let attempt = 0;
     let lastErr;
     while (attempt <= maxRetries) {
         try {
-            // her denemede valid token
             const tkn = await ensureValidToken();
             let res = await fetchWithTimeout(
                 url,
@@ -230,7 +226,6 @@ async function resilientPost(
                 30000
             );
 
-            // 401 → zorla yenile ve bir kez daha dene (hemen)
             if (res.status === 401) {
                 const fresh = await fetchFreshToken();
                 res = await fetchWithTimeout(
@@ -248,7 +243,6 @@ async function resilientPost(
             }
 
             if (!res.ok) {
-                // retry adayı durumlar
                 if (res.status === 429 || (res.status >= 500 && res.status <= 599)) {
                     const text = await res.text().catch(() => "");
                     lastErr = new Error(`${res.status} ${text}`);
@@ -257,18 +251,16 @@ async function resilientPost(
                     throw new Error(`${res.status} ${text}`);
                 }
             } else {
-                return; // başarı
+                return;
             }
         } catch (e) {
-            // ağ hatası/timeout/AbortError ↔ retry
             lastErr = e;
         }
 
-        // backoff
         attempt += 1;
         if (attempt > maxRetries) break;
         const jitter = Math.random() * 100;
-        const delay = baseDelay * 2 ** (attempt - 1) + jitter; // 200, 400, 800 + jitter
+        const delay = baseDelay * 2 ** (attempt - 1) + jitter;
         await sleep(delay);
     }
     throw lastErr || new Error("Bilinmeyen hata");
@@ -294,12 +286,60 @@ async function runWithConcurrencyLimit(jobs, limit, onProgress) {
         }
     }
 
-    const workers = Array.from(
-        { length: Math.min(limit, jobs.length) },
-        () => worker()
-    );
+    const workers = Array.from({ length: Math.min(limit, jobs.length) }, () => worker());
     await Promise.all(workers);
     return { errors };
+}
+
+/* ---------------------- YETKİLER ---------------------- */
+function coalesceOverride(overrideVal, roleVal) {
+    return overrideVal === true || overrideVal === false ? overrideVal : !!roleVal;
+}
+
+async function loadUploadPermission(kullanici) {
+    // 1) kullanıcıyı bul
+    const { data: userRow, error: eU } = await supabase
+        .from("login")
+        .select("id, kullanici, rol")
+        .eq("kullanici", kullanici)
+        .maybeSingle();
+    if (eU) throw eU;
+
+    // 2) rol id al
+    const roleKey = (userRow?.rol || "").toUpperCase();
+    const { data: roleRow, error: eR } = await supabase
+        .from("roles")
+        .select("id,key")
+        .eq("key", roleKey)
+        .maybeSingle();
+    if (eR) throw eR;
+
+    // 3) role_permissions (bu ekran)
+    let rolePerm = {};
+    if (roleRow?.id) {
+        const { data: rp, error: eRP } = await supabase
+            .from("role_permissions")
+            .select("*")
+            .eq("screen_key", SCREEN_KEY)
+            .eq("role_id", roleRow.id)
+            .maybeSingle();
+        if (eRP) throw eRP;
+        rolePerm = rp || {};
+    }
+
+    // 4) user_permissions override (bu ekran)
+    const { data: up, error: eUP } = await supabase
+        .from("user_permissions")
+        .select("*")
+        .eq("screen_key", SCREEN_KEY)
+        .eq("user_id", userRow?.id)
+        .maybeSingle();
+    if (eUP) throw eUP;
+
+    // 5) etkin izin
+    const canUpload = coalesceOverride(up?.[UPLOAD_COL], rolePerm?.[UPLOAD_COL]);
+
+    return { canUpload: !!canUpload };
 }
 
 /* ---------------------- ANA BİLEŞEN ---------------------- */
@@ -307,21 +347,41 @@ export default function HakedisSeferleri({ onFileReady }) {
     const [dragActive, setDragActive] = useState(false);
     const [fileError, setFileError] = useState("");
     const [file, setFile] = useState(null);
-    const [rows, setRows] = useState([]); // final satırlar (DISPLAY_HEADERS ile uyumlu)
+    const [rows, setRows] = useState([]);
     const [parsing, setParsing] = useState(false);
-    const [summary, setSummary] = useState(null); // Hesapla sonucu
+    const [summary, setSummary] = useState(null);
     const [exporting, setExporting] = useState(false);
     const [exportMsg, setExportMsg] = useState("");
-    const [progress, setProgress] = useState({ current: 0, total: 0 }); // anlık sayaç
-    const inputRef = useRef(null);
+    const [progress, setProgress] = useState({ current: 0, total: 0 });
 
-    const navigate = useNavigate(); // 👈 eklendi
+    const [permLoading, setPermLoading] = useState(true);
+    const [perms, setPerms] = useState({ canUpload: false });
+
+    const inputRef = useRef(null);
+    const navigate = useNavigate();
 
     const ACCEPT = [
         ".csv",
         "application/vnd.ms-excel",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ].join(",");
+
+    // YETKİYİ YÜKLE
+    useEffect(() => {
+        (async () => {
+            try {
+                setPermLoading(true);
+                const kullanici = localStorage.getItem("kullanici") || "";
+                const p = await loadUploadPermission(kullanici);
+                setPerms(p);
+            } catch (e) {
+                console.error("perm load error:", e);
+                setPerms({ canUpload: false });
+            } finally {
+                setPermLoading(false);
+            }
+        })();
+    }, []);
 
     const resetState = () => {
         setFile(null);
@@ -331,21 +391,14 @@ export default function HakedisSeferleri({ onFileReady }) {
         setExportMsg("");
     };
 
-    // Excel (.xlsx) şablon indir
+    // Excel (.xlsx) şablon indir — izin gerektirmez
     const handleDownloadTemplate = async () => {
         const mod = await import("xlsx");
         const XLSX = mod.default ?? mod;
         const aoa = [TEMPLATE_HEADERS];
         const ws = XLSX.utils.aoa_to_sheet(aoa);
         ws["!autofilter"] = { ref: "A1:F1" };
-        ws["!cols"] = [
-            { wch: 14 },
-            { wch: 12 },
-            { wch: 14 },
-            { wch: 12 },
-            { wch: 10 },
-            { wch: 30 },
-        ];
+        ws["!cols"] = [{ wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 30 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Sefer Şablon");
         const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
@@ -374,24 +427,34 @@ export default function HakedisSeferleri({ onFileReady }) {
         return "";
     };
 
-    const handleFiles = useCallback((files) => {
-        const f = files?.[0];
-        const err = validateFile(f);
-        if (err) {
-            setFile(null);
-            setFileError(err);
-            return;
-        }
-        setFileError("");
-        setFile(f);
-        setRows([]);
-        setSummary(null);
-        setExportMsg("");
-    }, []);
+    const handleFiles = useCallback(
+        (files) => {
+            // İZİN YOKSA ÇIK
+            if (!perms.canUpload) {
+                setFile(null);
+                setFileError("Dosya yükleme yetkiniz yok.");
+                return;
+            }
+            const f = files?.[0];
+            const err = validateFile(f);
+            if (err) {
+                setFile(null);
+                setFileError(err);
+                return;
+            }
+            setFileError("");
+            setFile(f);
+            setRows([]);
+            setSummary(null);
+            setExportMsg("");
+        },
+        [perms.canUpload]
+    );
 
     const onDragEnter = (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (!perms.canUpload) return;
         setDragActive(true);
     };
     const onDragOver = (e) => {
@@ -407,11 +470,15 @@ export default function HakedisSeferleri({ onFileReady }) {
         e.preventDefault();
         e.stopPropagation();
         setDragActive(false);
+        if (!perms.canUpload) return;
         const dt = e.dataTransfer;
         if (dt?.files?.length) handleFiles(dt.files);
     };
 
-    const openFileDialog = () => inputRef.current?.click();
+    const openFileDialog = () => {
+        if (!perms.canUpload) return;
+        inputRef.current?.click();
+    };
     const onInputChange = (e) => handleFiles(e.target.files);
 
     // Supabase: plakalara göre toplu çek
@@ -437,9 +504,7 @@ export default function HakedisSeferleri({ onFileReady }) {
             const chunk = all.slice(i, i + chunkSize);
             const { data, error } = await supabase
                 .from("arac_cari_ve_fiyat")
-                .select(
-                    "plaka,cari_id,cari_adi,aylik_kira,aylik_surucu,calisma_gunu"
-                )
+                .select("plaka,cari_id,cari_adi,aylik_kira,aylik_surucu,calisma_gunu")
                 .in("plaka", chunk);
 
             if (error) throw error;
@@ -465,25 +530,19 @@ export default function HakedisSeferleri({ onFileReady }) {
             const XLSX = mod.default ?? mod;
             const isCsv = file.name.toLowerCase().endsWith(".csv");
 
-            // Dosya oku
             const data = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result);
-                reader.onerror = () =>
-                    reject(reader.error || new Error("Dosya okunamadı"));
+                reader.onerror = () => reject(reader.error || new Error("Dosya okunamadı"));
                 if (isCsv) reader.readAsText(file, "utf-8");
                 else reader.readAsArrayBuffer(file);
             });
 
-            // Workbook
-            const wb = isCsv
-                ? XLSX.read(data, { type: "string" })
-                : XLSX.read(data, { type: "array" });
+            const wb = isCsv ? XLSX.read(data, { type: "string" }) : XLSX.read(data, { type: "array" });
             const sheetName = wb.SheetNames?.[0];
             if (!sheetName) throw new Error("Çalışma sayfası bulunamadı.");
             const sheet = wb.Sheets[sheetName];
 
-            // Header + satırlar
             const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
             if (!aoa.length) {
                 setRows([]);
@@ -491,7 +550,6 @@ export default function HakedisSeferleri({ onFileReady }) {
             }
             const headerRow = (aoa[0] || []).map((c) => String(c).trim());
 
-            // Header kontrol
             const missing = TEMPLATE_HEADERS.filter(
                 (h) => !headerRow.some((x) => normalize(x) === normalize(h))
             );
@@ -501,7 +559,6 @@ export default function HakedisSeferleri({ onFileReady }) {
                 headerRow.findIndex((x) => normalize(x) === normalize(h))
             );
 
-            // Excel tarih serisini Date'e çevir
             const excelSerialToDate = (n) => {
                 try {
                     const d = (mod.default ?? mod).SSF?.parse_date_code?.(Number(n));
@@ -536,33 +593,30 @@ export default function HakedisSeferleri({ onFileReady }) {
                 return Number.isNaN(dt.getTime()) ? null : dt;
             };
 
-            // Satırları oku
             const baseRows = [];
             for (let i = 1; i < aoa.length; i++) {
                 const r = aoa[i] || [];
-                if (r.every((c) => String(c ?? "").trim() === "")) continue; // boş satırları atla
+                if (r.every((c) => String(c ?? "").trim() === "")) continue;
                 const obj = {};
                 TEMPLATE_HEADERS.forEach((h, j) => {
                     const k = idx[j];
                     let val = k >= 0 ? r[k] ?? "" : "";
                     if (h === "Sefer Tarihi") {
-                        val = parseDateCell(val); // -> Date veya null
+                        val = parseDateCell(val);
                     } else if (h === "Toplam KM") {
                         const num = toNumber(val);
                         if (num !== null) val = num;
                     } else if (h === "TMSDespatchId") {
-                        val = toPlainDigits(val); // plain digits
+                        val = toPlainDigits(val);
                     }
                     obj[h] = val;
                 });
                 baseRows.push(obj);
             }
 
-            // Supabase eşlemesi
             const plateList = baseRows.map((r) => r["Plaka"]).filter(Boolean);
             const supaMap = await fetchSupabaseByPlates(plateList);
 
-            // Türetilmiş alanlar + son tablo satırı formatı
             const finals = baseRows.map((r) => {
                 const m = supaMap.get(normalize(r["Plaka"]));
                 const aylikKira = toNumber(m?.aylik_kira);
@@ -580,10 +634,10 @@ export default function HakedisSeferleri({ onFileReady }) {
                     "Cari Firma": m?.cari_adi ?? "",
                     "Aylık Kira": aylikKira,
                     "Aylık sürücü": aylikSurucu,
-                    "Hak Ediş Kira": null, // boş bırak
-                    "Hak Ediş Sürücü": null, // boş bırak
-                    "Sefer Kira Maliyeti": null, // boş bırak
-                    "Sefer Sürücü Maliyeti": null, // boş bırak
+                    "Hak Ediş Kira": null,
+                    "Hak Ediş Sürücü": null,
+                    "Sefer Kira Maliyeti": null,
+                    "Sefer Sürücü Maliyeti": null,
                     "Çalışma Günü": calismaGunu,
                 };
             });
@@ -608,7 +662,6 @@ export default function HakedisSeferleri({ onFileReady }) {
     const handleCalculate = () => {
         if (!rows.length) return;
 
-        // 1) Plaka bazında Toplam KM topla
         const plateKmTotals = rows.reduce((map, r) => {
             const plaka = String(r["Plaka"] || "").trim();
             const km = toNumber(r["Toplam KM"]) ?? 0;
@@ -617,7 +670,6 @@ export default function HakedisSeferleri({ onFileReady }) {
             return map;
         }, new Map());
 
-        // 2) Satır bazlı hesaplar
         const updatedRows = rows.map((r) => {
             const aylikKira = toNumber(r["Aylık Kira"]);
             const aylikSurucu = toNumber(r["Aylık sürücü"]);
@@ -626,7 +678,6 @@ export default function HakedisSeferleri({ onFileReady }) {
             const plaka = String(r["Plaka"] || "").trim();
             const plakaToplamKm = plateKmTotals.get(plaka) ?? null;
 
-            // Hak Edişler (ay/30 * çalışma günü)
             const hakEdisKira =
                 aylikKira !== null && calismaGunu !== null
                     ? (aylikKira / 30) * calismaGunu
@@ -637,7 +688,6 @@ export default function HakedisSeferleri({ onFileReady }) {
                     ? (aylikSurucu / 30) * calismaGunu
                     : null;
 
-            // Sefer Kira Maliyeti
             const seferKiraMaliyeti =
                 hakEdisKira !== null &&
                     plakaToplamKm !== null &&
@@ -646,7 +696,6 @@ export default function HakedisSeferleri({ onFileReady }) {
                     ? (hakEdisKira / plakaToplamKm) * satirKm
                     : null;
 
-            // Sefer Sürücü Maliyeti
             const seferSurucuMaliyeti =
                 hakEdisSurucu !== null &&
                     plakaToplamKm !== null &&
@@ -669,7 +718,6 @@ export default function HakedisSeferleri({ onFileReady }) {
 
         setRows(updatedRows);
 
-        // 3) Özet (2 ondalığa yuvarla)
         const round2 = (x) => Math.round(x * 100) / 100;
         const sum = (key) =>
             updatedRows.reduce((acc, row) => acc + (toNumber(row[key]) ?? 0), 0);
@@ -701,7 +749,6 @@ export default function HakedisSeferleri({ onFileReady }) {
         setExportMsg("Gönderiliyor…");
         setFileError("");
 
-        // başlangıç token doğrulama (şifre hatalıysa erken çık)
         try {
             await fetchFreshToken();
         } catch (e) {
@@ -711,7 +758,6 @@ export default function HakedisSeferleri({ onFileReady }) {
             return;
         }
 
-        // zorunlu alanı eksik olan satırları peşinen ele
         const validRows = rows.filter((r) => {
             const tmsDespatchId = Number(toPlainDigits(r["TMSDespatchId"]));
             const currentAccountId = Number(toPlainDigits(r["Cari ID"]));
@@ -734,7 +780,6 @@ export default function HakedisSeferleri({ onFileReady }) {
             failed = 0;
         let firstError = null;
 
-        // iş listesi (kira + sürücü ayrı job)
         const jobs = [];
         for (const r of validRows) {
             const tmsDespatchId = Number(toPlainDigits(r["TMSDespatchId"]));
@@ -742,10 +787,7 @@ export default function HakedisSeferleri({ onFileReady }) {
             const description = String(r["Açıklama"] || "");
 
             const decKira = toApiDecimal2(r["Sefer Kira Maliyeti"], DECIMAL_DIGITS);
-            const decSurucu = toApiDecimal2(
-                r["Sefer Sürücü Maliyeti"],
-                DECIMAL_DIGITS
-            );
+            const decSurucu = toApiDecimal2(r["Sefer Sürücü Maliyeti"], DECIMAL_DIGITS);
 
             if (decKira.cents > 0) {
                 const body = {
@@ -796,11 +838,9 @@ export default function HakedisSeferleri({ onFileReady }) {
             }
         }
 
-        // toplam gerçek iş kadar progress
         setProgress({ current: 0, total: jobs.length });
 
         try {
-            // 5 paralel worker önerisi (limit: 3–8 arası deneyerek optimizasyon yapılabilir)
             const { errors } = await runWithConcurrencyLimit(
                 jobs,
                 5,
@@ -820,7 +860,6 @@ export default function HakedisSeferleri({ onFileReady }) {
                 (firstError ? ` İlk hata: ${firstError}` : "");
             setExportMsg(msg);
             setExporting(false);
-            // progress son hal
             setProgress({ current: jobs.length, total: jobs.length });
         }
     };
@@ -831,17 +870,28 @@ export default function HakedisSeferleri({ onFileReady }) {
         const mod = await import("xlsx");
         const XLSX = mod.default ?? mod;
 
-        // Başlık + veri
         const aoa = [DISPLAY_HEADERS];
         rows.forEach((r) => {
-            aoa.push(DISPLAY_HEADERS.map((h) => {
-                const v = r[h];
-                if (h === "Sefer Tarihi") return v instanceof Date ? toISODate(v) : String(v ?? "");
-                if (h === "TMSDespatchId" || h === "Cari ID") return toPlainDigits(v);
-                if (["Aylık Kira", "Aylık sürücü", "Hak Ediş Kira", "Hak Ediş Sürücü", "Sefer Kira Maliyeti", "Sefer Sürücü Maliyeti"].includes(h)) return Number(v ?? 0);
-                if (h === "Toplam KM" || h === "Çalışma Günü") return Number(v ?? 0);
-                return v ?? "";
-            }));
+            aoa.push(
+                DISPLAY_HEADERS.map((h) => {
+                    const v = r[h];
+                    if (h === "Sefer Tarihi") return v instanceof Date ? toISODate(v) : String(v ?? "");
+                    if (h === "TMSDespatchId" || h === "Cari ID") return toPlainDigits(v);
+                    if (
+                        [
+                            "Aylık Kira",
+                            "Aylık sürücü",
+                            "Hak Ediş Kira",
+                            "Hak Ediş Sürücü",
+                            "Sefer Kira Maliyeti",
+                            "Sefer Sürücü Maliyeti",
+                        ].includes(h)
+                    )
+                        return Number(v ?? 0);
+                    if (h === "Toplam KM" || h === "Çalışma Günü") return Number(v ?? 0);
+                    return v ?? "";
+                })
+            );
         });
 
         const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -864,13 +914,14 @@ export default function HakedisSeferleri({ onFileReady }) {
         URL.revokeObjectURL(url);
     };
 
+    const dropzoneDisabled = permLoading || !perms.canUpload;
+
     return (
         <div className="hs-card fade-in">
             {/* Üst Bar */}
             <div className="hs-header">
                 <h1 className="hs-title">Hakediş Seferleri</h1>
 
-                {/* 👇 Eklendi: Geri ve Anasayfa kısayolları */}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button
                         type="button"
@@ -881,15 +932,9 @@ export default function HakedisSeferleri({ onFileReady }) {
                     >
                         ← Geri
                     </button>
-                    <Button
-                        size="small"
-                        variant="text"
-                        startIcon={<HomeIcon />}
-                        onClick={() => navigate(HOME_PATH)}
-                    >
+                    <Button size="small" variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
                         Anasayfa
                     </Button>
-                    {/* Mevcut: Şablon indir */}
                     <button
                         type="button"
                         onClick={handleDownloadTemplate}
@@ -901,51 +946,59 @@ export default function HakedisSeferleri({ onFileReady }) {
                 </div>
             </div>
 
+            {/* Yetki uyarısı */}
+            {dropzoneDisabled && (
+                <div
+                    className="hs-card"
+                    style={{
+                        marginTop: 8,
+                        background: "rgba(239,68,68,0.07)",
+                        border: "1px solid rgba(239,68,68,0.25)",
+                        color: "#991b1b",
+                        fontWeight: 600,
+                    }}
+                >
+                    {permLoading ? "Yetkiler yükleniyor…" : "Dosya yükleme yetkiniz yok."}
+                </div>
+            )}
+
             {/* Yükleme Alanı */}
             <div
-                className={`hs-dropzone ${dragActive ? "is-dragover" : ""}`}
-                onDragEnter={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDragActive(true);
-                }}
-                onDragOver={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }}
-                onDragLeave={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDragActive(false);
-                }}
-                onDrop={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDragActive(false);
-                    const dt = e.dataTransfer;
-                    if (dt?.files?.length) handleFiles(dt.files);
-                }}
+                className={`hs-dropzone ${dragActive ? "is-dragover" : ""} ${dropzoneDisabled ? "is-disabled" : ""}`}
+                onDragEnter={onDragEnter}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
+                    if (e.key === "Enter" || e.key === " ") openFileDialog();
                 }}
                 aria-label="Dosya sürükleyip bırakın veya seçin"
+                style={dropzoneDisabled ? { pointerEvents: "none", opacity: 0.6 } : undefined}
             >
                 <input
                     ref={inputRef}
                     type="file"
                     accept={ACCEPT}
                     className="hs-file-input"
-                    onChange={(e) => handleFiles(e.target.files)}
+                    onChange={onInputChange}
                     id="hs-file"
+                    disabled={dropzoneDisabled}
                 />
                 <div className="hs-dz-icon">📄</div>
                 <div className="hs-dz-title">Dosyanı sürükleyip bırak</div>
                 <div className="hs-dz-hint">CSV, XLSX, XLS — max 20MB</div>
                 <div className="hs-or">veya</div>
                 <div className="hs-filepicker">
-                    <label htmlFor="hs-file" className="btn btn-ghost">
+                    <label
+                        htmlFor="hs-file"
+                        className={`btn btn-ghost ${dropzoneDisabled ? "is-disabled" : ""}`}
+                        onClick={(e) => {
+                            if (dropzoneDisabled) e.preventDefault();
+                        }}
+                        title={dropzoneDisabled ? "Dosya yükleme yetkiniz yok" : "Belgelerden yükle"}
+                    >
                         Belgelerden yükle
                     </label>
                 </div>
@@ -978,7 +1031,6 @@ export default function HakedisSeferleri({ onFileReady }) {
                                 {parsing ? "İşleniyor..." : "Yükle"}
                             </button>
 
-                            {/* Bu iki buton her zaman görünür; veriler gelmeden disabled */}
                             <button
                                 type="button"
                                 onClick={handleCalculate}
@@ -1024,10 +1076,7 @@ export default function HakedisSeferleri({ onFileReady }) {
                         <div className="hs-table-title">Özet</div>
                         <div className="hs-table-meta">{summary.kayit} satır</div>
                     </div>
-                    <div
-                        className="hs-table-scroll"
-                        style={{ overflow: "visible", border: "0", borderRadius: 0 }}
-                    >
+                    <div className="hs-table-scroll" style={{ overflow: "visible", border: "0", borderRadius: 0 }}>
                         <table className="hs-table" style={{ minWidth: 0 }}>
                             <tbody>
                                 <tr>
@@ -1094,8 +1143,7 @@ export default function HakedisSeferleri({ onFileReady }) {
                         >
                             <div
                                 style={{
-                                    width: `${progress.total ? (progress.current / progress.total) * 100 : 0
-                                        }%`,
+                                    width: `${progress.total ? (progress.current / progress.total) * 100 : 0}%`,
                                     height: "100%",
                                 }}
                             />
@@ -1132,8 +1180,7 @@ export default function HakedisSeferleri({ onFileReady }) {
                                     <tr key={i}>
                                         {DISPLAY_HEADERS.map((h) => {
                                             const v = r[h];
-                                            if (h === "Sefer Tarihi")
-                                                return <td key={h + i}>{fmtDateTR(v)}</td>;
+                                            if (h === "Sefer Tarihi") return <td key={h + i}>{fmtDateTR(v)}</td>;
                                             if (h === "TMSDespatchId" || h === "Cari ID")
                                                 return <td key={h + i}>{toPlainDigits(v)}</td>;
                                             if (
@@ -1149,9 +1196,7 @@ export default function HakedisSeferleri({ onFileReady }) {
                                                 return <td key={h + i}>{fmtTRY(v)}</td>;
                                             if (h === "Toplam KM" || h === "Çalışma Günü")
                                                 return <td key={h + i}>{fmtKm(v)}</td>;
-                                            return (
-                                                <td key={h + i}>{(v ?? "") === "" ? "—" : String(v)}</td>
-                                            );
+                                            return <td key={h + i}>{(v ?? "") === "" ? "—" : String(v)}</td>;
                                         })}
                                     </tr>
                                 ))}
@@ -1159,15 +1204,15 @@ export default function HakedisSeferleri({ onFileReady }) {
                         </table>
                     </div>
                     <div style={{ marginTop: 16, textAlign: "right" }}>
-            <button
-                type="button"
-                onClick={handleExportExcel}
-                className="btn btn-primary"
-                style={{ minWidth: 160 }}
-            >
-                Excel’e Aktar
-            </button>
-        </div>
+                        <button
+                            type="button"
+                            onClick={handleExportExcel}
+                            className="btn btn-primary"
+                            style={{ minWidth: 160 }}
+                        >
+                            Excel’e Aktar
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

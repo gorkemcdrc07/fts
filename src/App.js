@@ -13,7 +13,6 @@ import Anasayfa from "./Anasayfa";
 import Planlama from "./kullanıcıIslemleri/Planlama";
 import PlakaOnerisi from "./kullanıcıIslemleri/PlakaOnerisi";
 import Siparisler from "./kullanıcıIslemleri/Siparisler";
-// ✅ YENİ (eskinin yerine):
 import TamamlananlarPage from "./tamamlananseferler/TamamlananlarPage";
 
 // Araç Durumları
@@ -45,7 +44,8 @@ import AppLayout from "./layout/AppLayout";
 const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler"));
 const SiparisAnaliz = lazy(() => import("./kullanıcıIslemleri/planlamaDetay/SiparisAnaliz"));
 const AdminPanel = lazy(() => import("./adminPanel/adminPanel"));
-const GorunumDuzenle = lazy(() => import("./aktifseferler/GorunumDuzenle")); // 👈 EKLENDİ
+const GorunumDuzenle = lazy(() => import("./aktifseferler/GorunumDuzenle"));
+const PagePermissionsPage = lazy(() => import("./adminPanel/PagePermissionsPage")); // 👈 YENİ
 
 function App() {
     return (
@@ -87,7 +87,7 @@ function App() {
 
                             <Route path="siparisler" element={<Siparisler />} />
 
-                            {/* Tamamlanan Seferler (yeni sayfa) */}
+                            {/* Tamamlanan Seferler */}
                             <Route path="tamamlanan-seferler" element={<TamamlananlarPage />} />
 
                             {/* Araç Durumları */}
@@ -125,12 +125,21 @@ function App() {
                                 }
                             />
 
-                            {/* Admin Panel */}
+                            {/* Admin */}
                             <Route
                                 path="admin"
                                 element={
                                     <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
                                         <AdminPanel />
+                                    </Suspense>
+                                }
+                            />
+                            {/* Kullanıcı Ekranları */}
+                            <Route
+                                path="admin/permissions"
+                                element={
+                                    <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
+                                        <PagePermissionsPage />
                                     </Suspense>
                                 }
                             />

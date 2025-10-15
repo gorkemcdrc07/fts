@@ -1,18 +1,19 @@
 // src/adminPanel/adminPanel.js
 import React, { useMemo, useState } from "react";
+// import { useNavigate } from "react-router-dom";
 import {
-    Box, Paper, Tabs, Tab, Typography, Alert, Stack, IconButton, Collapse,
+    Box, Paper, Tabs, Tab, Typography, Alert, Stack,
+    IconButton, Collapse,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
-// Sekmeler
 import UsersTab from "./tabs/UsersTab";
 import RolesTab from "./tabs/RolesTab";
 import UserOverridesTab from "./tabs/UserOverridesTab";
+import PagePermissionsTab from "./tabs/PagePermissionsTab";
 import LogsTab from "./tabs/LogsTab";
 import SettingsTab from "./tabs/SettingsTab";
 
-/* --- helpers --- */
 function normalizeRole(s = "") {
     return s.normalize("NFKC").toLocaleUpperCase("tr-TR").replace(/\s+/g, "");
 }
@@ -20,10 +21,7 @@ function safeGetUsername() {
     const k1 = (localStorage.getItem("kullaniciAdi") || "").trim();
     const k2 = (localStorage.getItem("kullanici") || "").trim();
     let k3 = "";
-    try {
-        const obj = JSON.parse(localStorage.getItem("girisYapanKullanici") || "{}");
-        k3 = (obj?.kullaniciAdi || "").trim();
-    } catch { }
+    try { k3 = JSON.parse(localStorage.getItem("girisYapanKullanici") || "{}")?.kullaniciAdi || ""; } catch { }
     const pick = (k1 || k2 || k3 || "").toLowerCase();
     return pick.includes("@") ? pick.split("@")[0] : pick;
 }
@@ -47,6 +45,7 @@ function canUseAdminResolved() {
 }
 
 export default function AdminPanel() {
+    // const navigate = useNavigate();
     const [tab, setTab] = useState(0);
     const [dbgOpen, setDbgOpen] = useState(false);
 
@@ -61,14 +60,32 @@ export default function AdminPanel() {
                     p: 2.5,
                     borderRadius: 3,
                     border: (t) => `1px solid ${t.palette.divider}`,
-                    bgcolor: (t) => t.palette.background.paper,
+                    bgcolor: (t) => t.palette.background.paper
                 }}
             >
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                <Stack
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    sx={{ mb: 1 }}
+                >
                     <Typography variant="h6" fontWeight={800}>Yönetim Paneli</Typography>
-                    <IconButton size="small" onClick={() => setDbgOpen((v) => !v)} aria-label="debug" title="Debug">
-                        <ExpandMoreIcon sx={{ transform: dbgOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "0.2s" }} />
-                    </IconButton>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        {/* "Sayfa Erişimleri" butonu kaldırıldı */}
+                        <IconButton
+                            size="small"
+                            onClick={() => setDbgOpen((v) => !v)}
+                            aria-label="debug"
+                            title="Debug"
+                        >
+                            <ExpandMoreIcon
+                                sx={{
+                                    transform: dbgOpen ? "rotate(180deg)" : "rotate(0deg)",
+                                    transition: "0.2s"
+                                }}
+                            />
+                        </IconButton>
+                    </Stack>
                 </Stack>
 
                 <Collapse in={dbgOpen} unmountOnExit>
@@ -97,7 +114,8 @@ export default function AdminPanel() {
                 >
                     <Tab label="Kullanıcılar" />
                     <Tab label="Roller & Yetkiler" />
-                    <Tab label="Kullanıcı Yetkileri" /> {/* <-- YENİ SEKME */}
+                    <Tab label="Kullanıcı Yetkileri" />
+                    <Tab label="Kullanıcı Ekranları" />
                     <Tab label="Loglar" />
                     <Tab label="Ayarlar" />
                 </Tabs>
@@ -110,9 +128,10 @@ export default function AdminPanel() {
                     <>
                         {tab === 0 && <UsersTab />}
                         {tab === 1 && <RolesTab />}
-                        {tab === 2 && <UserOverridesTab />}{/* <-- YENİ */}
-                        {tab === 3 && <LogsTab />}
-                        {tab === 4 && <SettingsTab />}
+                        {tab === 2 && <UserOverridesTab />}
+                        {tab === 3 && <PagePermissionsTab />}
+                        {tab === 4 && <LogsTab />}
+                        {tab === 5 && <SettingsTab />}
                     </>
                 )}
 

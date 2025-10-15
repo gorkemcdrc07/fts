@@ -5,6 +5,16 @@ import { EXCLUDED_PLAKAS, normalizePlate } from "./utils/sefer";
 const API_BASE_URL =
     process.env.REACT_APP_API_BASE_URL || "http://localhost:5000";
 
+/* ---------------- Yardımcılar ---------------- */
+
+function isNumericId(v) {
+    // string "123" ya da number 123 ise true
+    return (
+        (typeof v === "number" && Number.isFinite(v)) ||
+        (typeof v === "string" && /^\d+$/.test(v))
+    );
+}
+
 /* ---------------- Seferler ---------------- */
 
 export async function fetchSeferler(rangeMin, rangeMax) {
@@ -92,25 +102,61 @@ export async function upsertSeferler(rows) {
     if (error) throw error;
 }
 
-export async function loadDetaylar(seferId) {
-    const { data, error } = await supabase
-        .from("sefer_detaylari")
-        .select("*")
-        .eq("sefer_id", seferId)
-        .order("nokta_sirasi", { ascending: true });
+/**
+ * Sefer detaylarını güvenli şekilde yükler.
+ * - Numeric id gelirse doğrudan sefer_detaylari.sefer_id ile çeker.
+ * - "SFR..." (sefer_no) gelirse önce seferler'den id'yi bulur, sonra detayları çeker.
+ *
+ * @param {number|string} seferRef id (number | "123") veya sefer_no ("SFR...")
+ * @returns {Promise<Array>} sefer_detaylari satırları
+ */
+export async function loadDetaylar(seferRef) {
+    try {
+        // 1) Numeric id ise direkt kullan
+        if (isNumericId(seferRef)) {
+            const id = Number(seferRef);
+            const { data, error } = await supabase
+                .from("sefer_detaylari")
+                .select("*")
+                .eq("sefer_id", id)
+                .order("nokta_sirasi", { ascending: true });
 
-    if (error) {
-        console.error("loadDetaylar error:", error);
+            if (error) throw error;
+            return data || [];
+        }
+
+        // 2) "SFR..." gibi alfanümerik sefer_no ise önce id'yi bul
+        const seferNo = String(seferRef ?? "").trim();
+        if (!seferNo) return [];
+
+        const { data: s, error: e1 } = await supabase
+            .from("seferler")
+            .select("id")
+            .eq("sefer_no", seferNo)
+            .maybeSingle();
+
+        if (e1) throw e1;
+        if (!s?.id) {
+            console.warn("loadDetaylar: sefer bulunamadı:", seferNo);
+            return [];
+        }
+
+        const { data, error } = await supabase
+            .from("sefer_detaylari")
+            .select("*")
+            .eq("sefer_id", s.id) // bigint'e doğru değer
+            .order("nokta_sirasi", { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+    } catch (err) {
+        console.error("loadDetaylar error:", err);
         return [];
     }
-    return data || [];
 }
 
 export async function updateSefer(id, payload) {
-    const { error } = await supabase
-        .from("seferler")
-        .update(payload)
-        .eq("id", id);
+    const { error } = await supabase.from("seferler").update(payload).eq("id", id);
     if (error) throw error;
 }
 
@@ -123,6 +169,7 @@ export async function upsertDetaylar(rows) {
 }
 
 export async function moveToCompleted({ ana, detay }) {
+    // ana: tamamlanan_seferler satırı (id, sefer_no, sefer_tarihi, ...)
     const { error: e1 } = await supabase
         .from("tamamlanan_seferler")
         .upsert(ana, { onConflict: "sefer_no" });
@@ -134,6 +181,8 @@ export async function moveToCompleted({ ana, detay }) {
             .upsert(detay, { onConflict: "sefer_no,nokta_sirasi" });
         if (e2) throw e2;
     }
+
+    // Ardından aktif tablolardan sil
     await supabase.from("sefer_detaylari").delete().eq("sefer_id", ana.id);
     await supabase.from("seferler").delete().eq("id", ana.id);
 }

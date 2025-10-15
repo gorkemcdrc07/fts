@@ -66,7 +66,11 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 
 dayjs.locale("tr");
 
-/* ===================== Zoom’dan Bağımsız Ekrana Sığdırma (Kesinti ile aynı) ===================== */
+/* ===================== Yetki: ekran anahtarı ===================== */
+/* Bu sayfa İzin Yönetimi ekranı için çalışır */
+const SCREEN_KEY = "izin_yonetimi";
+
+/* ===================== Zoom’dan Bağımsız Ekrana Sığdırma ===================== */
 const HOME_PATH = "/anasayfa";
 const BASE_WIDTH = 1920;
 const BASE_HEIGHT = 1080;
@@ -197,7 +201,7 @@ const safeDateValueFormatter = (arg) => {
     return d.isValid() ? d.format("DD.MM.YYYY") : "-";
 };
 
-/* ===================== Tema (Kesinti ile aynı) ===================== */
+/* ===================== Tema ===================== */
 const theme = createTheme({
     palette: {
         mode: "dark",
@@ -226,8 +230,7 @@ const theme = createTheme({
         MuiDialog: {
             styleOverrides: {
                 paper: {
-                    background:
-                        "linear-gradient(180deg, rgba(10,16,30,0.95) 0%, rgba(10,16,30,0.85) 100%)",
+                    background: "linear-gradient(180deg, rgba(10,16,30,0.95) 0%, rgba(10,16,30,0.85) 100%)",
                     boxShadow: "0 10px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)",
                     backdropFilter: "blur(10px)",
                     border: "1px solid rgba(255,255,255,0.06)",
@@ -241,7 +244,7 @@ const theme = createTheme({
     },
 });
 
-/* ============= Toolbar (Kesinti ile aynı görünüm) ============= */
+/* ============= Toolbar ============= */
 function CustomToolbar({ onRefresh, onExport, onFilters }) {
     return (
         <GridToolbarContainer
@@ -287,11 +290,7 @@ export default function IzinGirisiModern() {
 
     // ui
     const [loading, setLoading] = useState(false);
-    const [snack, setSnack] = useState({
-        open: false,
-        msg: "",
-        severity: "success",
-    });
+    const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
     const [filtreDrawer, setFiltreDrawer] = useState(false);
 
     // form
@@ -319,6 +318,14 @@ export default function IzinGirisiModern() {
         eklenme_tarihi: "",
     });
 
+    // ==== YETKİ DURUMU ====
+    const [permLoading, setPermLoading] = useState(true);
+    const [perms, setPerms] = useState({
+        canCreate: false,
+        canEdit: false,
+        canDelete: false,
+    });
+
     const openSnack = (msg, severity = "success") =>
         setSnack({ open: true, msg, severity });
 
@@ -326,6 +333,10 @@ export default function IzinGirisiModern() {
     useEffect(() => {
         verileriGetir();
         plakalariGetir();
+        loadPermissions().catch((e) => {
+            console.error("perm load error:", e);
+            setPerms({ canCreate: false, canEdit: false, canDelete: false });
+        });
     }, []);
 
     useEffect(() => {
@@ -340,6 +351,82 @@ export default function IzinGirisiModern() {
     const buAy = izinler.filter(
         (r) => r.baslangic_tarihi && dayjs(r.baslangic_tarihi).isSame(dayjs(), "month")
     ).length;
+
+    /* ===================== Permissions Loader ===================== */
+    function coalesceOverride(overrideVal, roleVal) {
+        // override true/false ise onu kullan; null/undefined ise rol değeri
+        return (overrideVal === true || overrideVal === false) ? overrideVal : !!roleVal;
+    }
+
+    // basit UUID kontrolü (36 char, 4 tire)
+    const looksLikeUUID = (s) => typeof s === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+
+    async function loadPermissions() {
+        try {
+            setPermLoading(true);
+
+            // 1) Kullanıcı
+            const ad = getMevcutKullanici();
+            const { data: userRow, error: eU } = await supabase
+                .from("login")
+                .select("id, rol, kullanici")
+                .eq("kullanici", ad)
+                .maybeSingle();
+            if (eU) throw eU;
+            if (!userRow) {
+                setPerms({ canCreate: false, canEdit: false, canDelete: false });
+                return;
+            }
+
+            // 2) Rol ID: login.rol UUID ise direkt kullan; değilse roles.key'den bul
+            let roleId = null;
+            if (userRow.rol) {
+                if (looksLikeUUID(userRow.rol)) {
+                    roleId = userRow.rol;
+                } else {
+                    const roleKey = String(userRow.rol).toUpperCase();
+                    const { data: roleRow, error: eR } = await supabase
+                        .from("roles")
+                        .select("id,key")
+                        .eq("key", roleKey)
+                        .maybeSingle();
+                    if (eR) throw eR;
+                    roleId = roleRow?.id || null;
+                }
+            }
+
+            // 3) Rol izinleri (izin_yonetimi)
+            let rolePerm = {};
+            if (roleId) {
+                const { data: rp, error: eRP } = await supabase
+                    .from("role_permissions")
+                    .select("*")
+                    .eq("screen_key", SCREEN_KEY)
+                    .eq("role_id", roleId)
+                    .maybeSingle();
+                if (eRP) throw eRP;
+                rolePerm = rp || {};
+            }
+
+            // 4) Kullanıcı override (izin_yonetimi)
+            const { data: up, error: eUP } = await supabase
+                .from("user_permissions")
+                .select("*")
+                .eq("screen_key", SCREEN_KEY)
+                .eq("user_id", userRow.id)
+                .maybeSingle();
+            if (eUP) throw eUP;
+
+            // 5) Etkin izinler — **izin_* alanları**
+            const canCreate = coalesceOverride(up?.izin_create, rolePerm?.izin_create);
+            const canEdit = coalesceOverride(up?.izin_edit, rolePerm?.izin_edit);
+            const canDelete = coalesceOverride(up?.izin_delete, rolePerm?.izin_delete);
+
+            setPerms({ canCreate, canEdit, canDelete });
+        } finally {
+            setPermLoading(false);
+        }
+    }
 
     /* ===================== Data ===================== */
     const verileriGetir = async () => {
@@ -408,12 +495,20 @@ export default function IzinGirisiModern() {
     };
 
     const handleYeniIzin = () => {
+        if (!perms.canCreate) {
+            openSnack("Yeni kayıt ekleme yetkiniz yok.", "warning");
+            return;
+        }
         setForm({ ...BOS_FORM });
         setDuzenlemeId(null);
         setFormOpen(true);
     };
 
     const handleDuzenle = (row) => {
+        if (!perms.canEdit) {
+            openSnack("Düzenleme yetkiniz yok.", "warning");
+            return;
+        }
         setForm({
             plaka_treyler: row.plaka_treyler || "",
             surucu_adi: row.surucu_adi || "",
@@ -432,6 +527,10 @@ export default function IzinGirisiModern() {
     };
 
     const handleSil = async (id) => {
+        if (!perms.canDelete) {
+            openSnack("Silme yetkiniz yok.", "warning");
+            return;
+        }
         if (!window.confirm("Silmek istediğinize emin misiniz?")) return;
 
         const { data: izinKaydi } = await supabase
@@ -478,6 +577,16 @@ export default function IzinGirisiModern() {
     };
 
     const handleSubmit = async () => {
+        // create vs edit kontrolü
+        if (!duzenlemeId && !perms.canCreate) {
+            openSnack("Yeni kayıt ekleme yetkiniz yok.", "warning");
+            return;
+        }
+        if (duzenlemeId && !perms.canEdit) {
+            openSnack("Düzenleme yetkiniz yok.", "warning");
+            return;
+        }
+
         const kullanici = getMevcutKullanici();
 
         if (kesintiGerekirMi() && !formSubmitBekliyor) {
@@ -669,15 +778,28 @@ export default function IzinGirisiModern() {
             filterable: false,
             renderCell: (params) => (
                 <Stack direction="row" spacing={1}>
-                    <Tooltip title="Düzenle">
-                        <IconButton size="small" onClick={() => handleDuzenle(params.row)}>
-                            <EditIcon fontSize="inherit" />
-                        </IconButton>
+                    <Tooltip title={perms.canEdit ? "Düzenle" : "Yetkiniz yok"}>
+                        <span>
+                            <IconButton
+                                size="small"
+                                onClick={() => handleDuzenle(params.row)}
+                                disabled={!perms.canEdit}
+                            >
+                                <EditIcon fontSize="inherit" />
+                            </IconButton>
+                        </span>
                     </Tooltip>
-                    <Tooltip title="Sil">
-                        <IconButton size="small" color="error" onClick={() => handleSil(params.row.id)}>
-                            <DeleteIcon fontSize="inherit" />
-                        </IconButton>
+                    <Tooltip title={perms.canDelete ? "Sil" : "Yetkiniz yok"}>
+                        <span>
+                            <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleSil(params.row.id)}
+                                disabled={!perms.canDelete}
+                            >
+                                <DeleteIcon fontSize="inherit" />
+                            </IconButton>
+                        </span>
                     </Tooltip>
                 </Stack>
             ),
@@ -738,9 +860,18 @@ export default function IzinGirisiModern() {
                                     <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportToExcel}>
                                         Excel'e Aktar
                                     </Button>
-                                    <Button variant="contained" startIcon={<AddIcon />} onClick={handleYeniIzin}>
-                                        Yeni İzin
-                                    </Button>
+                                    <Tooltip title={perms.canCreate ? "" : "Yetkiniz yok"}>
+                                        <span>
+                                            <Button
+                                                variant="contained"
+                                                startIcon={<AddIcon />}
+                                                onClick={handleYeniIzin}
+                                                disabled={!perms.canCreate || permLoading}
+                                            >
+                                                Yeni İzin
+                                            </Button>
+                                        </span>
+                                    </Tooltip>
                                 </Stack>
                             </Stack>
 
@@ -789,7 +920,7 @@ export default function IzinGirisiModern() {
                                         border: "1px solid rgba(255,255,255,0.06)",
                                     }}
                                 >
-                                    {loading && <LinearProgress />}
+                                    {(loading || permLoading) && <LinearProgress />}
 
                                     <Box sx={{ height: "100%", overflow: "auto", pb: 1 }}>
                                         <DataGrid
@@ -797,7 +928,7 @@ export default function IzinGirisiModern() {
                                             rows={filtrelenmisIzinler}
                                             columns={columns}
                                             getRowId={(r) => r.id}
-                                            loading={loading}
+                                            loading={loading || permLoading}
                                             disableRowSelectionOnClick
                                             pagination={false}
                                             hideFooter
@@ -810,7 +941,10 @@ export default function IzinGirisiModern() {
                                                     <CustomToolbar
                                                         onFilters={() => setFiltreDrawer(true)}
                                                         onExport={exportToExcel}
-                                                        onRefresh={verileriGetir}
+                                                        onRefresh={() => {
+                                                            verileriGetir();
+                                                            loadPermissions().catch(() => { });
+                                                        }}
                                                     />
                                                 ),
                                             }}

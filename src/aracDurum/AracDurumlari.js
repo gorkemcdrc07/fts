@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from "react";
+// src/pages/AracDurumlari.jsx
+import React, { useEffect, useMemo, useState, useLayoutEffect, useRef, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
 import * as XLSX from "xlsx";
@@ -317,10 +318,7 @@ const getDateSeverity = (dateStr) => {
 /* === KEY NORMALIZE === */
 const trMap = { ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u" };
 const normalizeKey = (k) =>
-    String(k || "")
-        .toLowerCase()
-        .replace(/[çğıöşü]/g, (m) => trMap[m])
-        .replace(/[^a-z0-9]+/g, "");
+    String(k || "").toLowerCase().replace(/[çğıöşü]/g, (m) => trMap[m]).replace(/[^a-z0-9]+/g, "");
 
 // ---- Alan sıralama yardımcıları ----
 const choosePreferDateKey = (keys, base) => {
@@ -357,8 +355,8 @@ const isDateKey = (k) => /(tarih|date|updated|created|muayene|sigorta|vize)/i.te
 
 /* === YALNIZCA YIL OLAN ALANLAR === */
 const YEAR_ONLY_KEYS = new Set(
-    ["araç yıl", "arac yil", "araçyıl", "aracyil", "dorse yıl", "dorse yil", "dorsel yıl", "dorsel yil", "arac_yil", "dorse_yil"].map((s) =>
-        normalizeKey(s)
+    ["araç yıl", "arac yil", "araçyıl", "aracyil", "dorse yıl", "dorse yil", "dorsel yıl", "dorsel yil", "arac_yil", "dorse_yil"].map(
+        (s) => normalizeKey(s)
     )
 );
 const isYearKey = (k) => YEAR_ONLY_KEYS.has(normalizeKey(k));
@@ -415,6 +413,66 @@ const looksLikeDateColumn = (key, rows) => {
     return hits / sample.length >= 0.6;
 };
 
+/* ===================== ►►► YETKİ ◄◄◄ ===================== */
+const SCREEN_KEY = "arac_durumlari"; // role_permissions için screen_key
+const ROLE_NAME_TO_KEY = { "YÖNETİCİ": "YONETICI", "OPERASYON": "OPERASYON", "TAKİP": "TAKIP" };
+
+async function fetchPerms() {
+    const kullaniciId = parseInt(localStorage.getItem("kullaniciId"));
+    if (!kullaniciId) return { create: false, edit: false, delete: false };
+
+    // 1) User override (user_permissions: adur_* kolonları, screen_key yok)
+    const { data: up } = await supabase
+        .from("user_permissions")
+        .select("adur_create, adur_edit, adur_delete")
+        .eq("user_id", kullaniciId)
+        .maybeSingle();
+
+    if (up && Object.values(up).some((v) => typeof v === "boolean")) {
+        return {
+            create: !!up.adur_create,
+            edit: !!up.adur_edit,
+            delete: !!up.adur_delete,
+        };
+    }
+
+    // 2) Rol -> role_permissions (arcdur_* + screen_key)
+    const { data: u } = await supabase.from("login").select("rol").eq("id", kullaniciId).maybeSingle();
+    const roleKey = ROLE_NAME_TO_KEY[String(u?.rol || "").toUpperCase()] || String(u?.rol || "").toUpperCase();
+    if (!roleKey) return { create: false, edit: false, delete: false };
+
+    const { data: role } = await supabase.from("roles").select("id").eq("key", roleKey).maybeSingle();
+    if (!role?.id) return { create: false, edit: false, delete: false };
+
+    const { data: rp } = await supabase
+        .from("role_permissions")
+        .select("arcdur_create, arcdur_edit, arcdur_delete")
+        .eq("role_id", role.id)
+        .eq("screen_key", SCREEN_KEY)
+        .maybeSingle();
+
+    if (rp && Object.values(rp).some((v) => typeof v === "boolean")) {
+        return {
+            create: !!rp.arcdur_create,
+            edit: !!rp.arcdur_edit,
+            delete: !!rp.arcdur_delete,
+        };
+    }
+
+    // Eski şema fallback (screen_key olmadan)
+    const { data: rp2 } = await supabase
+        .from("role_permissions")
+        .select("arcdur_create, arcdur_edit, arcdur_delete")
+        .eq("role_id", role.id)
+        .maybeSingle();
+
+    return {
+        create: !!rp2?.arcdur_create,
+        edit: !!rp2?.arcdur_edit,
+        delete: !!rp2?.arcdur_delete,
+    };
+}
+
 /* ===================== Bileşen ===================== */
 export default function AracDurumlari() {
     const navigate = useNavigate();
@@ -437,10 +495,15 @@ export default function AracDurumlari() {
     const [duzenlemeId, setDuzenlemeId] = useState(null);
     const [form, setForm] = useState({});
 
+    // ► izinler
+    const [canCreate, setCanCreate] = useState(false);
+    const [canEdit, setCanEdit] = useState(false);
+    const [canDelete, setCanDelete] = useState(false);
+
     const openSnack = (msg, severity = "success") => setSnack({ open: true, msg, severity });
 
     /* ===================== Veriler ===================== */
-    const verileriGetir = async () => {
+    const verileriGetir = useCallback(async () => {
         setYukleniyor(true);
         const { data, error } = await supabase.from("aracdurum").select("*").order("id", { ascending: false });
 
@@ -476,10 +539,14 @@ export default function AracDurumlari() {
                 const isDateByName = isDateKey(k);
                 const isDateByData = !isDateByName && looksLikeDateColumn(k, temiz);
 
-                const type = isDateByName || isDateByData ? "date"
-                    : isGenericSelectKey(k) ? "genericSelect"
-                        : isYesNoSelectKey(k) ? "yesnoSelect"
-                            : "text";
+                const type =
+                    isDateByName || isDateByData
+                        ? "date"
+                        : isGenericSelectKey(k)
+                            ? "genericSelect"
+                            : isYesNoSelectKey(k)
+                                ? "yesnoSelect"
+                                : "text";
 
                 return { key: k, type };
             });
@@ -489,10 +556,22 @@ export default function AracDurumlari() {
         }
 
         setYukleniyor(false);
-    };
+    }, [kolonlariTespitEt]);
 
     useEffect(() => {
         verileriGetir();
+        (async () => {
+            try {
+                const p = await fetchPerms();
+                setCanCreate(!!p.create);
+                setCanEdit(!!p.edit);
+                setCanDelete(!!p.delete);
+            } catch {
+                setCanCreate(false);
+                setCanEdit(false);
+                setCanDelete(false);
+            }
+        })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -531,6 +610,12 @@ export default function AracDurumlari() {
 
     /* ===================== INLINE KAYDETME ===================== */
     const processRowUpdate = async (newRow, oldRow) => {
+        // edit izni yoksa engelle
+        if (!canEdit) {
+            openSnack("Düzenleme yetkiniz yok.", "warning");
+            return oldRow;
+        }
+
         const diff = {};
         Object.keys(newRow).forEach((k) => {
             if (k === "id") return;
@@ -557,124 +642,162 @@ export default function AracDurumlari() {
     /* ===================== Kolonlar (Dinamik) ===================== */
     const columns = useMemo(() => {
         if (alanlar.length === 0) return [];
-        return [
-            ...alanlar
-                .filter((a) => a.key !== "id")
-                .map((a) => {
-                    const header = a.key.replace(/_/g, " ").toUpperCase();
+        const dynamicCols = alanlar
+            .filter((a) => a.key !== "id")
+            .map((a) => {
+                const header = a.key.replace(/_/g, " ").toUpperCase();
 
-                    // YEAR tipindeki kolonlar (sadece YYYY)
-                    if (a.type === "year") {
-                        return {
-                            field: a.key,
-                            headerName: header,
-                            type: "number",
-                            editable: true,
-                            flex: 0.6,
-                            minWidth: 120,
-                            valueGetter: (params) => {
-                                const raw = safeRowVal(params, a.key);
-                                const y = toYearString(raw);
-                                return y ? Number(y) : null;
-                            },
-                            valueFormatter: (params) => (params && params.value ? String(params.value) : "-"),
-                            renderCell: (params) => {
-                                const raw = safeRowVal(params, a.key);
-                                const y = toYearString(raw);
-                                return <Typography variant="body2">{y || "-"}</Typography>;
-                            },
-                        };
-                    }
+                // YEAR
+                if (a.type === "year") {
+                    return {
+                        field: a.key,
+                        headerName: header,
+                        type: "number",
+                        editable: canEdit, // sadece izin varsa
+                        flex: 0.6,
+                        minWidth: 120,
+                        valueGetter: (params) => {
+                            const raw = safeRowVal(params, a.key);
+                            const y = toYearString(raw);
+                            return y ? Number(y) : null;
+                        },
+                        valueFormatter: (params) => (params && params.value ? String(params.value) : "-"),
+                        renderCell: (params) => {
+                            const raw = safeRowVal(params, a.key);
+                            const y = toYearString(raw);
+                            return <Typography variant="body2">{y || "-"}</Typography>;
+                        },
+                    };
+                }
 
-                    // Zorunlu/normal tarih sütunları
-                    const thisIsDate = a.type === "date" || isForcedDateKey(a.key);
-                    if (thisIsDate) {
-                        return {
-                            field: a.key,
-                            headerName: header,
-                            type: "date",
-                            editable: false,
-                            flex: 1,
-                            minWidth: 160,
-                            valueGetter: safeDateValueGetter,
-                            renderCell: (params) => {
-                                const raw = safeRowVal(params, a.key);
-                                const d = parseDate(raw);
-                                const label = d ? d.format("DD.MM.YYYY") : "-";
-                                const { level, days } = getDateSeverity(raw);
-                                const colorMap = {
-                                    success: (theme) => theme.palette.success.main,
-                                    warning: (theme) => theme.palette.warning.main,
-                                    error: (theme) => theme.palette.error.main,
-                                    none: (theme) => theme.palette.divider,
-                                };
-                                return (
-                                    <Stack direction="row" alignItems="center" spacing={1} sx={{ width: "100%" }}>
-                                        <Box
-                                            sx={(theme) => ({
-                                                width: 10,
-                                                height: 10,
-                                                borderRadius: "50%",
-                                                bgcolor: colorMap[level](theme),
-                                            })}
-                                            title={
-                                                level === "success"
-                                                    ? `Rahat (${days} gün var)`
-                                                    : level === "warning"
-                                                        ? `Yaklaşıyor (${days} gün kaldı)`
-                                                        : level === "error"
-                                                            ? days === 0
-                                                                ? "Bugün"
-                                                                : `Geçmiş (${Math.abs(days)} gün)`
-                                                            : "Tarih yok"
-                                            }
-                                        />
-                                        <Typography variant="body2">{label}</Typography>
-                                    </Stack>
-                                );
-                            },
-                        };
-                    }
-
-                    // Seçmeli sütunlar
-                    if (a.type === "genericSelect" || a.type === "yesnoSelect") {
-                        const options = a.type === "genericSelect" ? SELECT_ALL_OPTS : YES_NO_OPTS;
-                        return {
-                            field: a.key,
-                            headerName: header,
-                            flex: 1,
-                            minWidth: 180,
-                            type: "singleSelect",
-                            editable: true,
-                            valueOptions: options,
-                            renderCell: (params) => {
-                                const val = safeRowVal(params, a.key);
-                                const color = selectColor(val);
-                                return (
-                                    <Chip
-                                        size="small"
-                                        color={color === "default" ? undefined : color}
-                                        label={val || "-"}
-                                        variant={color === "default" ? "outlined" : undefined}
+                // DATE
+                const thisIsDate = a.type === "date" || isForcedDateKey(a.key);
+                if (thisIsDate) {
+                    return {
+                        field: a.key,
+                        headerName: header,
+                        type: "date",
+                        editable: false, // tarih hücresi formdan değişsin
+                        flex: 1,
+                        minWidth: 160,
+                        valueGetter: safeDateValueGetter,
+                        renderCell: (params) => {
+                            const raw = safeRowVal(params, a.key);
+                            const d = parseDate(raw);
+                            const label = d ? d.format("DD.MM.YYYY") : "-";
+                            const { level, days } = getDateSeverity(raw);
+                            const colorMap = {
+                                success: (theme) => theme.palette.success.main,
+                                warning: (theme) => theme.palette.warning.main,
+                                error: (theme) => theme.palette.error.main,
+                                none: (theme) => theme.palette.divider,
+                            };
+                            return (
+                                <Stack direction="row" alignItems="center" spacing={1} sx={{ width: "100%" }}>
+                                    <Box
+                                        sx={(theme) => ({
+                                            width: 10,
+                                            height: 10,
+                                            borderRadius: "50%",
+                                            bgcolor: colorMap[level](theme),
+                                        })}
+                                        title={
+                                            level === "success"
+                                                ? `Rahat (${days} gün var)`
+                                                : level === "warning"
+                                                    ? `Yaklaşıyor (${days} gün kaldı)`
+                                                    : level === "error"
+                                                        ? days === 0
+                                                            ? "Bugün"
+                                                            : `Geçmiş (${Math.abs(days)} gün)`
+                                                        : "Tarih yok"
+                                        }
                                     />
-                                );
-                            },
-                        };
-                    }
+                                    <Typography variant="body2">{label}</Typography>
+                                </Stack>
+                            );
+                        },
+                    };
+                }
 
-                    // Diğer sütunlar -> metin
+                // SELECT
+                if (a.type === "genericSelect" || a.type === "yesnoSelect") {
+                    const options = a.type === "genericSelect" ? SELECT_ALL_OPTS : YES_NO_OPTS;
                     return {
                         field: a.key,
                         headerName: header,
                         flex: 1,
-                        minWidth: 140,
-                        editable: true,
+                        minWidth: 180,
+                        type: "singleSelect",
+                        editable: canEdit, // izin kontrolü
+                        valueOptions: options,
                         renderCell: (params) => {
                             const val = safeRowVal(params, a.key);
-                            return <Typography variant="body2">{val ?? "-"}</Typography>;
+                            const color = selectColor(val);
+                            return (
+                                <Chip
+                                    size="small"
+                                    color={color === "default" ? undefined : color}
+                                    label={val || "-"}
+                                    variant={color === "default" ? "outlined" : undefined}
+                                />
+                            );
                         },
                     };
-                }),
+                }
+
+                // TEXT
+                return {
+                    field: a.key,
+                    headerName: header,
+                    flex: 1,
+                    minWidth: 140,
+                    editable: canEdit, // izin kontrolü
+                    renderCell: (params) => {
+                        const val = safeRowVal(params, a.key);
+                        return <Typography variant="body2">{val ?? "-"}</Typography>;
+                    },
+                };
+            });
+
+        // Actions: izinlere göre oluştur
+        const actionItems = [];
+        if (canEdit) {
+            actionItems.push((params) => (
+                <GridActionsCellItem
+                    icon={<EditIcon fontSize="inherit" />}
+                    label="Düzenle"
+                    onClick={() => handleDuzenle(params.row)}
+                    showInMenu
+                />
+            ));
+        }
+        if (canDelete) {
+            actionItems.push((params) => (
+                <GridActionsCellItem
+                    icon={<DeleteIcon fontSize="inherit" />}
+                    label="Sil"
+                    onClick={() => handleSil(params.row.id)}
+                    showInMenu
+                />
+            ));
+        }
+
+        const actionCol =
+            actionItems.length > 0
+                ? [
+                    {
+                        field: "actions",
+                        type: "actions",
+                        headerName: "İŞLEM",
+                        width: 130,
+                        getActions: (params) => actionItems.map((fn) => fn(params)),
+                    },
+                ]
+                : [];
+
+        return [
+            ...dynamicCols,
             {
                 field: "durum_badge",
                 headerName: "DURUM",
@@ -703,31 +826,16 @@ export default function AracDurumlari() {
                     );
                 },
             },
-            {
-                field: "actions",
-                type: "actions",
-                headerName: "İŞLEM",
-                width: 130,
-                getActions: (params) => [
-                    <GridActionsCellItem
-                        icon={<EditIcon fontSize="inherit" />}
-                        label="Düzenle"
-                        onClick={() => handleDuzenle(params.row)}
-                        showInMenu
-                    />,
-                    <GridActionsCellItem
-                        icon={<DeleteIcon fontSize="inherit" />}
-                        label="Sil"
-                        onClick={() => handleSil(params.row.id)}
-                        showInMenu
-                    />,
-                ],
-            },
+            ...actionCol,
         ];
-    }, [alanlar]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [alanlar, canEdit, canDelete]); // eslint-disable-line react-hooks/exhaustive-deps
 
     /* ===================== CRUD ===================== */
     const handleYeni = () => {
+        if (!canCreate) {
+            openSnack("Yeni kayıt oluşturmaya yetkiniz yok.", "warning");
+            return;
+        }
         const empty = Object.fromEntries(alanlar.filter((a) => a.key !== "id").map((a) => [a.key, ""]));
         setForm(empty);
         setDuzenlemeId(null);
@@ -735,6 +843,10 @@ export default function AracDurumlari() {
     };
 
     const handleDuzenle = (row) => {
+        if (!canEdit) {
+            openSnack("Düzenleme yetkiniz yok.", "warning");
+            return;
+        }
         const editable = Object.fromEntries(Object.entries(row).filter(([k]) => k !== "id"));
         setForm(editable);
         setDuzenlemeId(row.id);
@@ -742,6 +854,10 @@ export default function AracDurumlari() {
     };
 
     const handleSil = async (id) => {
+        if (!canDelete) {
+            openSnack("Silme yetkiniz yok.", "warning");
+            return;
+        }
         if (!window.confirm("Silmek istediğinize emin misiniz?")) return;
         const { error } = await supabase.from("aracdurum").delete().eq("id", id);
         if (error) return openSnack("Silme sırasında hata oluştu.", "error");
@@ -752,8 +868,16 @@ export default function AracDurumlari() {
     const handleSubmit = async () => {
         let result;
         if (duzenlemeId) {
+            if (!canEdit) {
+                openSnack("Düzenleme yetkiniz yok.", "warning");
+                return;
+            }
             result = await supabase.from("aracdurum").update(form).eq("id", duzenlemeId);
         } else {
+            if (!canCreate) {
+                openSnack("Kayıt ekleme yetkiniz yok.", "warning");
+                return;
+            }
             result = await supabase.from("aracdurum").insert([form]);
         }
         if (result.error) return openSnack("Kayıt sırasında hata oluştu.", "error");
@@ -813,9 +937,13 @@ export default function AracDurumlari() {
                                     <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportToExcel}>
                                         Excel'e Aktar
                                     </Button>
-                                    <Button variant="contained" startIcon={<AddIcon />} onClick={handleYeni} disabled={alanlar.length === 0}>
-                                        Yeni Kayıt
-                                    </Button>
+                                    <Tooltip title={canCreate ? "Yeni kayıt oluştur" : "Yetkiniz yok"}>
+                                        <span>
+                                            <Button variant="contained" startIcon={<AddIcon />} onClick={handleYeni} disabled={!canCreate || alanlar.length === 0}>
+                                                Yeni Kayıt
+                                            </Button>
+                                        </span>
+                                    </Tooltip>
                                 </Stack>
                             </Stack>
 

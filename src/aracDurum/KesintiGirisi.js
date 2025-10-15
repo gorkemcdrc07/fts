@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from "re
 import { supabase } from "../supabaseClient";
 import * as XLSX from "xlsx";
 import { Helmet } from "react-helmet-async";
-import { useNavigate } from "react-router-dom"; // 👈 eklendi
+import { useNavigate } from "react-router-dom";
 
 // MUI
 import {
@@ -33,6 +33,7 @@ import {
     DialogActions,
     Tooltip,
     Autocomplete,
+    Chip,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
@@ -41,8 +42,8 @@ import FilterListIcon from "@mui/icons-material/FilterList";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
-import ArrowBackIcon from "@mui/icons-material/ArrowBackIosNew"; // 👈 eklendi
-import HomeIcon from "@mui/icons-material/HomeOutlined";       // 👈 eklendi
+import ArrowBackIcon from "@mui/icons-material/ArrowBackIosNew";
+import HomeIcon from "@mui/icons-material/HomeOutlined";
 
 // DataGrid
 import {
@@ -58,15 +59,16 @@ import dayjs from "dayjs";
 import "dayjs/locale/tr";
 dayjs.locale("tr");
 
-/* ===================== Zoom’dan Bağımsız Ekrana Sığdırma (KOLON DUYARLI) ===================== */
-// importların hemen altı
-const HOME_PATH = "/anasayfa"; // sizde neyse: "/dashboard" vb.
+/* ===================== Yetkilendirme (şemaya uygun) ===================== */
+/* Bu ekran araç durumu mantığına denk geliyor; şemanda var olan arcdur_* kolonlarını kullanıyoruz */
+const SCREEN_KEY = "arac_durumlari"; // user_permissions & role_permissions içinde var: arcdur_create/edit/delete
 
+/* ===================== Zoom’dan Bağımsız Ekrana Sığdırma ===================== */
+const HOME_PATH = "/anasayfa";
 const BASE_WIDTH = 1920;
 const BASE_HEIGHT = 1080;
 const MAX_SCALE = Infinity;
 
-// Ebeveyn kutunun (kolonun) gerçek boyuna göre ölçekler
 function useContainerScale(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = MAX_SCALE) {
     const ref = useRef(null);
     const [scale, setScale] = useState(1);
@@ -95,11 +97,11 @@ function ScaleToFit({ children }) {
         <Box
             ref={ref}
             sx={{
-                width: "100%",          // kolonun tamamını kapla
+                width: "100%",
                 height: "100dvh",
                 overflow: "hidden",
                 display: "grid",
-                justifyItems: "start",  // sol-üstten hizala (merkezleme kayma hissi yaratıyordu)
+                justifyItems: "start",
                 alignItems: "start",
                 background:
                     "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.15), transparent 40%)," +
@@ -122,7 +124,6 @@ function ScaleToFit({ children }) {
         </Box>
     );
 }
-/* ============================================================================ */
 
 /* ===================== Grid TR ===================== */
 const GRID_TR = {
@@ -271,12 +272,13 @@ function CustomToolbar({ onFilters, onExport, onRefresh }) {
 
 /* ===================== Component ===================== */
 export default function KesintiGirisi() {
+    const navigate = useNavigate();
+
     const [form, setForm] = useState(BOS_FORM);
     const [kesintiler, setKesintiler] = useState([]);
     const [plakalar, setPlakalar] = useState([]);
     const [formOpen, setFormOpen] = useState(false);
     const [filtreDrawer, setFiltreDrawer] = useState(false);
-    const navigate = useNavigate(); // 👈 eklendi
 
     // form modu ve düzenlenen id
     const [formMode, setFormMode] = useState("create"); // 'create' | 'edit'
@@ -291,8 +293,17 @@ export default function KesintiGirisi() {
         gun_sayisi: "",
         aciklama: "",
         ekleyen_kullanici: "",
-        ay: "", // <-- YENİ
+        ay: "",
     });
+
+    // ==== YETKİ DURUMU ====
+    const [permLoading, setPermLoading] = useState(true);
+    const [perms, setPerms] = useState({
+        canCreate: false,
+        canEdit: false,
+        canDelete: false,
+    });
+
     // KPI
     const toplam = kesintiler.length;
     const buAy = useMemo(() => {
@@ -302,17 +313,15 @@ export default function KesintiGirisi() {
 
     const filtrelenmisKesintiler = useMemo(() => {
         return kesintiler.filter((k) => {
-            // 1) Metin tabanlı/diğer alanlar (ay hariç) için eski davranış:
             const metinlerTamam = Object.entries(filtreler).every(([key, deger]) => {
                 if (!deger) return true;
-                if (key === "ay") return true; // ay'ı burada ES geçiyoruz
+                if (key === "ay") return true;
                 return String(k[key] ?? "").toLowerCase().includes(String(deger).toLowerCase());
             });
             if (!metinlerTamam) return false;
 
-            // 2) Ay filtresi (baslangic_tarihi YYYY-MM eşleşecek)
             if (filtreler.ay) {
-                const ym = String(k.baslangic_tarihi || "").slice(0, 7); // "YYYY-MM"
+                const ym = String(k.baslangic_tarihi || "").slice(0, 7);
                 if (ym !== filtreler.ay) return false;
             }
 
@@ -325,8 +334,90 @@ export default function KesintiGirisi() {
     useEffect(() => {
         verileriGetir();
         plakalarGetir();
+        loadPermissions().catch((e) => {
+            console.error("perm load error:", e);
+            setPerms({ canCreate: false, canEdit: false, canDelete: false });
+        });
     }, []);
 
+    /* ===================== Permissions Loader ===================== */
+    function coalesceOverride(overrideVal, roleVal) {
+        // override true/false ise onu kullan; null/undefined ise rol değeri
+        return (overrideVal === true || overrideVal === false) ? overrideVal : !!roleVal;
+    }
+
+    const looksLikeUUID = (s) =>
+        typeof s === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+
+    async function loadPermissions() {
+        try {
+            setPermLoading(true);
+
+            // 1) Kullanıcı
+            const ad = getMevcutKullanici();
+            const { data: userRow, error: eU } = await supabase
+                .from("login")
+                .select("id, rol, kullanici")
+                .eq("kullanici", ad)
+                .maybeSingle();
+            if (eU) throw eU;
+            if (!userRow) {
+                setPerms({ canCreate: false, canEdit: false, canDelete: false });
+                return;
+            }
+
+            // 2) Rol ID
+            let roleId = null;
+            if (userRow.rol) {
+                if (looksLikeUUID(userRow.rol)) {
+                    roleId = userRow.rol;
+                } else {
+                    const roleKey = String(userRow.rol).toUpperCase();
+                    const { data: roleRow, error: eR } = await supabase
+                        .from("roles")
+                        .select("id,key")
+                        .eq("key", roleKey)
+                        .maybeSingle();
+                    if (eR) throw eR;
+                    roleId = roleRow?.id || null;
+                }
+            }
+
+            // 3) Rol izinleri (arac_durumlari)
+            let rolePerm = {};
+            if (roleId) {
+                const { data: rp, error: eRP } = await supabase
+                    .from("role_permissions")
+                    .select("*")
+                    .eq("screen_key", SCREEN_KEY)
+                    .eq("role_id", roleId)
+                    .maybeSingle();
+                if (eRP) throw eRP;
+                rolePerm = rp || {};
+            }
+
+            // 4) Kullanıcı override (arac_durumlari)
+            const { data: up, error: eUP } = await supabase
+                .from("user_permissions")
+                .select("*")
+                .eq("screen_key", SCREEN_KEY)
+                .eq("user_id", userRow.id)
+                .maybeSingle();
+            if (eUP) throw eUP;
+
+            // 5) Etkin izinler — arcdur_* alanları
+            const canCreate = coalesceOverride(up?.arcdur_create, rolePerm?.arcdur_create);
+            const canEdit = coalesceOverride(up?.arcdur_edit, rolePerm?.arcdur_edit);
+            const canDelete = coalesceOverride(up?.arcdur_delete, rolePerm?.arcdur_delete);
+
+            setPerms({ canCreate, canEdit, canDelete });
+        } finally {
+            setPermLoading(false);
+        }
+    }
+
+    /* ===================== Data ===================== */
     const verileriGetir = async () => {
         setLoading(true);
         const { data } = await supabase.from("kesintiler").select("*").order("id", { ascending: false });
@@ -360,8 +451,20 @@ export default function KesintiGirisi() {
         setForm(next);
     };
 
+    /* ===================== CRUD Handlers (Yetki guard'lı) ===================== */
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // create vs edit guard
+        if (formMode === "create" && !perms.canCreate) {
+            alert("Yeni kesinti ekleme yetkiniz yok.");
+            return;
+        }
+        if (formMode === "edit" && !perms.canEdit) {
+            alert("Düzenleme yetkiniz yok.");
+            return;
+        }
+
         const {
             plaka_treyler,
             baslangic_tarihi,
@@ -449,6 +552,10 @@ export default function KesintiGirisi() {
     };
 
     const handleSil = async (id) => {
+        if (!perms.canDelete) {
+            alert("Silme yetkiniz yok.");
+            return;
+        }
         if (!window.confirm("Kesinti kaydı silinsin mi?")) return;
 
         const { data: silinecek } = await supabase.from("kesintiler").select("*").eq("id", id).single();
@@ -530,33 +637,44 @@ export default function KesintiGirisi() {
             filterable: false,
             renderCell: (params) => (
                 <Stack direction="row" spacing={1}>
-                    <Tooltip title="Düzenle">
-                        <IconButton
-                            size="small"
-                            onClick={() => {
-                                setForm({
-                                    plaka_treyler: params.row.plaka_treyler || "",
-                                    kesinti_turu: params.row.kesinti_turu || "",
-                                    neden: params.row.neden || "",
-                                    baslangic_tarihi: (params.row.baslangic_tarihi || "").slice(0, 10),
-                                    bitis_tarihi: (params.row.bitis_tarihi || "").slice(0, 10),
-                                    gun_sayisi:
-                                        params.row.gun_sayisi ||
-                                        hesaplaGun(params.row.baslangic_tarihi, params.row.bitis_tarihi),
-                                    aciklama: params.row.aciklama || "",
-                                });
-                                setEditingId(params.row.id);
-                                setFormMode("edit");
-                                setFormOpen(true);
-                            }}
-                        >
-                            <EditIcon fontSize="inherit" />
-                        </IconButton>
+                    <Tooltip title={perms.canEdit ? "Düzenle" : "Yetkiniz yok"}>
+                        <span>
+                            <IconButton
+                                size="small"
+                                onClick={() => {
+                                    if (!perms.canEdit) return;
+                                    setForm({
+                                        plaka_treyler: params.row.plaka_treyler || "",
+                                        kesinti_turu: params.row.kesinti_turu || "",
+                                        neden: params.row.neden || "",
+                                        baslangic_tarihi: (params.row.baslangic_tarihi || "").slice(0, 10),
+                                        bitis_tarihi: (params.row.bitis_tarihi || "").slice(0, 10),
+                                        gun_sayisi:
+                                            params.row.gun_sayisi ||
+                                            hesaplaGun(params.row.baslangic_tarihi, params.row.bitis_tarihi),
+                                        aciklama: params.row.aciklama || "",
+                                    });
+                                    setEditingId(params.row.id);
+                                    setFormMode("edit");
+                                    setFormOpen(true);
+                                }}
+                                disabled={!perms.canEdit}
+                            >
+                                <EditIcon fontSize="inherit" />
+                            </IconButton>
+                        </span>
                     </Tooltip>
-                    <Tooltip title="Sil">
-                        <IconButton size="small" color="error" onClick={() => handleSil(params.row.id)}>
-                            <DeleteIcon fontSize="inherit" />
-                        </IconButton>
+                    <Tooltip title={perms.canDelete ? "Sil" : "Yetkiniz yok"}>
+                        <span>
+                            <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => perms.canDelete && handleSil(params.row.id)}
+                                disabled={!perms.canDelete}
+                            >
+                                <DeleteIcon fontSize="inherit" />
+                            </IconButton>
+                        </span>
                     </Tooltip>
                 </Stack>
             ),
@@ -585,7 +703,7 @@ export default function KesintiGirisi() {
                             gap={2}
                             sx={{ mb: 1.5 }}
                         >
-                            <Stack>
+                            <Stack direction="row" alignItems="center" spacing={1}>
                                 <Typography
                                     variant="h4"
                                     fontWeight={800}
@@ -597,22 +715,23 @@ export default function KesintiGirisi() {
                                 >
                                     Kesinti Girişleri
                                 </Typography>
-                                <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                                    Kayıtları yönetin, filtreleyin ve dışa aktarın.
-                                </Typography>
+                                {/* bilgi çipi: yetki özeti */}
+                                <Chip
+                                    size="small"
+                                    variant="outlined"
+                                    label={
+                                        permLoading
+                                            ? "Yetkiler yükleniyor…"
+                                            : `Yetkiler: ${perms.canCreate ? "E" : "H"}/${perms.canEdit ? "E" : "H"}/${perms.canDelete ? "E" : "H"}`
+                                    }
+                                />
                             </Stack>
 
                             <Stack direction="row" spacing={1}>
-                                {/* 👇 Sadece eklendi */}
                                 <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
                                     Geri
                                 </Button>
-                                <Button
-                                    size="small"
-                                    variant="text"
-                                    startIcon={<HomeIcon />}
-                                    onClick={() => navigate(HOME_PATH)}
-                                >
+                                <Button size="small" variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
                                     Anasayfa
                                 </Button>
 
@@ -622,18 +741,24 @@ export default function KesintiGirisi() {
                                 <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleExportExcel}>
                                     Excel'e Aktar
                                 </Button>
-                                <Button
-                                    variant="contained"
-                                    startIcon={<AddIcon />}
-                                    onClick={() => {
-                                        setForm(BOS_FORM);
-                                        setFormMode("create");
-                                        setEditingId(null);
-                                        setFormOpen(true);
-                                    }}
-                                >
-                                    Yeni Kesinti
-                                </Button>
+                                <Tooltip title={perms.canCreate ? "" : "Yetkiniz yok"}>
+                                    <span>
+                                        <Button
+                                            variant="contained"
+                                            startIcon={<AddIcon />}
+                                            onClick={() => {
+                                                if (!perms.canCreate) return;
+                                                setForm(BOS_FORM);
+                                                setFormMode("create");
+                                                setEditingId(null);
+                                                setFormOpen(true);
+                                            }}
+                                            disabled={!perms.canCreate || permLoading}
+                                        >
+                                            Yeni Kesinti
+                                        </Button>
+                                    </span>
+                                </Tooltip>
                             </Stack>
                         </Stack>
 
@@ -682,7 +807,7 @@ export default function KesintiGirisi() {
                                     border: "1px solid rgba(255,255,255,0.06)",
                                 }}
                             >
-                                {loading && <LinearProgress />}
+                                {(loading || permLoading) && <LinearProgress />}
 
                                 <Box sx={{ height: "100%", overflow: "auto", pb: 1 }}>
                                     <DataGrid
@@ -690,7 +815,7 @@ export default function KesintiGirisi() {
                                         rows={filtrelenmisKesintiler}
                                         columns={columns}
                                         getRowId={(r) => r.id}
-                                        loading={loading}
+                                        loading={loading || permLoading}
                                         disableRowSelectionOnClick
                                         pagination={false}
                                         hideFooter
@@ -703,7 +828,10 @@ export default function KesintiGirisi() {
                                                 <CustomToolbar
                                                     onFilters={() => setFiltreDrawer(true)}
                                                     onExport={handleExportExcel}
-                                                    onRefresh={verileriGetir}
+                                                    onRefresh={() => {
+                                                        verileriGetir();
+                                                        loadPermissions().catch(() => { });
+                                                    }}
                                                 />
                                             ),
                                         }}
@@ -875,7 +1003,6 @@ export default function KesintiGirisi() {
                                 </Button>
                             </Stack>
 
-
                             <TextField
                                 type="number"
                                 label="Gün"
@@ -902,7 +1029,6 @@ export default function KesintiGirisi() {
                                             ay: "",
                                         })
                                     }
-
                                 >
                                     Temizle
                                 </Button>

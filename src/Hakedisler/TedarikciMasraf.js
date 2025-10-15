@@ -1,4 +1,4 @@
-// src/Hakedisler/TedarikciMasraf.js (geniş panel + görünür Tarih & Bedel)
+// src/Hakedisler/TedarikciMasraf.js
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import * as XLSX from "xlsx";
@@ -64,9 +64,14 @@ import {
     ErrorOutline as ErrorOutlineIcon,
 } from "@mui/icons-material";
 
+/* ---------- Yetkilendirme: bu ekranın anahtarı ---------- */
+const SCREEN_KEY = "tedarikci_masraf";
+// Onaylama için hangi kolon kullanılacak?
+// İstersen "can_edit" yapabilirsin.
+const APPROVE_COL = "may_open_edit";
+
 /* ---------- Helpers ---------- */
-// tüm importlar bitti
-const HOME_PATH = "/anasayfa"; // sizde hangi rota ise: "/dashboard" vb.
+const HOME_PATH = "/anasayfa";
 
 const BOS_FORM = {
     tedarikci: "",
@@ -158,7 +163,7 @@ function ConfirmDialog({ open, title, subtitle, onCancel, onConfirm, loading }) 
     );
 }
 
-function EmptyState({ onCreate }) {
+function EmptyState({ onCreate, createDisabled }) {
     return (
         <Stack alignItems="center" justifyContent="center" sx={{ height: "52vh", py: 6 }} spacing={2}>
             <ErrorOutlineIcon sx={{ fontSize: 56, opacity: 0.6 }} />
@@ -166,9 +171,15 @@ function EmptyState({ onCreate }) {
                 Henüz kayıt yok
             </Typography>
             <Typography sx={{ opacity: 0.7 }}>Yeni bir masraf ekleyerek başlayın.</Typography>
-            <Button startIcon={<AddIcon />} variant="contained" onClick={onCreate}>
-                Yeni Masraf
-            </Button>
+            <span>
+                <Tooltip title={createDisabled ? "Yeni ekleme yetkiniz yok" : ""}>
+                    <span>
+                        <Button startIcon={<AddIcon />} variant="contained" onClick={onCreate} disabled={createDisabled}>
+                            Yeni Masraf
+                        </Button>
+                    </span>
+                </Tooltip>
+            </span>
         </Stack>
     );
 }
@@ -179,7 +190,7 @@ export default function TedarikciMasraf() {
     const downSm = useMediaQuery(theme.breakpoints.down("sm"));
     dayjs.locale("tr");
 
-    const navigate = useNavigate(); // 🧭 eklendi
+    const navigate = useNavigate();
 
     const kullanici = localStorage.getItem("kullanici") || "";
     const kullaniciRol = localStorage.getItem("rol") || "";
@@ -196,6 +207,76 @@ export default function TedarikciMasraf() {
     const [hata, setHata] = useState(null);
     const [silDialog, setSilDialog] = useState({ open: false, id: null, loading: false });
 
+    /* ---------- YETKİ: rol + kullanıcı override ---------- */
+    const [permLoading, setPermLoading] = useState(true);
+    const [perms, setPerms] = useState({
+        canCreate: false,
+        canEdit: false,
+        canDelete: false,
+        canApprove: false,
+    });
+
+    function coalesceOverride(overrideVal, roleVal) {
+        return overrideVal === true || overrideVal === false ? overrideVal : !!roleVal;
+    }
+
+    async function loadPermissions() {
+        try {
+            setPermLoading(true);
+            // 1) Kullanıcı
+            const { data: userRow, error: eU } = await supabase
+                .from("login")
+                .select("id, kullanici, rol")
+                .eq("kullanici", kullanici)
+                .maybeSingle();
+            if (eU) throw eU;
+
+            // Rol key'i (roles.key büyük harf)
+            const roleKey = (userRow?.rol || "").toUpperCase();
+            const { data: roleRow, error: eR } = await supabase
+                .from("roles")
+                .select("id,key")
+                .eq("key", roleKey)
+                .maybeSingle();
+            if (eR) throw eR;
+
+            // 2) Rol izinleri
+            let rolePerm = {};
+            if (roleRow?.id) {
+                const { data: rp, error: eRP } = await supabase
+                    .from("role_permissions")
+                    .select("*")
+                    .eq("screen_key", SCREEN_KEY)
+                    .eq("role_id", roleRow.id)
+                    .maybeSingle();
+                if (eRP) throw eRP;
+                rolePerm = rp || {};
+            }
+
+            // 3) Kullanıcı override
+            const { data: up, error: eUP } = await supabase
+                .from("user_permissions")
+                .select("*")
+                .eq("screen_key", SCREEN_KEY)
+                .eq("user_id", userRow?.id)
+                .maybeSingle();
+            if (eUP) throw eUP;
+
+            // 4) Etkin izinler
+            const canCreate = coalesceOverride(up?.arcdur_create, rolePerm?.arcdur_create);
+            const canEdit = coalesceOverride(up?.arcdur_edit, rolePerm?.arcdur_edit);
+            const canDelete = coalesceOverride(up?.arcdur_delete, rolePerm?.arcdur_delete);
+            const canApprove = coalesceOverride(up?.[APPROVE_COL], rolePerm?.[APPROVE_COL]);
+
+            setPerms({ canCreate, canEdit, canDelete, canApprove });
+        } catch (err) {
+            console.error("perm load error:", err);
+            setPerms({ canCreate: false, canEdit: false, canDelete: false, canApprove: false });
+        } finally {
+            setPermLoading(false);
+        }
+    }
+
     const veriGetir = useCallback(async () => {
         setYukleniyor(true);
         setHata(null);
@@ -210,12 +291,15 @@ export default function TedarikciMasraf() {
 
     useEffect(() => {
         veriGetir();
+        loadPermissions();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [veriGetir]);
 
-    const onayVerebilir =
-        kullaniciRol === "YÖNETİCİ" && (kullanici || "").trim().toUpperCase() === "BEKİR AKCAGÖZ";
-
     const handleOpenYeni = () => {
+        if (!perms.canCreate) {
+            toast.warn("Yeni ekleme yetkiniz yok.");
+            return;
+        }
         setForm(BOS_FORM);
         setDuzenlemeId(null);
         setFormGorunur(true);
@@ -228,6 +312,17 @@ export default function TedarikciMasraf() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // create vs edit kontrolü
+        if (!duzenlemeId && !perms.canCreate) {
+            toast.warn("Yeni ekleme yetkiniz yok.");
+            return;
+        }
+        if (duzenlemeId && !perms.canEdit) {
+            toast.warn("Düzenleme yetkiniz yok.");
+            return;
+        }
+
         const bedelParsed = parseFloat(String(form.bedel).replace(",", "."));
         if (Number.isNaN(bedelParsed)) {
             toast.error("Geçerli bir bedel giriniz.");
@@ -246,6 +341,7 @@ export default function TedarikciMasraf() {
         } else {
             sonuc = await supabase.from("tedarikci_masraflar").insert([kayit]);
 
+            // İsteğe bağlı: Bekir'e bildirim (mevcut davranış)
             try {
                 const bekir = await supabase
                     .from("login")
@@ -281,10 +377,12 @@ export default function TedarikciMasraf() {
     const handleSil = async () => {
         const { id } = silDialog;
         if (!id) return setSilDialog({ open: false, id: null, loading: false });
-        if (kullaniciRol !== "YÖNETİCİ") {
+
+        if (!perms.canDelete) {
             toast.error("❌ Silme yetkiniz yok.");
             return setSilDialog({ open: false, id: null, loading: false });
         }
+
         setSilDialog((p) => ({ ...p, loading: true }));
         const { error } = await supabase.from("tedarikci_masraflar").delete().eq("id", id);
         if (!error) {
@@ -297,6 +395,10 @@ export default function TedarikciMasraf() {
     };
 
     const handleDuzenle = (kayit) => {
+        if (!perms.canEdit) {
+            toast.warn("Düzenleme yetkiniz yok.");
+            return;
+        }
         setForm({
             id: kayit.id,
             sefer_no: kayit.sefer_no || "",
@@ -311,13 +413,16 @@ export default function TedarikciMasraf() {
     };
 
     const handleOnayla = async (id) => {
-        const { error } = await supabase
-            .from("tedarikci_masraflar")
-            .update({ statu: "ONAYLANDI" })
-            .eq("id", id);
+        if (!perms.canApprove) {
+            toast.warn("Onaylama yetkiniz yok.");
+            return;
+        }
+        const { error } = await supabase.from("tedarikci_masraflar").update({ statu: "ONAYLANDI" }).eq("id", id);
         if (!error) {
             await veriGetir();
             toast.success("✔️ Masraf onaylandı.");
+        } else {
+            toast.error("❌ Onaylama sırasında hata oluştu.");
         }
     };
 
@@ -329,10 +434,7 @@ export default function TedarikciMasraf() {
             toast.warn("Önce kutucuğu işaretleyin.");
             return;
         }
-        const { error } = await supabase
-            .from("tedarikci_masraflar")
-            .update({ reel_islendi: true })
-            .eq("id", id);
+        const { error } = await supabase.from("tedarikci_masraflar").update({ reel_islendi: true }).eq("id", id);
         if (!error) {
             setReelDurum((prev) => {
                 const k = { ...prev };
@@ -369,20 +471,13 @@ export default function TedarikciMasraf() {
 
     const sayilar = useMemo(() => {
         const toplam = filtrelenmis.length;
-        const onayBekleyen = filtrelenmis.filter(
-            (m) => (m.statu || "").toUpperCase() === "ONAY BEKLİYOR"
-        ).length;
-        const onaylanan = filtrelenmis.filter(
-            (m) => (m.statu || "").toUpperCase() === "ONAYLANDI"
-        ).length;
+        const onayBekleyen = filtrelenmis.filter((m) => (m.statu || "").toUpperCase() === "ONAY BEKLİYOR").length;
+        const onaylanan = filtrelenmis.filter((m) => (m.statu || "").toUpperCase() === "ONAYLANDI").length;
         const reel = filtrelenmis.filter((m) => !!m.reel_islendi).length;
         return { toplam, onayBekleyen, onaylanan, reel };
     }, [filtrelenmis]);
 
-    const gridRows = useMemo(
-        () => (filtrelenmis || []).map((m, i) => ({ id: m.id ?? `row-${i}`, ...m })),
-        [filtrelenmis]
-    );
+    const gridRows = useMemo(() => (filtrelenmis || []).map((m, i) => ({ id: m.id ?? `row-${i}`, ...m })), [filtrelenmis]);
 
     const exportToExcel = () => {
         const excelData = (filtrelenmis || []).map((m) => ({
@@ -399,15 +494,10 @@ export default function TedarikciMasraf() {
 
         // Autofit
         const cols = Object.keys(excelData[0] || {}).map((k) => ({ wch: Math.max(12, k.length + 2) }));
-        const rowsAuto = excelData.map((row) =>
-            Object.values(row).map((v) => (v ? String(v).length + 2 : 10))
-        );
+        const rowsAuto = excelData.map((row) => Object.values(row).map((v) => (v ? String(v).length + 2 : 10)));
         if (rowsAuto.length) {
             rowsAuto[0].forEach((_, i) => {
-                cols[i].wch = Math.max(
-                    cols[i].wch,
-                    Math.min(40, Math.max(...rowsAuto.map((r) => r[i] || 10)))
-                );
+                cols[i].wch = Math.max(cols[i].wch, Math.min(40, Math.max(...rowsAuto.map((r) => r[i] || 10))));
             });
         }
         sheet["!cols"] = cols;
@@ -440,12 +530,7 @@ export default function TedarikciMasraf() {
                 headerName: "Tarih",
                 minWidth: 140,
                 flex: 0.7,
-                // Bazı kurulumlarda DataGrid 'date' stringlerini boş gösterebiliyor; kendimiz render edelim.
-                renderCell: (params) => (
-                    <Typography title={formatDateTR(params.row?.tarih)}>
-                        {formatDateTR(params.row?.tarih)}
-                    </Typography>
-                ),
+                renderCell: (params) => <Typography title={formatDateTR(params.row?.tarih)}>{formatDateTR(params.row?.tarih)}</Typography>,
             },
             { field: "neden", headerName: "Neden", minWidth: 200, flex: 1.1 },
             {
@@ -456,10 +541,7 @@ export default function TedarikciMasraf() {
                 align: "right",
                 headerAlign: "right",
                 renderCell: (params) => (
-                    <Typography
-                        title={formatTL(params.row?.bedel)}
-                        sx={{ width: "100%", textAlign: "right" }}
-                    >
+                    <Typography title={formatTL(params.row?.bedel)} sx={{ width: "100%", textAlign: "right" }}>
                         {formatTL(params.row?.bedel)}
                     </Typography>
                 ),
@@ -482,8 +564,7 @@ export default function TedarikciMasraf() {
                 flex: 0.8,
                 renderCell: (params) => {
                     const v = (params.value || "").toString().toUpperCase();
-                    const color =
-                        v === "ONAYLANDI" ? "success" : v === "ONAY BEKLİYOR" ? "warning" : "default";
+                    const color = v === "ONAYLANDI" ? "success" : v === "ONAY BEKLİYOR" ? "warning" : "default";
                     return (
                         <Chip
                             size="small"
@@ -507,12 +588,7 @@ export default function TedarikciMasraf() {
                     const checked = already ? true : !!reelDurum[id];
                     return (
                         <Stack direction="row" spacing={1.25} alignItems="center">
-                            <Checkbox
-                                size="small"
-                                checked={checked}
-                                onChange={(e) => handleReelTick(id, e.target.checked)}
-                                disabled={already}
-                            />
+                            <Checkbox size="small" checked={checked} onChange={(e) => handleReelTick(id, e.target.checked)} disabled={already} />
                             {!already && checked ? (
                                 <Button size="small" variant="contained" onClick={() => handleReelKaydet(id)}>
                                     Kaydet
@@ -527,42 +603,54 @@ export default function TedarikciMasraf() {
             {
                 field: "actions",
                 headerName: "İşlem",
-                minWidth: 220,
-                flex: 0.9,
+                minWidth: 260,
+                flex: 1,
                 sortable: false,
                 renderCell: (params) => {
                     const row = params.row;
-                    const gosterOnay =
-                        (row.statu || "").toString().toUpperCase() === "ONAY BEKLİYOR" && onayVerebilir;
+                    const gosterOnay = (row.statu || "").toString().toUpperCase() === "ONAY BEKLİYOR" && perms.canApprove;
+
                     return (
                         <Stack direction="row" spacing={1}>
-                            <Tooltip title="Düzenle">
-                                <IconButton size="small" onClick={() => handleDuzenle(row)}>
-                                    <EditIcon />
-                                </IconButton>
+                            <Tooltip title={perms.canEdit ? "Düzenle" : "Düzenleme yetkiniz yok"}>
+                                <span>
+                                    <IconButton size="small" onClick={() => handleDuzenle(row)} disabled={!perms.canEdit || permLoading}>
+                                        <EditIcon />
+                                    </IconButton>
+                                </span>
                             </Tooltip>
 
-                            {kullaniciRol === "YÖNETİCİ" && (
-                                <Tooltip title="Sil">
-                                    <IconButton size="small" color="error" onClick={() => confirmSil(row.id)}>
+                            <Tooltip title={perms.canDelete ? "Sil" : "Silme yetkiniz yok"}>
+                                <span>
+                                    <IconButton
+                                        size="small"
+                                        color="error"
+                                        onClick={() => confirmSil(row.id)}
+                                        disabled={!perms.canDelete || permLoading}
+                                    >
                                         <DeleteIcon />
                                     </IconButton>
-                                </Tooltip>
-                            )}
+                                </span>
+                            </Tooltip>
 
-                            {gosterOnay && (
-                                <Tooltip title="Onayla">
-                                    <IconButton size="small" color="primary" onClick={() => handleOnayla(row.id)}>
+                            <Tooltip title={gosterOnay ? "Onayla" : "Onaylama yetkiniz yok veya durum uygun değil"}>
+                                <span>
+                                    <IconButton
+                                        size="small"
+                                        color="primary"
+                                        onClick={() => handleOnayla(row.id)}
+                                        disabled={!gosterOnay || permLoading}
+                                    >
                                         <CheckIcon />
                                     </IconButton>
-                                </Tooltip>
-                            )}
+                                </span>
+                            </Tooltip>
                         </Stack>
                     );
                 },
             },
         ],
-        [kullaniciRol, onayVerebilir, reelDurum]
+        [perms, permLoading, reelDurum]
     );
 
     return (
@@ -575,19 +663,10 @@ export default function TedarikciMasraf() {
                 minHeight: "100dvh",
                 py: { xs: 2, md: 4 },
                 background: (t) =>
-                    t.palette.mode === "dark"
-                        ? "linear-gradient(180deg,#0b1020,#0e1428)"
-                        : "linear-gradient(180deg,#f6f9ff,#f4f7ff)",
+                    t.palette.mode === "dark" ? "linear-gradient(180deg,#0b1020,#0e1428)" : "linear-gradient(180deg,#f6f9ff,#f4f7ff)",
             }}
         >
-            {/* 🔑 Geniş panel: Container büyütüldü */}
-            <Container
-                maxWidth={false}
-                sx={{
-                    maxWidth: "1680px",
-                    px: { xs: 2, md: 4 },
-                }}
-            >
+            <Container maxWidth={false} sx={{ maxWidth: "1680px", px: { xs: 2, md: 4 } }}>
                 <Paper
                     elevation={6}
                     sx={{
@@ -596,11 +675,8 @@ export default function TedarikciMasraf() {
                         borderRadius: 4,
                         overflow: "hidden",
                         backdropFilter: "saturate(140%) blur(10px)",
-                        bgcolor: (t) =>
-                            t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.9)",
-                        border: (t) =>
-                            `1px solid ${t.palette.mode === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"
-                            }`,
+                        bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.9)"),
+                        border: (t) => `1px solid ${t.palette.mode === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"}`,
                     }}
                 >
                     {/* Üst şerit */}
@@ -619,12 +695,7 @@ export default function TedarikciMasraf() {
 
                         <Stack direction="row" spacing={1.25} alignItems="center">
                             {yukleniyor && (
-                                <Chip
-                                    label="Yükleniyor…"
-                                    color="info"
-                                    variant="outlined"
-                                    icon={<CircularProgress size={14} />}
-                                />
+                                <Chip label="Yükleniyor…" color="info" variant="outlined" icon={<CircularProgress size={14} />} />
                             )}
                             {hata && <Chip label={`Hata: ${hata}`} color="error" variant="outlined" />}
                             {!yukleniyor && !hata && (
@@ -634,26 +705,32 @@ export default function TedarikciMasraf() {
                                 </>
                             )}
 
-                            {/* 🧭 Eklendi: Geri ve Anasayfa butonları */}
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => navigate(-1)}
-                                title="Geri"
-                            >
+                            {/* Perm durum göstergesi (isteğe bağlı) */}
+                            {permLoading ? (
+                                <Chip size="small" variant="outlined" label="Yetkiler yükleniyor…" />
+                            ) : null}
+
+                            {/* 🧭 Geri / Anasayfa / Yeni */}
+                            <Button size="small" variant="outlined" onClick={() => navigate(-1)} title="Geri">
                                 Geri
                             </Button>
-                            <Button
-                                size="small"
-                                variant="text"
-                                startIcon={<HomeIcon />}
-                                onClick={() => navigate(HOME_PATH)}
-                            >
+                            <Button size="small" variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
                                 Anasayfa
                             </Button>
-                            <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={handleOpenYeni}>
-                                Yeni
-                            </Button>
+
+                            <Tooltip title={perms.canCreate ? "" : "Yeni ekleme yetkiniz yok"}>
+                                <span>
+                                    <Button
+                                        size="small"
+                                        variant="contained"
+                                        startIcon={<AddIcon />}
+                                        onClick={handleOpenYeni}
+                                        disabled={!perms.canCreate || permLoading}
+                                    >
+                                        Yeni
+                                    </Button>
+                                </span>
+                            </Tooltip>
                         </Stack>
                     </Box>
 
@@ -744,6 +821,9 @@ export default function TedarikciMasraf() {
                         <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportToExcel}>
                             Excel'e Aktar
                         </Button>
+                        <Button variant="outlined" onClick={() => { veriGetir(); loadPermissions(); }}>
+                            Yenile
+                        </Button>
                     </Box>
 
                     <Divider />
@@ -751,7 +831,7 @@ export default function TedarikciMasraf() {
                     {/* GRID */}
                     <Box sx={{ height: "68vh", width: "100%" }}>
                         {gridRows.length === 0 && !yukleniyor ? (
-                            <EmptyState onCreate={handleOpenYeni} />
+                            <EmptyState onCreate={handleOpenYeni} createDisabled={!perms.canCreate || permLoading} />
                         ) : (
                             <DataGrid
                                 rows={gridRows}
@@ -773,8 +853,7 @@ export default function TedarikciMasraf() {
                                     "& .MuiDataGrid-columnHeaders": {
                                         position: "sticky",
                                         top: 0,
-                                        background: (t) =>
-                                            t.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.9)",
+                                        background: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.9)"),
                                         backdropFilter: "blur(6px)",
                                     },
                                     "& .MuiDataGrid-cell": { py: 1.25, fontSize: 14.5 },
@@ -785,7 +864,7 @@ export default function TedarikciMasraf() {
                 </Paper>
             </Container>
 
-            {/* Form Dialog — ferah, 2 sütun, responsive */}
+            {/* Form Dialog */}
             <Dialog
                 open={formGorunur}
                 onClose={handleCloseForm}
@@ -880,9 +959,28 @@ export default function TedarikciMasraf() {
                         <Button startIcon={<CloseIcon />} onClick={handleCloseForm} variant="text">
                             Vazgeç
                         </Button>
-                        <Button type="submit" startIcon={<CheckIcon />} variant="contained">
-                            Kaydet
-                        </Button>
+                        <Tooltip
+                            title={
+                                duzenlemeId
+                                    ? perms.canEdit
+                                        ? ""
+                                        : "Düzenleme yetkiniz yok"
+                                    : perms.canCreate
+                                        ? ""
+                                        : "Yeni ekleme yetkiniz yok"
+                            }
+                        >
+                            <span>
+                                <Button
+                                    type="submit"
+                                    startIcon={<CheckIcon />}
+                                    variant="contained"
+                                    disabled={permLoading || (!duzenlemeId && !perms.canCreate) || (duzenlemeId && !perms.canEdit)}
+                                >
+                                    Kaydet
+                                </Button>
+                            </span>
+                        </Tooltip>
                     </DialogActions>
                 </form>
             </Dialog>

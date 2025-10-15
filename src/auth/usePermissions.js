@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 
-const mapByScreen = {
+/** Ekran -> kolon eşlemesi (user_permissions & role_permissions’ta bulunan gerçek kolon isimleri) */
+const MAP_BY_SCREEN = {
     aktif_seferler: [
         "aktif_can_sync",
         "aktif_can_edit",
@@ -17,37 +18,186 @@ const mapByScreen = {
     tedarikci_masraf: ["tdm_create", "tdm_edit", "tdm_delete", "tdm_may_open_edit"],
     arac_cari_fiyat: ["acf_create", "acf_edit", "acf_delete"],
     hakedis_seferleri: ["hks_upload"],
+    izin_yonetimi: ["izin_create", "izin_edit", "izin_delete"], // <-- eklendi
 };
 
+/** Rol adı -> role.key normalize */
+const ROLE_NAME_TO_KEY = {
+    "YÖNETİCİ": "YONETICI",
+    "OPERASYON": "OPERASYON",
+    "TAKİP": "TAKIP",
+};
+
+const looksLikeUUID = (s) =>
+    typeof s === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+
+/** Bir satırda olası birkaç anahtardan ilk boolean olanı döndür (esnek şema toleransı) */
+const pickFirstBool = (row, keys) => {
+    if (!row) return undefined;
+    for (const k of keys) {
+        if (k in row && (row[k] === true || row[k] === false)) return row[k];
+    }
+    return undefined;
+};
+
+/** override (kullanıcı) null değilse onu kullan, değilse rol değerini miras al */
+const coalesceOverride = (overrideVal, roleVal) =>
+    (overrideVal === true || overrideVal === false) ? overrideVal : !!roleVal;
+
+/** create/edit/delete için ekran bazında muhtemel anahtar listeleri */
+const CANDIDATES = {
+    create: [
+        "izin_create", "ayon_create", "adur_create", "kes_create",
+        "tdm_create", "acf_create",
+    ],
+    edit: [
+        "izin_edit", "ayon_edit", "adur_edit", "kes_edit",
+        "tdm_edit", "acf_edit",
+    ],
+    delete: [
+        "izin_delete", "ayon_delete", "adur_delete", "kes_delete",
+        "tdm_delete", "acf_delete",
+    ],
+};
+
+/**
+ * usePermissions(screenKey)
+ * Dönen yapı:
+ * {
+ *   loading: boolean,
+ *   // kolay erişim (varsa):
+ *   canCreate: boolean,
+ *   canEdit: boolean,
+ *   canDelete: boolean,
+ *   // tüm anahtarların birleşik hali:
+ *   flags: { [permKey:boolean] }
+ * }
+ */
 export default function usePermissions(screenKey) {
-    const [state, setState] = useState({ loading: true });
+    const [state, setState] = useState({
+        loading: true,
+        canCreate: false,
+        canEdit: false,
+        canDelete: false,
+        flags: {},
+    });
 
     useEffect(() => {
+        let cancelled = false;
+
         (async () => {
             try {
-                const userId = parseInt(localStorage.getItem("kullaniciId"), 10);
-                if (!userId) return setState({ loading: false });
+                setState((s) => ({ ...s, loading: true }));
 
-                // Tek satır / kullanıcı
-                const { data, error } = await supabase
+                const userId = parseInt(localStorage.getItem("kullaniciId") || "", 10);
+                if (!userId) {
+                    if (!cancelled) setState({ loading: false, canCreate: false, canEdit: false, canDelete: false, flags: {} });
+                    return;
+                }
+
+                // 1) login -> rol bilgisi
+                const { data: userRow, error: eUser } = await supabase
+                    .from("login")
+                    .select("id, rol, kullanici")
+                    .eq("id", userId)
+                    .maybeSingle();
+                if (eUser) throw eUser;
+
+                // 2) roleId bul (UUID ise direkt; değilse roles.key ile)
+                let roleId = null;
+                if (userRow?.rol) {
+                    if (looksLikeUUID(userRow.rol)) {
+                        roleId = userRow.rol;
+                    } else {
+                        const roleKey =
+                            ROLE_NAME_TO_KEY[String(userRow.rol || "").toUpperCase()] ||
+                            String(userRow.rol || "").toUpperCase();
+                        const { data: roleRow, error: eR } = await supabase
+                            .from("roles")
+                            .select("id,key")
+                            .eq("key", roleKey)
+                            .maybeSingle();
+                        if (eR) throw eR;
+                        roleId = roleRow?.id || null;
+                    }
+                }
+
+                // 3) role_permissions (önce screen_key ile; yoksa fallback tek satır)
+                let rolePerm = {};
+                if (roleId) {
+                    let rp = null;
+                    let eRP = null;
+                    ({ data: rp, error: eRP } = await supabase
+                        .from("role_permissions")
+                        .select("*")
+                        .eq("screen_key", screenKey)
+                        .eq("role_id", roleId)
+                        .maybeSingle());
+                    if (eRP) throw eRP;
+
+                    if (!rp) {
+                        // bazı eski şemalarda screen_key yoktu
+                        const res = await supabase
+                            .from("role_permissions")
+                            .select("*")
+                            .eq("role_id", roleId)
+                            .maybeSingle();
+                        rp = res.data || {};
+                    }
+                    rolePerm = rp || {};
+                }
+
+                // 4) user_permissions (tek satır)
+                const { data: up, error: eUP } = await supabase
                     .from("user_permissions")
                     .select("*")
                     .eq("user_id", userId)
                     .maybeSingle();
+                if (eUP) throw eUP;
 
-                if (error) throw error;
+                // 5) ekranın beklenen anahtarları
+                const screenKeys = MAP_BY_SCREEN[screenKey] || [];
 
-                const keys = mapByScreen[screenKey] || [];
-                const perms = { loading: false, roleKey: null };
+                // 6) her anahtar için user override + role mirası
+                const flags = {};
+                for (const key of screenKeys) {
+                    const userVal = pickFirstBool(up, [key]);
+                    const roleVal = pickFirstBool(rolePerm, [key]);
+                    flags[key] = coalesceOverride(userVal, roleVal) === true;
+                }
 
-                keys.forEach((k) => { perms[k] = data ? data[k] === true : false; });
+                // 7) kolay erişim alanları (create/edit/delete varsa)
+                const findFirstTrue = (candidates) => {
+                    // ekranın anahtarları içinde ilk eşleşen true olanı bul
+                    for (const k of candidates) {
+                        if (screenKeys.includes(k) && flags[k] === true) return true;
+                    }
+                    return false;
+                };
 
-                setState(perms);
+                const canCreate = findFirstTrue(CANDIDATES.create);
+                const canEdit = findFirstTrue(CANDIDATES.edit);
+                const canDelete = findFirstTrue(CANDIDATES.delete);
+
+                if (!cancelled) {
+                    setState({
+                        loading: false,
+                        canCreate,
+                        canEdit,
+                        canDelete,
+                        flags,
+                    });
+                }
             } catch (e) {
                 console.error("usePermissions load error:", e);
-                setState({ loading: false });
+                if (!cancelled) {
+                    setState({ loading: false, canCreate: false, canEdit: false, canDelete: false, flags: {} });
+                }
             }
         })();
+
+        return () => { cancelled = true; };
     }, [screenKey]);
 
     return state;

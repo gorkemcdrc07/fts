@@ -255,8 +255,7 @@ function CustomToolbar({ onRefresh, onExport, onFilters }) {
                 position: "sticky",
                 top: 0,
                 zIndex: 1,
-                background:
-                    "linear-gradient(180deg, rgba(15,23,42,0.9) 0%, rgba(15,23,42,0.6) 100%)",
+                background: "linear-gradient(180deg, rgba(15,23,42,0.9) 0%, rgba(15,23,42,0.6) 100%)",
                 borderBottom: "1px solid rgba(255,255,255,0.08)",
                 backdropFilter: "blur(6px)",
             }}
@@ -326,8 +325,7 @@ export default function IzinGirisiModern() {
         canDelete: false,
     });
 
-    const openSnack = (msg, severity = "success") =>
-        setSnack({ open: true, msg, severity });
+    const openSnack = (msg, severity = "success") => setSnack({ open: true, msg, severity });
 
     /* ===================== Effects ===================== */
     useEffect(() => {
@@ -353,14 +351,6 @@ export default function IzinGirisiModern() {
     ).length;
 
     /* ===================== Permissions Loader ===================== */
-    function coalesceOverride(overrideVal, roleVal) {
-        // override true/false ise onu kullan; null/undefined ise rol değeri
-        return (overrideVal === true || overrideVal === false) ? overrideVal : !!roleVal;
-    }
-
-    // basit UUID kontrolü (36 char, 4 tire)
-    const looksLikeUUID = (s) => typeof s === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
-
     async function loadPermissions() {
         try {
             setPermLoading(true);
@@ -379,48 +369,56 @@ export default function IzinGirisiModern() {
             }
 
             // 2) Rol ID: login.rol UUID ise direkt kullan; değilse roles.key'den bul
+            const ROLE_NAME_TO_KEY = { YÖNETİCİ: "YONETICI", OPERASYON: "OPERASYON", TAKİP: "TAKIP" };
+            const looksLikeUUID = (s) =>
+                typeof s === "string" &&
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+
             let roleId = null;
             if (userRow.rol) {
                 if (looksLikeUUID(userRow.rol)) {
                     roleId = userRow.rol;
                 } else {
-                    const roleKey = String(userRow.rol).toUpperCase();
-                    const { data: roleRow, error: eR } = await supabase
+                    const roleKey =
+                        ROLE_NAME_TO_KEY[String(userRow.rol || "").toUpperCase()] ||
+                        String(userRow.rol || "").toUpperCase();
+                    const { data: roleRow } = await supabase
                         .from("roles")
                         .select("id,key")
                         .eq("key", roleKey)
                         .maybeSingle();
-                    if (eR) throw eR;
                     roleId = roleRow?.id || null;
                 }
             }
 
-            // 3) Rol izinleri (izin_yonetimi)
-            let rolePerm = {};
+            // 3) Rol izinleri (role_permissions: ekran anahtarı = izin_yonetimi)
+            let roleCreate = false,
+                roleEdit = false,
+                roleDelete = false;
             if (roleId) {
-                const { data: rp, error: eRP } = await supabase
+                const { data: rp } = await supabase
                     .from("role_permissions")
-                    .select("*")
+                    .select("izin_create, izin_edit, izin_delete")
                     .eq("screen_key", SCREEN_KEY)
                     .eq("role_id", roleId)
                     .maybeSingle();
-                if (eRP) throw eRP;
-                rolePerm = rp || {};
+                roleCreate = !!rp?.izin_create;
+                roleEdit = !!rp?.izin_edit;
+                roleDelete = !!rp?.izin_delete;
             }
 
-            // 4) Kullanıcı override (izin_yonetimi)
-            const { data: up, error: eUP } = await supabase
+            // 4) Kullanıcı override (user_permissions: screen_key YOK!)
+            const { data: up } = await supabase
                 .from("user_permissions")
-                .select("*")
-                .eq("screen_key", SCREEN_KEY)
+                .select("izin_create, izin_edit, izin_delete")
                 .eq("user_id", userRow.id)
                 .maybeSingle();
-            if (eUP) throw eUP;
 
-            // 5) Etkin izinler — **izin_* alanları**
-            const canCreate = coalesceOverride(up?.izin_create, rolePerm?.izin_create);
-            const canEdit = coalesceOverride(up?.izin_edit, rolePerm?.izin_edit);
-            const canDelete = coalesceOverride(up?.izin_delete, rolePerm?.izin_delete);
+            // 5) Etkin izin = override varsa onu kullan; yoksa rol
+            const coalesce = (u, r) => (typeof u === "boolean" ? u : !!r);
+            const canCreate = coalesce(up?.izin_create, roleCreate);
+            const canEdit = coalesce(up?.izin_edit, roleEdit);
+            const canDelete = coalesce(up?.izin_delete, roleDelete);
 
             setPerms({ canCreate, canEdit, canDelete });
         } finally {
@@ -533,11 +531,7 @@ export default function IzinGirisiModern() {
         }
         if (!window.confirm("Silmek istediğinize emin misiniz?")) return;
 
-        const { data: izinKaydi } = await supabase
-            .from("izinler")
-            .select("*")
-            .eq("id", id)
-            .single();
+        const { data: izinKaydi } = await supabase.from("izinler").select("*").eq("id", id).single();
 
         if (!izinKaydi) {
             openSnack("Silinecek kayıt bulunamadı.", "warning");
@@ -952,8 +946,7 @@ export default function IzinGirisiModern() {
                                                 border: "none",
                                                 pb: 0.5,
                                                 "& .MuiDataGrid-columnHeaders": {
-                                                    background:
-                                                        "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
+                                                    background: "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
                                                     color: "#C8D1E6",
                                                     borderBottomColor: "rgba(255,255,255,0.08)",
                                                     fontWeight: 700,
@@ -1132,12 +1125,7 @@ export default function IzinGirisiModern() {
                         </Drawer>
 
                         {/* Form Dialog */}
-                        <Dialog
-                            open={formOpen}
-                            onClose={() => setFormOpen(false)}
-                            maxWidth="xl"
-                            fullWidth
-                        >
+                        <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="xl" fullWidth>
                             <DialogTitle sx={{ pb: 0 }}>
                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                                     <Stack>
@@ -1286,8 +1274,7 @@ export default function IzinGirisiModern() {
                                     p: 3,
                                     position: "sticky",
                                     bottom: 0,
-                                    background:
-                                        "linear-gradient(180deg, rgba(10,16,30,0.9) 0%, rgba(10,16,30,0.95) 100%)",
+                                    background: "linear-gradient(180deg, rgba(10,16,30,0.9) 0%, rgba(10,16,30,0.95) 100%)",
                                     borderTop: "1px solid rgba(255,255,255,0.06)",
                                 }}
                             >

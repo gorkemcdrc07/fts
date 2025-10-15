@@ -59,9 +59,11 @@ import dayjs from "dayjs";
 import "dayjs/locale/tr";
 dayjs.locale("tr");
 
-/* ===================== Yetkilendirme (şemaya uygun) ===================== */
-/* Bu ekran araç durumu mantığına denk geliyor; şemanda var olan arcdur_* kolonlarını kullanıyoruz */
-const SCREEN_KEY = "arac_durumlari"; // user_permissions & role_permissions içinde var: arcdur_create/edit/delete
+/* ===================== Yetkilendirme ===================== */
+/* Bu ekran: KESİNTİ YÖNETİMİ. role_permissions'ta screen_key=kesinti_yonetimi
+   user_permissions'ta ekran bazlı kolon yok; tek satır/ kullanıcı. */
+const SCREEN_KEY = "kesinti_yonetimi"; // role_permissions.screen_key
+const USER_KEYS = { create: "kes_create", edit: "kes_edit", delete: "kes_delete" };
 
 /* ===================== Zoom’dan Bağımsız Ekrana Sığdırma ===================== */
 const HOME_PATH = "/anasayfa";
@@ -384,7 +386,7 @@ export default function KesintiGirisi() {
                 }
             }
 
-            // 3) Rol izinleri (arac_durumlari)
+            // 3) Rol izinleri (screen_key = kesinti_yonetimi)
             let rolePerm = {};
             if (roleId) {
                 const { data: rp, error: eRP } = await supabase
@@ -397,19 +399,18 @@ export default function KesintiGirisi() {
                 rolePerm = rp || {};
             }
 
-            // 4) Kullanıcı override (arac_durumlari)
+            // 4) Kullanıcı override — user_permissions'ta screen_key YOK; user_id ile tek satır
             const { data: up, error: eUP } = await supabase
                 .from("user_permissions")
                 .select("*")
-                .eq("screen_key", SCREEN_KEY)
                 .eq("user_id", userRow.id)
                 .maybeSingle();
             if (eUP) throw eUP;
 
-            // 5) Etkin izinler — arcdur_* alanları
-            const canCreate = coalesceOverride(up?.arcdur_create, rolePerm?.arcdur_create);
-            const canEdit = coalesceOverride(up?.arcdur_edit, rolePerm?.arcdur_edit);
-            const canDelete = coalesceOverride(up?.arcdur_delete, rolePerm?.arcdur_delete);
+            // 5) Etkin izinler — kes_* alanları
+            const canCreate = coalesceOverride(up?.[USER_KEYS.create], rolePerm?.[USER_KEYS.create]);
+            const canEdit = coalesceOverride(up?.[USER_KEYS.edit], rolePerm?.[USER_KEYS.edit]);
+            const canDelete = coalesceOverride(up?.[USER_KEYS.delete], rolePerm?.[USER_KEYS.delete]);
 
             setPerms({ canCreate, canEdit, canDelete });
         } finally {
@@ -590,12 +591,12 @@ export default function KesintiGirisi() {
                 Plaka: k.plaka_treyler,
                 Tür: k.kesinti_turu,
                 Neden: k.neden,
-                Başlangıç: new Date(k.baslangic_tarihi).toLocaleDateString("tr-TR"),
-                Bitiş: new Date(k.bitis_tarihi).toLocaleDateString("tr-TR"),
+                Başlangıç: k.baslangic_tarihi ? new Date(k.baslangic_tarihi).toLocaleDateString("tr-TR") : "",
+                Bitiş: k.bitis_tarihi ? new Date(k.bitis_tarihi).toLocaleDateString("tr-TR") : "",
                 Gün: k.gun_sayisi,
                 Açıklama: k.aciklama,
                 Ekleyen: k.ekleyen_kullanici,
-                Eklenme_Tarihi: new Date(k.eklenme_tarihi).toLocaleString("tr-TR"),
+                Eklenme_Tarihi: k.eklenme_tarihi ? new Date(k.eklenme_tarihi).toLocaleString("tr-TR") : "",
             }))
         );
         const workbook = XLSX.utils.book_new();

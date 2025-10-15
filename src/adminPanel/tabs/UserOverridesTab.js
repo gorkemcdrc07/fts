@@ -67,7 +67,6 @@ const PERM_KEYS_BY_SCREEN = {
         { key: "acf_delete", label: "Kayıt Sil" },
     ],
     hakedis_seferleri: [{ key: "hks_upload", label: "Dosya Yükle" }],
-    // Bu ekran user_permissions'ta yok; UI'da bilgilendirme için görünüyor
     izin_yonetimi: [
         { key: "izin_create", label: "Yeni Kayıt Oluştur" },
         { key: "izin_edit", label: "Kayıt Düzenle" },
@@ -86,13 +85,20 @@ const USER_PERMISSIONS_COLUMNS = new Set([
     "tdm_create", "tdm_edit", "tdm_delete", "tdm_may_open_edit",
     "acf_create", "acf_edit", "acf_delete",
     "hks_upload",
+    // İZİN YÖNETİMİ — eklendi
+    "izin_create", "izin_edit", "izin_delete",
 ]);
 
 async function upsertUserPermissions(rows) {
-    const { error } = await supabase.from("user_permissions").upsert(rows, { onConflict: "user_id" });
+    const { error } = await supabase
+        .from("user_permissions")
+        .upsert(rows, { onConflict: "user_id" });
     if (!error) return;
     if (String(error.code) === "406") {
-        const { error: e2 } = await supabase.from("user_permissions").upsert(rows, { onConflict: "user_id" }).select();
+        const { error: e2 } = await supabase
+            .from("user_permissions")
+            .upsert(rows, { onConflict: "user_id" })
+            .select();
         if (!e2) return;
         throw e2;
     }
@@ -124,7 +130,9 @@ export default function UserOverridesTab() {
                 .order("kullanici", { ascending: true });
             if (e1) throw e1;
 
-            const { data: ovrs, error: e2 } = await supabase.from("user_permissions").select("*");
+            const { data: ovrs, error: e2 } = await supabase
+                .from("user_permissions")
+                .select("*");
             if (e2) throw e2;
 
             const byUser = new Map((ovrs || []).map((o) => [String(o.user_id), o]));
@@ -269,7 +277,13 @@ export default function UserOverridesTab() {
                     </span>
                 </Tooltip>
 
-                <Button startIcon={<SaveIcon />} onClick={save} disabled={!dirty || saving || loading || !overridesSupported} variant="contained" size="small">
+                <Button
+                    startIcon={<SaveIcon />}
+                    onClick={save}
+                    disabled={!dirty || saving || loading || !overridesSupported}
+                    variant="contained"
+                    size="small"
+                >
                     {saving ? "Kaydediliyor…" : "Kaydet"}
                 </Button>
             </Toolbar>
@@ -332,7 +346,11 @@ export default function UserOverridesTab() {
                                                             />
                                                         </span>
                                                     </Tooltip>
-                                                    {isInherited && <Typography variant="caption" sx={{ opacity: 0.55 }}>(miras)</Typography>}
+                                                    {isInherited && (
+                                                        <Typography variant="caption" sx={{ opacity: 0.55 }}>
+                                                            (miras)
+                                                        </Typography>
+                                                    )}
                                                 </Stack>
                                             </TableCell>
                                         );

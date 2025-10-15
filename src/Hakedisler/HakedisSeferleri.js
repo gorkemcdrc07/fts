@@ -8,7 +8,7 @@ import { HomeOutlined as HomeIcon } from "@mui/icons-material";
 
 /** Ekran anahtarı & izin anahtarı */
 const SCREEN_KEY = "hakedis_seferleri";
-const UPLOAD_COL = "arcdur_create"; // dosya ekleme izni için
+const UPLOAD_COL = "hks_upload"; // dosya ekleme izni için DOĞRU kolon
 
 /** Kullanıcı şablon başlıkları (Excel) */
 const HOME_PATH = "/anasayfa";
@@ -45,16 +45,12 @@ const DISPLAY_HEADERS = [
 const IS_PROD = process.env.NODE_ENV === "production";
 const PROXY_BASE = IS_PROD ? "/api" : "/reel-api";
 
-const TMS_LOGIN_URL = `${PROXY_BASE}${IS_PROD ? "/reel-auth/login" : "/api/auth/login"
-    }`;
-const TMS_ADD_EXPENSE_URL = `${PROXY_BASE}${IS_PROD
-        ? "/tmsdespatchincomeexpenses/addexpense"
-        : "/api/tmsdespatchincomeexpenses/addexpense"
+const TMS_LOGIN_URL = `${PROXY_BASE}${IS_PROD ? "/reel-auth/login" : "/api/auth/login"}`;
+const TMS_ADD_EXPENSE_URL = `${PROXY_BASE}${IS_PROD ? "/tmsdespatchincomeexpenses/addexpense" : "/api/tmsdespatchincomeexpenses/addexpense"
     }`;
 
 /** Yardımcılar */
-const normalize = (s) =>
-    String(s ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+const normalize = (s) => String(s ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 
 /** Metni TR formatından sayıya çevirir (YUVARLAMA YOK) */
 const toNumber = (v) => {
@@ -161,12 +157,7 @@ async function loginToTMSWithLocalReelCreds() {
     }
     const j = await res.json().catch(() => ({}));
     let token =
-        j.token ||
-        j.access_token ||
-        j.accessToken ||
-        j?.data?.token ||
-        j?.result?.token ||
-        j?.jwt;
+        j.token || j.access_token || j.accessToken || j?.data?.token || j?.result?.token || j?.jwt;
 
     if (!token || typeof token !== "string") {
         throw new Error("TMS login yanıtında token bulunamadı.");
@@ -296,6 +287,10 @@ function coalesceOverride(overrideVal, roleVal) {
     return overrideVal === true || overrideVal === false ? overrideVal : !!roleVal;
 }
 
+const looksLikeUUID = (s) =>
+    typeof s === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+
 async function loadUploadPermission(kullanici) {
     // 1) kullanıcıyı bul
     const { data: userRow, error: eU } = await supabase
@@ -305,34 +300,43 @@ async function loadUploadPermission(kullanici) {
         .maybeSingle();
     if (eU) throw eU;
 
+    if (!userRow) return { canUpload: false };
+
     // 2) rol id al
-    const roleKey = (userRow?.rol || "").toUpperCase();
-    const { data: roleRow, error: eR } = await supabase
-        .from("roles")
-        .select("id,key")
-        .eq("key", roleKey)
-        .maybeSingle();
-    if (eR) throw eR;
+    let roleId = null;
+    if (userRow.rol) {
+        if (looksLikeUUID(userRow.rol)) {
+            roleId = userRow.rol;
+        } else {
+            const roleKey = String(userRow.rol).toUpperCase();
+            const { data: roleRow, error: eR } = await supabase
+                .from("roles")
+                .select("id,key")
+                .eq("key", roleKey)
+                .maybeSingle();
+            if (eR) throw eR;
+            roleId = roleRow?.id || null;
+        }
+    }
 
     // 3) role_permissions (bu ekran)
     let rolePerm = {};
-    if (roleRow?.id) {
+    if (roleId) {
         const { data: rp, error: eRP } = await supabase
             .from("role_permissions")
             .select("*")
             .eq("screen_key", SCREEN_KEY)
-            .eq("role_id", roleRow.id)
+            .eq("role_id", roleId)
             .maybeSingle();
         if (eRP) throw eRP;
         rolePerm = rp || {};
     }
 
-    // 4) user_permissions override (bu ekran)
+    // 4) user_permissions override (tek satır/kullanıcı — screen_key yok)
     const { data: up, error: eUP } = await supabase
         .from("user_permissions")
         .select("*")
-        .eq("screen_key", SCREEN_KEY)
-        .eq("user_id", userRow?.id)
+        .eq("user_id", userRow.id)
         .maybeSingle();
     if (eUP) throw eUP;
 
@@ -679,37 +683,24 @@ export default function HakedisSeferleri({ onFileReady }) {
             const plakaToplamKm = plateKmTotals.get(plaka) ?? null;
 
             const hakEdisKira =
-                aylikKira !== null && calismaGunu !== null
-                    ? (aylikKira / 30) * calismaGunu
-                    : null;
+                aylikKira !== null && calismaGunu !== null ? (aylikKira / 30) * calismaGunu : null;
 
             const hakEdisSurucu =
-                aylikSurucu !== null && calismaGunu !== null
-                    ? (aylikSurucu / 30) * calismaGunu
-                    : null;
+                aylikSurucu !== null && calismaGunu !== null ? (aylikSurucu / 30) * calismaGunu : null;
 
             const seferKiraMaliyeti =
-                hakEdisKira !== null &&
-                    plakaToplamKm !== null &&
-                    plakaToplamKm > 0 &&
-                    satirKm !== null
+                hakEdisKira !== null && plakaToplamKm !== null && plakaToplamKm > 0 && satirKm !== null
                     ? (hakEdisKira / plakaToplamKm) * satirKm
                     : null;
 
             const seferSurucuMaliyeti =
-                hakEdisSurucu !== null &&
-                    plakaToplamKm !== null &&
-                    plakaToplamKm > 0 &&
-                    satirKm !== null
+                hakEdisSurucu !== null && plakaToplamKm !== null && plakaToplamKm > 0 && satirKm !== null
                     ? (hakEdisSurucu / plakaToplamKm) * satirKm
                     : null;
 
             return {
                 ...r,
-                "Hak Ediş Kira":
-                    seferKiraMaliyeti === null && seferSurucuMaliyeti === null
-                        ? hakEdisKira
-                        : hakEdisKira,
+                "Hak Ediş Kira": seferKiraMaliyeti === null && seferSurucuMaliyeti === null ? hakEdisKira : hakEdisKira,
                 "Hak Ediş Sürücü": hakEdisSurucu,
                 "Sefer Kira Maliyeti": seferKiraMaliyeti,
                 "Sefer Sürücü Maliyeti": seferSurucuMaliyeti,
@@ -719,15 +710,11 @@ export default function HakedisSeferleri({ onFileReady }) {
         setRows(updatedRows);
 
         const round2 = (x) => Math.round(x * 100) / 100;
-        const sum = (key) =>
-            updatedRows.reduce((acc, row) => acc + (toNumber(row[key]) ?? 0), 0);
+        const sum = (key) => updatedRows.reduce((acc, row) => acc + (toNumber(row[key]) ?? 0), 0);
 
         const s = {
             toplamKm: round2(
-                updatedRows.reduce(
-                    (acc, row) => acc + (toNumber(row["Toplam KM"]) ?? 0),
-                    0
-                )
+                updatedRows.reduce((acc, row) => acc + (toNumber(row["Toplam KM"]) ?? 0), 0)
             ),
             aylikKira: round2(sum("Aylık Kira")),
             aylikSurucu: round2(sum("Aylık sürücü")),
@@ -841,10 +828,8 @@ export default function HakedisSeferleri({ onFileReady }) {
         setProgress({ current: 0, total: jobs.length });
 
         try {
-            const { errors } = await runWithConcurrencyLimit(
-                jobs,
-                5,
-                (done, total) => setProgress({ current: done, total })
+            const { errors } = await runWithConcurrencyLimit(jobs, 5, (done, total) =>
+                setProgress({ current: done, total })
             );
             failed = errors.filter(Boolean).length;
             if (failed && !firstError) firstError = String(errors.find(Boolean));
@@ -1007,9 +992,7 @@ export default function HakedisSeferleri({ onFileReady }) {
             {/* Seçilen Dosya Bilgisi + Yükle + (Hesapla / Reel’e Aktar) */}
             <div className="mt-4">
                 {fileError ? (
-                    <p className="text-sm" style={{ color: "rgb(239, 68, 68)" }}>
-                        {fileError}
-                    </p>
+                    <p className="text-sm" style={{ color: "rgb(239, 68, 68)" }}>{fileError}</p>
                 ) : file ? (
                     <div className="hs-file-row">
                         <div className="hs-file-info">
@@ -1022,12 +1005,7 @@ export default function HakedisSeferleri({ onFileReady }) {
                             </div>
                         </div>
                         <div className="hs-row-actions" style={{ gap: 8, flexWrap: "wrap" }}>
-                            <button
-                                type="button"
-                                onClick={parseSelectedFile}
-                                className="btn-upload"
-                                disabled={parsing}
-                            >
+                            <button type="button" onClick={parseSelectedFile} className="btn-upload" disabled={parsing}>
                                 {parsing ? "İşleniyor..." : "Yükle"}
                             </button>
 
@@ -1181,8 +1159,7 @@ export default function HakedisSeferleri({ onFileReady }) {
                                         {DISPLAY_HEADERS.map((h) => {
                                             const v = r[h];
                                             if (h === "Sefer Tarihi") return <td key={h + i}>{fmtDateTR(v)}</td>;
-                                            if (h === "TMSDespatchId" || h === "Cari ID")
-                                                return <td key={h + i}>{toPlainDigits(v)}</td>;
+                                            if (h === "TMSDespatchId" || h === "Cari ID") return <td key={h + i}>{toPlainDigits(v)}</td>;
                                             if (
                                                 [
                                                     "Aylık Kira",
@@ -1194,8 +1171,7 @@ export default function HakedisSeferleri({ onFileReady }) {
                                                 ].includes(h)
                                             )
                                                 return <td key={h + i}>{fmtTRY(v)}</td>;
-                                            if (h === "Toplam KM" || h === "Çalışma Günü")
-                                                return <td key={h + i}>{fmtKm(v)}</td>;
+                                            if (h === "Toplam KM" || h === "Çalışma Günü") return <td key={h + i}>{fmtKm(v)}</td>;
                                             return <td key={h + i}>{(v ?? "") === "" ? "—" : String(v)}</td>;
                                         })}
                                     </tr>
@@ -1204,12 +1180,7 @@ export default function HakedisSeferleri({ onFileReady }) {
                         </table>
                     </div>
                     <div style={{ marginTop: 16, textAlign: "right" }}>
-                        <button
-                            type="button"
-                            onClick={handleExportExcel}
-                            className="btn btn-primary"
-                            style={{ minWidth: 160 }}
-                        >
+                        <button type="button" onClick={handleExportExcel} className="btn btn-primary" style={{ minWidth: 160 }}>
                             Excel’e Aktar
                         </button>
                     </div>

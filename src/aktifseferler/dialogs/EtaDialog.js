@@ -1,4 +1,5 @@
-import React from "react";
+// src/aktifseferler/EtaDialog.jsx
+import React, { useMemo } from "react";
 import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     Stack, Button, Typography, TextField, Grid, Chip, Box, Tooltip, IconButton, Divider, MenuItem
@@ -13,23 +14,25 @@ import WorkOutlineIcon from "@mui/icons-material/WorkOutline";
 import PlaceIcon from "@mui/icons-material/Place";
 import FlagIcon from "@mui/icons-material/Flag";
 import { makeGlam } from "./styles";
+import { ETA_MESSAGES, ETA_STATUS } from "../utils/eta";
 
 export default function EtaDialog(props) {
     const {
         open, onClose, COLORS, etaRow, vehicleText, driverText, jobText, originText, destinationText, etaDistanceInfo,
-        DateTimeOneField, TimeHMField, BREAK_OPTIONS, latestYuklemeCikis, nowLocalISO, baseInputSX,
-        etaStartISO, setEtaStartISO, driveHM, setDriveHM, breakSel, setBreakSel,
+        DateTimeOneField, BREAK_OPTIONS,
+        driveHM, setDriveHM, breakSel, setBreakSel,
         computedETAISO, fromISOToCombined, copyETA, saveETA,
-        // ---- yetkiler:
         mayOpenETA = false,
         canETA = false,
+        /** YENİ: parent’tan gelen ilk yükleme çıkış (tek nokta veya çok noktanın ilki) */
+        latestYuklemeCikis,
     } = props;
 
     const theme = useTheme();
     const glam = makeGlam(theme, COLORS);
     const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
-    // dk taşmasını düzelt: "02:90" -> "03:30", negatifleri sıfırla
+    // --- helpers ---
     const normalizeHM = (raw) => {
         const [h = "0", m = "0"] = String(raw || "").split(":");
         let H = parseInt(h, 10); if (Number.isNaN(H) || H < 0) H = 0;
@@ -48,12 +51,30 @@ export default function EtaDialog(props) {
         return `${hh}:${mm}`;
     };
 
-    const safeBreakValue =
-        typeof breakSel === "number" && !Number.isNaN(breakSel)
-            ? breakSel
-            : (etaRow?.eta_mola_dk ?? 0);
-
     const onCopy = () => { copyETA(); };
+
+    // --- SADECE İLK NOKTA: Önce prop, yoksa etaRow içinden al ---
+    const rawFirstYC =
+        latestYuklemeCikis ??
+        etaRow?.sefer_detaylari?.[0]?.yukleme_cikis ??
+        null;
+
+    // DateTimeOneField "YYYY-MM-DDTHH:mm" bekler
+    const firstYCForInput = useMemo(() => {
+        if (!rawFirstYC) return null;
+        const d = (rawFirstYC instanceof Date) ? rawFirstYC : new Date(rawFirstYC);
+        if (Number.isNaN(d.getTime())) return null;
+        const pad = (n) => String(n).padStart(2, "0");
+        const yyyy = d.getFullYear();
+        const MM = pad(d.getMonth() + 1);
+        const DD = pad(d.getDate());
+        const hh = pad(d.getHours());
+        const mm = pad(d.getMinutes());
+        return `${yyyy}-${MM}-${DD}T${hh}:${mm}`;
+    }, [rawFirstYC]);
+
+    const firstYCKey = useMemo(() => String(firstYCForInput ?? "null"), [firstYCForInput]);
+    const lackFirstYC = !firstYCForInput; // başlangıç yoksa ekranda uyarı gösteriyoruz
 
     return (
         <Dialog
@@ -77,7 +98,11 @@ export default function EtaDialog(props) {
             <Box sx={{ ...glam.headerBar, position: "sticky", top: 0, zIndex: 1 }}>
                 <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, p: 0, ...glam.title }}>
                     ETA Hesabı
-                    <Typography component="span" sx={glam.subtitle}>
+                    <Typography
+                        component="span"
+                        sx={glam.subtitle}
+                        title={`${etaRow?.sefer_no || "-"} • ${etaRow?.plaka || "-"} • ${etaRow?.surucu_ad_soyad || "-"}`}
+                    >
                         {etaRow?.sefer_no || "-"} • {etaRow?.plaka || "-"} • {etaRow?.surucu_ad_soyad || "-"}
                     </Typography>
                 </DialogTitle>
@@ -132,7 +157,7 @@ export default function EtaDialog(props) {
                     {/* KGM notu */}
                     <Box sx={glam.section}>
                         <Typography variant="caption" color="text.secondary">
-                            Not: ETA KGM kuralına göre hesaplanır (4,5s + 45dk + 4,5s + 11s).
+                            Not: ETA KGM kuralına göre hesaplanır (4,5s + 45dk + 4,5s + 11s, 15+30 split destekli).
                         </Typography>
                         {etaDistanceInfo && (
                             <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
@@ -144,27 +169,29 @@ export default function EtaDialog(props) {
                     {/* Form */}
                     <Box sx={[glam.formGroup, glam.killPillScope]}>
                         <Stack spacing={0}>
+                            {/* Başlangıç (yalnızca ilk nokta; pasif) */}
                             <Box sx={{ p: { xs: 1, sm: 1.25 } }}>
                                 <DateTimeOneField
-                                    label="Başlangıç (Yükleme Çıkış / Şimdi)"
-                                    value={etaStartISO || latestYuklemeCikis || nowLocalISO()}
-                                    onChange={(e) => setEtaStartISO((e?.target?.value) || latestYuklemeCikis || nowLocalISO())}
+                                    key={firstYCKey}
+                                    label="Başlangıç (Yükleme Çıkış)"
+                                    value={firstYCForInput || ""}     // controlled
                                     size="small"
                                     InputLabelProps={{ shrink: true }}
                                     sx={[glam.input]}
                                     fullWidth
-                                    disabled={!canETA}
+                                    disabled                   // daima pasif
                                 />
                             </Box>
 
                             <Divider />
 
+                            {/* Kalan sürüş */}
                             <Box sx={{ p: { xs: 1, sm: 1.25 } }}>
                                 <TextField
                                     label="Kalan Sürüş (ss:dd)"
                                     value={driveHM || minToHM(etaRow?.kalan_surus_dk)}
                                     onChange={(e) => setDriveHM(e.target.value)}
-                                    onBlur={(e) => setDriveHM(normalizeHM(e.target.value))}
+                                    onBlur={handleHMBlur}
                                     size="small"
                                     inputProps={{ maxLength: 5 }}
                                     InputLabelProps={{ shrink: true }}
@@ -176,12 +203,17 @@ export default function EtaDialog(props) {
 
                             <Divider />
 
+                            {/* Başlangıçta mola */}
                             <Box sx={{ p: { xs: 1, sm: 1.25 } }}>
                                 <TextField
                                     label="Başlangıçta mola"
                                     select
                                     size="small"
-                                    value={typeof breakSel === "number" && !Number.isNaN(breakSel) ? breakSel : (etaRow?.eta_mola_dk ?? 0)}
+                                    value={
+                                        typeof breakSel === "number" && !Number.isNaN(breakSel)
+                                            ? breakSel
+                                            : (etaRow?.eta_mola_dk ?? 0)
+                                    }
                                     onChange={(e) => setBreakSel(Number(e.target.value) || 0)}
                                     helperText="Seçilen mola başlangıca eklenir"
                                     InputLabelProps={{ shrink: true }}
@@ -189,7 +221,9 @@ export default function EtaDialog(props) {
                                     fullWidth
                                     disabled={!canETA}
                                 >
-                                    {BREAK_OPTIONS.map(o => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+                                    {BREAK_OPTIONS.map(o => (
+                                        <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                                    ))}
                                 </TextField>
                             </Box>
                         </Stack>
@@ -197,10 +231,12 @@ export default function EtaDialog(props) {
 
                     {/* ETA sonucu */}
                     <Box sx={glam.etaPanel}>
-                        {computedETAISO === "__NEED_DISTANCE__" ? (
-                            <Typography variant="body1"><b>ETA:</b> Bekleniyor — Mesafe bulunamadı.</Typography>
+                        {lackFirstYC ? (
+                            <Typography variant="body1"><b>ETA:</b> {ETA_MESSAGES[ETA_STATUS.WAITING_FIRST_YC]}</Typography>
+                        ) : computedETAISO === "__NEED_DISTANCE__" ? (
+                            <Typography variant="body1"><b>ETA:</b> {ETA_MESSAGES[ETA_STATUS.NEED_DISTANCE]}</Typography>
                         ) : computedETAISO === "__WAITING__" ? (
-                            <Typography variant="body1"><b>ETA:</b> Bekleniyor — “Yükleme Çıkış” bilgisi girilmemiş.</Typography>
+                            <Typography variant="body1"><b>ETA:</b> {ETA_MESSAGES[ETA_STATUS.WAITING_FIRST_YC]}</Typography>
                         ) : (
                             <Stack direction="row" spacing={1} alignItems="center">
                                 <Typography variant="body1" sx={{ fontWeight: 900 }}>
@@ -208,7 +244,7 @@ export default function EtaDialog(props) {
                                 </Typography>
                                 <Tooltip title="ETA'yı kopyala">
                                     <span>
-                                        <IconButton size="small" onClick={() => { /* kopyalama izni serbest bırakılabilir */ return onCopy(); }}>
+                                        <IconButton size="small" onClick={() => onCopy()} disabled={lackFirstYC}>
                                             <ContentCopyIcon fontSize="small" />
                                         </IconButton>
                                     </span>
@@ -234,7 +270,6 @@ export default function EtaDialog(props) {
             >
                 <Button onClick={onClose}>Kapat</Button>
 
-                {/* Görünürlük ve işlem yetkisi ayrı */}
                 {mayOpenETA && (
                     <Button
                         variant="contained"

@@ -22,7 +22,7 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         field: "eta_varis",
         headerName: "ETA",
         width: 190,
-        renderCell: (p) => fromISOToCombined(p.row.eta_varis || ""),
+        renderCell: (p) => p.row.eta_note || fromISOToCombined(p.row.eta_varis || ""),
         sortComparator: (a, b) => new Date(a) - new Date(b),
     };
 

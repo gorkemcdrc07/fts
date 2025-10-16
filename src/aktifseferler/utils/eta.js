@@ -1,19 +1,16 @@
 // src/aktifseferler/utils/eta.js
 // ==============================
 
-// UTC → Lokal ISO formatında döndürür
+/** Date -> "YYYY-MM-DDTHH:mm:ss" (naive local ISO) */
 export function toLocalISO(date) {
     if (!(date instanceof Date)) return null;
-    // timezone offset (dk)
-    const tzOffset = date.getTimezoneOffset();
-    const local = new Date(date.getTime() - tzOffset * 60000);
     const pad = (n) => String(n).padStart(2, "0");
-    const y = local.getFullYear();
-    const m = pad(local.getMonth() + 1);
-    const d = pad(local.getDate());
-    const h = pad(local.getHours());
-    const min = pad(local.getMinutes());
-    const s = pad(local.getSeconds());
+    const y = date.getFullYear();
+    const m = pad(date.getMonth() + 1);
+    const d = pad(date.getDate());
+    const h = pad(date.getHours());
+    const min = pad(date.getMinutes());
+    const s = pad(date.getSeconds());
     return `${y}-${m}-${d}T${h}:${min}:${s}`;
 }
 
@@ -25,6 +22,20 @@ export const DAILY_REST_MIN = 11 * 60;
 export const REDUCED_DAILY_REST_MIN = 9 * 60;
 export const WEEKLY_LIMIT_MIN = 56 * 60;
 export const FORTNIGHT_LIMIT_MIN = 90 * 60;
+
+// === ETA Durum Sabitleri & Mesajları (YENİ) ===
+export const ETA_STATUS = {
+    OK: "OK",
+    WAITING_FIRST_YC: "WAITING_FIRST_YC",
+    NEED_DISTANCE: "NEED_DISTANCE",
+    INVALID_START: "INVALID_START",
+};
+
+export const ETA_MESSAGES = {
+    [ETA_STATUS.WAITING_FIRST_YC]: "Yükleme çıkış tarihi bekleniyor.",
+    [ETA_STATUS.NEED_DISTANCE]: "Mesafe bulunamadı.",
+    [ETA_STATUS.INVALID_START]: "Başlangıç tarihi geçersiz.",
+};
 
 // Yardımcılar
 export const parseHHMMtoMin = (txt) => {
@@ -47,8 +58,30 @@ function makeSplitState() {
     return { pendingSecondPart30: false, minutesDrivenSince15: 0 };
 }
 
+/** startISO parse:
+ * - "YYYY-MM-DDTHH:mm[:ss][±TZ]" -> Date
+ * - "DD.MM.YYYY HH:mm" (yerel)   -> Date
+ */
+function parseStartLocal(startISO) {
+    if (!startISO) return null;
+
+    if (/^\d{4}-\d{2}-\d{2}T/.test(startISO)) {
+        const d = new Date(startISO);
+        return Number.isNaN(d.getTime()) ? null : d;
+    }
+    const m = /^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/.exec(String(startISO));
+    if (m) {
+        const [, dd, MM, yyyy, hh, mm] = m.map(Number);
+        const d = new Date(yyyy, MM - 1, dd, hh, mm, 0, 0);
+        return Number.isNaN(d.getTime()) ? null : d;
+    }
+    const d = new Date(startISO);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export const defaultRegOptions = {
     speedKmh: AVG_SPEED_KMPH,
+    /** İlk kesintisiz sürüş kalanı (dk) — UI: "Kalan Sürüş" */
     initialRemainMin: BLOCK_MIN,
     allowSplitBreak: true,
     dailyDriveLimitMin: 9 * 60,
@@ -56,36 +89,48 @@ export const defaultRegOptions = {
     useExtendedToday: false,
     dailyRestMin: DAILY_REST_MIN,
     allowReducedDailyRest: true,
-    useReducedRestToday: false,
+    useReducedRestToday: false,   // <- düzeltilmiş ad
     enforceWeeklyLimits: false,
     weeklyLimitMin: WEEKLY_LIMIT_MIN,
     fortnightLimitMin: FORTNIGHT_LIMIT_MIN,
     currentWeekDrivenMin: 0,
     currentFortnightDrivenMin: 0,
+
+    /** Başlangıç molası (dk) — örn. 45 */
+    startBreakMin: 0,
 };
 
+/** KGM kurallarıyla ETA simülasyonu */
 export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
     if (!distanceKm || !startISO) return { etaISO: null, meta: null };
 
     const opt = { ...defaultRegOptions, ...options };
-    // Başlangıcı UTC kabul et
-    const start = new Date(startISO + "Z");
-    if (Number.isNaN(start.getTime())) return { etaISO: null, meta: null };
+
+    const start = parseStartLocal(startISO);
+    if (!start) return { etaISO: null, meta: null };
 
     const kmPerMin = opt.speedKmh / 60;
     let remainingKm = Math.max(0, distanceKm);
 
     let t = new Date(start);
-    let remainToBreak = opt.initialRemainMin;
+    let remainToBreak = Math.max(1, Number(opt.initialRemainMin) || BLOCK_MIN);
+
+    // Başlangıç molası (yalnızca tek blokta bitiremiyorsak uygula)
+    const startBreakMin = Math.max(0, Number(opt.startBreakMin) || 0);
+    if (startBreakMin > 0) {
+        const totalNeededMin = Math.round((Math.max(0, distanceKm) / opt.speedKmh) * 60);
+        if (totalNeededMin > remainToBreak) {
+            t = new Date(t.getTime() + minToMs(startBreakMin));
+            remainToBreak = BLOCK_MIN;
+        }
+    }
+
     let drivenTodayMin = 0;
     let dayExtendedUsed = false;
     let split = makeSplitState();
 
-    let weekDriven = opt.currentWeekDrivenMin || 0;
-    let fortnightDriven = opt.currentFortnightDrivenMin || 0;
-
     let totalDriveMin = 0;
-    let totalBreakMin = 0;
+    let totalBreakMin = startBreakMin;
     let totalRestMin = 0;
 
     const addMinutes = (date, m) => new Date(date.getTime() + minToMs(m));
@@ -94,7 +139,7 @@ export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
     const todayLimit = () =>
         canExtendToday() ? 10 * 60 : opt.dailyDriveLimitMin;
     const todayRest = () =>
-        opt.allowReducedDailyRest && opt.useReducedRestToday
+        opt.allowReducedDailyRest && opt.useReducedRestToday     // <- düzeltilmiş kullanım
             ? REDUCED_DAILY_REST_MIN
             : opt.dailyRestMin;
 
@@ -143,10 +188,10 @@ export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
             continue;
         }
 
-        let canDriveMin = Math.min(remainToBreak, remainInDay);
-        const canDriveKm = canDriveMin * kmPerMin;
+        const canDriveMin = Math.min(remainToBreak, remainInDay);
+        const canDriveKm = canDriveMin * (opt.speedKmh / 60);
         const driveKm = Math.min(remainingKm, canDriveKm);
-        const driveMin = Math.max(1, Math.ceil(driveKm / kmPerMin));
+        const driveMin = Math.max(1, Math.round(driveKm / (opt.speedKmh / 60)));
 
         t = addMinutes(t, driveMin);
         remainingKm -= driveKm;
@@ -168,7 +213,7 @@ export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
     };
 }
 
-// Eski uyumlu fonksiyon
+/** Eski uyumlu */
 export function computeETAWithKGM(distanceKm, startISO, initialRemainMin = BLOCK_MIN, speedKmh = AVG_SPEED_KMPH) {
     const { etaISO } = computeETAWithKGMPlus(distanceKm, startISO, {
         initialRemainMin,
@@ -181,6 +226,47 @@ export function computeETAWithKGM(distanceKm, startISO, initialRemainMin = BLOCK
         enforceWeeklyLimits: false,
     });
     return etaISO;
+}
+
+/* ===========================
+   YENİ: Güvenli yardımcılar
+   =========================== */
+
+/** İlk noktanın yukleme_cikis değerini döndürür (string) veya null */
+export function getFirstYuklemeCikis(etaRow) {
+    return etaRow?.sefer_detaylari?.[0]?.yukleme_cikis ?? null;
+}
+
+/**
+ * Satır bazlı **STRICT** ETA hesaplaması.
+ * - İlk nokta yoksa hesaplama YAPMAZ.
+ * - Mesafe yoksa YAPMAZ.
+ */
+export function computeRowETA(
+    etaRow,
+    {
+        distanceKm,
+        startBreakMin = 0,
+        initialRemainMin = BLOCK_MIN,
+        speedKmh = AVG_SPEED_KMPH,
+        useExtendedToday = false,
+    } = {}
+) {
+    const firstYC = getFirstYuklemeCikis(etaRow);
+    if (!firstYC) return { status: ETA_STATUS.WAITING_FIRST_YC }; // Yükleme çıkışı bekleniyor
+
+    const dist = distanceKm ?? parseMesafeKm(etaRow?.mesafe_km);
+    if (!dist) return { status: ETA_STATUS.NEED_DISTANCE }; // Mesafe yok
+
+    const { etaISO, meta } = computeETAWithKGMPlus(dist, firstYC, {
+        startBreakMin,
+        initialRemainMin,
+        speedKmh,
+        useExtendedToday,
+    });
+
+    if (!etaISO) return { status: ETA_STATUS.INVALID_START };
+    return { status: ETA_STATUS.OK, etaISO, meta };
 }
 
 export const BREAK_OPTIONS = [

@@ -68,7 +68,10 @@ import {
     parseHHMMtoMin,
     parseMesafeKm,
     computeETAWithKGM,
+    computeETAWithKGMPlus,   // ← buraya ekle
     BREAK_OPTIONS,
+    ETA_STATUS,
+    ETA_MESSAGES,
 } from "./utils/eta";
 import {
     fetchSeferler,
@@ -458,11 +461,13 @@ export default function ReelAtananSeferler() {
             // Auto ETA
             try {
                 const firstStart = getFirstLegStartISO(detailRows);
-                if (editSefer?.id && firstStart) {
+                if (editSefer?.id) {
                     const { yIl, yIlce, tIl, tIlce } = pickFirstLegOD(editSefer || {}, detailRows);
                     const mesafeRaw = await fetchMesafe({ yIl, yIlce, tIl, tIlce });
                     const km = parseMesafeKm(mesafeRaw);
-                    if (km) {
+
+                    if (firstStart && km) {
+                        // Yükleme çıkış + mesafe var → ETA hesapla
                         const { data: srow } = await supabase
                             .from("seferler")
                             .select("kalan_surus_dk")
@@ -471,13 +476,56 @@ export default function ReelAtananSeferler() {
                         const remain = Number(srow?.kalan_surus_dk) || BLOCK_MIN;
 
                         const newETA = computeETAWithKGM(km, firstStart, remain);
-                        await updateSefer(editSefer.id, { eta_varis: newETA, kayit_zamani: new Date().toISOString() });
-                        setRows((prev) => prev.map((r) => (r.id === editSefer.id ? { ...r, eta_varis: newETA } : r)));
+
+                        await updateSefer(editSefer.id, {
+                            eta_varis: newETA,
+                            eta_note: null,
+                            kayit_zamani: new Date().toISOString(),
+                        });
+
+                        setRows((prev) =>
+                            prev.map((r) =>
+                                r.id === editSefer.id
+                                    ? { ...r, eta_varis: newETA, eta_note: null }
+                                    : r
+                            )
+                        );
+                    } else if (!firstStart) {
+                        // Yükleme çıkış yok → not yaz
+                        await updateSefer(editSefer.id, {
+                            eta_varis: null,
+                            eta_note: "Yükleme çıkış tarihi bekleniyor.",
+                            kayit_zamani: new Date().toISOString(),
+                        });
+
+                        setRows((prev) =>
+                            prev.map((r) =>
+                                r.id === editSefer.id
+                                    ? { ...r, eta_varis: null, eta_note: "Yükleme çıkış tarihi bekleniyor." }
+                                    : r
+                            )
+                        );
+                    } else {
+                        // firstStart var ama km yok → not yaz
+                        await updateSefer(editSefer.id, {
+                            eta_varis: null,
+                            eta_note: "Mesafe bulunamadı.",
+                            kayit_zamani: new Date().toISOString(),
+                        });
+
+                        setRows((prev) =>
+                            prev.map((r) =>
+                                r.id === editSefer.id
+                                    ? { ...r, eta_varis: null, eta_note: "Mesafe bulunamadı." }
+                                    : r
+                            )
+                        );
                     }
                 }
             } catch (e) {
                 console.error("Auto ETA hesaplama hatası:", e);
             }
+
 
             setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
         } catch (e) {
@@ -702,7 +750,7 @@ export default function ReelAtananSeferler() {
                 setEtaDetails(detay);
 
                 const firstStart = getFirstLegStartISO(detay);
-                setEtaStartISO(firstStart || nowLocalISO());
+                setEtaStartISO(firstStart || "");
 
                 try {
                     const { yIl, yIlce, tIl, tIlce } = pickFirstLegOD(row, detay);
@@ -766,14 +814,21 @@ export default function ReelAtananSeferler() {
 
     const firstLegStartISO = useMemo(() => getFirstLegStartISO(etaDetails), [etaDetails]);
 
+
     const computedETAISO = useMemo(() => {
         try {
             if (!etaDistanceKm) return "__NEED_DISTANCE__";
-            const base0 = etaStartISO || firstLegStartISO;
-            if (!base0) return "__WAITING__";
-            const base = addMinutesISO(base0, Number(breakSel) || 0);
+            const startISO = etaStartISO || firstLegStartISO;
+            if (!startISO) return "__WAITING__";
+
             const initialRemain = parseHHMMtoMin(driveHM) || BLOCK_MIN;
-            return computeETAWithKGM(etaDistanceKm, base, initialRemain);
+
+            const { etaISO } = computeETAWithKGMPlus(etaDistanceKm, startISO, {
+                initialRemainMin: initialRemain,
+                startBreakMin: Number(breakSel) || 0, // ✅ molayı buraya veriyoruz, tabana eklemiyoruz
+            });
+
+            return etaISO || "";
         } catch {
             return "";
         }
@@ -789,9 +844,18 @@ export default function ReelAtananSeferler() {
     }, [etaRow]);
 
     const copyETA = useCallback(async () => {
-        if (computedETAISO === "__WAITING__" || computedETAISO === "__NEED_DISTANCE__") return;
-        const txt = fromISOToCombined(computedETAISO || "") || "-";
         try {
+            if (computedETAISO === "__WAITING__") {
+                await navigator.clipboard.writeText("Yükleme çıkış tarihi bekleniyor.");
+                setSnack({ open: true, msg: "Mesaj kopyalandı.", severity: "success" });
+                return;
+            }
+            if (computedETAISO === "__NEED_DISTANCE__") {
+                await navigator.clipboard.writeText("Mesafe bulunamadı.");
+                setSnack({ open: true, msg: "Mesaj kopyalandı.", severity: "success" });
+                return;
+            }
+            const txt = fromISOToCombined(computedETAISO || "") || "-";
             await navigator.clipboard.writeText(txt);
             setSnack({ open: true, msg: `ETA kopyalandı: ${txt}`, severity: "success" });
         } catch {
@@ -812,13 +876,25 @@ export default function ReelAtananSeferler() {
 
             const firstStart = getFirstLegStartISO(etaDetails);
             const canCompute = !!(etaDistanceKm && (etaStartISO || firstStart));
-            const base0 = etaStartISO || firstStart || nowLocalISO();
-            const base = addMinutesISO(base0, Number(breakSel) || 0);
+            const startISO = etaStartISO || firstStart || nowLocalISO();
             const initialRemain = parseHHMMtoMin(driveHM) || BLOCK_MIN;
-            const newETA = canCompute ? computeETAWithKGM(etaDistanceKm, base, initialRemain) : null;
 
+            let newETA = null;
+            if (canCompute) {
+                const { etaISO } = computeETAWithKGMPlus(etaDistanceKm, startISO, {
+                    initialRemainMin: initialRemain,
+                    startBreakMin: Number(breakSel) || 0, // ✅ molayı opsiyonla ver
+                });
+                newETA = etaISO || null;
+            }
+
+            const waiting = !(etaStartISO || firstLegStartISO);
+            const note = waiting
+                ? ETA_MESSAGES[ETA_STATUS.WAITING_FIRST_YC]
+                : (canCompute ? null : ETA_MESSAGES[ETA_STATUS.NEED_DISTANCE]);
             const payload = {
                 eta_varis: newETA,
+                eta_note: note ?? null,
                 kalan_surus_dk: Number(initialRemain) || null,
                 eta_mola_dk: Number(breakSel) || 0,
                 kayit_zamani: new Date().toISOString(),

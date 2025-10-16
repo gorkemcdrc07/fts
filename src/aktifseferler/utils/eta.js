@@ -23,7 +23,7 @@ export const REDUCED_DAILY_REST_MIN = 9 * 60;
 export const WEEKLY_LIMIT_MIN = 56 * 60;
 export const FORTNIGHT_LIMIT_MIN = 90 * 60;
 
-// === ETA Durum Sabitleri & Mesajları (YENİ) ===
+// === ETA Durum Sabitleri & Mesajları ===
 export const ETA_STATUS = {
     OK: "OK",
     WAITING_FIRST_YC: "WAITING_FIRST_YC",
@@ -37,7 +37,7 @@ export const ETA_MESSAGES = {
     [ETA_STATUS.INVALID_START]: "Başlangıç tarihi geçersiz.",
 };
 
-// Yardımcılar
+// === Yardımcılar ===
 export const parseHHMMtoMin = (txt) => {
     const [h = "0", m = "0"] = String(txt || "").split(":");
     let H = parseInt(h, 10) || 0;
@@ -56,6 +56,19 @@ export const parseMesafeKm = (v) => {
 const minToMs = (m) => m * 60000;
 function makeSplitState() {
     return { pendingSecondPart30: false, minutesDrivenSince15: 0 };
+}
+
+/** Cumartesi 12:00 sonrası +1 gün kuralı */
+function applySaturdayRule(date) {
+    const d = new Date(date);
+    if (d.getDay() === 6) { // 6 = Cumartesi
+        const minutes = d.getHours() * 60 + d.getMinutes();
+        if (minutes >= 12 * 60) {
+            // 12:00 veya sonrası → ertesi güne at
+            d.setDate(d.getDate() + 1);
+        }
+    }
+    return d;
 }
 
 /** startISO parse:
@@ -81,7 +94,6 @@ function parseStartLocal(startISO) {
 
 export const defaultRegOptions = {
     speedKmh: AVG_SPEED_KMPH,
-    /** İlk kesintisiz sürüş kalanı (dk) — UI: "Kalan Sürüş" */
     initialRemainMin: BLOCK_MIN,
     allowSplitBreak: true,
     dailyDriveLimitMin: 9 * 60,
@@ -89,14 +101,12 @@ export const defaultRegOptions = {
     useExtendedToday: false,
     dailyRestMin: DAILY_REST_MIN,
     allowReducedDailyRest: true,
-    useReducedRestToday: false,   // <- düzeltilmiş ad
+    useReducedRestToday: false,
     enforceWeeklyLimits: false,
     weeklyLimitMin: WEEKLY_LIMIT_MIN,
     fortnightLimitMin: FORTNIGHT_LIMIT_MIN,
     currentWeekDrivenMin: 0,
     currentFortnightDrivenMin: 0,
-
-    /** Başlangıç molası (dk) — örn. 45 */
     startBreakMin: 0,
 };
 
@@ -106,8 +116,11 @@ export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
 
     const opt = { ...defaultRegOptions, ...options };
 
-    const start = parseStartLocal(startISO);
+    let start = parseStartLocal(startISO);
     if (!start) return { etaISO: null, meta: null };
+
+    // ✅ Cumartesi 12:00 sonrası kuralını uygula
+    start = applySaturdayRule(start);
 
     const kmPerMin = opt.speedKmh / 60;
     let remainingKm = Math.max(0, distanceKm);
@@ -139,7 +152,7 @@ export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
     const todayLimit = () =>
         canExtendToday() ? 10 * 60 : opt.dailyDriveLimitMin;
     const todayRest = () =>
-        opt.allowReducedDailyRest && opt.useReducedRestToday     // <- düzeltilmiş kullanım
+        opt.allowReducedDailyRest && opt.useReducedRestToday
             ? REDUCED_DAILY_REST_MIN
             : opt.dailyRestMin;
 
@@ -231,17 +244,10 @@ export function computeETAWithKGM(distanceKm, startISO, initialRemainMin = BLOCK
 /* ===========================
    YENİ: Güvenli yardımcılar
    =========================== */
-
-/** İlk noktanın yukleme_cikis değerini döndürür (string) veya null */
 export function getFirstYuklemeCikis(etaRow) {
     return etaRow?.sefer_detaylari?.[0]?.yukleme_cikis ?? null;
 }
 
-/**
- * Satır bazlı **STRICT** ETA hesaplaması.
- * - İlk nokta yoksa hesaplama YAPMAZ.
- * - Mesafe yoksa YAPMAZ.
- */
 export function computeRowETA(
     etaRow,
     {
@@ -253,10 +259,10 @@ export function computeRowETA(
     } = {}
 ) {
     const firstYC = getFirstYuklemeCikis(etaRow);
-    if (!firstYC) return { status: ETA_STATUS.WAITING_FIRST_YC }; // Yükleme çıkışı bekleniyor
+    if (!firstYC) return { status: ETA_STATUS.WAITING_FIRST_YC };
 
     const dist = distanceKm ?? parseMesafeKm(etaRow?.mesafe_km);
-    if (!dist) return { status: ETA_STATUS.NEED_DISTANCE }; // Mesafe yok
+    if (!dist) return { status: ETA_STATUS.NEED_DISTANCE };
 
     const { etaISO, meta } = computeETAWithKGMPlus(dist, firstYC, {
         startBreakMin,

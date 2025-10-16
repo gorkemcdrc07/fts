@@ -1,4 +1,3 @@
-// src/adminPanel/tabs/UserOverridesTab.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabaseClient";
 import {
@@ -63,8 +62,18 @@ const PERM_KEYS_BY_SCREEN = {
     ],
     arac_cari_fiyat: [
         { key: "acf_create", label: "Yeni Kayıt Oluştur" },
-        { key: "acf_edit", label: "Kayıt Düzenle" },
+        { key: "acf_edit", label: "Kayıt Düzenle (Genel)" },
         { key: "acf_delete", label: "Kayıt Sil" },
+
+        // Alan-bazlı düzenleme yetkileri:
+        { key: "acf_edit_cari_id", label: "Cari ID Düzenle" },
+        { key: "acf_edit_cari_adi", label: "Cari Adı Düzenle" },
+        { key: "acf_edit_arac_sahibi", label: "Araç Sahibi Düzenle" },
+        { key: "acf_edit_odak_tipi", label: "Odak Çalışma Tipi Düzenle" },
+        { key: "acf_edit_aylik_kira", label: "Aylık Kira Düzenle" },
+        { key: "acf_edit_aylik_surucu", label: "Aylık Sürücü Düzenle" },
+        { key: "acf_edit_calisma_gunu", label: "Çalışma Günü Düzenle" },
+        { key: "acf_edit_pasif", label: "Pasif Alanını Düzenle" },
     ],
     hakedis_seferleri: [{ key: "hks_upload", label: "Dosya Yükle" }],
     izin_yonetimi: [
@@ -76,33 +85,35 @@ const PERM_KEYS_BY_SCREEN = {
 
 /** Tablo gerçek kolon seti */
 const USER_PERMISSIONS_COLUMNS = new Set([
-    "id", "user_id", "updated_at",
+    "user_id", "updated_at",
     "aktif_can_sync", "aktif_can_edit", "aktif_can_eta", "aktif_may_open_edit", "aktif_may_open_eta",
     "pln_update", "pln_save", "pln_export_excel", "pln_import_excel",
     "adur_create", "adur_edit", "adur_delete",
     "ayon_create", "ayon_edit", "ayon_delete",
     "kes_create", "kes_edit", "kes_delete",
     "tdm_create", "tdm_edit", "tdm_delete", "tdm_may_open_edit",
+
+    // Araç & Cari Fiyat
     "acf_create", "acf_edit", "acf_delete",
+    "acf_edit_cari_id",
+    "acf_edit_cari_adi",
+    "acf_edit_arac_sahibi",
+    "acf_edit_odak_tipi",
+    "acf_edit_aylik_kira",
+    "acf_edit_aylik_surucu",
+    "acf_edit_calisma_gunu",
+    "acf_edit_pasif",
+
     "hks_upload",
-    // İZİN YÖNETİMİ — eklendi
     "izin_create", "izin_edit", "izin_delete",
 ]);
 
 async function upsertUserPermissions(rows) {
     const { error } = await supabase
         .from("user_permissions")
-        .upsert(rows, { onConflict: "user_id" });
-    if (!error) return;
-    if (String(error.code) === "406") {
-        const { error: e2 } = await supabase
-            .from("user_permissions")
-            .upsert(rows, { onConflict: "user_id" })
-            .select();
-        if (!e2) return;
-        throw e2;
-    }
-    throw error;
+        .upsert(rows, { onConflict: "user_id" })
+        .select(); // daima representation iste, hatayı gör
+    if (error) throw error;
 }
 
 export default function UserOverridesTab() {
@@ -209,6 +220,7 @@ export default function UserOverridesTab() {
 
             const payload = Array.from(merged.values());
             if (payload.length) {
+                // debug istersen: console.log("UPDATING PERMS PAYLOAD", payload);
                 await upsertUserPermissions(payload); // onConflict: 'user_id'
             }
 

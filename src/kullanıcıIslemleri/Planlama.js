@@ -216,14 +216,14 @@ export default function PlanlamaDeluxe() {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    // permissions (planlama) — usePermissions ile
+    // permissions (planlama) — usePermissions flags
+    const { loading: permsLoading, flags = {} } = usePermissions('planlama');
     const {
-        loading: permsLoading,
         pln_update = false,
         pln_save = false,
         pln_export_excel = false,
         pln_import_excel = false,
-    } = usePermissions('planlama');
+    } = flags;
 
     // Sayfa içinde mevcut "perms.xxx" kullanımlarını bozmamak için aynı yapıyı memo’layalım
     const perms = useMemo(() => ({
@@ -931,23 +931,27 @@ const orderedColumns = useMemo(() => {
 }, [columns, columnOrder]);
 
 /* ---------- DataGrid edit akışı ---------- */
-const processRowUpdate = useCallback((newRow, oldRow) => {
-    if (newRow.son_nokta !== oldRow.son_nokta) {
-        const { son_nokta, bolge } = normalizeSonNoktaAndRegion(newRow.son_nokta);
-        newRow.son_nokta = son_nokta;
-        newRow.bolge = bolge;
-    }
+    const processRowUpdate = useCallback((incomingNewRow, oldRow) => {
+        const newRow = { ...incomingNewRow };
 
-    ["tarih", "varis_tarihi"].forEach((k) => {
-        const val = newRow?.[k];
-        if (typeof val === "string" && /\b\d{1,2}\.\d{1,2}\.\d{4}\b/.test(val)) {
-            const iso = parseDateLike(val);
-            if (iso) newRow[k] = iso;
+        if (newRow.son_nokta !== oldRow.son_nokta) {
+            const { son_nokta, bolge } = normalizeSonNoktaAndRegion(newRow.son_nokta);
+            newRow.son_nokta = son_nokta;
+            newRow.bolge = bolge;
         }
-    });
 
-    return newRow;
-}, []);
+        ["tarih", "varis_tarihi"].forEach((k) => {
+            const val = newRow?.[k];
+            if (typeof val === "string" && /\b\d{1,2}\.\d{1,2}\.\d{4}\b/.test(val)) {
+                const iso = parseDateLike(val);
+                if (iso) newRow[k] = iso;
+            }
+        });
+
+        // rows controlled olduğu için burada state'i güncelle
+        setRows((prev) => prev.map((r) => (r._rowId === newRow._rowId ? newRow : r)));
+        return newRow;
+    }, []);
 
 const handleRowUpdateCommit = useCallback((updatedRow) => {
     setRows((prev) => prev.map((r) => (r._rowId === updatedRow._rowId ? updatedRow : r)));
@@ -1277,10 +1281,8 @@ return (
                     console.error(e);
                     setSnack({ open: true, msg: "Satır güncellenemedi.", severity: "error" });
                 }}
-                onRowUpdateCommit={handleRowUpdateCommit}
                 onRowDoubleClick={(p) => openDrawer(p.row)}
                 disableColumnMenu={false}
-                columnReorder
                 disableColumnReorder={false}
                 onColumnOrderChange={onColumnOrderChange}
                 getRowClassName={(params) => {

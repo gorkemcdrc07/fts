@@ -1,8 +1,7 @@
-// src/auth/usePermissions.js
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 
-/** Ekran -> kolon eşlemesi (user_permissions & role_permissions’ta bulunan gerçek kolon isimleri) */
+/** Ekran -> kolon eşlemesi (user_permissions & role_permissions’ta bulunan GERÇEK kolon isimleri) */
 const MAP_BY_SCREEN = {
     aktif_seferler: [
         "aktif_can_sync",
@@ -16,9 +15,20 @@ const MAP_BY_SCREEN = {
     arac_yonetimi: ["ayon_create", "ayon_edit", "ayon_delete"],
     kesinti_yonetimi: ["kes_create", "kes_edit", "kes_delete"],
     tedarikci_masraf: ["tdm_create", "tdm_edit", "tdm_delete", "tdm_may_open_edit"],
-    arac_cari_fiyat: ["acf_create", "acf_edit", "acf_delete"],
+    arac_cari_fiyat: [
+        "acf_create", "acf_edit", "acf_delete",
+        // alan-bazlı edit anahtarları:
+        "acf_edit_cari_id",
+        "acf_edit_cari_adi",
+        "acf_edit_arac_sahibi",
+        "acf_edit_odak_tipi",
+        "acf_edit_aylik_kira",
+        "acf_edit_aylik_surucu",
+        "acf_edit_calisma_gunu",
+        "acf_edit_pasif",
+    ],
     hakedis_seferleri: ["hks_upload"],
-    izin_yonetimi: ["izin_create", "izin_edit", "izin_delete"], // <-- eklendi
+    izin_yonetimi: ["izin_create", "izin_edit", "izin_delete"],
 };
 
 /** Rol adı -> role.key normalize */
@@ -47,30 +57,29 @@ const coalesceOverride = (overrideVal, roleVal) =>
 
 /** create/edit/delete için ekran bazında muhtemel anahtar listeleri */
 const CANDIDATES = {
-    create: [
-        "izin_create", "ayon_create", "adur_create", "kes_create",
-        "tdm_create", "acf_create",
-    ],
+    create: ["izin_create", "ayon_create", "adur_create", "kes_create", "tdm_create", "acf_create", "hks_upload"],
     edit: [
-        "izin_edit", "ayon_edit", "adur_edit", "kes_edit",
-        "tdm_edit", "acf_edit",
+        "izin_edit", "ayon_edit", "adur_edit", "kes_edit", "tdm_edit", "acf_edit",
+        // arac_cari_fiyat alan-bazlı edit anahtarları da genel canEdit hesabına girsin:
+        "acf_edit_cari_id",
+        "acf_edit_cari_adi",
+        "acf_edit_arac_sahibi",
+        "acf_edit_odak_tipi",
+        "acf_edit_aylik_kira",
+        "acf_edit_aylik_surucu",
+        "acf_edit_calisma_gunu",
+        "acf_edit_pasif",
     ],
-    delete: [
-        "izin_delete", "ayon_delete", "adur_delete", "kes_delete",
-        "tdm_delete", "acf_delete",
-    ],
+    delete: ["izin_delete", "ayon_delete", "adur_delete", "kes_delete", "tdm_delete", "acf_delete"],
 };
 
 /**
  * usePermissions(screenKey)
- * Dönen yapı:
  * {
  *   loading: boolean,
- *   // kolay erişim (varsa):
  *   canCreate: boolean,
  *   canEdit: boolean,
  *   canDelete: boolean,
- *   // tüm anahtarların birleşik hali:
  *   flags: { [permKey:boolean] }
  * }
  */
@@ -137,7 +146,6 @@ export default function usePermissions(screenKey) {
                     if (eRP) throw eRP;
 
                     if (!rp) {
-                        // bazı eski şemalarda screen_key yoktu
                         const res = await supabase
                             .from("role_permissions")
                             .select("*")
@@ -163,13 +171,12 @@ export default function usePermissions(screenKey) {
                 const flags = {};
                 for (const key of screenKeys) {
                     const userVal = pickFirstBool(up, [key]);
-                    const roleVal = pickFirstBool(rolePerm, [key]);
+                    const roleVal = pickFirstBool(rolePerm, [key]); // isimler artık birebir
                     flags[key] = coalesceOverride(userVal, roleVal) === true;
                 }
 
                 // 7) kolay erişim alanları (create/edit/delete varsa)
                 const findFirstTrue = (candidates) => {
-                    // ekranın anahtarları içinde ilk eşleşen true olanı bul
                     for (const k of candidates) {
                         if (screenKeys.includes(k) && flags[k] === true) return true;
                     }

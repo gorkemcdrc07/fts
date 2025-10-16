@@ -66,9 +66,8 @@ import {
 
 /* ---------- Yetkilendirme: bu ekranın anahtarı ---------- */
 const SCREEN_KEY = "tedarikci_masraf";
-// Onaylama için hangi kolon kullanılacak?
-// İstersen "can_edit" yapabilirsin.
-const APPROVE_COL = "may_open_edit";
+// Onaylama kolonu
+const APPROVE_COL = "tdm_approve";
 
 /* ---------- Helpers ---------- */
 const HOME_PATH = "/anasayfa";
@@ -240,33 +239,32 @@ export default function TedarikciMasraf() {
                 .maybeSingle();
             if (eR) throw eR;
 
-            // 2) Rol izinleri
+            // 2) Rol izinleri (screen_key yok; role_id yeterli)
             let rolePerm = {};
             if (roleRow?.id) {
                 const { data: rp, error: eRP } = await supabase
                     .from("role_permissions")
-                    .select("*")
-                    .eq("screen_key", SCREEN_KEY)
+                    .select("tdm_create, tdm_edit, tdm_delete, tdm_approve, tdm_may_open_edit")
                     .eq("role_id", roleRow.id)
                     .maybeSingle();
                 if (eRP) throw eRP;
                 rolePerm = rp || {};
             }
 
-            // 3) Kullanıcı override
+            // 3) Kullanıcı override (screen_key yok; user_id yeterli)
             const { data: up, error: eUP } = await supabase
                 .from("user_permissions")
-                .select("*")
-                .eq("screen_key", SCREEN_KEY)
+                .select("tdm_create, tdm_edit, tdm_delete, tdm_approve, tdm_may_open_edit")
                 .eq("user_id", userRow?.id)
                 .maybeSingle();
             if (eUP) throw eUP;
 
-            // 4) Etkin izinler
-            const canCreate = coalesceOverride(up?.arcdur_create, rolePerm?.arcdur_create);
-            const canEdit = coalesceOverride(up?.arcdur_edit, rolePerm?.arcdur_edit);
-            const canDelete = coalesceOverride(up?.arcdur_delete, rolePerm?.arcdur_delete);
+            const canCreate = coalesceOverride(up?.tdm_create, rolePerm?.tdm_create);
+            const canEdit = coalesceOverride(up?.tdm_edit, rolePerm?.tdm_edit);
+            const canDelete = coalesceOverride(up?.tdm_delete, rolePerm?.tdm_delete);
             const canApprove = coalesceOverride(up?.[APPROVE_COL], rolePerm?.[APPROVE_COL]);
+            // gerekirse UI’de kullanmak için:
+            // const mayOpenEdit = coalesceOverride(up?.tdm_may_open_edit, rolePerm?.tdm_may_open_edit);
 
             setPerms({ canCreate, canEdit, canDelete, canApprove });
         } catch (err) {
@@ -331,8 +329,8 @@ export default function TedarikciMasraf() {
         const kayit = {
             ...form,
             bedel: bedelParsed,
-            statu: "ONAY BEKLİYOR",
-            reel_islendi: false,
+            // insert'te statü ve reel_islendi set edilsin, edit'te dokunma
+            ...(duzenlemeId ? {} : { statu: "ONAY BEKLİYOR", reel_islendi: false }),
         };
 
         let sonuc;
@@ -839,7 +837,8 @@ export default function TedarikciMasraf() {
                                 disableColumnMenu
                                 disableRowSelectionOnClick
                                 loading={yukleniyor}
-                                slots={{ toolbar: () => <Toolbar onExcel={exportToExcel} /> }}
+                                    slots={{ toolbar: Toolbar }}
+                                    slotProps={{ toolbar: { onExcel: exportToExcel } }}
                                 initialState={{
                                     pagination: { paginationModel: { page: 0, pageSize: 25 } },
                                     density: "standard",

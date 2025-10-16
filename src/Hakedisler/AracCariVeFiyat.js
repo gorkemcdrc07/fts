@@ -174,62 +174,115 @@ export default function AracCariVeFiyat() {
     const [permLoading, setPermLoading] = useState(true);
     const [perms, setPerms] = useState({
         canCreate: false,
-        canEdit: false,
+        canEditAny: false,   // en az bir alan editlenebilir mi?
+        fields: {            // alan-bazlı bayraklar
+            cari_id: false,
+            cari_adi: false,
+            arac_sahibi: false,
+            odak_arac_calisma_tipi: false,
+            aylik_kira: false,
+            aylik_surucu: false,
+            calisma_gunu: false,
+            pasif: false,
+        },
     });
 
     async function loadPermissions() {
         try {
             setPermLoading(true);
 
-            const kullanici = localStorage.getItem("kullanici") || "";
+            // login sonrası localStorage’a koyduğun user id’yi kullan
+            const userId = parseInt(localStorage.getItem("kullaniciId") || "", 10);
+
+            // Güvenli UUID kontrolü
+            const looksLikeUUID = (s) =>
+                typeof s === "string" &&
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
 
             // 1) kullanıcı
             const { data: userRow, error: eU } = await supabase
                 .from("login")
-                .select("id, kullanici, rol")
-                .eq("kullanici", kullanici)
+                .select("id, rol, kullanici")
+                .eq("id", userId)
                 .maybeSingle();
             if (eU) throw eU;
 
-            const roleKey = (userRow?.rol || "").toUpperCase();
-
-            // 2) rol id
-            const { data: roleRow, error: eR } = await supabase
-                .from("roles")
-                .select("id,key")
-                .eq("key", roleKey)
-                .maybeSingle();
-            if (eR) throw eR;
+            // 2) rol id (UUID mi yoksa roles.key mi?)
+            let roleId = null;
+            if (userRow?.rol) {
+                if (looksLikeUUID(userRow.rol)) {
+                    roleId = userRow.rol;
+                } else {
+                    const roleKey = String(userRow.rol || "").toUpperCase();
+                    const { data: roleRow, error: eR } = await supabase
+                        .from("roles")
+                        .select("id,key")
+                        .eq("key", roleKey)
+                        .maybeSingle();
+                    if (eR) throw eR;
+                    roleId = roleRow?.id || null;
+                }
+            }
 
             // 3) rol izinleri (bu ekran için)
             let rolePerm = {};
-            if (roleRow?.id) {
+            if (roleId) {
                 const { data: rp, error: eRP } = await supabase
                     .from("role_permissions")
-                    .select("*")
-                    .eq("screen_key", SCREEN_KEY)
-                    .eq("role_id", roleRow.id)
+                    .select(`
+                    acf_create, acf_edit, acf_delete,
+                    acf_edit_cari_id, acf_edit_cari_adi, acf_edit_arac_sahibi, acf_edit_odak_tipi,
+                    acf_edit_aylik_kira, acf_edit_aylik_surucu, acf_edit_calisma_gunu, acf_edit_pasif
+                `)
+                    .eq("screen_key", "arac_cari_fiyat")
+                    .eq("role_id", roleId)
                     .maybeSingle();
                 if (eRP) throw eRP;
                 rolePerm = rp || {};
             }
 
-            // 4) kullanıcı override (bu ekran için)
+            // 4) kullanıcı override (tek satır) — DİKKAT: screen_key filtresi YOK!
             const { data: up, error: eUP } = await supabase
                 .from("user_permissions")
-                .select("*")
-                .eq("screen_key", SCREEN_KEY)
+                .select(`
+                acf_create, acf_edit, acf_delete,
+                acf_edit_cari_id, acf_edit_cari_adi, acf_edit_arac_sahibi, acf_edit_odak_tipi,
+                acf_edit_aylik_kira, acf_edit_aylik_surucu, acf_edit_calisma_gunu, acf_edit_pasif
+            `)
                 .eq("user_id", userRow?.id)
                 .maybeSingle();
             if (eUP) throw eUP;
 
-            const canCreate = coalesceOverride(up?.arcdur_create, rolePerm?.arcdur_create);
-            const canEdit = coalesceOverride(up?.arcdur_edit, rolePerm?.arcdur_edit);
+            const coalesce = (ovr, role) =>
+                (ovr === true || ovr === false) ? ovr : !!role;
 
-            setPerms({ canCreate, canEdit });
+            const canCreate = coalesce(up?.acf_create, rolePerm?.acf_create);
+            const fields = {
+                cari_id: coalesce(up?.acf_edit_cari_id, rolePerm?.acf_edit_cari_id),
+                cari_adi: coalesce(up?.acf_edit_cari_adi, rolePerm?.acf_edit_cari_adi),
+                arac_sahibi: coalesce(up?.acf_edit_arac_sahibi, rolePerm?.acf_edit_arac_sahibi),
+                odak_arac_calisma_tipi: coalesce(up?.acf_edit_odak_tipi, rolePerm?.acf_edit_odak_tipi),
+                aylik_kira: coalesce(up?.acf_edit_aylik_kira, rolePerm?.acf_edit_aylik_kira),
+                aylik_surucu: coalesce(up?.acf_edit_aylik_surucu, rolePerm?.acf_edit_aylik_surucu),
+                calisma_gunu: coalesce(up?.acf_edit_calisma_gunu, rolePerm?.acf_edit_calisma_gunu),
+                pasif: coalesce(up?.acf_edit_pasif, rolePerm?.acf_edit_pasif),
+            };
+
+            // Genel acf_edit açık ya da alan-bazlılardan en az biri true ise edit başlatılabilsin
+            const generalEdit = coalesce(up?.acf_edit, rolePerm?.acf_edit);
+            const canEditAny = !!generalEdit || Object.values(fields).some(Boolean);
+
+            setPerms({ canCreate, canEditAny, fields });
         } catch (e) {
             console.error("perm load error:", e);
-            setPerms({ canCreate: false, canEdit: false });
+            setPerms({
+                canCreate: false,
+                canEditAny: false,
+                fields: {
+                    cari_id: false, cari_adi: false, arac_sahibi: false, odak_arac_calisma_tipi: false,
+                    aylik_kira: false, aylik_surucu: false, calisma_gunu: false, pasif: false
+                }
+            });
         } finally {
             setPermLoading(false);
         }
@@ -403,7 +456,7 @@ export default function AracCariVeFiyat() {
     /* --------- Edit Handlers --------- */
     const startEdit = (row) => {
         if (permLoading) return; // izinler yüklenirken beklet
-        if (!perms.canEdit) {
+        if (!perms.canEditAny) {
             alert("Düzenleme yetkiniz yok.");
             return;
         }
@@ -418,7 +471,7 @@ export default function AracCariVeFiyat() {
     };
 
     const saveEdit = async () => {
-        if (!perms.canEdit) {
+        if (!perms.canEditAny) {
             alert("Düzenleme yetkiniz yok.");
             return;
         }
@@ -428,31 +481,38 @@ export default function AracCariVeFiyat() {
                 return n === null ? null : n;
             };
 
-            // cari_id sayısal olmalı
-            const newCariIdStr = (editData.cari_id ?? "").toString();
-            const newCariId = Number(newCariIdStr.replace(/[^\d-]/g, ""));
-            if (!Number.isFinite(newCariId)) {
-                alert("Cari ID geçersiz veya boş olamaz.");
+            const payload = {};
+
+            // Her alanı kendi yetkisine göre ekle
+            if (perms.fields.cari_id && editData.cari_id != null) {
+                const newCariIdStr = (editData.cari_id ?? "").toString();
+                const newCariId = Number(newCariIdStr.replace(/[^\d-]/g, ""));
+                if (!Number.isFinite(newCariId)) {
+                    alert("Cari ID geçersiz veya boş olamaz.");
+                    return;
+                }
+                payload.cari_id = newCariId;
+            }
+            if (perms.fields.cari_adi) payload.cari_adi = editData.cari_adi?.trim() || null;
+            if (perms.fields.arac_sahibi) payload.arac_sahip = editData.arac_sahip?.trim() || null;
+            if (perms.fields.odak_arac_calisma_tipi) payload.odak_arac_calisma_tipi = editData.odak_arac_calisma_tipi?.trim() || null;
+            if (perms.fields.aylik_kira) payload.aylik_kira = normalizeMoney(editData.aylik_kira);
+            if (perms.fields.aylik_surucu) payload.aylik_surucu = normalizeMoney(editData.aylik_surucu);
+            if (perms.fields.calisma_gunu) {
+                payload.calisma_gunu =
+                    editData.calisma_gunu === "" || editData.calisma_gunu == null ? null : Number(editData.calisma_gunu);
+            }
+            if (perms.fields.pasif) payload.pasif = !!editData.pasif;
+
+            // audit alanları
+            payload.duzenleme_yapan_kullanici = localStorage.getItem("kullanici") || "Admin";
+            payload.duzenleme_yapilan_tarih = new Date().toISOString();
+
+            // yalnız audit geldiyse (hiç yetkili alan değişmiyorsa) uyar
+            if (Object.keys(payload).length <= 2) {
+                alert("Değişiklik yok ya da yetkisiz alanlar.");
                 return;
             }
-
-            const payload = {
-                cari_id: newCariId,
-                cari_adi: editData.cari_adi?.trim() || null,
-                arac_sahip: editData.arac_sahip?.trim() || null,
-                odak_arac_calisma_tipi: editData.odak_arac_calisma_tipi?.trim() || null,
-                aylik_kira: normalizeMoney(editData.aylik_kira),
-                aylik_surucu: normalizeMoney(editData.aylik_surucu),
-                calisma_gunu:
-                    editData.calisma_gunu === "" || editData.calisma_gunu == null ? null : Number(editData.calisma_gunu),
-
-                duzenleme_yapan_kullanici: localStorage.getItem("kullanici") || "Admin",
-                duzenleme_yapilan_tarih: new Date().toISOString(),
-            };
-
-            Object.keys(payload).forEach((k) => {
-                if (payload[k] === undefined) delete payload[k];
-            });
 
             setSavingId(editingId);
 
@@ -466,7 +526,9 @@ export default function AracCariVeFiyat() {
             if (error) throw error;
 
             setRows((prev) =>
-                prev.map((r) => (r.plaka === editingKey.plaka && r.cari_id === editingKey.cari_id ? { ...r, ...data } : r))
+                prev.map((r) =>
+                    r.plaka === editingKey.plaka && r.cari_id === editingKey.cari_id ? { ...r, ...data } : r
+                )
             );
 
             cancelEdit();
@@ -494,7 +556,7 @@ export default function AracCariVeFiyat() {
         try {
             const payload = {
                 plaka: addForm.plaka.trim(),
-                cari_id: parseTLToNumber(addForm.cari_id),
+                cari_id: Number(String(addForm.cari_id).replace(/[^\d-]/g, "")),
                 cari_adi: addForm.cari_adi?.trim() || null,
                 arac_sahip: addForm.arac_sahip?.trim() || null,
                 aylik_kira: parseTLToNumber(addForm.aylik_kira),
@@ -830,9 +892,9 @@ export default function AracCariVeFiyat() {
                                                 {!perms.canCreate && (
                                                     <Chip size="small" variant="outlined" label="Yeni Kayıt: Kapalı" />
                                                 )}
-                                                {!perms.canEdit && (
-                                                    <Chip size="small" variant="outlined" label="Düzenleme: Kapalı" />
-                                                )}
+                                                    {!perms.canEditAny && (
+                                                        <Chip size="small" variant="outlined" label="Düzenleme: Kapalı" />
+                                                    )}
                                             </>
                                         )}
                                     </Stack>
@@ -933,6 +995,7 @@ export default function AracCariVeFiyat() {
                                                             size="small"
                                                             inputMode="numeric"
                                                             sx={{ width: 140 }}
+                                                            disabled={!perms.fields.cari_id}
                                                         />
                                                     ) : (
                                                         r.cari_id
@@ -947,6 +1010,7 @@ export default function AracCariVeFiyat() {
                                                             onChange={(e) => setEditData((p) => ({ ...p, cari_adi: e.target.value }))}
                                                             size="small"
                                                             fullWidth
+                                                            disabled={!perms.fields.cari_adi}
                                                         />
                                                     ) : (
                                                         <Typography noWrap>{r.cari_adi}</Typography>
@@ -961,6 +1025,7 @@ export default function AracCariVeFiyat() {
                                                             onChange={(e) => setEditData((p) => ({ ...p, arac_sahip: e.target.value }))}
                                                             size="small"
                                                             fullWidth
+                                                            disabled={!perms.fields.arac_sahibi}
                                                         />
                                                     ) : (
                                                         <Typography noWrap>{r.arac_sahip}</Typography>
@@ -975,6 +1040,7 @@ export default function AracCariVeFiyat() {
                                                             onChange={(e) => setEditData((p) => ({ ...p, odak_arac_calisma_tipi: e.target.value }))}
                                                             size="small"
                                                             fullWidth
+                                                            disabled={!perms.fields.odak_arac_calisma_tipi}
                                                         />
                                                     ) : (
                                                         <Typography noWrap>{r.odak_arac_calisma_tipi}</Typography>
@@ -987,14 +1053,12 @@ export default function AracCariVeFiyat() {
                                                         <TextField
                                                             value={editData.aylik_kira ?? ""}
                                                             onChange={(e) =>
-                                                                setEditData((p) => ({
-                                                                    ...p,
-                                                                    aylik_kira: formatTLForTyping(e.target.value),
-                                                                }))
+                                                                setEditData((p) => ({ ...p, aylik_kira: formatTLForTyping(e.target.value) }))
                                                             }
                                                             size="small"
                                                             inputMode="decimal"
                                                             sx={{ width: 160 }}
+                                                            disabled={!perms.fields.aylik_kira}
                                                         />
                                                     ) : (
                                                         formatTL(toNumberLoose(r.aylik_kira))
@@ -1007,14 +1071,12 @@ export default function AracCariVeFiyat() {
                                                         <TextField
                                                             value={editData.aylik_surucu ?? ""}
                                                             onChange={(e) =>
-                                                                setEditData((p) => ({
-                                                                    ...p,
-                                                                    aylik_surucu: formatTLForTyping(e.target.value),
-                                                                }))
+                                                                setEditData((p) => ({ ...p, aylik_surucu: formatTLForTyping(e.target.value) }))
                                                             }
                                                             size="small"
                                                             inputMode="decimal"
                                                             sx={{ width: 160 }}
+                                                            disabled={!perms.fields.aylik_surucu}
                                                         />
                                                     ) : (
                                                         formatTL(toNumberLoose(r.aylik_surucu))
@@ -1035,6 +1097,7 @@ export default function AracCariVeFiyat() {
                                                             size="small"
                                                             inputMode="numeric"
                                                             sx={{ width: 110 }}
+                                                            disabled={!perms.fields.calisma_gunu}
                                                         />
                                                     ) : (
                                                         r.calisma_gunu ?? ""
@@ -1043,7 +1106,15 @@ export default function AracCariVeFiyat() {
 
                                                 {/* Pasif (read-only) */}
                                                 <TableCell align="center">
-                                                    <Checkbox checked={!!r.pasif} disabled />
+                                                    {isEditing ? (
+                                                        <Checkbox
+                                                            checked={!!editData.pasif}
+                                                            onChange={(e) => setEditData((p) => ({ ...p, pasif: e.target.checked }))}
+                                                            disabled={!perms.fields.pasif}
+                                                        />
+                                                    ) : (
+                                                        <Checkbox checked={!!r.pasif} disabled />
+                                                    )}
                                                 </TableCell>
 
                                                 {/* Açıklama (read-only) */}
@@ -1060,7 +1131,7 @@ export default function AracCariVeFiyat() {
                                                                     <IconButton
                                                                         color="primary"
                                                                         onClick={saveEdit}
-                                                                        disabled={savingId === editingId || !perms.canEdit || permLoading}
+                                                                        disabled={savingId === editingId || !perms.canEditAny || permLoading}
                                                                         size="small"
                                                                     >
                                                                         <CheckIcon />
@@ -1081,12 +1152,12 @@ export default function AracCariVeFiyat() {
                                                             </Tooltip>
                                                         </Stack>
                                                     ) : (
-                                                        <Tooltip title={perms.canEdit ? "Satırı düzenle" : "Düzenleme yetkiniz yok"}>
+                                                            <Tooltip title={perms.canEditAny ? "Satırı düzenle" : "Düzenleme yetkiniz yok"}>
                                                             <span>
                                                                 <IconButton
                                                                     onClick={() => startEdit(r)}
                                                                     size="small"
-                                                                    disabled={!perms.canEdit || permLoading}
+                                                                        disabled={!perms.canEditAny || permLoading}
                                                                 >
                                                                     <EditIcon />
                                                                 </IconButton>

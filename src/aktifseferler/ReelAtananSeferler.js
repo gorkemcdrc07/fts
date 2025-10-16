@@ -142,15 +142,14 @@ export default function ReelAtananSeferler() {
 
     const navigate = useNavigate();
     // Yetkiler
-    const perms = usePermissions('aktif_seferler');
+    const { loading: permsLoading, flags = {} } = usePermissions('aktif_seferler');
     const {
-        loading: permsLoading,
         aktif_can_sync = false,
         aktif_can_edit = false,
         aktif_can_eta = false,
         aktif_may_open_edit = false,
         aktif_may_open_eta = false,
-    } = perms || {};
+    } = flags;
 
     // Uyum için yerel alias'lar (bileşenin geri kalanı bunları kullanıyor)
     const canSync = aktif_can_sync;

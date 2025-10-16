@@ -1,4 +1,3 @@
-// src/adminPanel/tabs/RolesTab.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabaseClient";
 import {
@@ -26,16 +25,17 @@ const SCREENS = [
     { key: "tedarikci_masraf", name: "Tedarikçi Masraf" },
     { key: "arac_cari_fiyat", name: "Araç ve Cari Fiyat" },
     { key: "hakedis_seferleri", name: "Hakediş Seferleri" },
+    { key: "izin_yonetimi", name: "İzin Yönetimi" }, // eklendi
 ];
 
-/** Ekrana göre İZİN KOLONLARI — role_permissions tablosundaki GERÇEK isimlerle */
+/** role_permissions tablosundaki GERÇEK kolon isimleri — user_permissions ile BİREBİR */
 const PERM_KEYS_BY_SCREEN = {
     aktif_seferler: [
-        { key: "can_sync", label: "Senkronize" },
-        { key: "can_edit", label: "Sefer Düzenle" },
-        { key: "can_eta", label: "ETA Gör" },
-        { key: "may_open_edit", label: "Editörü Aç" },
-        { key: "may_open_eta", label: "ETA Paneli Aç" },
+        { key: "aktif_can_sync", label: "Senkronize" },
+        { key: "aktif_can_edit", label: "Sefer Düzenle" },
+        { key: "aktif_can_eta", label: "ETA Gör" },
+        { key: "aktif_may_open_edit", label: "Editörü Aç" },
+        { key: "aktif_may_open_eta", label: "ETA Paneli Aç" },
     ],
     planlama: [
         { key: "pln_update", label: "Güncelle" },
@@ -43,38 +43,49 @@ const PERM_KEYS_BY_SCREEN = {
         { key: "pln_export_excel", label: "Excel Aktar" },
         { key: "pln_import_excel", label: "Dosya İçe Aktar" },
     ],
-    // Bu üç ekran generic arcdur_* kolonlarını paylaşıyor
     arac_durumlari: [
-        { key: "arcdur_create", label: "Yeni Kayıt Oluştur" },
-        { key: "arcdur_edit", label: "Kayıt Düzenle" },
-        { key: "arcdur_delete", label: "Kayıt Sil" },
+        { key: "adur_create", label: "Yeni Kayıt Oluştur" },
+        { key: "adur_edit", label: "Kayıt Düzenle" },
+        { key: "adur_delete", label: "Kayıt Sil" },
     ],
     arac_yonetimi: [
-        { key: "arcdur_create", label: "Yeni Kayıt Oluştur" },
-        { key: "arcdur_edit", label: "Kayıt Düzenle" },
-        { key: "arcdur_delete", label: "Kayıt Sil" },
+        { key: "ayon_create", label: "Yeni Kayıt Oluştur" },
+        { key: "ayon_edit", label: "Kayıt Düzenle" },
+        { key: "ayon_delete", label: "Kayıt Sil" },
     ],
     kesinti_yonetimi: [
-        { key: "arcdur_create", label: "Yeni Kayıt Oluştur" },
-        { key: "arcdur_edit", label: "Kayıt Düzenle" },
-        { key: "arcdur_delete", label: "Kayıt Sil" },
+        { key: "kes_create", label: "Yeni Kayıt Oluştur" },
+        { key: "kes_edit", label: "Kayıt Düzenle" },
+        { key: "kes_delete", label: "Kayıt Sil" },
     ],
-    // Tedarikçi Masraf: generic create/edit/delete + approve için may_open_edit
     tedarikci_masraf: [
-        { key: "arcdur_create", label: "Yeni Kayıt Oluştur" },
-        { key: "arcdur_edit", label: "Kayıt Düzenle" },
-        { key: "arcdur_delete", label: "Kayıt Sil" },
-        { key: "may_open_edit", label: "Masrafı Onayla" },
+        { key: "tdm_create", label: "Yeni Kayıt Oluştur" },
+        { key: "tdm_edit", label: "Kayıt Düzenle" },
+        { key: "tdm_delete", label: "Kayıt Sil" },
+        { key: "tdm_may_open_edit", label: "Masrafı Onayla" },
     ],
-    // Araç ve Cari Fiyat: generic create/edit/delete
     arac_cari_fiyat: [
-        { key: "arcdur_create", label: "Yeni Kayıt Oluştur" },
-        { key: "arcdur_edit", label: "Kayıt Düzenle" },
-        { key: "arcdur_delete", label: "Kayıt Sil" },
+        { key: "acf_create", label: "Yeni Kayıt Oluştur" },
+        { key: "acf_edit", label: "Kayıt Düzenle (Genel)" },
+        { key: "acf_delete", label: "Kayıt Sil" },
+
+        // Alan-bazlı düzenleme yetkileri:
+        { key: "acf_edit_cari_id", label: "Cari ID Düzenle" },
+        { key: "acf_edit_cari_adi", label: "Cari Adı Düzenle" },
+        { key: "acf_edit_arac_sahibi", label: "Araç Sahibi Düzenle" },
+        { key: "acf_edit_odak_tipi", label: "Odak Çalışma Tipi Düzenle" },
+        { key: "acf_edit_aylik_kira", label: "Aylık Kira Düzenle" },
+        { key: "acf_edit_aylik_surucu", label: "Aylık Sürücü Düzenle" },
+        { key: "acf_edit_calisma_gunu", label: "Çalışma Günü Düzenle" },
+        { key: "acf_edit_pasif", label: "Pasif Alanını Düzenle" },
     ],
-    // Hakediş Seferleri: upload izni için arcdur_create'ı kullanıyoruz
     hakedis_seferleri: [
-        { key: "arcdur_create", label: "Dosya Yükle" },
+        { key: "hks_upload", label: "Dosya Yükle" },
+    ],
+    izin_yonetimi: [
+        { key: "izin_create", label: "Yeni Kayıt Oluştur" },
+        { key: "izin_edit", label: "Kayıt Düzenle" },
+        { key: "izin_delete", label: "Kayıt Sil" },
     ],
 };
 
@@ -103,22 +114,13 @@ async function fetchRolePermissions(screenKey) {
     return byRoleId;
 }
 
-/** Upsert + 406 fallback */
+/** Upsert + daima .select() ile görünür hata */
 async function safeUpsertRolePerms(payload) {
     const { error } = await supabase
         .from("role_permissions")
-        .upsert(payload, { onConflict: "role_id,screen_key" });
-    if (!error) return;
-
-    if (String(error.code) === "406") {
-        const { error: e2 } = await supabase
-            .from("role_permissions")
-            .upsert(payload, { onConflict: "role_id,screen_key" })
-            .select();
-        if (e2) throw e2;
-        return;
-    }
-    throw error;
+        .upsert(payload, { onConflict: "role_id,screen_key" })
+        .select();
+    if (error) throw error;
 }
 
 export default function RolesTab() {

@@ -1,13 +1,16 @@
 // src/App.js
 import React, { Suspense, lazy } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 
 // MUI Tema
 import { ThemeProvider, CssBaseline } from "@mui/material";
 import theme from "./theme";
 
-// Sayfalar
+// Guard
+import RequirePageAccess from "./routes/guards/RequirePageAccess";
+
+// Sayfalar (eager)
 import Login from "./Login";
 import Anasayfa from "./Anasayfa";
 import Planlama from "./kullanıcıIslemleri/Planlama";
@@ -45,7 +48,7 @@ const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler
 const SiparisAnaliz = lazy(() => import("./kullanıcıIslemleri/planlamaDetay/SiparisAnaliz"));
 const AdminPanel = lazy(() => import("./adminPanel/adminPanel"));
 const GorunumDuzenle = lazy(() => import("./aktifseferler/GorunumDuzenle"));
-const PagePermissionsPage = lazy(() => import("./adminPanel/PagePermissionsPage")); // 👈 YENİ
+const PagePermissionsPage = lazy(() => import("./adminPanel/PagePermissionsPage")); // Kullanıcı ekranları yönetimi
 
 function App() {
     return (
@@ -54,95 +57,104 @@ function App() {
                 <CssBaseline />
                 <Router>
                     <Routes>
-                        {/* Giriş */}
+                        {/* Public: Login */}
                         <Route path="/" element={<Login />} />
 
                         {/* App Layout içinde tüm sayfalar */}
                         <Route element={<AppLayout />}>
+                            {/* Whitelist (usePageAccess içinde serbest): /anasayfa */}
                             <Route path="anasayfa" element={<Anasayfa />} />
 
-                            {/* Planlama */}
-                            <Route path="planlama" element={<Planlama />} />
-                            <Route path="plaka-onerisi" element={<PlakaOnerisi />} />
-
-                            {/* ReelAtananSeferler (lazy) */}
+                            {/* <<< BURADAN SONRASI GUARD ALTINDA >>> */}
                             <Route
-                                path="seferler"
                                 element={
-                                    <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
-                                        <ReelAtananSeferler />
-                                    </Suspense>
+                                    <RequirePageAccess>
+                                        <Outlet />
+                                    </RequirePageAccess>
                                 }
-                            />
+                            >
+                                {/* Planlama */}
+                                <Route path="planlama" element={<Planlama />} />
+                                <Route path="plaka-onerisi" element={<PlakaOnerisi />} />
 
-                            {/* Görünüm Düzenle (lazy) */}
-                            <Route
-                                path="aktifseferler/gorunum"
-                                element={
-                                    <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
-                                        <GorunumDuzenle />
-                                    </Suspense>
-                                }
-                            />
+                                {/* Reel Atanan Seferler (lazy) */}
+                                <Route
+                                    path="seferler"
+                                    element={
+                                        <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
+                                            <ReelAtananSeferler />
+                                        </Suspense>
+                                    }
+                                />
 
-                            <Route path="siparisler" element={<Siparisler />} />
+                                {/* Görünüm Düzenle (lazy) */}
+                                <Route
+                                    path="aktifseferler/gorunum"
+                                    element={
+                                        <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
+                                            <GorunumDuzenle />
+                                        </Suspense>
+                                    }
+                                />
 
-                            {/* Tamamlanan Seferler */}
-                            <Route path="tamamlanan-seferler" element={<TamamlananlarPage />} />
+                                <Route path="siparisler" element={<Siparisler />} />
 
-                            {/* Araç Durumları */}
-                            <Route path="arac/durumlari" element={<AracDurumlari />} />
-                            <Route path="arac/yonetim" element={<AracYonetimi />} />
-                            <Route path="arac/izin-girisi" element={<IzinGirisi />} />
-                            <Route path="arac/kesinti-girisi" element={<KesintiGirisi />} />
+                                {/* Tamamlanan Seferler */}
+                                <Route path="tamamlanan-seferler" element={<TamamlananlarPage />} />
 
-                            {/* Görevler */}
-                            <Route path="gorevler/ata" element={<GorevAta />} />
-                            <Route path="gorevler/benim" element={<BenimGorevlerim />} />
-                            <Route path="gorevler/tum" element={<TumGorevler />} />
+                                {/* Araç Durumları */}
+                                <Route path="arac/durumlari" element={<AracDurumlari />} />
+                                <Route path="arac/yonetim" element={<AracYonetimi />} />
+                                <Route path="arac/izin-girisi" element={<IzinGirisi />} />
+                                <Route path="arac/kesinti-girisi" element={<KesintiGirisi />} />
 
-                            {/* Hakediş */}
-                            <Route path="hakedis/tedarikci-masraf" element={<TedarikciMasraf />} />
-                            <Route path="hakedis/arac-cari-ve-fiyat" element={<AracCariVeFiyat />} />
-                            <Route path="hakedis/hakedis-seferleri" element={<HakedisSeferleri />} />
-                            <Route path="hakedis/hamaliye" element={<Hamaliye />} />
+                                {/* Görevler */}
+                                <Route path="gorevler/ata" element={<GorevAta />} />
+                                <Route path="gorevler/benim" element={<BenimGorevlerim />} />
+                                <Route path="gorevler/tum" element={<TumGorevler />} />
 
-                            {/* KPI */}
-                            <Route path="raporlar/kpi-olcumu" element={<KpiOlcumu />} />
+                                {/* Hakediş */}
+                                <Route path="hakedis/tedarikci-masraf" element={<TedarikciMasraf />} />
+                                <Route path="hakedis/arac-cari-ve-fiyat" element={<AracCariVeFiyat />} />
+                                <Route path="hakedis/hakedis-seferleri" element={<HakedisSeferleri />} />
+                                <Route path="hakedis/hamaliye" element={<Hamaliye />} />
 
-                            {/* Raporlar */}
-                            <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
-                            <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
-                            <Route path="raporlar/tools" element={<div style={{ padding: 24 }}>ROUTE OK</div>} />
+                                {/* KPI & Raporlar */}
+                                <Route path="raporlar/kpi-olcumu" element={<KpiOlcumu />} />
+                                <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
+                                <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
+                                <Route path="raporlar/tools" element={<div style={{ padding: 24 }}>ROUTE OK</div>} />
 
-                            {/* KOCAELİ kartı için hedef route */}
-                            <Route
-                                path="siparis-analiz"
-                                element={
-                                    <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
-                                        <SiparisAnaliz />
-                                    </Suspense>
-                                }
-                            />
+                                {/* KOCAELİ kartı */}
+                                <Route
+                                    path="siparis-analiz"
+                                    element={
+                                        <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
+                                            <SiparisAnaliz />
+                                        </Suspense>
+                                    }
+                                />
 
-                            {/* Admin */}
-                            <Route
-                                path="admin"
-                                element={
-                                    <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
-                                        <AdminPanel />
-                                    </Suspense>
-                                }
-                            />
-                            {/* Kullanıcı Ekranları */}
-                            <Route
-                                path="admin/permissions"
-                                element={
-                                    <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
-                                        <PagePermissionsPage />
-                                    </Suspense>
-                                }
-                            />
+                                {/* Admin */}
+                                <Route
+                                    path="admin"
+                                    element={
+                                        <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
+                                            <AdminPanel />
+                                        </Suspense>
+                                    }
+                                />
+                                {/* Kullanıcı Ekranları (izin yönetimi) */}
+                                <Route
+                                    path="admin/permissions"
+                                    element={
+                                        <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
+                                            <PagePermissionsPage />
+                                        </Suspense>
+                                    }
+                                />
+                            </Route>
+                            {/* <<< GUARD BLOĞU BİTTİ >>> */}
 
                             {/* Varsayılan */}
                             <Route path="*" element={<Navigate to="/anasayfa" replace />} />

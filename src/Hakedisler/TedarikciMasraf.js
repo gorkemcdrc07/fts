@@ -13,7 +13,7 @@ import { motion } from "framer-motion";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 
-// 🧭 Eklendi: gezinme için
+// 🧭 Gezinme
 import { useNavigate } from "react-router-dom";
 
 // MUI
@@ -64,10 +64,15 @@ import {
     ErrorOutline as ErrorOutlineIcon,
 } from "@mui/icons-material";
 
-/* ---------- Yetkilendirme: bu ekranın anahtarı ---------- */
+/* ---------- Yetkilendirme sabitleri (komponent DIŞINDA) ---------- */
 const SCREEN_KEY = "tedarikci_masraf";
-// Onaylama kolonu
-const APPROVE_COL = "tdm_approve";
+const APPROVE_COL = "tdm_approve"; // onay yetkisi alanı (role/user permissions tablosunda)
+
+/* ---------- Yardımcılar (komponent DIŞINDA: hook KULLANILMAZ) ---------- */
+function coalesceOverride(overrideVal, roleVal) {
+    // override true/false ise onu al; değilse (null/undefined) role değerine düş
+    return overrideVal === true || overrideVal === false ? overrideVal : !!roleVal;
+}
 
 /* ---------- Helpers ---------- */
 const HOME_PATH = "/anasayfa";
@@ -148,13 +153,7 @@ function ConfirmDialog({ open, title, subtitle, onCancel, onConfirm, loading }) 
                 <Button startIcon={<CloseIcon />} onClick={onCancel} disabled={loading}>
                     Vazgeç
                 </Button>
-                <Button
-                    startIcon={<DeleteIcon />}
-                    onClick={onConfirm}
-                    color="error"
-                    variant="contained"
-                    disabled={loading}
-                >
+                <Button startIcon={<DeleteIcon />} onClick={onConfirm} color="error" variant="contained" disabled={loading}>
                     Sil
                 </Button>
             </DialogActions>
@@ -215,65 +214,70 @@ export default function TedarikciMasraf() {
         canApprove: false,
     });
 
-    function coalesceOverride(overrideVal, roleVal) {
-        return overrideVal === true || overrideVal === false ? overrideVal : !!roleVal;
-    }
-
-    async function loadPermissions() {
+    const loadPermissions = useCallback(async () => {
         try {
             setPermLoading(true);
-            // 1) Kullanıcı
+
+            // 1) Kullanıcıyı bul (kullanici / kullaniciAdi ikisini de dene)
             const { data: userRow, error: eU } = await supabase
                 .from("login")
-                .select("id, kullanici, rol")
-                .eq("kullanici", kullanici)
+                .select("id, kullanici, kullaniciAdi, rol")
+                .or(`kullanici.eq.${kullanici},kullaniciAdi.eq.${kullanici}`)
                 .maybeSingle();
             if (eU) throw eU;
+            if (!userRow?.id) throw new Error("Kullanıcı bulunamadı");
 
-            // Rol key'i (roles.key büyük harf)
-            const roleKey = (userRow?.rol || "").toUpperCase();
-            const { data: roleRow, error: eR } = await supabase
-                .from("roles")
-                .select("id,key")
-                .eq("key", roleKey)
-                .maybeSingle();
-            if (eR) throw eR;
-
-            // 2) Rol izinleri (screen_key yok; role_id yeterli)
+            // 2) Rol (case-insensitive)
+            const roleKey = (userRow?.rol || kullaniciRol || "").trim();
             let rolePerm = {};
-            if (roleRow?.id) {
-                const { data: rp, error: eRP } = await supabase
-                    .from("role_permissions")
-                    .select("tdm_create, tdm_edit, tdm_delete, tdm_approve, tdm_may_open_edit")
-                    .eq("role_id", roleRow.id)
+            if (roleKey) {
+                const { data: roleRow, error: eR } = await supabase
+                    .from("roles")
+                    .select("id,key")
+                    .ilike("key", roleKey)
                     .maybeSingle();
-                if (eRP) throw eRP;
-                rolePerm = rp || {};
+                if (eR) throw eR;
+
+                if (roleRow?.id) {
+                    // 3) Rol izinleri — * ile al; olmayan kolon 400 yaptırmasın
+                    const { data: rp, error: eRP } = await supabase
+                        .from("role_permissions")
+                        .select("*")
+                        .eq("role_id", roleRow.id)
+                        .maybeSingle();
+                    if (eRP) throw eRP;
+                    rolePerm = rp || {};
+                }
             }
 
-            // 3) Kullanıcı override (screen_key yok; user_id yeterli)
+            // 4) Kullanıcı override — yine * ile güvenli al
             const { data: up, error: eUP } = await supabase
                 .from("user_permissions")
-                .select("tdm_create, tdm_edit, tdm_delete, tdm_approve, tdm_may_open_edit")
-                .eq("user_id", userRow?.id)
+                .select("*")
+                .eq("user_id", userRow.id)
                 .maybeSingle();
             if (eUP) throw eUP;
 
+            // 5) Yetki kararları
             const canCreate = coalesceOverride(up?.tdm_create, rolePerm?.tdm_create);
             const canEdit = coalesceOverride(up?.tdm_edit, rolePerm?.tdm_edit);
             const canDelete = coalesceOverride(up?.tdm_delete, rolePerm?.tdm_delete);
             const canApprove = coalesceOverride(up?.[APPROVE_COL], rolePerm?.[APPROVE_COL]);
-            // gerekirse UI’de kullanmak için:
-            // const mayOpenEdit = coalesceOverride(up?.tdm_may_open_edit, rolePerm?.tdm_may_open_edit);
 
             setPerms({ canCreate, canEdit, canDelete, canApprove });
         } catch (err) {
-            console.error("perm load error:", err);
+            console.error("perm load error:", {
+                message: err?.message,
+                code: err?.code,
+                details: err?.details,
+                hint: err?.hint,
+                err,
+            });
             setPerms({ canCreate: false, canEdit: false, canDelete: false, canApprove: false });
         } finally {
             setPermLoading(false);
         }
-    }
+    }, [kullanici, kullaniciRol]);
 
     const veriGetir = useCallback(async () => {
         setYukleniyor(true);
@@ -290,8 +294,7 @@ export default function TedarikciMasraf() {
     useEffect(() => {
         veriGetir();
         loadPermissions();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [veriGetir]);
+    }, [veriGetir, loadPermissions]);
 
     const handleOpenYeni = () => {
         if (!perms.canCreate) {
@@ -341,11 +344,7 @@ export default function TedarikciMasraf() {
 
             // İsteğe bağlı: Bekir'e bildirim (mevcut davranış)
             try {
-                const bekir = await supabase
-                    .from("login")
-                    .select("id")
-                    .eq("kullanici", "BEKİR AKCAGÖZ")
-                    .single();
+                const bekir = await supabase.from("login").select("id").eq("kullanici", "BEKİR AKCAGÖZ").single();
                 if (bekir.data?.id) {
                     await supabase.from("bildirimler").insert([
                         {
@@ -703,10 +702,8 @@ export default function TedarikciMasraf() {
                                 </>
                             )}
 
-                            {/* Perm durum göstergesi (isteğe bağlı) */}
-                            {permLoading ? (
-                                <Chip size="small" variant="outlined" label="Yetkiler yükleniyor…" />
-                            ) : null}
+                            {/* Perm durum göstergesi (opsiyonel) */}
+                            {permLoading ? <Chip size="small" variant="outlined" label="Yetkiler yükleniyor…" /> : null}
 
                             {/* 🧭 Geri / Anasayfa / Yeni */}
                             <Button size="small" variant="outlined" onClick={() => navigate(-1)} title="Geri">
@@ -837,8 +834,8 @@ export default function TedarikciMasraf() {
                                 disableColumnMenu
                                 disableRowSelectionOnClick
                                 loading={yukleniyor}
-                                    slots={{ toolbar: Toolbar }}
-                                    slotProps={{ toolbar: { onExcel: exportToExcel } }}
+                                slots={{ toolbar: Toolbar }}
+                                slotProps={{ toolbar: { onExcel: exportToExcel } }}
                                 initialState={{
                                     pagination: { paginationModel: { page: 0, pageSize: 25 } },
                                     density: "standard",

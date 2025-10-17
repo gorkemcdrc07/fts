@@ -176,7 +176,7 @@ function DateTimeSingleField({
 ----------------------------------------------------------------------------- */
 
 /** * GÜNCELLEME ZAMANINA +3 saat kayması EKLEYEN fonksiyon (13:23 -> 16:23)
- * Saf dize manipülasyonu ile UTC saatini yerel saati olarak gösterir.
+ * UTC saatini yerel saati olarak gösterir.
  */
 function fromISOTooltipFixed(raw) {
     if (!raw) return "";
@@ -220,7 +220,7 @@ function fromISOTooltipFixed(raw) {
  * @param {string} fieldName - Alan adı ('yukleme_varis' vb.)
  * @param {object} COLORS - Renk sabitleri
  */
-function createFieldUpdateInfoText(row, fieldName, COLORS) { // COLORS parametresi eklendi
+function createFieldUpdateInfoText(row, fieldName, COLORS) {
     const userKey = `${fieldName}_guncelleyen`;
     const dateKey = `${fieldName}_guncelleme_tarihi`;
 
@@ -238,7 +238,7 @@ function createFieldUpdateInfoText(row, fieldName, COLORS) { // COLORS parametre
                 top: 8,
                 right: 8,
                 height: 'auto',
-                pointerEvents: 'none', // Input'a dokunulmasını engelle
+                pointerEvents: 'none',
             }}>
                 <Tooltip title={`Güncelleyen: ${user} - Kayıt Zamanı: ${formattedDate.replace(' ', ' ')}`} placement="top" enterDelay={500}>
                     <Box sx={{
@@ -248,14 +248,13 @@ function createFieldUpdateInfoText(row, fieldName, COLORS) { // COLORS parametre
                         py: '2px',
                         px: '6px',
                         borderRadius: '4px',
-                        // Renkler artık COLORS parametresinden alınıyor
                         bgcolor: alpha('#00e676', 0.1),
                         color: alpha(COLORS.text, 0.7),
                         fontSize: 10,
                         fontWeight: 600,
                         whiteSpace: 'nowrap',
                         userSelect: 'none',
-                        pointerEvents: 'auto', // Tooltip'in çalışması için
+                        pointerEvents: 'auto',
                         border: `1px solid ${alpha('#00e676', 0.3)}`,
                     }}>
                         <Typography variant="caption" sx={{ fontSize: 10, fontWeight: 700, color: COLORS.text }}>
@@ -283,21 +282,26 @@ export default function EditorDialog(props) {
         onSaveClick, onMoveToCompleted
     } = props;
 
-    // Tamamlananlara Aktar butonu için mantık (Değişmedi)
-    const canMoveToCompleted = useMemo(() => {
-        if (!canEdit) return false;
+    // Tüm tarih alanlarının dolu olup olmadığını kontrol eden ana mantık
+    const allDatesComplete = useMemo(() => {
         if (!isISODateTimeValid(seferTarihiYeni)) return false;
 
         const requiredFields = ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"];
 
-        const allDatesAreValid = detailRows.every(row =>
+        const allValid = detailRows.every(row =>
             requiredFields.every(field =>
                 isISODateTimeValid(row[field])
             )
         );
 
-        return allDatesAreValid;
-    }, [canEdit, seferTarihiYeni, detailRows]);
+        return allValid;
+    }, [seferTarihiYeni, detailRows]);
+
+    // Kaydet butonu: Düzenleme izni varsa VE tüm tarihler henüz tamamlanmamışsa aktif
+    const canSave = canEdit && !allDatesComplete;
+
+    // Tamamlananlara Aktar butonu: Düzenleme izni varsa VE tüm tarihler TAMAMLANMIŞSA aktif
+    const canMoveToCompleted = canEdit && allDatesComplete;
 
     return (
         <Dialog
@@ -431,7 +435,15 @@ export default function EditorDialog(props) {
                 <Button onClick={onClose} startIcon={<ArrowBackIosNewIcon />}>Kapat</Button>
                 {canEdit && (
                     <Stack direction="row" spacing={1}>
-                        <Button variant="contained" color="primary" startIcon={<SaveIcon />} onClick={onSaveClick}>Kaydet</Button>
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            startIcon={<SaveIcon />}
+                            onClick={onSaveClick}
+                            disabled={!canSave} // KRİTİK: YENİ MANTIK UYGULANDI
+                        >
+                            Kaydet
+                        </Button>
 
                         <Tooltip
                             title={!canMoveToCompleted ? "Tüm detay satırlarındaki 4 tarih/saat alanı (Giriş/Çıkış) ve Sefer Tarihi (Yeni) doldurulmalıdır." : ""}
@@ -442,7 +454,7 @@ export default function EditorDialog(props) {
                                     color="success"
                                     startIcon={<FileDownloadDoneIcon />}
                                     onClick={onMoveToCompleted}
-                                    disabled={!canMoveToCompleted}
+                                    disabled={!canMoveToCompleted} // KRİTİK: YENİ MANTIK UYGULANDI
                                 >
                                     Tamamlananlara Aktar
                                 </Button>

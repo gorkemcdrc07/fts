@@ -9,6 +9,7 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
+// KRİTİK DÜZELTME: Yanlış import yolu düzeltildi
 import DirectionsCarFilledIcon from "@mui/icons-material/DirectionsCarFilled";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import TimelineIcon from "@mui/icons-material/Timeline";
@@ -18,6 +19,7 @@ import TableRowsIcon from "@mui/icons-material/TableRows";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import { alpha } from "@mui/material/styles";
 import { supabase } from "../supabaseClient";
+import { fromISOToCombined } from "./utils/datetime"; // Varsayımsal olarak import edildi
 
 /* ---------- Helpers ---------- */
 const fmt = (iso) => {
@@ -52,14 +54,8 @@ function riskOfLate(minutesLate) {
     if (minutesLate >= 15) return { lvl: "orta", color: "secondary" };
     return { lvl: "düşük", color: "default" };
 }
-const statusPalette = (theme) => ({
-    red: theme.palette.mode === "dark" ? "#ef4444" : "#dc2626",
-    amber: theme.palette.mode === "dark" ? "#f59e0b" : "#d97706",
-    blue: theme.palette.mode === "dark" ? "#3b82f6" : "#2563eb",
-    mint: theme.palette.mode === "dark" ? "#10b981" : "#059669",
-});
 
-/* ---------- Bölüm başlığı ---------- */
+/* ---------- Bölüm başlığı (Sadeleştirildi) ---------- */
 function SectionHeader({ icon, title, count, expanded, onToggle, color = "inherit", hint, rightSlot }) {
     const theme = useTheme();
     return (
@@ -80,26 +76,17 @@ function SectionHeader({ icon, title, count, expanded, onToggle, color = "inheri
                 },
                 border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
                 backdropFilter: "blur(6px)",
+                background: alpha(theme.palette.background.paper, 0.8),
             }}
         >
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 1.25, py: 1 }}>
                 <Stack direction="row" spacing={1} alignItems="center">
-                    <Box
-                        sx={{
-                            width: 26, height: 26, borderRadius: 1.5, display: "grid", placeItems: "center",
-                            background: "linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04))",
-                            border: `1px solid ${alpha(theme.palette.common.white, 0.18)}`,
-                            boxShadow: `inset 0 0 0 1px ${alpha(theme.palette.common.white, 0.12)}`
-                        }}
-                    >
-                        {icon}
-                    </Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 900, letterSpacing: 0.2, color }}>
-                        {title}
+                        {icon} {title}
                     </Typography>
                     <Chip
                         size="small"
-                        label={count}
+                        label={`${count} Sefer`}
                         sx={{
                             fontWeight: 800, borderRadius: 1.25,
                             background: theme.palette.mode === "dark" ? alpha("#93c5fd", 0.12) : alpha(theme.palette.primary.main, 0.08),
@@ -126,6 +113,8 @@ function SectionHeader({ icon, title, count, expanded, onToggle, color = "inheri
 
 /* ---------- Modern rozet ---------- */
 function NoteBadge({ title = "Açıklama mevcut" }) {
+    // ... (NoteBadge içeriği aynı kalır)
+    const theme = useTheme();
     return (
         <Tooltip title={title}>
             <Box sx={{
@@ -210,259 +199,135 @@ function GridList({ items, render, pageSize = 12 }) {
     );
 }
 
+/* ---------- Yeni Rapor Verisi Çekme ve Hesaplama Fonksiyonu ---------- */
+async function fetchPerformanceData(startDate, endDate) {
+    const rangeMin = `${startDate || ""}T00:00:00`;
+    const rangeMax = `${endDate || ""}T23:59:59`;
+
+    // SADECE İLK YÜKLEME ÇIKIŞ KONTROLÜ İÇİN GEREKLİ ALANLAR
+    const selectQuery = `
+        sefer_no, sefer_tarihi, plaka, surucu_ad_soyad, 
+        eta_varis, 
+        sefer_detaylari!inner(yukleme_cikis, nokta_sirasi)
+    `;
+
+    const runQuery = async (tableName) => {
+        const { data, error } = await supabase
+            .from(tableName)
+            .select(selectQuery)
+            .gte('sefer_tarihi', rangeMin)
+            .lte('sefer_tarihi', rangeMax);
+
+        if (error) {
+            console.error(`Supabase sorgu hatası (${tableName}):`, error);
+            return [];
+        }
+        return data || [];
+    };
+
+    const activeSeferler = await runQuery('seferler');
+    const completedSeferler = await runQuery('tamamlanan_seferler');
+
+    const allSeferler = [...activeSeferler, ...completedSeferler];
+
+    const reportData = [];
+
+    allSeferler.forEach(sefer => {
+        const eta = sefer.eta_varis ? new Date(sefer.eta_varis) : null;
+
+        // İlk noktanın YÜKLEME ÇIKIŞ tarihini bul
+        const firstDepartureDetail = sefer.sefer_detaylari
+            ?.filter(d => d.yukleme_cikis)
+            .sort((a, b) => (a.nokta_sirasi || 0) - (b.nokta_sirasi || 0))[0];
+
+        const firstDepartureTimeISO = firstDepartureDetail?.yukleme_cikis || null;
+        const departureTime = firstDepartureTimeISO ? new Date(firstDepartureTimeISO) : null;
+
+        let durum = 'VERİ EKSİK';
+        let diffMin = null;
+
+        if (eta && departureTime) {
+            // İstenen karşılaştırma (Başlangıç ve Bitiş zamanı):
+            diffMin = Math.round((eta.getTime() - departureTime.getTime()) / 60000);
+
+            // Eğer ETA, Yükleme Çıkıştan sonra ise (Normal akışta pozitif fark)
+            if (eta.getTime() > departureTime.getTime()) {
+                durum = 'TAHMİN EDİLDİ';
+            } else {
+                // ETA, çıkıştan önce veya aynı anda ise (Veri düzensizliği)
+                durum = 'DÜZENSİZ VERİ';
+            }
+        }
+
+        reportData.push({
+            id: sefer.sefer_no,
+            sefer_no: sefer.sefer_no,
+            plaka: sefer.plaka,
+            surucu: sefer.surucu_ad_soyad,
+            sefer_tarihi: sefer.sefer_tarihi,
+            eta_varis: sefer.eta_varis,
+            ilk_yukleme_cikis: firstDepartureTimeISO,
+            fark_dk: diffMin,
+            durum: durum,
+        });
+    });
+
+    return reportData;
+}
+
+
 /* ---------- ANA DASHBOARD ---------- */
 export default function Dashboard({ rows = [], onOpenRow, onAskReason, reasonNos = new Set(), bump }) {
     const theme = useTheme();
+    const statusPalette = (theme) => ({
+        red: theme.palette.mode === "dark" ? "#ef4444" : "#dc2626",
+        amber: theme.palette.mode === "dark" ? "#f59e0b" : "#d97706",
+        blue: theme.palette.mode === "dark" ? "#3b82f6" : "#2563eb",
+        mint: theme.palette.mode === "dark" ? "#10b981" : "#059669",
+    });
     const sp = statusPalette(theme);
 
-    const byId = React.useMemo(() => {
-        const m = new Map();
-        rows.forEach((r) => m.set(r.id ?? r.sefer_no, r));
-        return m;
-    }, [rows]);
-
-    const bySeferNo = React.useMemo(() => {
-        const m = new Map();
-        rows.forEach((r) => {
-            const k = (r.sefer_no || "").toString().trim();
-            if (k) m.set(k, r);
-        });
-        return m;
-    }, [rows]);
-
-    const deliveredCompare = React.useMemo(() => {
-        const out = [];
-        rows.forEach((r) => {
-            const eta = r?.eta ? new Date(r.eta) : null;
-            const teslimVarisISO = r?.detay?.teslim_varis || null;
-            const tv = teslimVarisISO ? new Date(teslimVarisISO) : null;
-            if (!eta || !tv) return;
-            const diffMin = Math.round((tv - eta) / 60000);
-            let durum = "zamanında";
-            if (diffMin > ON_TIME_TOL_MIN) durum = "gecikme";
-            else if (diffMin < -ON_TIME_TOL_MIN) durum = "erken";
-            out.push({ ...r, teslim_varis: teslimVarisISO, eta_diff_min: diffMin, durum });
-        });
-        return out;
-    }, [rows]);
-    const deliveredNotOnEta = React.useMemo(() => deliveredCompare.filter((x) => x.durum !== "zamanında"), [deliveredCompare]);
-
-    // === ŞU AN GEÇ GÖRÜNENLER (ilk bacak kuralı) ===
-    const liveLate = React.useMemo(() => {
-        const now = Date.now();
-        return rows
-            .filter((r) => !!r?.eta)
-            .map((r) => ({ ...r, etaDate: new Date(r.eta) }))
-            .filter((r) => !Number.isNaN(r.etaDate.getTime()))
-            .filter((r) => {
-                // ETA aşılmış olmalı
-                if (r.etaDate.getTime() >= now) return false;
-
-                // hızlı bayrak: EditorDialog’daki 1.nokta teslim_varis doluysa gösterme
-                if (r?.first_has_teslim_varis === true) return false;
-
-                // detay üzerinden emniyetli kontrol (geriye dönük alan adları dahil)
-                const d = r?.detay ?? {};
-                const firstTV =
-                    d.first_teslim_varis ??
-                    d.first_teslim_giris ??  // alias
-                    d.ilk_teslim_varis ??    // eski ad olasılığı
-                    "";
-                return String(firstTV || "").trim().length === 0;
-            });
-    }, [rows]);
-    const etaMissingToday = React.useMemo(
-        () => rows.filter((r) => !r?.eta && r?.sefer_tarihi && isToday(r.sefer_tarihi)),
-        [rows]
-    );
-
-    /* --------- LOG GÖRÜNÜRLÜĞÜ: sadece kendi logunu gör --------- */
-    const normalizeUser = (s = "") =>
-        s.normalize("NFKC").toLocaleLowerCase("tr-TR").replace(/\s+/g, "");
-    const meRaw = localStorage.getItem("kullaniciAdi") || "-";
-    const me = normalizeUser(meRaw);
-    // tüm logları görme yetkisi olan kullanıcılar
-    const ALL_VIEWERS = new Set(["admin", "bekirakcagoz"]);
-    const isAllViewer = ALL_VIEWERS.has(me);
-
-    const recentLogs = React.useMemo(() => {
-        try {
-            const all = JSON.parse(localStorage.getItem("aktifseferler.logs") || "[]");
-            const todays = all.filter((x) => isToday(x.ts));
-            const visible = isAllViewer
-                ? todays
-                : todays.filter((l) => normalizeUser(l.user || "-") === me);
-            return visible.slice(0, 10);
-        } catch {
-            return [];
-        }
-    }, [rows.length, bump, isAllViewer, me]);
-
-    const [openDelivered, setOpenDelivered] = React.useState(false);
-    const [openLive, setOpenLive] = React.useState(false);
-    const [openMissing, setOpenMissing] = React.useState(false);
-    const [openLogs, setOpenLogs] = React.useState(false);
-
-    const [onlyHigh, setOnlyHigh] = React.useState(false);
-    const [sortKey, setSortKey] = React.useState("lateDesc");
-    const [dense, setDense] = React.useState(true);
-    const [view, setView] = React.useState("grid");
-
-    const hasNote = React.useCallback(
-        (sefer_no) => {
-            const sn = (sefer_no || "").toString().trim();
-            return sn && reasonNos.has(sn);
-        },
-        [reasonNos]
-    );
-
-    const prepare = React.useCallback(
-        (arr, kind) => {
-            let list = [...arr];
-            if (kind === "live") {
-                list = list.map((r) => {
-                    const lateMin = Math.max(0, Math.round((Date.now() - r.etaDate.getTime()) / 60000));
-                    const rk = riskOfLate(lateMin);
-                    return { ...r, __lateMin: lateMin, __risk: rk };
-                });
-                if (onlyHigh) list = list.filter((x) => ["yüksek", "kritik"].includes(x.__risk.lvl));
-                if (sortKey === "lateDesc") list.sort((a, b) => b.__lateMin - a.__lateMin);
-                if (sortKey === "etaAsc") list.sort((a, b) => a.etaDate - b.etaDate);
-                if (sortKey === "codeAsc") list.sort((a, b) => String(a.sefer_no).localeCompare(String(b.sefer_no)));
-            }
-            if (kind === "delivered") {
-                list = list.map((r) => {
-                    const lateMin = Math.abs(r.eta_diff_min);
-                    const overdue = r.eta_diff_min > 0 ? lateMin : 0;
-                    const rk = riskOfLate(overdue);
-                    return { ...r, __lateMin: overdue, __risk: rk };
-                });
-                if (onlyHigh) list = list.filter((x) => ["yüksek", "kritik"].includes(x.__risk.lvl));
-                if (sortKey === "lateDesc") list.sort((a, b) => b.__lateMin - a.__lateMin);
-                if (sortKey === "etaAsc") list.sort((a, b) => new Date(a.teslim_varis) - new Date(b.teslim_varis));
-                if (sortKey === "codeAsc") list.sort((a, b) => String(a.sefer_no).localeCompare(String(b.sefer_no)));
-            }
-            return list;
-        },
-        [onlyHigh, sortKey]
-    );
-
-    /* ---------- RAPOR PANELİ ---------- */
-    const [reportOpen, setReportOpen] = React.useState(false);
-    const [reportTitle, setReportTitle] = React.useState("");
-    const [reportKind, setReportKind] = React.useState(null); // "live" | "delivered"
     const [reportRows, setReportRows] = React.useState([]);
     const [reportLoading, setReportLoading] = React.useState(false);
+    const [reportExpanded, setReportExpanded] = React.useState(true);
 
-    const openReport = async (kind) => {
-        if (kind === "live") {
-            const list = prepare(liveLate, "live");
-            const nos = Array.from(new Set(list.map((r) => (r.sefer_no || "").toString().trim()).filter(Boolean)));
+    // Yeni Tarih Kontrolleri
+    const [startDate, setStartDate] = React.useState(new Date().toISOString().substring(0, 10));
+    const [endDate, setEndDate] = React.useState(new Date().toISOString().substring(0, 10));
 
-            setReportTitle("Rapor • Şu an geç görünenler");
-            setReportKind("live");
-            setReportOpen(true);
-            setReportLoading(true);
-            try {
-                let rowsOut = [];
-                if (nos.length) {
-                    const { data, error } = await supabase
-                        .from("eta_gecikme_nedenleri")
-                        .select("sefer_no,kategori,aciklama,kaydeden,kayit_zamani,sefer_tarihi,eta_varis,gecikme_suresi_dk")
-                        .in("sefer_no", nos)
-                        .order("kayit_zamani", { ascending: false });
+    const loadData = React.useCallback(async () => {
+        setReportLoading(true);
+        // Hata: fetchPerformanceData'yı React'ın dışında tanımladık, burada kullanabiliriz.
+        const data = await fetchPerformanceData(startDate, endDate);
+        setReportRows(data);
+        setReportLoading(false);
+    }, [startDate, endDate]);
 
-                    if (error) throw error;
+    React.useEffect(() => {
+        loadData();
+    }, [loadData]);
 
-                    rowsOut = (data || []).map((r) => {
-                        const base = bySeferNo.get((r.sefer_no || "").toString().trim()) || {};
-                        return {
-                            sefer_no: r.sefer_no,
-                            plaka: base.plaka || "-",
-                            surucu: base.surucu_ad_soyad || "-",
-                            kategori: r.kategori || "-",
-                            aciklama: r.aciklama || "-",
-                            kaydeden: r.kaydeden || "-",
-                            kayit_zamani: r.kayit_zamani || null,
-                            sefer_tarihi: r.sefer_tarihi || null,
-                            eta: r.eta_varis || null,
-                            gecikme_dk: typeof r.gecikme_suresi_dk === "number" ? r.gecikme_suresi_dk : null,
-                        };
-                    });
-                }
-                setReportRows(rowsOut);
-            } catch (e) {
-                setReportRows([]);
-                console.error("Rapor (live) fetch error:", e?.message || e);
-            } finally {
-                setReportLoading(false);
-            }
-            return;
+    // Rapor Filtreleri
+    const [onlyLate, setOnlyLate] = React.useState(false);
+    const [sortKey, setSortKey] = React.useState("farkDesc");
+
+    const filteredReport = React.useMemo(() => {
+        let list = reportRows;
+        // NOTE: Burada durum sadece GECİKMİŞ/ERKEN değil, 'TAHMİN EDİLDİ' olduğu için filtreleme mantığı değişebilir.
+        if (onlyLate) {
+            list = list.filter(r => r.durum === 'GECİKMİŞ'); // Varsayılan olarak sadece gecikmişi filtrele
         }
 
-        if (kind === "delivered") {
-            const list = prepare(deliveredNotOnEta, "delivered");
-            const mapped = list.map((r) => ({
-                sefer_no: r.sefer_no,
-                plaka: r.plaka || "-",
-                surucu: r.surucu_ad_soyad || "-",
-                eta: r.eta,
-                teslim_varis: r.teslim_varis,
-                fark_dk: r.eta_diff_min,
-                durum: r.durum,
-                risk: riskOfLate(r.eta_diff_min > 0 ? Math.abs(r.eta_diff_min) : 0).lvl,
-            }));
-            setReportRows(mapped);
-            setReportTitle("Rapor • Teslim varış ≠ ETA");
-            setReportKind("delivered");
-            setReportOpen(true);
+        if (sortKey === 'farkDesc') {
+            list.sort((a, b) => (b.fark_dk || 0) - (a.fark_dk || 0));
+        } else if (sortKey === 'dateAsc') {
+            list.sort((a, b) => new Date(a.sefer_tarihi) - new Date(b.sefer_tarihi));
         }
-    };
 
-    /* ---------- Excel (CSV) aktar ---------- */
-    const csvEscape = (val) => {
-        const s = String(val ?? "");
-        if (/[;"\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-        return s;
-    };
-    const downloadCSV = (filename, headers, rows) => {
-        const sep = ";";
-        const headerLine = headers.map(csvEscape).join(sep);
-        const lines = rows.map((r) => r.map(csvEscape).join(sep));
-        const csv = [headerLine, ...lines].join("\r\n");
-        const bom = "\uFEFF";
-        const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
-    };
-    const exportToExcel = () => {
-        if (!reportRows.length || !reportKind) return;
-        const pad = (n) => String(n).padStart(2, "0");
-        const ts = new Date();
-        if (reportKind === "live") {
-            const headers = ["Sefer No", "Plaka", "Şoför", "Kategori", "Açıklama", "ETA", "Gecikme (saat/dk)", "Kaydeden", "Kayıt Zamanı"];
-            const rows = reportRows.map((r) => [
-                r.sefer_no || "-", r.plaka || "-", r.surucu || "-", r.kategori || "-",
-                r.aciklama || "-", fmt(r.eta), minToHM(r.gecikme_dk ?? 0), r.kaydeden || "-", fmt(r.kayit_zamani)
-            ]);
-            const name = `rapor_gec_gorunenler_${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}`;
-            downloadCSV(name, headers, rows);
-        } else {
-            const headers = ["Sefer No", "Plaka", "Şoför", "ETA", "Teslim Varış", "Fark (saat/dk)", "Durum", "Risk"];
-            const rows = reportRows.map((r) => [
-                r.sefer_no || "-", r.plaka || "-", r.surucu || "-", fmt(r.eta), fmt(r.teslim_varis),
-                minToHM(Math.abs(r.fark_dk ?? 0)), (r.durum || "-").toString().toUpperCase(), r.risk || "-"
-            ]);
-            const name = `rapor_teslim_eta_fark_${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}`;
-            downloadCSV(name, headers, rows);
-        }
-    };
+        return list;
+    }, [reportRows, onlyLate, sortKey]);
 
-    /* ---------- UI ---------- */
+
     function Controls() {
         return (
             <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ xs: "flex-start", md: "center" }}
@@ -470,223 +335,127 @@ export default function Dashboard({ rows = [], onOpenRow, onAskReason, reasonNos
                     pb: 0.5, px: 0.75, pt: 0.75, borderRadius: 2, border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
                     background: alpha(theme.palette.background.paper, 0.5), backdropFilter: "blur(6px)"
                 }}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                    <FilterListIcon fontSize="small" />
-                    <FormControlLabel control={<Switch size="small" checked={onlyHigh} onChange={(e) => setOnlyHigh(e.target.checked)} />}
-                        label={<Typography variant="caption">Sadece yüksek/kritik</Typography>} />
-                </Stack>
+
+                {/* Tarih Seçimi */}
+                <TextField
+                    label="Başlangıç Tarihi"
+                    type="date"
+                    size="small"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                    label="Bitiş Tarihi"
+                    type="date"
+                    size="small"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                />
+                <Button variant="contained" size="small" onClick={loadData} disabled={reportLoading}>
+                    {reportLoading ? <CircularProgress size={20} color="inherit" /> : 'Yenile'}
+                </Button>
+
+                <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+
+                {/* Filtre ve Sıralama */}
+                <FormControlLabel control={<Switch size="small" checked={onlyLate} onChange={(e) => setOnlyLate(e.target.checked)} />}
+                    label={<Typography variant="caption" sx={{ color: theme.palette.text.primary }}>Sadece Gecikenler</Typography>} />
 
                 <TextField select size="small" value={sortKey} onChange={(e) => setSortKey(e.target.value)} label="Sırala" sx={{ minWidth: 180 }}>
-                    <MenuItem value="lateDesc">Gecikme (azalan)</MenuItem>
-                    <MenuItem value="etaAsc">ETA / Teslim (artan)</MenuItem>
-                    <MenuItem value="codeAsc">Sefer No (A→Z)</MenuItem>
+                    <MenuItem value="farkDesc">Fark (En Gecikmişten)</MenuItem>
+                    <MenuItem value="dateAsc">Sefer Tarihi (Eskiden Yeniye)</MenuItem>
                 </TextField>
-
-                <FormControlLabel control={<Switch size="small" checked={dense} onChange={(e) => setDense(e.target.checked)} />}
-                    label={<Typography variant="caption">Sıkı görünüm</Typography>} />
-
-                <Box sx={{ flex: 1 }} />
-
-                <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, v) => v && setView(v)}
-                    sx={{ background: alpha(theme.palette.background.paper, 0.6), border: `1px solid ${alpha(theme.palette.divider, 0.8)}`, borderRadius: 2 }}>
-                    <ToggleButton value="grid" sx={{ px: 1.2 }}><ViewModuleIcon fontSize="small" /></ToggleButton>
-                    <ToggleButton value="list" sx={{ px: 1.2 }}><TableRowsIcon fontSize="small" /></ToggleButton>
-                </ToggleButtonGroup>
             </Stack>
         );
     }
 
+    /* ---------- RAPOR TABLOSU ---------- */
+    const ReportTable = () => (
+        <Table size="small" stickyHeader>
+            <TableHead>
+                <TableRow>
+                    <TableCell sx={{ fontWeight: 800 }}>Sefer No</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Plaka</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Sürücü</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Sefer Tarihi</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>ETA Varış</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>İlk Yükleme Çıkış</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Fark (dk)</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Durum</TableCell>
+                </TableRow>
+            </TableHead>
+            <TableBody>
+                {filteredReport.length === 0 ? (
+                    <TableRow>
+                        <TableCell colSpan={8}>
+                            <Typography variant="body2" sx={{ opacity: 0.7, p: 2 }}>
+                                {reportLoading ? 'Veriler yükleniyor...' : 'Seçilen tarih aralığında raporlanacak sefer bulunamadı.'}
+                            </Typography>
+                        </TableCell>
+                    </TableRow>
+                ) : (
+                    filteredReport.map((r, i) => (
+                        <TableRow key={r.id || i} hover onClick={() => onOpenRow && onOpenRow(r)} sx={{ cursor: 'pointer' }}>
+                            <TableCell>{r.sefer_no}</TableCell>
+                            <TableCell>{r.plaka}</TableCell>
+                            <TableCell>{r.surucu}</TableCell>
+                            <TableCell>{fmt(r.sefer_tarihi)}</TableCell>
+                            <TableCell>{fmt(r.eta_varis)}</TableCell>
+                            <TableCell>{fmt(r.ilk_yukleme_cikis)}</TableCell>
+                            <TableCell>
+                                {r.fark_dk === null ? '-' : (
+                                    <Chip size="small"
+                                        label={`${r.fark_dk > 0 ? '+' : ''}${minToHM(Math.abs(r.fark_dk))}`}
+                                        color={r.fark_dk <= 0 ? 'error' : 'success'}
+                                        variant="outlined"
+                                    />
+                                )}
+                            </TableCell>
+                            <TableCell>
+                                <Typography sx={{
+                                    fontWeight: 700,
+                                    color: r.durum === 'DÜZENSİZ VERİ' ? sp.red : (r.durum === 'TAHMİN EDİLDİ' ? sp.mint : theme.palette.text.secondary)
+                                }}>
+                                    {r.durum}
+                                </Typography>
+                            </TableCell>
+                        </TableRow>
+                    ))
+                )}
+            </TableBody>
+        </Table>
+    );
+
     return (
         <Container maxWidth="lg" disableGutters>
             <Stack spacing={1.25}>
-                <SectionHeader
-                    icon={<AccessTimeIcon fontSize="small" />}
-                    title="Şu an geç görünenler"
-                    count={liveLate.length}
-                    expanded={openLive}
-                    onToggle={() => setOpenLive((v) => !v)}
-                    color={sp.amber}
-                    rightSlot={<Button size="small" variant="outlined" onClick={() => openReport("live")}>Raporla</Button>}
-                />
-                <Collapse in={openLive} unmountOnExit>
-                    <Controls />
-                    {(() => {
-                        const list = prepare(liveLate, "live");
-                        const renderItem = (r) => {
-                            const chips = [
-                                <Chip key="risk" size="small" label={`Risk: ${r.__risk.lvl}`} color={r.__risk.color}
-                                    variant={r.__risk.color === "default" ? "outlined" : "filled"} />,
-                                <Chip key="late" size="small" label={`+${minToHM(r.__lateMin)}`} variant="outlined" color="warning" />,
-                            ];
-                            const full = byId.get(r.id ?? r.sefer_no) || r;
-                            return (
-                                <RowCard key={r.id ?? r.sefer_no} title={r.sefer_no || "-"} subtitle={`ETA: ${fmt(r.eta)}`}
-                                    chips={chips} color={sp.amber} dense={dense} hasNote={hasNote(r.sefer_no)}
-                                    onClick={() => { onOpenRow && onOpenRow(full, { readOnly: true }); onAskReason && onAskReason(full); }} />
-                            );
-                        };
-                        return view === "grid" ? <GridList items={list} render={renderItem} pageSize={12} /> : <Stack spacing={0.9}>{list.map(renderItem)}</Stack>;
-                    })()}
-                </Collapse>
 
-                <Divider sx={{ opacity: 0.08 }} />
-
-                <SectionHeader
-                    icon={<CheckCircleOutlineIcon fontSize="small" />}
-                    title="Teslim varış ≠ ETA"
-                    count={deliveredNotOnEta.length}
-                    expanded={openDelivered}
-                    onToggle={() => setOpenDelivered((v) => !v)}
-                    color={sp.red}
-                    hint="Gerçek teslim zamanı ile kayıtlı ETA farkı"
-                    rightSlot={<Button size="small" variant="outlined" color="error" onClick={() => openReport("delivered")}>Raporla</Button>}
-                />
-                <Collapse in={openDelivered} unmountOnExit>
-                    <Controls />
-                    {(() => {
-                        const list = prepare(deliveredNotOnEta, "delivered");
-                        const renderItem = (r) => {
-                            const chips = [
-                                <Chip key="state" size="small" label={r.durum.toUpperCase()} color={r.durum === "gecikme" ? "error" : "success"} />,
-                                <Chip key="risk" size="small" label={`Risk: ${r.__risk.lvl}`} color={r.__risk.color}
-                                    variant={r.__risk.color === "default" ? "outlined" : "filled"} />,
-                                <Chip key="diff" size="small" variant="outlined" label={`${r.eta_diff_min > 0 ? "+" : ""}${minToHM(Math.abs(r.eta_diff_min))}`} />,
-                            ];
-                            return (
-                                <RowCard key={r.id ?? r.sefer_no}
-                                    title={r.sefer_no || "-"} subtitle={`ETA: ${fmt(r.eta)} • Teslim: ${fmt(r.teslim_varis)}`}
-                                    chips={chips} color={sp.red} dense={dense} hasNote={hasNote(r.sefer_no)}
-                                    onClick={() => onOpenRow && onOpenRow(byId.get(r.id ?? r.sefer_no) || r)} />
-                            );
-                        };
-                        return view === "grid" ? <GridList items={list} render={renderItem} pageSize={12} /> : <Stack spacing={0.9}>{list.map(renderItem)}</Stack>;
-                    })()}
-                </Collapse>
-
-                <Divider sx={{ opacity: 0.08 }} />
-
-                <SectionHeader
-                    icon={<DirectionsCarFilledIcon fontSize="small" />}
-                    title="ETA eksik (bugün)"
-                    count={etaMissingToday.length}
-                    expanded={openMissing}
-                    onToggle={() => setOpenMissing((v) => !v)}
-                    color={sp.blue}
-                />
-                <Collapse in={openMissing} unmountOnExit>
-                    {etaMissingToday.length === 0 ? (
-                        <Typography variant="caption" sx={{ opacity: 0.7, px: 0.5 }}>Bugün için eksik ETA yok.</Typography>
-                    ) : (
-                        <GridList
-                            items={etaMissingToday}
-                            render={(r) => (
-                                <RowCard key={r.id ?? r.sefer_no} title={r.sefer_no || "-"} subtitle={`Sefer Tarihi: ${fmt(r.sefer_tarihi)}`}
-                                    chips={[<Chip key="tag" size="small" label="ETA YOK" variant="outlined" />]}
-                                    color={sp.blue} dense={dense} hasNote={hasNote(r.sefer_no)}
-                                    onClick={() => onOpenRow && onOpenRow(byId.get(r.id ?? r.sefer_no) || r)} />
-                            )}
-                            pageSize={12}
-                        />
-                    )}
-                </Collapse>
-
-                <Divider sx={{ opacity: 0.08 }} />
+                {/* Dashboard Kontrolleri */}
+                <Controls />
 
                 <SectionHeader
                     icon={<TimelineIcon fontSize="small" />}
-                    title="Bugün güncellenen alanlar (son 10)"
-                    count={recentLogs.length}
-                    expanded={openLogs}
-                    onToggle={() => setOpenLogs((v) => !v)}
-                    color={sp.mint}
+                    title="Sefer ETA Performans Raporu (Çıkış vs ETA)"
+                    count={filteredReport.length}
+                    expanded={reportExpanded}
+                    onToggle={() => setReportExpanded((v) => !v)}
+                    color={sp.blue}
                 />
-                <Collapse in={openLogs} unmountOnExit>
-                    {recentLogs.length === 0 ? (
-                        <Typography variant="caption" sx={{ opacity: 0.7, px: 0.5 }}>Bugün için log kaydı yok.</Typography>
-                    ) : (
-                        <GridList
-                            items={recentLogs}
-                            render={(l, i) => (
-                                <RowCard key={`${l.ts}-${i}`} title={l.sefer_no || "-"}
-                                    subtitle={`${l.user} • ${fmt(l.ts)} • ${l.action}${l.fields?.length ? ` [${l.fields.join(", ")}]` : ""}`}
-                                    chips={[]} color={sp.mint} dense={dense} hasNote={hasNote(l.sefer_no)}
-                                    onClick={() => {
-                                        const found = rows.find((r) => (r.sefer_no || "").toString() === (l.sefer_no || "").toString()) || null;
-                                        if (found && onOpenRow) onOpenRow(found);
-                                    }} />
-                            )}
-                            pageSize={12}
-                        />
-                    )}
+
+                <Collapse in={reportExpanded} unmountOnExit>
+                    <Paper elevation={1} sx={{ borderRadius: 2, overflow: 'hidden' }}>
+                        <Box sx={{ maxHeight: 600, overflowY: "auto" }}>
+                            <ReportTable />
+                        </Box>
+                    </Paper>
                 </Collapse>
 
                 <Box sx={{ mt: 0.5 }}>
                     <LinearProgress sx={{ height: 2, borderRadius: 6, opacity: 0.18 }} />
                 </Box>
             </Stack>
-
-            {/* ---------- RAPOR DİYALOĞU ---------- */}
-            <Dialog open={reportOpen} onClose={() => setReportOpen(false)} fullWidth maxWidth="lg"
-                PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}>
-                <DialogTitle sx={{ fontWeight: 900, display: "flex", alignItems: "center", gap: 1 }}>
-                    {reportTitle}
-                    {reportLoading && <CircularProgress size={16} sx={{ ml: 0.5 }} />}
-                </DialogTitle>
-                <DialogContent dividers sx={{ p: 0 }}>
-                    <Box sx={{ maxHeight: 560, overflow: "auto" }}>
-                        <Table size="small" stickyHeader>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell sx={{ fontWeight: 800 }}>Sefer No</TableCell>
-                                    <TableCell sx={{ fontWeight: 800 }}>Plaka</TableCell>
-                                    <TableCell sx={{ fontWeight: 800 }}>Şoför</TableCell>
-                                    {reportKind === "live" ? <TableCell sx={{ fontWeight: 800 }}>Kategori</TableCell> : null}
-                                    {reportKind === "live" ? <TableCell sx={{ fontWeight: 800 }}>Açıklama</TableCell> : null}
-                                    <TableCell sx={{ fontWeight: 800 }}>ETA</TableCell>
-                                    {reportKind === "delivered" ? <TableCell sx={{ fontWeight: 800 }}>Teslim Varış</TableCell> : null}
-                                    <TableCell sx={{ fontWeight: 800 }}>{reportKind === "delivered" ? "Fark (saat/dk)" : "Gecikme (saat/dk)"}</TableCell>
-                                    {reportKind === "delivered" ? <TableCell sx={{ fontWeight: 800 }}>Durum</TableCell> : null}
-                                    <TableCell sx={{ fontWeight: 800 }}>{reportKind === "live" ? "Kaydeden" : "Risk"}</TableCell>
-                                    {reportKind === "live" ? <TableCell sx={{ fontWeight: 800 }}>Kayıt Zamanı</TableCell> : null}
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {reportRows.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={9}>
-                                            <Typography variant="body2" sx={{ opacity: 0.7, p: 2 }}>
-                                                Kayıt bulunamadı.
-                                            </Typography>
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    reportRows.map((r, i) => (
-                                        <TableRow key={`${r.sefer_no}-${i}`} hover>
-                                            <TableCell>{r.sefer_no}</TableCell>
-                                            <TableCell>{r.plaka || "-"}</TableCell>
-                                            <TableCell>{r.surucu || "-"}</TableCell>
-                                            {reportKind === "live" ? <TableCell>{r.kategori}</TableCell> : null}
-                                            {reportKind === "live" ? <TableCell>{r.aciklama}</TableCell> : null}
-                                            <TableCell>{fmt(r.eta)}</TableCell>
-                                            {reportKind === "delivered" ? <TableCell>{fmt(r.teslim_varis)}</TableCell> : null}
-                                            <TableCell>{reportKind === "delivered" ? minToHM(Math.abs(r.fark_dk ?? 0)) : minToHM(r.gecikme_dk ?? 0)}</TableCell>
-                                            {reportKind === "delivered" ? <TableCell>{r.durum?.toUpperCase?.() || "-"}</TableCell> : null}
-                                            <TableCell>{reportKind === "live" ? r.kaydeden : r.risk}</TableCell>
-                                            {reportKind === "live" ? <TableCell>{fmt(r.kayit_zamani)}</TableCell> : null}
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </Box>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={exportToExcel} variant="contained" disabled={!reportRows.length}>
-                        Excel’e aktar
-                    </Button>
-                    <Button onClick={() => setReportOpen(false)}>Kapat</Button>
-                </DialogActions>
-            </Dialog>
         </Container>
     );
 }

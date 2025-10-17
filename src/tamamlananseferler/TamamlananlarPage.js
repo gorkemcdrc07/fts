@@ -4,6 +4,7 @@ import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 
+/* MUI */
 import {
     Box, Paper, Stack, Typography, Button, Drawer, IconButton, Divider,
     Table, TableHead, TableRow, TableCell, TableBody,
@@ -27,6 +28,64 @@ import DashboardPanel from "./components/DashboardPanel";
 const HOME_PATH = "/anasayfa";
 const now = new Date();
 const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+// =================================================================
+// YENİ HELPER: GÖSTERİM AMAÇLI +3 SAAT DÜZELTME FONKSİYONLARI
+// Supabase'den gelen UTC dizesini Yerel Saat (TR saati) olarak gösterir.
+// =================================================================
+const fmtDateTimeFixed = (isoString) => {
+    if (!isoString) return "-";
+    const d = new Date(isoString);
+    if (Number.isNaN(d.getTime())) return "-";
+
+    // 1. UTC Değerlerini alıyoruz.
+    let y = d.getUTCFullYear();
+    let mo = d.getUTCMonth() + 1;
+    let dd = d.getUTCDate();
+    let hh = d.getUTCHours();
+    let mi = d.getUTCMinutes();
+
+    // 2. SADECE 3 SAAT EKLEME İŞLEMİ (TR Saati)
+    let totalMinutes = (hh * 60) + mi + (3 * 60);
+
+    const newHH = Math.floor(totalMinutes / 60) % 24;
+    const newMI = totalMinutes % 60;
+    const daysToAdd = Math.floor(totalMinutes / (24 * 60));
+
+    // 3. Gün kayması varsa, tarih parçalarını kullanarak günü ayarla
+    if (daysToAdd > 0) {
+        let tempDate = new Date(Date.UTC(y, mo - 1, dd, 0, 0, 0));
+        tempDate.setUTCDate(tempDate.getUTCDate() + daysToAdd);
+
+        y = tempDate.getUTCFullYear();
+        mo = tempDate.getUTCMonth() + 1;
+        dd = tempDate.getUTCDate();
+    }
+
+    const pad = (n) => String(n).padStart(2, "0");
+
+    // 4. Sonucu formatla
+    return `${pad(dd)}.${pad(mo)}.${y} ${pad(newHH)}:${pad(newMI)}`;
+};
+
+const fmtDateFixed = (isoString) => {
+    if (!isoString) return "-";
+    const d = new Date(isoString);
+    if (Number.isNaN(d.getTime())) return "-";
+
+    // Sadece tarih gösterimi için, saati gün ortasına alıp yerel tarihini alırız.
+    // Bu, fmtDateTimeFixed'in tarih kısmını kullanmaktan daha güvenlidir.
+
+    // NOT: Harici fmtDateText'in doğru çalıştığını varsayarak onu kullanmak en iyisidir.
+    // Ancak o 3 saat geride gösteriyorsa, biz UTC'den alalım.
+    const y = d.getUTCFullYear();
+    const mo = d.getUTCMonth() + 1;
+    const dd = d.getUTCDate();
+
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(dd)}.${pad(mo)}.${y}`;
+};
+
 
 export default function TamamlananlarPage() {
     const theme = useTheme();
@@ -125,6 +184,8 @@ export default function TamamlananlarPage() {
                 const maxTeslim = {};
                 (det || []).forEach((d) => {
                     if (!d?.sefer_no || !d?.teslim_varis) return;
+                    // NOT: Teslim varışı alırken 3 saat ekleme yapılmamalı, 
+                    // çünkü karşılaştırmada UTC/UTC kullanılır.
                     const t = new Date(d.teslim_varis);
                     if (!maxTeslim[d.sefer_no] || t > maxTeslim[d.sefer_no]) {
                         maxTeslim[d.sefer_no] = t;
@@ -146,7 +207,9 @@ export default function TamamlananlarPage() {
                 ];
 
                 for (const r of data || []) {
+                    // tETA UTC'de olmalı
                     const tETA = r?.eta_varis ? new Date(r.eta_varis) : null;
+                    // tReal UTC'de olmalı
                     const tReal = maxTeslim[r.sefer_no] || null;
 
                     let status = "ONTIME";
@@ -282,14 +345,16 @@ export default function TamamlananlarPage() {
                 field: "atama_tarihi",
                 headerName: "Atama Tarihi",
                 width: 170,
-                valueGetter: (v, row) => (row?.atama_tarihi ? fmtDateTimeText(row.atama_tarihi) : "-"),
+                // DÜZELTME: Kendi +3 saat ekleyen helper'ımızı kullanıyoruz
+                valueGetter: (v, row) => (row?.atama_tarihi ? fmtDateTimeFixed(row.atama_tarihi) : "-"),
             },
 
             {
                 field: "sefer_tarihi",
                 headerName: "Sefer Tarihi",
                 width: 140,
-                valueGetter: (v, row) => (row?.sefer_tarihi ? fmtDateText(row.sefer_tarihi) : "-"),
+                // DÜZELTME: Kendi +3 saat ekleyen helper'ımızı kullanıyoruz
+                valueGetter: (v, row) => (row?.sefer_tarihi ? fmtDateFixed(row.sefer_tarihi) : "-"),
             },
 
             { field: "arac_statu", headerName: "Araç Statü", width: 140 },
@@ -298,13 +363,15 @@ export default function TamamlananlarPage() {
                 field: "eta_varis",
                 headerName: "ETA Varış",
                 width: 180,
-                valueGetter: (v, row) => (row?.eta_varis ? fmtDateTimeText(row.eta_varis) : "-"),
+                // DÜZELTME: Kendi +3 saat ekleyen helper'ımızı kullanıyoruz
+                valueGetter: (v, row) => (row?.eta_varis ? fmtDateTimeFixed(row.eta_varis) : "-"),
             },
             {
                 field: "kayit_zamani",
                 headerName: "Kayıt Zamanı",
                 width: 180,
-                valueGetter: (v, row) => (row?.kayit_zamani ? fmtDateTimeText(row.kayit_zamani) : "-"),
+                // DÜZELTME: Kendi +3 saat ekleyen helper'ımızı kullanıyoruz
+                valueGetter: (v, row) => (row?.kayit_zamani ? fmtDateTimeFixed(row.kayit_zamani) : "-"),
             },
         ],
         [openDetails]
@@ -325,11 +392,12 @@ export default function TamamlananlarPage() {
             TeslimNoktasi: s.teslim_noktasi,
             TeslimIlce: `${s.teslim_ili ?? ""} / ${s.teslim_ilcesi ?? ""}`,
             Atayan: s.atama_yapan_kullanici,
-            AtamaTarihi: fmtDateTimeText(s.atama_tarihi),
-            SeferTarihi: fmtDateText(s.sefer_tarihi),
+            // DÜZELTME: Kendi helper'ımızı kullanıyoruz
+            AtamaTarihi: s.atama_tarihi ? fmtDateTimeFixed(s.atama_tarihi) : "-",
+            SeferTarihi: s.sefer_tarihi ? fmtDateFixed(s.sefer_tarihi) : "-",
             Durum: s.arac_statu,
-            ETA_Varis: s.eta_varis ? fmtDateTimeText(s.eta_varis) : "",
-            KayitZamani: s.kayit_zamani ? fmtDateTimeText(s.kayit_zamani) : "",
+            ETA_Varis: s.eta_varis ? fmtDateTimeFixed(s.eta_varis) : "",
+            KayitZamani: s.kayit_zamani ? fmtDateTimeFixed(s.kayit_zamani) : "",
         }));
         const ws = XLSX.utils.json_to_sheet(sheet);
         const wb = XLSX.utils.book_new();
@@ -355,8 +423,8 @@ export default function TamamlananlarPage() {
                     Musteri: s.musteri_adi,
                     Proje: s.proje_adi,
                     Asama: "Detay yok",
-                    ETA_Varis: s.eta_varis ? fmtDateTimeText(s.eta_varis) : "",
-                    KayitZamani: s.kayit_zamani ? fmtDateTimeText(s.kayit_zamani) : "",
+                    ETA_Varis: s.eta_varis ? fmtDateTimeFixed(s.eta_varis) : "",
+                    KayitZamani: s.kayit_zamani ? fmtDateTimeFixed(s.kayit_zamani) : "",
                 });
                 continue;
             }
@@ -369,13 +437,14 @@ export default function TamamlananlarPage() {
                     Proje: d.proje_adi,
                     Sira: d.nokta_sirasi,
                     YuklemeNoktasi: d.yukleme_noktasi,
-                    YuklemeVaris: fmtDateTimeText(d.yukleme_varis),
-                    YuklemeCikis: fmtDateTimeText(d.yukleme_cikis),
+                    // DÜZELTME: Kendi helper'ımızı kullanıyoruz
+                    YuklemeVaris: fmtDateTimeFixed(d.yukleme_varis),
+                    YuklemeCikis: fmtDateTimeFixed(d.yukleme_cikis),
                     TeslimNoktasi: d.teslim_noktasi,
-                    TeslimVaris: fmtDateTimeText(d.teslim_varis),
-                    TeslimCikis: fmtDateTimeText(d.teslim_cikis),
-                    ETA_Varis: s.eta_varis ? fmtDateTimeText(s.eta_varis) : "",
-                    KayitZamani: s.kayit_zamani ? fmtDateTimeText(s.kayit_zamani) : "",
+                    TeslimVaris: fmtDateTimeFixed(d.teslim_varis),
+                    TeslimCikis: fmtDateTimeFixed(d.teslim_cikis),
+                    ETA_Varis: s.eta_varis ? fmtDateTimeFixed(s.eta_varis) : "",
+                    KayitZamani: s.kayit_zamani ? fmtDateTimeFixed(s.kayit_zamani) : "",
                 });
             }
         }
@@ -489,7 +558,7 @@ export default function TamamlananlarPage() {
                         <Typography variant="body2" sx={{ opacity: 0.7 }}>—</Typography>
                         <TextField
                             type="date" size="small"
-                            value={(dateEnd && fmtDate(dateEnd)?.toISOString()?.slice(0, 10)) || ""} 
+                            value={(dateEnd && fmtDate(dateEnd)?.toISOString()?.slice(0, 10)) || ""}
                             onChange={(e) => {
                                 setPaginationModel((p) => ({ ...p, page: 0 }));
                                 setDateEnd(e.target.value ? new Date(e.target.value) : null);
@@ -576,7 +645,7 @@ export default function TamamlananlarPage() {
                             zIndex: 2,
                             background: "rgba(15,23,42,0.92)",
                             backdropFilter: "blur(4px)",
-                            borderBottom: "1px solid rgba(255,255,255,0.06)",
+                            borderBottom: "1px solid rgba(255,255,255,0.08)",
                             overflowX: "auto",
                             flexWrap: "wrap",
                         },
@@ -655,11 +724,11 @@ export default function TamamlananlarPage() {
                                                 <TableCell>{d.nokta_sirasi}</TableCell>
                                                 <TableCell>{d.proje_adi}</TableCell>
                                                 <TableCell>{d.yukleme_noktasi}</TableCell>
-                                                <TableCell>{fmtDateTimeText(d.yukleme_varis)}</TableCell>
-                                                <TableCell>{fmtDateTimeText(d.yukleme_cikis)}</TableCell>
+                                                <TableCell>{fmtDateTimeFixed(d.yukleme_varis)}</TableCell>
+                                                <TableCell>{fmtDateTimeFixed(d.yukleme_cikis)}</TableCell>
                                                 <TableCell>{d.teslim_noktasi}</TableCell>
-                                                <TableCell>{fmtDateTimeText(d.teslim_varis)}</TableCell>
-                                                <TableCell>{fmtDateTimeText(d.teslim_cikis)}</TableCell>
+                                                <TableCell>{fmtDateTimeFixed(d.teslim_varis)}</TableCell>
+                                                <TableCell>{fmtDateTimeFixed(d.teslim_cikis)}</TableCell>
                                             </TableRow>
                                         ))
                                     )}

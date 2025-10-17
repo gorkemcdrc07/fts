@@ -821,7 +821,6 @@ export default function ReelAtananSeferler() {
                         teslim_ili: pick("teslim_ili", i),
                         teslim_ilcesi: pick("teslim_ilcesi", i),
                         yukleme_varis: pick("yukleme_varis", i),
-                        yukleme_cikis: pick("yukleme_cikis", i),
                         teslim_varis: pick("teslim_varis", i),
                         teslim_cikis: pick("teslim_cikis", i),
                     }));
@@ -1430,48 +1429,16 @@ export default function ReelAtananSeferler() {
                     p: 1.25,
                 }}
             >
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography variant="subtitle2" fontWeight={800}>
-                            Özet Dashboard
-                        </Typography>
-                        <Chip size="small" label={dashRows.length} />
-                    </Stack>
-                    <IconButton size="small" onClick={() => setDashOpen((v) => !v)}>
-                        <ExpandMoreIcon
-                            sx={{ transform: dashOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "0.2s" }}
-                        />
-                    </IconButton>
-                </Stack>
-
-                <Collapse in={dashOpen} unmountOnExit>
-                    <Box sx={{ pt: 1.25 }}>
-                        <Dashboard
-                            rows={dashRows}
-                            reasonNos={reasonNos}
-                            bump={viewBump}
-                            onOpenRow={(mini) => {
-                                const full =
-                                    filtered.find(
-                                        (r) =>
-                                            (r.id ?? r._rid) === mini.id ||
-                                            (mini.sefer_no && r.sefer_no === mini.sefer_no)
-                                    ) || mini;
-                                openETA(full);
-                            }}
-                            onAskReason={(mini) => {
-                                const full =
-                                    filtered.find(
-                                        (r) =>
-                                            (r.id ?? r._rid) === mini.id ||
-                                            (mini.sefer_no && r.sefer_no === mini.sefer_no)
-                                    ) || mini;
-                                setReasonRow(full);
-                                setReasonOpen(true);
-                            }}
-                        />
-                    </Box>
-                </Collapse>
+                {/* DÜZELTİLDİ: Dashboard yerine direkt Raporu render ediyoruz */}
+                <Box sx={{ pt: 1.25 }}>
+                    <Dashboard
+                        rows={rows} // Artık rows'un tamamını gönderiyoruz, Dashboard kendi içinde filtreler/hesaplamalar yapacak.
+                        reasonNos={reasonNos}
+                        bump={viewBump}
+                        // openETA ve onAskReason artık dashboard'un içinde geçersiz, onOpenRow kullanılıyor
+                        onOpenRow={(r) => openEditor(r)}
+                    />
+                </Box>
             </Paper>
 
             {/* Liste */}

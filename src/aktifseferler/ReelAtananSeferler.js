@@ -68,7 +68,7 @@ import {
     parseHHMMtoMin,
     parseMesafeKm,
     computeETAWithKGM,
-    computeETAWithKGMPlus,   // ← buraya ekle
+    computeETAWithKGMPlus,
     BREAK_OPTIONS,
     ETA_STATUS,
     ETA_MESSAGES,
@@ -105,7 +105,8 @@ const isUUID = (v) =>
 export default function ReelAtananSeferler() {
     /* DataGrid apiRef + kullanıcı anahtarları */
     const apiRef = useGridApiRef();
-    const USERKEY = (localStorage.getItem("kullaniciAdi") || "GENERIC").toUpperCase();
+    // GÜNCELLEYEN BİLGİSİ İÇİN KULLANILACAK: localStorage.getItem("kullanici") olarak düzeltildi
+    const USERKEY = (localStorage.getItem("kullanici") || "GENERIC").toUpperCase();
     const ORDER_KEY = `aktifseferler.columnOrder.${USERKEY}`;
     const HIDDEN_KEY = `aktifseferler.hiddenColumns.${USERKEY}`;
     const GENERIC_ORDER_KEY = `aktifseferler.columnOrder.GENERIC`;
@@ -204,6 +205,7 @@ export default function ReelAtananSeferler() {
     const [editOpen, setEditOpen] = useState(false);
     const [editSefer, setEditSefer] = useState(null);
     const [detailRows, setDetailRows] = useState([]);
+    // detailRowsOrig: Orijinal değerleri tutar (karşılaştırma ve yeni sütunları doldurmak için gerekli)
     const [detailRowsOrig, setDetailRowsOrig] = useState([]);
     const [seferTarihiYeni, setSeferTarihiYeni] = useState("");
 
@@ -232,7 +234,7 @@ export default function ReelAtananSeferler() {
     const addLog = (entry) => {
         try {
             const all = JSON.parse(localStorage.getItem("aktifseferler.logs") || "[]");
-            const user = localStorage.getItem("kullaniciAdi") || "-";
+            const user = localStorage.getItem("kullanici") || "-"; // Düzeltildi
             all.unshift({ ts: new Date().toISOString(), user, ...entry });
             localStorage.setItem("aktifseferler.logs", JSON.stringify(all.slice(0, 200)));
             setViewBump(String(Date.now()));
@@ -409,6 +411,15 @@ export default function ReelAtananSeferler() {
                 yukleme_cikis: "",
                 teslim_varis: "",
                 teslim_cikis: "",
+                // Yeni kolonlar başlangıçta boş
+                yukleme_varis_guncelleyen: "",
+                yukleme_varis_guncelleme_tarihi: "",
+                yukleme_cikis_guncelleyen: "",
+                yukleme_cikis_guncelleme_tarihi: "",
+                teslim_varis_guncelleyen: "",
+                teslim_varis_guncelleme_tarihi: "",
+                teslim_cikis_guncelleyen: "",
+                teslim_cikis_guncelleme_tarihi: "",
             },
         ]);
     }, [editSefer]);
@@ -416,6 +427,7 @@ export default function ReelAtananSeferler() {
     const copyDetailRow = useCallback((idx) => {
         setDetailRows((prev) => {
             const r = prev[idx];
+            // Kopyalarken _guncelleyen ve _guncelleme_tarihi alanları kopyalanmalı
             const c = { ...r, nokta_sirasi: prev.length };
             return [...prev, c];
         });
@@ -432,42 +444,99 @@ export default function ReelAtananSeferler() {
         setDetailRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
     }, []);
 
+    // GÜNCELLENMİŞ saveDetails: Yeni guncelleyen/tarih sütunlarını ekler ve NULL hatasını çözer
     const saveDetails = useCallback(async () => {
-        if (!editSefer) return;
+        if (!editSefer) return false;
         setSaving(true);
 
+        // DÜZELTİLDİ: localStorage.getItem("kullanici") kullanılıyor
+        const currentUserName = (localStorage.getItem("kullanici") || "GENERIC").toUpperCase();
+        const currentTimestamp = new Date().toISOString();
+        const timeFields = ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"];
+
+        let successfullyUpdatedRows = []; // Yeni kaydedilen bilgileri tutacak
+        let errorOccurred = false;
+
         try {
-            const upserts = detailRows.map((d, i) => ({
-                sefer_id: editSefer.id,
-                nokta_sirasi: i,
-                proje_adi: clean(d.proje_adi),
-                yukleme_noktasi: clean(d.yukleme_noktasi),
-                yukleme_ili: clean(d.yukleme_ili),
-                yukleme_ilcesi: clean(d.yukleme_ilcesi),
-                teslim_noktasi: clean(d.teslim_noktasi),
-                teslim_ili: clean(d.teslim_ili),
-                teslim_ilcesi: clean(d.teslim_ilcesi),
-                yukleme_varis: clean(d.yukleme_varis),
-                yukleme_cikis: clean(d.yukleme_cikis),
-                teslim_varis: clean(d.teslim_varis),
-                teslim_cikis: clean(d.teslim_cikis),
+            // Detay satırlarını güncelleme bilgisiyle hazırlarız
+            const upserts = detailRows.map((d, i) => {
+                const original = detailRowsOrig[i] || {};
 
-                arac_statu: computeAracStatu(detailRows) || null,
-                kayit_zamani: new Date().toISOString(),
-            }));
+                // CRITICAL: Supabase'e göndermeden önce tüm boş stringleri null'a dönüştür
+                const cleaned_d = {};
+                for (const key in d) {
+                    cleaned_d[key] = clean(d[key]) || null; // clean() "" döndürüyorsa, null'a dönüştür
+                }
 
-            await upsertDetaylar(upserts);
+                const updatedRow = {
+                    sefer_id: cleaned_d.sefer_id,
+                    nokta_sirasi: cleaned_d.nokta_sirasi,
+                    proje_adi: cleaned_d.proje_adi,
+                    yukleme_noktasi: cleaned_d.yukleme_noktasi,
+                    yukleme_ili: cleaned_d.yukleme_ili,
+                    yukleme_ilcesi: cleaned_d.yukleme_ilcesi,
+                    teslim_noktasi: cleaned_d.teslim_noktasi,
+                    teslim_ili: cleaned_d.teslim_ili,
+                    teslim_ilcesi: cleaned_d.teslim_ilcesi,
+                    // Zaman alanları (Artık cleaned_d'den geliyor ve boşsa NULL)
+                    yukleme_varis: cleaned_d.yukleme_varis,
+                    yukleme_cikis: cleaned_d.yukleme_cikis,
+                    teslim_varis: cleaned_d.teslim_varis,
+                    teslim_cikis: cleaned_d.teslim_cikis,
 
-            // Auto ETA
+                    arac_statu: computeAracStatu(detailRows) || null,
+                    kayit_zamani: new Date().toISOString(), // Genel kayıt zamanı
+                };
+
+                // YENİ MANTIK: Hangi tarih alanının değiştiğini kontrol et ve yeni sütunları doldur
+                timeFields.forEach(field => {
+                    // Karşılaştırma için clean edilmiş değeri kullan
+                    const currentValue = cleaned_d[field]; // null veya ISO string
+                    const originalValue = clean(original[field]) || null; // null veya ISO string
+
+                    if (currentValue !== originalValue) {
+                        // Alan değişti! Güncelleyen ve tarihi kodda ayarla.
+                        updatedRow[`${field}_guncelleyen`] = currentUserName;
+                        updatedRow[`${field}_guncelleme_tarihi`] = currentTimestamp;
+                    } else {
+                        // Alan değişmedi. Eski güncelleyen bilgisini koru.
+                        const originalUser = original[`${field}_guncelleyen`] ?? null;
+                        const originalDate = clean(original[`${field}_guncelleme_tarihi`]) || null; // CRITICAL: Boş stringi null yap
+
+                        updatedRow[`${field}_guncelleyen`] = originalUser;
+                        updatedRow[`${field}_guncelleme_tarihi`] = originalDate;
+                    }
+                });
+
+                // Başarılı olursa kullanılacak güncel state'i tut
+                // Bu, aynı zamanda yeni kaydedilen _guncelleyen alanlarını da içerir.
+                successfullyUpdatedRows.push({ ...d, ...updatedRow });
+                return updatedRow; // Supabase'e gönderilecek payload
+            });
+
+            // CRITICAL DÜZELTME: Güvenli Promise Çözümlemesi
+            const upsertResult = await upsertDetaylar(upserts);
+            if (upsertResult && upsertResult.error) {
+                throw upsertResult.error;
+            }
+
+
+            // BAŞARILI KAYIT SONRASI STATE GÜNCELLEMESİ (CRITICAL)
+            // Detay state'ini, yeni kaydedilen guncelleyen/tarih bilgileriyle güncelle
+            setDetailRows(successfullyUpdatedRows);
+            // Orijinal (snapshot) state'ini de aynı verilerle güncelle
+            setDetailRowsOrig(successfullyUpdatedRows);
+
+
+            // Auto ETA kısmı aynı kalır
             try {
-                const firstStart = getFirstLegStartISO(detailRows);
+                const firstStart = getFirstLegStartISO(successfullyUpdatedRows); // Yeni state'i kullan
                 if (editSefer?.id) {
-                    const { yIl, yIlce, tIl, tIlce } = pickFirstLegOD(editSefer || {}, detailRows);
+                    const { yIl, yIlce, tIl, tIlce } = pickFirstLegOD(editSefer || {}, successfullyUpdatedRows);
                     const mesafeRaw = await fetchMesafe({ yIl, yIlce, tIl, tIlce });
                     const km = parseMesafeKm(mesafeRaw);
 
                     if (firstStart && km) {
-                        // Yükleme çıkış + mesafe var → ETA hesapla
                         const { data: srow } = await supabase
                             .from("seferler")
                             .select("kalan_surus_dk")
@@ -491,7 +560,6 @@ export default function ReelAtananSeferler() {
                             )
                         );
                     } else if (!firstStart) {
-                        // Yükleme çıkış yok → not yaz
                         await updateSefer(editSefer.id, {
                             eta_varis: null,
                             eta_note: "Yükleme çıkış tarihi bekleniyor.",
@@ -506,7 +574,6 @@ export default function ReelAtananSeferler() {
                             )
                         );
                     } else {
-                        // firstStart var ama km yok → not yaz
                         await updateSefer(editSefer.id, {
                             eta_varis: null,
                             eta_note: "Mesafe bulunamadı.",
@@ -526,15 +593,17 @@ export default function ReelAtananSeferler() {
                 console.error("Auto ETA hesaplama hatası:", e);
             }
 
-
             setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
         } catch (e) {
+            errorOccurred = true;
             console.error(e);
             setSnack({ open: true, msg: `Kaydetme hatası: ${e?.message || e}`, severity: "error" });
         } finally {
             setSaving(false);
         }
-    }, [detailRows, editSefer]);
+
+        return !errorOccurred; // Başarılı olup olmadığını döndür
+    }, [detailRows, editSefer, detailRowsOrig, USERKEY, computeAracStatu]);
 
     const moveToCompleted = useCallback(async () => {
         if (!editSefer) return;
@@ -583,12 +652,22 @@ export default function ReelAtananSeferler() {
                 teslim_noktasi: clean(d.teslim_noktasi),
                 teslim_ili: clean(d.teslim_ili),
                 teslim_ilcesi: clean(d.teslim_ilcesi),
-                yukleme_varis: clean(d.yukleme_varis),
-                yukleme_cikis: clean(d.yukleme_cikis),
-                teslim_varis: clean(d.teslim_varis),
-                teslim_cikis: clean(d.teslim_cikis),
+                // CRITICAL: Tamamlananlara aktarırken de boş stringleri null yap
+                yukleme_varis: clean(d.yukleme_varis) || null,
+                yukleme_cikis: clean(d.yukleme_cikis) || null,
+                teslim_varis: clean(d.teslim_varis) || null,
+                teslim_cikis: clean(d.teslim_cikis) || null,
                 kayit_zamani: new Date().toISOString(),
                 arac_statu: seferAna.arac_statu ?? null,
+                // YENİ EKLENEN 8 KOLON (detailRows'taki son veriyi tamamlananlara aktarıyoruz)
+                yukleme_varis_guncelleyen: d.yukleme_varis_guncelleyen || null,
+                yukleme_varis_guncelleme_tarihi: clean(d.yukleme_varis_guncelleme_tarihi) || null,
+                yukleme_cikis_guncelleyen: d.yukleme_cikis_guncelleyen || null,
+                yukleme_cikis_guncelleme_tarihi: clean(d.yukleme_cikis_guncelleme_tarihi) || null,
+                teslim_varis_guncelleyen: d.teslim_varis_guncelleyen || null,
+                teslim_varis_guncelleme_tarihi: clean(d.teslim_varis_guncelleme_tarihi) || null,
+                teslim_cikis_guncelleyen: d.teslim_cikis_guncelleyen || null,
+                teslim_cikis_guncelleme_tarihi: clean(d.teslim_cikis_guncelleme_tarihi) || null,
             }));
 
             const { error: e1 } = await supabase
@@ -635,6 +714,7 @@ export default function ReelAtananSeferler() {
             let detay = [];
             if (id) detay = await loadDetaylar(id);
 
+            // Eğer detaylar boşsa, ana tablodan detayları oluştur
             if (!detay.length) {
                 const arrs = Object.fromEntries(detailFields.map((k) => [k, splitCell(row[k])]));
                 const len = Math.max(1, ...detailFields.map((k) => arrs[k].length));
@@ -656,7 +736,8 @@ export default function ReelAtananSeferler() {
                 }));
             }
 
-            setDetailRows(detay.map((d) => ({
+            // Gelen datayı state'e yüklerken, yeni 8 kolonu da dahil et (varsayım)
+            const mapDetay = (d) => ({
                 ...d,
                 proje_adi: d.proje_adi ?? "",
                 yukleme_noktasi: d.yukleme_noktasi ?? "",
@@ -669,21 +750,20 @@ export default function ReelAtananSeferler() {
                 yukleme_cikis: d.yukleme_cikis ?? "",
                 teslim_varis: d.teslim_varis ?? "",
                 teslim_cikis: d.teslim_cikis ?? "",
-            })));
+                // YENİ EKLENEN 8 ALAN: Backend'den geliyorsa al, yoksa boş bırak
+                yukleme_varis_guncelleyen: d.yukleme_varis_guncelleyen ?? "",
+                yukleme_varis_guncelleme_tarihi: d.yukleme_varis_guncelleme_tarihi ?? "",
+                yukleme_cikis_guncelleyen: d.yukleme_cikis_guncelleyen ?? "",
+                yukleme_cikis_guncelleme_tarihi: d.yukleme_cikis_guncelleme_tarihi ?? "",
+                teslim_varis_guncelleyen: d.teslim_varis_guncelleyen ?? "",
+                teslim_varis_guncelleme_tarihi: d.teslim_varis_guncelleme_tarihi ?? "",
+                teslim_cikis_guncelleyen: d.teslim_cikis_guncelleyen ?? "",
+                teslim_cikis_guncelleme_tarihi: d.teslim_cikis_guncelleme_tarihi ?? "",
+            });
 
-            setDetailRowsOrig(detay.map((d) => ({
-                proje_adi: d.proje_adi ?? "",
-                yukleme_noktasi: d.yukleme_noktasi ?? "",
-                yukleme_ili: d.yukleme_ili ?? "",
-                yukleme_ilcesi: d.yukleme_ilcesi ?? "",
-                teslim_noktasi: d.teslim_noktasi ?? "",
-                teslim_ili: d.teslim_ili ?? "",
-                teslim_ilcesi: d.teslim_ilcesi ?? "",
-                yukleme_varis: d.yukleme_varis ?? "",
-                yukleme_cikis: d.yukleme_cikis ?? "",
-                teslim_varis: d.teslim_varis ?? "",
-                teslim_cikis: d.teslim_cikis ?? "",
-            })));
+            const initialDetails = detay.map(mapDetay);
+            setDetailRows(initialDetails);
+            setDetailRowsOrig(initialDetails); // Orijinal (snapshot) olarak da kaydet
             setSeferTarihiYeni(row?.sefer_tarihi || "");
 
             if (aktarModu) {
@@ -779,7 +859,6 @@ export default function ReelAtananSeferler() {
         [mayOpenETA]
     );
 
-    // Özet metinleri
     const originText = useMemo(() => {
         if (!etaRow) return "-";
         const first = (arr) => (arr.length ? arr[0] : "");
@@ -825,7 +904,7 @@ export default function ReelAtananSeferler() {
 
             const { etaISO } = computeETAWithKGMPlus(etaDistanceKm, startISO, {
                 initialRemainMin: initialRemain,
-                startBreakMin: Number(breakSel) || 0, // ✅ molayı buraya veriyoruz, tabana eklemiyoruz
+                startBreakMin: Number(breakSel) || 0, // molayı buraya veriyoruz, tabana eklemiyoruz
             });
 
             return etaISO || "";
@@ -883,7 +962,7 @@ export default function ReelAtananSeferler() {
             if (canCompute) {
                 const { etaISO } = computeETAWithKGMPlus(etaDistanceKm, startISO, {
                     initialRemainMin: initialRemain,
-                    startBreakMin: Number(breakSel) || 0, // ✅ molayı opsiyonla ver
+                    startBreakMin: Number(breakSel) || 0, // molayı opsiyonla ver
                 });
                 newETA = etaISO || null;
             }
@@ -919,7 +998,8 @@ export default function ReelAtananSeferler() {
 
                     return (matchById || matchByRid || matchByNo) ? { ...r, ...payload } : r;
                 })
-            );            addLog({ action: "ETA kaydedildi", sefer_no: etaRow?.sefer_no || "-", fields: ["eta_varis", "kalan_surus_dk", "eta_mola_dk"] });
+            );
+            addLog({ action: "ETA kaydedildi", sefer_no: etaRow?.sefer_no || "-", fields: ["eta_varis", "kalan_surus_dk", "eta_mola_dk"] });
 
             setSnack({
                 open: true,
@@ -932,7 +1012,7 @@ export default function ReelAtananSeferler() {
         } finally {
             setSaving(false);
         }
-    }, [etaLocked, etaRow, etaStartISO, driveHM, etaDetails, etaDistanceKm, breakSel]);
+    }, [etaLocked, etaRow, etaStartISO, driveHM, etaDetails, etaDistanceKm, breakSel, firstLegStartISO]);
 
     /* === Dashboard için adapter === */
     const [dashRows, setDashRows] = useState([]);
@@ -1160,7 +1240,7 @@ export default function ReelAtananSeferler() {
             const sefer_id = isUUID(sefer_id_raw) ? sefer_id_raw : null;
 
             const sefer_no = (reasonRow?.sefer_no || "").toString().trim() || null;
-            const kaydeden = localStorage.getItem("kullaniciAdi") || "-";
+            const kaydeden = localStorage.getItem("kullanici") || "-"; // Düzeltildi
 
             const sefer_tarihi = reasonRow?.sefer_tarihi || null;
             const eta_varis = reasonRow?.eta_varis || reasonRow?.eta || null;
@@ -1531,7 +1611,6 @@ export default function ReelAtananSeferler() {
                         onDetailChange={onDetailChange}
                         onSaveClick={async () => {
                             try {
-                                setSaving(true);
 
                                 // 1) sefer_tarihi değişti mi?
                                 let tarihDegisti = false;
@@ -1543,10 +1622,13 @@ export default function ReelAtananSeferler() {
                                     tarihDegisti = true;
                                 }
 
-                                // 2) detayları kaydet
-                                await saveDetails();
+                                // 2) detayları kaydet ve yeni state'i al
+                                const success = await saveDetails();
+                                if (!success) {
+                                    return;
+                                }
 
-                                // 3) grid’i güncelle
+                                // 3) grid’i güncelle (Sefer tarihi değiştiyse)
                                 setRows((prev) =>
                                     prev.map((r) =>
                                         r.id === editSefer?.id
@@ -1555,7 +1637,7 @@ export default function ReelAtananSeferler() {
                                     )
                                 );
 
-                                // 4) DEĞİŞEN ALANLAR
+                                // 4) DEĞİŞEN ALANLAR (Loglama kısmı)
                                 const timeKeys = ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"];
                                 const changedFields = [];
                                 const detailedChanges = {};
@@ -1563,6 +1645,7 @@ export default function ReelAtananSeferler() {
                                 detailRows.forEach((row, idx) => {
                                     const orig = detailRowsOrig[idx] || {};
                                     timeKeys.forEach((k) => {
+                                        // Burada detailRows'u kontrol ediyoruz, çünkü saveDetails state'i güncelledi.
                                         const beforeVal = String(orig?.[k] ?? "");
                                         const afterVal = String(row?.[k] ?? "");
                                         if (beforeVal !== afterVal) {
@@ -1579,43 +1662,13 @@ export default function ReelAtananSeferler() {
                                 }
 
                                 if (changedFields.length) {
-                                    addLog({
-                                        action: "Düzenleme kaydedildi",
-                                        sefer_no: editSefer?.sefer_no || "-",
-                                        fields: changedFields,
-                                        changes: detailedChanges,
-                                    });
-                                } else {
-                                    addLog({
-                                        action: "Düzenleme (değişiklik yok)",
-                                        sefer_no: editSefer?.sefer_no || "-",
-                                        fields: [],
-                                    });
-                                }
-
-                                // 6) snapshot’ı güncelle
-                                setDetailRowsOrig(
-                                    detailRows.map((d) => ({
-                                        proje_adi: d.proje_adi ?? "",
-                                        yukleme_noktasi: d.yukleme_noktasi ?? "",
-                                        yukleme_ili: d.yukleme_ili ?? "",
-                                        yukleme_ilcesi: d.yukleme_ilcesi ?? "",
-                                        teslim_noktasi: d.teslim_noktasi ?? "",
-                                        teslim_ili: d.teslim_ili ?? "",
-                                        teslim_ilcesi: d.teslim_ilcesi ?? "",
-                                        yukleme_varis: d.yukleme_varis ?? "",
-                                        yukleme_cikis: d.yukleme_cikis ?? "",
-                                        teslim_varis: d.teslim_varis ?? "",
-                                        teslim_cikis: d.teslim_cikis ?? "",
-                                    }))
-                                );
+                                    addLog({ action: "Düzenleme kaydedildi", sefer_no: editSefer?.sefer_no || "-", fields: changedFields, changes: detailedChanges, });
+                                } else { addLog({ action: "Düzenleme (değişiklik yok)", sefer_no: editSefer?.sefer_no || "-", fields: [], }); }
 
                                 setSnack({ open: true, msg: "Kaydedildi.", severity: "success" });
                             } catch (e) {
                                 console.error(e);
                                 setSnack({ open: true, msg: "Kaydetme sırasında hata oluştu.", severity: "error" });
-                            } finally {
-                                setSaving(false);
                             }
                         }}
                         onMoveToCompleted={moveToCompleted}

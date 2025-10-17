@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     Box, Stack, Button, Typography, TextField, Grid, Card, CardContent, CardHeader,
-    Tooltip, IconButton
+    Tooltip, IconButton, InputAdornment
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
@@ -13,7 +13,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 
 /* ----------------------------------------------------------------------------- 
-    Yardımcılar (tarih alanı) - (Bu kısım değişmedi, olduğu gibi duruyor)
+    Yardımcılar (tarih alanı) 
 ----------------------------------------------------------------------------- */
 function digitsOnly(s) {
     return (s || "").replace(/\D+/g, "");
@@ -61,14 +61,35 @@ function toLocalISOString(d) {
     const pad = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 }
-// Bu fonksiyon, bir tarih dizesinin geçerli bir ISO tarih/saat dizesi olup olmadığını kontrol etmek için kullanılır.
-// (Örn: "2025-10-17T14:55:00" formatında olmalı ve geçerli bir tarih oluşturmalı)
 function isISODateTimeValid(isoString) {
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(isoString)) return false;
     const d = new Date(isoString);
     return !isNaN(d.getTime());
 }
 
+// Orijinal fromISO mantığı (sadece parçalama yapar, kayma içermez)
+export const fromISO = (raw) => {
+    if (!raw) return { d: "", t: "" };
+
+    const s = String(raw).trim().replace(" ", "T");
+
+    // "2025-05-13T13:13" → parçala
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!m) return { d: "", t: "" };
+
+    const [, y, mo, dd, hh, mi] = m;
+    return { d: `${dd}.${mo}.${y}`, t: `${hh}:${mi}` };
+};
+
+export const fromISOToCombined = (raw) => {
+    const { d, t } = fromISO(raw);
+    return d ? (t ? `${d} ${t}` : d) : "";
+};
+
+
+// =================================================================
+// DateTimeSingleField: EndAdornment kullanmak için güncellendi
+// =================================================================
 function DateTimeSingleField({
     label,
     value,
@@ -78,26 +99,23 @@ function DateTimeSingleField({
     disabled = false,
     required = false,
     errorText = "Geçersiz tarih/saat",
+    EndAdornment = null,
 }) {
     const [text, setText] = React.useState("");
     const [touched, setTouched] = React.useState(false);
 
     React.useEffect(() => {
+        // Ana tarih alanları fromISOToCombined ile formatlanır
         if (!value) { setText(""); return; }
         if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
-            const d = new Date(value);
-            if (!isNaN(d.getTime())) {
-                const pad = (n) => String(n).padStart(2, "0");
-                setText(`${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`);
-            } else {
-                setText("");
-            }
+            setText(fromISOToCombined(value));
         } else {
             setText(value);
         }
     }, [value]);
 
     function handleChange(e) {
+        // ... (Değişiklik yönetimi mantığı)
         const raw = e.target.value;
         const digs = normalizeFormattedToDigits(raw);
         const masked = formatFromDigits(digs);
@@ -110,6 +128,7 @@ function DateTimeSingleField({
             const HH = parseInt(digs.slice(8, 10), 10);
             const mm = parseInt(digs.slice(10, 12), 10);
 
+            // Burada new Date(Y, M-1, D, H, M) ile yerel zaman objesi oluşturulur.
             const dt = new Date(yyyy, MM - 1, dd, HH, mm);
             if (!isNaN(dt.getTime())) {
                 onChange(toLocalISOString(dt));
@@ -127,6 +146,7 @@ function DateTimeSingleField({
     const isValid = complete && !!dd && !!MM && !!yyyy && !!HH && !!mm;
     const showError = touched && !isValid && (required || digs.length > 0);
 
+    // Ana bileşeni döndür
     return (
         <TextField
             label={label}
@@ -141,13 +161,119 @@ function DateTimeSingleField({
             disabled={disabled}
             error={showError}
             helperText={showError ? errorText : " "}
+            // InputProps içine Adornment ekleniyor
+            InputProps={EndAdornment ? {
+                endAdornment: EndAdornment,
+                sx: { pr: 1.5 } // Adornment için biraz sağ boşluk bırak
+            } : undefined}
         />
     );
 }
 
+
 /* ----------------------------------------------------------------------------- 
     Dialog
 ----------------------------------------------------------------------------- */
+
+/** * GÜNCELLEME ZAMANINA +3 saat kayması EKLEYEN fonksiyon (13:23 -> 16:23)
+ * Saf dize manipülasyonu ile UTC saatini yerel saati olarak gösterir.
+ */
+function fromISOTooltipFixed(raw) {
+    if (!raw) return "";
+
+    const s = String(raw).trim().replace(" ", "T");
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!m) return "";
+
+    // Dize parçalarını al
+    let [y, mo, dd, hh, mi] = m.map(Number).slice(1);
+
+    // YALNIZCA BURADA 3 SAAT EKLEME YAPILIYOR (13:23 -> 16:23)
+    let totalMinutes = (hh * 60) + mi + (3 * 60);
+
+    // Yeni saat ve gün/saat kaymalarını hesapla
+    const carryHours = Math.floor(totalMinutes / 60);
+    const newHH = carryHours % 24;
+    const newMI = totalMinutes % 60;
+
+    const daysToAdd = Math.floor(carryHours / 24);
+
+    // Gün kayması varsa, tarih parçalarını kullanarak günü ayarla
+    if (daysToAdd > 0) {
+        const tempDate = new Date(y, mo - 1, dd);
+        tempDate.setDate(tempDate.getDate() + daysToAdd);
+
+        y = tempDate.getFullYear();
+        mo = tempDate.getMonth() + 1;
+        dd = tempDate.getDate();
+    }
+
+    const pad = (n) => String(n).padStart(2, "0");
+
+    // Sadece saat/dakika ve günü döndür (gg.aa formatında)
+    return `${pad(newHH)}:${pad(newMI)} ${pad(dd)}.${pad(mo)}`;
+}
+
+
+/** * YENİ: Alan Altı için gerekli bilgiyi hazırlar ve JSX Adornment'ı döndürür
+ * @param {object} row - Sefer detay satırı
+ * @param {string} fieldName - Alan adı ('yukleme_varis' vb.)
+ * @param {object} COLORS - Renk sabitleri
+ */
+function createFieldUpdateInfoText(row, fieldName, COLORS) { // COLORS parametresi eklendi
+    const userKey = `${fieldName}_guncelleyen`;
+    const dateKey = `${fieldName}_guncelleme_tarihi`;
+
+    const user = row[userKey];
+    const dateISO = row[dateKey];
+
+    if (user && dateISO) {
+        const formattedDate = fromISOTooltipFixed(dateISO);
+        const shortUser = user.split(' ')[0].slice(0, 1); // Kullanıcı adının sadece ilk harfi
+
+        // Bilgiyi zarif bir EndAdornment içinde minimalist bir etiket olarak döndürürüz
+        const infoJSX = (
+            <InputAdornment position="end" sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                height: 'auto',
+                pointerEvents: 'none', // Input'a dokunulmasını engelle
+            }}>
+                <Tooltip title={`Güncelleyen: ${user} - Kayıt Zamanı: ${formattedDate.replace(' ', ' ')}`} placement="top" enterDelay={500}>
+                    <Box sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        py: '2px',
+                        px: '6px',
+                        borderRadius: '4px',
+                        // Renkler artık COLORS parametresinden alınıyor
+                        bgcolor: alpha('#00e676', 0.1),
+                        color: alpha(COLORS.text, 0.7),
+                        fontSize: 10,
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        userSelect: 'none',
+                        pointerEvents: 'auto', // Tooltip'in çalışması için
+                        border: `1px solid ${alpha('#00e676', 0.3)}`,
+                    }}>
+                        <Typography variant="caption" sx={{ fontSize: 10, fontWeight: 700, color: COLORS.text }}>
+                            {shortUser}
+                        </Typography>
+                        <Typography variant="caption" sx={{ fontSize: 10, opacity: 0.8 }}>
+                            {formattedDate.split(' ')[0]}
+                        </Typography>
+                    </Box>
+                </Tooltip>
+            </InputAdornment>
+        );
+
+        return infoJSX;
+    }
+    return null;
+}
+
 export default function EditorDialog(props) {
     const {
         open, onClose, COLORS, computeAracStatu, fromISOToCombined, baseInputSX,
@@ -157,18 +283,13 @@ export default function EditorDialog(props) {
         onSaveClick, onMoveToCompleted
     } = props;
 
-    // YENİ MANTIK: Tüm gerekli tarihlerin girilip girilmediğini kontrol et
+    // Tamamlananlara Aktar butonu için mantık (Değişmedi)
     const canMoveToCompleted = useMemo(() => {
-        // Düzenleme izni yoksa butonu pasif tut
         if (!canEdit) return false;
-
-        // Sefer Tarihi (Yeni) alanı da zorunlu ise kontrol et
         if (!isISODateTimeValid(seferTarihiYeni)) return false;
 
-        // Detay satırlarını kontrol et
         const requiredFields = ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"];
 
-        // Tüm satırların tüm zorunlu alanları dolu ve geçerli olmalı
         const allDatesAreValid = detailRows.every(row =>
             requiredFields.every(field =>
                 isISODateTimeValid(row[field])
@@ -177,8 +298,6 @@ export default function EditorDialog(props) {
 
         return allDatesAreValid;
     }, [canEdit, seferTarihiYeni, detailRows]);
-    // Eğer detailRows prop'u çok büyükse veya sık değişiyorsa performans için dikkatli olunmalıdır.
-    // Ancak bu senaryoda UI'daki kilitlenme mantığı için doğru bağımlılıktır.
 
     return (
         <Dialog
@@ -204,6 +323,7 @@ export default function EditorDialog(props) {
             </DialogTitle>
 
             <DialogContent dividers sx={{ backgroundColor: alpha("#fff", 0.01) }}>
+                {/* Sefer Tarihi Alanları */}
                 <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 1, mb: 1.2 }}>
                     <TextField
                         label="Sefer Tarihi (Eski)"
@@ -224,6 +344,7 @@ export default function EditorDialog(props) {
                     />
                 </Box>
 
+                {/* Satır Ekle Butonu */}
                 {canEdit && (
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                         <Button startIcon={<AddIcon />} onClick={addDetailRow} color="info" variant="contained">
@@ -235,10 +356,13 @@ export default function EditorDialog(props) {
                     </Stack>
                 )}
 
+                {/* Detay Satırları */}
                 <Grid container spacing={1.2}>
                     {detailRows.map((r, i) => (
                         <Grid item xs={12} key={i}>
                             <Card variant="outlined" sx={{ borderColor: COLORS.border, background: COLORS.surface2, borderRadius: 2 }}>
+
+                                {/* Card Header (Başlık ve Aksiyonlar) */}
                                 <CardHeader
                                     sx={{
                                         "& .MuiCardHeader-title": { fontWeight: 800, fontSize: 16 },
@@ -250,74 +374,51 @@ export default function EditorDialog(props) {
                                     action={canEdit && (
                                         <Stack direction="row" spacing={0.5}>
                                             <Tooltip title="Bu satırı kopyala">
-                                                <span>
-                                                    <IconButton onClick={() => copyDetailRow(i)} size="small" color="info">
-                                                        <ContentCopyIcon fontSize="inherit" />
-                                                    </IconButton>
-                                                </span>
+                                                <span><IconButton onClick={() => copyDetailRow(i)} size="small" color="info"><ContentCopyIcon fontSize="inherit" /></IconButton></span>
                                             </Tooltip>
                                             <Tooltip title="Satırı sil">
-                                                <span>
-                                                    <IconButton onClick={() => removeDetailRow(i)} size="small" color="error">
-                                                        <DeleteIcon fontSize="inherit" />
-                                                    </IconButton>
-                                                </span>
+                                                <span><IconButton onClick={() => removeDetailRow(i)} size="small" color="error"><DeleteIcon fontSize="inherit" /></IconButton></span>
                                             </Tooltip>
                                         </Stack>
                                     )}
                                 />
-                                <CardContent sx={{ pt: 1.5 }}>
+
+                                <CardContent sx={{ pt: 1.5, pb: 2 }}>
                                     <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 1 }}>
+                                        {/* Metin Alanları (Değişmedi) */}
                                         {[
-                                            ["proje_adi", "Proje Adı"],
-                                            ["yukleme_noktasi", "Yükleme Noktası"],
-                                            ["yukleme_ili", "Yükleme İl"],
-                                            ["yukleme_ilcesi", "Yükleme İlçe"],
-                                            ["teslim_noktasi", "Teslim Noktası"],
-                                            ["teslim_ili", "Teslim İl"],
+                                            ["proje_adi", "Proje Adı"], ["yukleme_noktasi", "Yükleme Noktası"], ["yukleme_ili", "Yükleme İl"],
+                                            ["yukleme_ilcesi", "Yükleme İlçe"], ["teslim_noktasi", "Teslim Noktası"], ["teslim_ili", "Teslim İl"],
                                             ["teslim_ilcesi", "Teslim İlçe"],
                                         ].map(([k, l]) => (
-                                            <TextField
-                                                key={k}
-                                                label={l}
-                                                size="small"
-                                                value={r[k] ?? ""}
-                                                onChange={(e) => onDetailChange(i, k, e.target.value)}
-                                                InputLabelProps={{ shrink: true }}
-                                                sx={baseInputSX}
-                                                InputProps={{ readOnly: !canEdit }}
+                                            <TextField key={k} label={l} size="small" value={r[k] ?? ""} onChange={(e) => onDetailChange(i, k, e.target.value)}
+                                                InputLabelProps={{ shrink: true }} sx={baseInputSX} InputProps={{ readOnly: !canEdit }}
                                             />
                                         ))}
 
-                                        {/* Tarih/Saat alanları */}
-                                        <DateTimeSingleField
-                                            label="Yükleme Giriş"
-                                            value={r.yukleme_varis || ""}
-                                            onChange={(v) => onDetailChange(i, "yukleme_varis", v)}
-                                            baseInputSX={baseInputSX}
-                                            disabled={!canEdit}
-                                        />
-                                        <DateTimeSingleField
-                                            label="Yükleme Çıkış"
-                                            value={r.yukleme_cikis || ""}
-                                            onChange={(v) => onDetailChange(i, "yukleme_cikis", v)}
-                                            baseInputSX={baseInputSX}
-                                            disabled={!canEdit}
-                                        />
-                                        <DateTimeSingleField
-                                            label="Teslim Giriş"
-                                            value={r.teslim_varis || ""}
-                                            onChange={(v) => onDetailChange(i, "teslim_varis", v)}
-                                            baseInputSX={baseInputSX}
-                                            disabled={!canEdit}
-                                        />
-                                        <DateTimeSingleField
-                                            label="Teslim Çıkış"
-                                            value={r.teslim_cikis || ""}
-                                            onChange={(v) => onDetailChange(i, "teslim_cikis", v)}
-                                            baseInputSX={baseInputSX}
-                                            disabled={!canEdit}
-                                        />
+                                        {/* YENİ: Tarih/Saat Alanları ve Sürekli Görünür Güncelleme Bilgisi */}
+                                        {[
+                                            ["yukleme_varis", "Yükleme Giriş"],
+                                            ["yukleme_cikis", "Yükleme Çıkış"],
+                                            ["teslim_varis", "Teslim Giriş"],
+                                            ["teslim_cikis", "Teslim Çıkış"],
+                                        ].map(([k, l]) => {
+                                            // COLORS prop'u createFieldUpdateInfoText'e iletiliyor
+                                            const Adornment = canEdit ? createFieldUpdateInfoText(r, k, COLORS) : null;
+
+                                            return (
+                                                <Box key={k} sx={{ position: 'relative' }}>
+                                                    <DateTimeSingleField
+                                                        label={l}
+                                                        value={r[k] || ""}
+                                                        onChange={(v) => onDetailChange(i, k, v)}
+                                                        baseInputSX={baseInputSX}
+                                                        disabled={!canEdit}
+                                                        EndAdornment={Adornment}
+                                                    />
+                                                </Box>
+                                            );
+                                        })}
                                     </Box>
                                 </CardContent>
                             </Card>
@@ -330,20 +431,18 @@ export default function EditorDialog(props) {
                 <Button onClick={onClose} startIcon={<ArrowBackIosNewIcon />}>Kapat</Button>
                 {canEdit && (
                     <Stack direction="row" spacing={1}>
-                        {/* Kaydet butonu rengi değiştirildi */}
                         <Button variant="contained" color="primary" startIcon={<SaveIcon />} onClick={onSaveClick}>Kaydet</Button>
 
                         <Tooltip
-                            title={!canMoveToCompleted ? "Tüm detay satırlarındaki 4 tarih/saat alanı (Giriş/Çıkış) doldurulmalıdır." : ""}
+                            title={!canMoveToCompleted ? "Tüm detay satırlarındaki 4 tarih/saat alanı (Giriş/Çıkış) ve Sefer Tarihi (Yeni) doldurulmalıdır." : ""}
                         >
                             <span>
-                                {/* Tamamlananlara Aktar butonu pasif hale getirildi */}
                                 <Button
                                     variant="contained"
                                     color="success"
                                     startIcon={<FileDownloadDoneIcon />}
                                     onClick={onMoveToCompleted}
-                                    disabled={!canMoveToCompleted} // Pasiflik şartı uygulandı
+                                    disabled={!canMoveToCompleted}
                                 >
                                     Tamamlananlara Aktar
                                 </Button>

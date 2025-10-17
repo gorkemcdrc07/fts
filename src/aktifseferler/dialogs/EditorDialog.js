@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     Box, Stack, Button, Typography, TextField, Grid, Card, CardContent, CardHeader,
@@ -13,7 +13,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 
 /* ----------------------------------------------------------------------------- 
-   Yardımcılar (tarih alanı)
+    Yardımcılar (tarih alanı) - (Bu kısım değişmedi, olduğu gibi duruyor)
 ----------------------------------------------------------------------------- */
 function digitsOnly(s) {
     return (s || "").replace(/\D+/g, "");
@@ -60,6 +60,13 @@ function normalizeFormattedToDigits(v) {
 function toLocalISOString(d) {
     const pad = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+}
+// Bu fonksiyon, bir tarih dizesinin geçerli bir ISO tarih/saat dizesi olup olmadığını kontrol etmek için kullanılır.
+// (Örn: "2025-10-17T14:55:00" formatında olmalı ve geçerli bir tarih oluşturmalı)
+function isISODateTimeValid(isoString) {
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(isoString)) return false;
+    const d = new Date(isoString);
+    return !isNaN(d.getTime());
 }
 
 function DateTimeSingleField({
@@ -139,16 +146,39 @@ function DateTimeSingleField({
 }
 
 /* ----------------------------------------------------------------------------- 
-   Dialog
+    Dialog
 ----------------------------------------------------------------------------- */
 export default function EditorDialog(props) {
     const {
         open, onClose, COLORS, computeAracStatu, fromISOToCombined, baseInputSX,
-        canEdit, // <- izin burada
+        canEdit,
         editSefer, detailRows, seferTarihiYeni, setSeferTarihiYeni,
         addDetailRow, copyDetailRow, removeDetailRow, onDetailChange,
         onSaveClick, onMoveToCompleted
     } = props;
+
+    // YENİ MANTIK: Tüm gerekli tarihlerin girilip girilmediğini kontrol et
+    const canMoveToCompleted = useMemo(() => {
+        // Düzenleme izni yoksa butonu pasif tut
+        if (!canEdit) return false;
+
+        // Sefer Tarihi (Yeni) alanı da zorunlu ise kontrol et
+        if (!isISODateTimeValid(seferTarihiYeni)) return false;
+
+        // Detay satırlarını kontrol et
+        const requiredFields = ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"];
+
+        // Tüm satırların tüm zorunlu alanları dolu ve geçerli olmalı
+        const allDatesAreValid = detailRows.every(row =>
+            requiredFields.every(field =>
+                isISODateTimeValid(row[field])
+            )
+        );
+
+        return allDatesAreValid;
+    }, [canEdit, seferTarihiYeni, detailRows]);
+    // Eğer detailRows prop'u çok büyükse veya sık değişiyorsa performans için dikkatli olunmalıdır.
+    // Ancak bu senaryoda UI'daki kilitlenme mantığı için doğru bağımlılıktır.
 
     return (
         <Dialog
@@ -300,8 +330,25 @@ export default function EditorDialog(props) {
                 <Button onClick={onClose} startIcon={<ArrowBackIosNewIcon />}>Kapat</Button>
                 {canEdit && (
                     <Stack direction="row" spacing={1}>
-                        <Button variant="outlined" color="secondary" startIcon={<SaveIcon />} onClick={onSaveClick}>Kaydet</Button>
-                        <Button variant="contained" color="success" startIcon={<FileDownloadDoneIcon />} onClick={onMoveToCompleted}>Tamamlananlara Aktar</Button>
+                        {/* Kaydet butonu rengi değiştirildi */}
+                        <Button variant="contained" color="primary" startIcon={<SaveIcon />} onClick={onSaveClick}>Kaydet</Button>
+
+                        <Tooltip
+                            title={!canMoveToCompleted ? "Tüm detay satırlarındaki 4 tarih/saat alanı (Giriş/Çıkış) doldurulmalıdır." : ""}
+                        >
+                            <span>
+                                {/* Tamamlananlara Aktar butonu pasif hale getirildi */}
+                                <Button
+                                    variant="contained"
+                                    color="success"
+                                    startIcon={<FileDownloadDoneIcon />}
+                                    onClick={onMoveToCompleted}
+                                    disabled={!canMoveToCompleted} // Pasiflik şartı uygulandı
+                                >
+                                    Tamamlananlara Aktar
+                                </Button>
+                            </span>
+                        </Tooltip>
                     </Stack>
                 )}
             </DialogActions>

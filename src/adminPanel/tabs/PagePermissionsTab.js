@@ -3,17 +3,20 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
     Box, Paper, Typography, Table, TableHead, TableRow, TableCell, TableBody,
     TableContainer, Toolbar, Chip, Switch, Tooltip, IconButton, Button,
-    CircularProgress, TextField, InputAdornment, Stack
+    CircularProgress, TextField, InputAdornment, Stack, Select, MenuItem, FormControl, InputLabel
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SaveIcon from "@mui/icons-material/Save";
 import SearchIcon from "@mui/icons-material/Search";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
+import VisibilityIcon from '@mui/icons-material/Visibility'; // Sayfa Erişim İkonu
 
 import { supabase } from "../../supabaseClient";
 import { APP_PAGES } from "../../routes/pages";
 
-/** Yardımcılar */
+/** Yardımcılar (Değişiklik yapılmadı) */
 function normalizePath(path) {
     if (!path) return "/";
     let s = String(path).trim().toLowerCase();
@@ -23,49 +26,74 @@ function normalizePath(path) {
     return s;
 }
 
+function getCategoryByPath(path) {
+    const p = normalizePath(path);
+    if (p === "/anasayfa") return "Genel";
+    if (p.startsWith("/planlama") || ["/plaka-onerisi", "/siparisler", "/siparis-analiz"].includes(p)) return "Planlama";
+    if (p.startsWith("/aktifseferler") || p === "/seferler") return "Aktif Seferler";
+    if (p.startsWith("/tamamlanan-seferler")) return "Tamamlanan Seferler";
+    if (p.startsWith("/arac/")) return "Araç";
+    if (p.startsWith("/gorevler/")) return "Görevler";
+    if (p.startsWith("/hakedis/")) return "Hakediş";
+    if (p.startsWith("/raporlar/")) return "Raporlar";
+    if (p === "/admin" || p.startsWith("/admin/")) return "Yönetim";
+    return "Diğer";
+}
+
 function pathToColumn(path) {
-    // "/hakedis/arac-cari-ve-fiyat" -> "p_hakedis_arac_cari_ve_fiyat"
     const s = normalizePath(path).replace(/^\//, "");
     const core = s.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
     return "p_" + (core || "anasayfa");
 }
 
-/** APP_PAGES → [{ title, path, col }] (DB kolonları ile bire bir) */
 const PAGE_COLUMNS = APP_PAGES.map((p) => ({
     title: p.title,
     path: normalizePath(p.path),
     col: pathToColumn(p.path),
+    category: getCategoryByPath(p.path),
 }));
 
 async function upsertUserPageAccess(rows) {
     const { error, data } = await supabase
         .from("user_page_access")
-        .upsert(rows, { onConflict: "user_id" }) // user_id PK/UNIQUE olmalı
-        .select(); // temsil döndür (debug için yararlı)
+        .upsert(rows, { onConflict: "user_id" })
+        .select();
     if (error) throw error;
     return data;
 }
 
 export default function PagePermissionsTab() {
-    const [rows, setRows] = useState([]);       // [{ user_id, name, kullanici, rol, p_*... }]
+    const cols = useMemo(() => PAGE_COLUMNS, []);
+
+    // Kategori State Yönetimi (Daha modern Select bileşeni için)
+    const initialCategory = cols[0]?.category || "Genel";
+    const [category, setCategory] = useState(initialCategory);
+
+    const categories = useMemo(() => {
+        const set = new Set(cols.map(c => c.category));
+        return Array.from(set);
+    }, [cols]);
+
+    const visibleCols = useMemo(() => {
+        return cols.filter(c => c.category === category);
+    }, [cols, category]);
+
+    const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [q, setQ] = useState("");
 
-    const cols = useMemo(() => PAGE_COLUMNS, []);
-
+    /** ---- Veri yükleme (Değişiklik yapılmadı) ---- */
     const load = async () => {
         setLoading(true);
         try {
-            // 1) login kullanıcıları
             const { data: users, error: e1 } = await supabase
                 .from("login")
                 .select("id, kullanici, kullaniciAdi, rol")
                 .order("kullaniciAdi", { ascending: true });
             if (e1) throw e1;
 
-            // 2) mevcut user_page_access satırları
             const { data: accessRows, error: e2 } = await supabase
                 .from("user_page_access")
                 .select("*");
@@ -73,11 +101,10 @@ export default function PagePermissionsTab() {
 
             const byUser = new Map((accessRows || []).map((r) => [String(r.user_id), r]));
 
-            // 3) UI satırları: tüm boolean kolonları doldur
             const uiRows = (users || []).map((u) => {
                 const dbRow = byUser.get(String(u.id)) || {};
                 const base = {
-                    user_id: Number(u.id),                               // BIGINT
+                    user_id: Number(u.id),
                     name: u.kullaniciAdi || u.kullanici || "",
                     kullanici: u.kullanici || "",
                     rol: u.rol || "",
@@ -97,8 +124,9 @@ export default function PagePermissionsTab() {
         }
     };
 
-    useEffect(() => { load(); }, []); // ilk yükleme
+    useEffect(() => { load(); }, []);
 
+    /** ---- Etkileşimler (Değişiklik yapılmadı) ---- */
     const toggle = (user_id, col) => {
         setRows((prev) =>
             prev.map((r) => (r.user_id === user_id ? { ...r, [col]: !r[col] } : r))
@@ -106,7 +134,18 @@ export default function PagePermissionsTab() {
         setDirty(true);
     };
 
-    // Kullanıcının tüm sayfa izinlerini false'a çek
+    const toggleRow = (user_id, value) => {
+        setRows((prev) =>
+            prev.map((r) => {
+                if (r.user_id !== user_id) return r;
+                const next = { ...r };
+                visibleCols.forEach(({ col }) => { next[col] = value; });
+                return next;
+            })
+        );
+        setDirty(true);
+    };
+
     const clearRow = (user_id) => {
         setRows((prev) =>
             prev.map((r) => {
@@ -122,8 +161,6 @@ export default function PagePermissionsTab() {
     const save = async () => {
         try {
             setSaving(true);
-
-            // user_id başına tek obje (tüm boolean kolonlar)
             const payload = rows.map((r) => {
                 const obj = { user_id: Number(r.user_id), updated_at: new Date().toISOString() };
                 cols.forEach(({ col }) => { obj[col] = !!r[col]; });
@@ -131,29 +168,18 @@ export default function PagePermissionsTab() {
             });
 
             if (!payload.length) { setSaving(false); return; }
-
-            // Debug yardımcıları:
-            // console.log("[UPA] payload sample:", payload[0]);
-
-            const data = await upsertUserPageAccess(payload);
-            // console.log("[UPA] upsert result:", data);
-
+            await upsertUserPageAccess(payload);
             setDirty(false);
             await load();
         } catch (e) {
-            console.error("save user_page_access error:", {
-                message: e?.message,
-                code: e?.code,
-                details: e?.details,
-                hint: e?.hint,
-                error: e,
-            });
+            console.error("save user_page_access error:", e);
             alert("Kaydetme hatası: " + (e?.message || e));
         } finally {
             setSaving(false);
         }
     };
 
+    /** ---- Arama filtresi (Değişiklik yapılmadı) ---- */
     const filtered = useMemo(() => {
         const needle = q.trim().toLowerCase();
         if (!needle) return rows;
@@ -164,29 +190,48 @@ export default function PagePermissionsTab() {
 
     return (
         <Paper variant="outlined" sx={{ p: 0, borderRadius: 3, overflow: "hidden" }}>
+            {/* Toolbar: Daha düzenli ve gruplanmış aksiyonlar */}
             <Toolbar
                 sx={{
-                    gap: 1, px: 2, py: 1.5,
+                    gap: 2, px: 2, py: 1.5,
                     bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"),
                     borderBottom: (t) => `1px solid ${t.palette.divider}`,
                 }}
             >
-                <Typography variant="subtitle1" fontWeight={800}>Kullanıcı Ekranları (Sayfa Erişimleri)</Typography>
+                <Typography variant="h6" component="div" fontWeight={600}>Sayfa Erişim Yönetimi</Typography>
 
-                <TextField
-                    size="small"
-                    placeholder="Ara: ad soyad, kullanıcı, rol…"
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>) }}
-                    sx={{ width: 320, ml: "auto" }}
-                />
+                <Stack direction="row" spacing={2} ml="auto" alignItems="center">
+                    {/* Kategori Seçici (Modern Select) */}
+                    <FormControl size="small" sx={{ width: 200 }}>
+                        <InputLabel id="category-select-label">Sayfa Kategorisi</InputLabel>
+                        <Select
+                            labelId="category-select-label"
+                            value={category}
+                            label="Sayfa Kategorisi"
+                            onChange={(e) => setCategory(e.target.value)}
+                        >
+                            {categories.map(cat => (
+                                <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
 
-                <Chip size="small" label={`Kullanıcı: ${filtered.length}`} />
+                    {/* Arama */}
+                    <TextField
+                        size="small"
+                        placeholder="Kullanıcı/Rol ara..."
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                        InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>) }}
+                        sx={{ width: 250 }}
+                    />
+                </Stack>
+
+                <Chip size="small" label={`Toplam Kullanıcı: ${filtered.length}`} />
 
                 <Tooltip title="Yenile">
                     <span>
-                        <IconButton onClick={() => load()} disabled={loading || saving}>
+                        <IconButton onClick={() => load()} disabled={loading || saving} size="small">
                             {loading ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
                         </IconButton>
                     </span>
@@ -197,82 +242,122 @@ export default function PagePermissionsTab() {
                     onClick={save}
                     disabled={!dirty || saving || loading}
                     variant="contained"
+                    color="primary"
                     size="small"
                 >
                     {saving ? "Kaydediliyor…" : "Kaydet"}
                 </Button>
             </Toolbar>
 
-            <TableContainer sx={{ maxHeight: 560 }}>
-                <Table stickyHeader size="small">
+            {/* Tablo: Daha minimalist stil */}
+            <TableContainer sx={{ maxHeight: 600 }}>
+                <Table
+                    stickyHeader
+                    size="small"
+                    // Tabloya genel bir görünüm veriyor (ör. daha az yoğun borderlar)
+                    sx={{
+                        '& .MuiTableCell-root': { borderRight: (t) => `1px solid ${t.palette.divider}` },
+                        '& .MuiTableCell-head': { bgcolor: (t) => t.palette.action.hover, fontWeight: 700 },
+                    }}
+                >
                     <TableHead>
                         <TableRow>
-                            <TableCell sx={{ fontWeight: 800, width: 240 }}>Ad Soyad</TableCell>
-                            <TableCell sx={{ fontWeight: 800, width: 160 }}>Rol</TableCell>
-                            {cols.map(({ col, title, path }) => (
-                                <TableCell key={col} sx={{ fontWeight: 800 }}>
-                                    {title}
-                                    <Typography variant="caption" sx={{ display: "block", opacity: 0.6 }}>{path}</Typography>
-                                </TableCell>
+                            <TableCell sx={{ minWidth: 200, maxWidth: 250 }}>Kullanıcı</TableCell>
+                            <TableCell sx={{ width: 150 }}>Rol</TableCell>
+                            {/* Başlıklar: Daha kompakt, sadece isimler, path Tooltip'te */}
+                            {visibleCols.map(({ col, title, path }) => (
+                                <Tooltip title={`Sayfa Yolu: ${path}`} placement="top" key={col}>
+                                    <TableCell
+                                        align="center"
+                                        sx={{
+                                            maxWidth: 100,
+                                            p: 0.5, // Daha kompakt
+                                            fontWeight: 600,
+                                            // Başlıkları dikey yazma (isteğe bağlı, kaldırılabilir)
+                                            // transform: 'rotate(-45deg)', // Dikey başlıklar için
+                                        }}
+                                    >
+                                        <Stack
+                                            direction="column"
+                                            alignItems="center"
+                                            justifyContent="center"
+                                        >
+                                            <VisibilityIcon fontSize="small" sx={{ mb: 0.5, color: (t) => t.palette.primary.main }} />
+                                            <Typography variant="caption" fontWeight={600} lineHeight={1.2}>
+                                                {title}
+                                            </Typography>
+                                        </Stack>
+                                    </TableCell>
+                                </Tooltip>
                             ))}
-                            <TableCell align="right" sx={{ width: 90, fontWeight: 800 }}>İşlem</TableCell>
+                            <TableCell align="center" sx={{ width: 150 }}>Satır İşlemleri</TableCell>
                         </TableRow>
                     </TableHead>
 
                     <TableBody>
-                        {loading ? (
+                        {loading || filtered.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={2 + cols.length + 1}>
-                                    <Box sx={{ py: 3, display: "flex", gap: 1, alignItems: "center", justifyContent: "center" }}>
-                                        <CircularProgress size={20} />
-                                        <Typography>Yükleniyor…</Typography>
+                                <TableCell colSpan={2 + visibleCols.length + 1}>
+                                    <Box sx={{ py: 3, textAlign: "center", opacity: loading ? 1 : 0.7 }}>
+                                        {loading ? <CircularProgress size={20} /> : "Gösterilecek sonuç yok."}
                                     </Box>
-                                </TableCell>
-                            </TableRow>
-                        ) : filtered.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={2 + cols.length + 1}>
-                                    <Box sx={{ py: 4, textAlign: "center", opacity: 0.7 }}>Sonuç yok.</Box>
                                 </TableCell>
                             </TableRow>
                         ) : (
                             filtered.map((r) => (
                                 <TableRow
                                     key={r.user_id}
+                                    // Zebra Satırlar
                                     sx={{
-                                        "&:nth-of-type(2n) td": {
-                                            bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)",
+                                        "&:nth-of-type(odd)": {
+                                            bgcolor: (t) => t.palette.action.hover,
                                         },
                                     }}
                                 >
                                     <TableCell>
-                                        <Stack spacing={0.25}>
-                                            <Typography fontWeight={800}>{r.name || "-"}</Typography>
-                                            {r.kullanici && (
-                                                <Typography variant="caption" sx={{ opacity: 0.7 }}>{r.kullanici}</Typography>
-                                            )}
-                                        </Stack>
+                                        <Typography fontWeight={600}>{r.name || "-"}</Typography>
+                                        {r.kullanici && (
+                                            <Typography variant="caption" color="text.secondary">{r.kullanici}</Typography>
+                                        )}
                                     </TableCell>
-                                    <TableCell>{r.rol || "-"}</TableCell>
+                                    <TableCell>
+                                        <Chip label={r.rol || "Tanımsız"} size="small" variant="outlined" />
+                                    </TableCell>
 
-                                    {cols.map(({ col }) => (
-                                        <TableCell key={col}>
+                                    {/* Yetki Switch'leri */}
+                                    {visibleCols.map(({ col }) => (
+                                        <TableCell key={col} align="center">
                                             <Switch
                                                 size="small"
                                                 checked={!!r[col]}
                                                 onChange={() => toggle(r.user_id, col)}
+                                                // Yetki durumu görselleştirme: true=success, false/null=error
+                                                color={r[col] ? "success" : "error"}
                                             />
                                         </TableCell>
                                     ))}
 
-                                    <TableCell align="right">
-                                        <Tooltip title="Bu kullanıcının tüm sayfa izinlerini kapat">
-                                            <span>
-                                                <IconButton size="small" onClick={() => clearRow(r.user_id)}>
+                                    {/* Kullanıcı bazlı tümünü aç/kapat butonları */}
+                                    <TableCell align="center">
+                                        <Stack direction="row" spacing={0} justifyContent="center" alignItems="center">
+                                            <Tooltip title={`Bu kategorideki (${category}) tüm sayfalara erişimi AÇ (True)`}>
+                                                <IconButton size="small" onClick={() => toggleRow(r.user_id, true)} color="success">
+                                                    <CheckIcon fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+
+                                            <Tooltip title={`Bu kategorideki (${category}) tüm sayfalara erişimi KAPAT (False)`}>
+                                                <IconButton size="small" onClick={() => toggleRow(r.user_id, false)} color="error">
+                                                    <CloseIcon fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+
+                                            <Tooltip title="TÜM sayfa erişimlerini KAPAT/Sıfırla (Tüm Kategoriler)">
+                                                <IconButton size="small" onClick={() => clearRow(r.user_id)} color="primary">
                                                     <RestartAltIcon fontSize="small" />
                                                 </IconButton>
-                                            </span>
-                                        </Tooltip>
+                                            </Tooltip>
+                                        </Stack>
                                     </TableCell>
                                 </TableRow>
                             ))

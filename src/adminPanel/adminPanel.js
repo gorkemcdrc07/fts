@@ -1,4 +1,3 @@
-// src/adminPanel/adminPanel.js
 import React, { useMemo, useState } from "react";
 // import { useNavigate } from "react-router-dom";
 import {
@@ -113,7 +112,7 @@ export default function AdminPanel() {
                     sx={{ mb: 2 }}
                 >
                     <Tab label="Kullanıcılar" />
-                    <Tab label="Roller & Yetkiler" />
+                    {/* "Roller & Yetkiler" sekmesi kaldırıldı. Diğer sekmeler kaydırıldı. */}
                     <Tab label="Kullanıcı Yetkileri" />
                     <Tab label="Kullanıcı Ekranları" />
                     <Tab label="Loglar" />
@@ -127,11 +126,15 @@ export default function AdminPanel() {
                 ) : (
                     <>
                         {tab === 0 && <UsersTab />}
-                        {tab === 1 && <RolesTab />}
-                        {tab === 2 && <UserOverridesTab />}
-                        {tab === 3 && <PagePermissionsTab />}
-                        {tab === 4 && <LogsTab />}
-                        {tab === 5 && <SettingsTab />}
+                        {/* tab === 1 artık Kullanıcı Yetkileri (eski tab 2) */}
+                        {tab === 1 && <UserOverridesTab />}
+                        {/* tab === 2 artık Kullanıcı Ekranları (eski tab 3) */}
+                        {tab === 2 && <PagePermissionsTab />}
+                        {/* tab === 3 artık Loglar (eski tab 4) */}
+                        {tab === 3 && <LogsTab />}
+                        {/* tab === 4 artık Ayarlar (eski tab 5) */}
+                        {tab === 4 && <SettingsTab />}
+                        {/* Not: Eski tab 1 (RolesTab) kaldırıldı. */}
                     </>
                 )}
 

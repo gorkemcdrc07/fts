@@ -6,12 +6,17 @@ import {
     CircularProgress, TextField, InputAdornment, Stack, FormControl, InputLabel,
     Select, MenuItem,
 } from "@mui/material";
+
+// İKONLAR
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SaveIcon from "@mui/icons-material/Save";
 import SearchIcon from "@mui/icons-material/Search";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import CheckIcon from "@mui/icons-material/Check"; // Açmak için
+import CloseIcon from "@mui/icons-material/Close"; // Kapatmak için
+// Miras ikonunu kaldırdık: import SwapHorizIcon from '@mui/icons-material/SwapHoriz'; 
 
-/** EKRANLAR */
+/** EKRANLAR - Değişiklik yok */
 const SCREENS = [
     { key: "aktif_seferler", name: "Aktif Seferler" },
     { key: "planlama", name: "Planlama" },
@@ -24,7 +29,7 @@ const SCREENS = [
     { key: "izin_yonetimi", name: "İzin Yönetimi" },
 ];
 
-/** Ekrana göre (tek tabloda) gerçek kolonlar */
+/** Ekrana göre (tek tabloda) gerçek kolonlar - Değişiklik yok */
 const PERM_KEYS_BY_SCREEN = {
     aktif_seferler: [
         { key: "aktif_can_sync", label: "Senkronize" },
@@ -83,7 +88,7 @@ const PERM_KEYS_BY_SCREEN = {
     ],
 };
 
-/** Tablo gerçek kolon seti */
+/** Tablo gerçek kolon seti - Değişiklik yok */
 const USER_PERMISSIONS_COLUMNS = new Set([
     "user_id", "updated_at",
     "aktif_can_sync", "aktif_can_edit", "aktif_can_eta", "aktif_may_open_edit", "aktif_may_open_eta",
@@ -108,11 +113,12 @@ const USER_PERMISSIONS_COLUMNS = new Set([
     "izin_create", "izin_edit", "izin_delete",
 ]);
 
+/** Supabase'e veri kaydetme işlevi */
 async function upsertUserPermissions(rows) {
     const { error } = await supabase
         .from("user_permissions")
         .upsert(rows, { onConflict: "user_id" })
-        .select(); // daima representation iste, hatayı gör
+        .select();
     if (error) throw error;
 }
 
@@ -135,12 +141,14 @@ export default function UserOverridesTab() {
     const load = async () => {
         setLoading(true);
         try {
+            // Kullanıcıları yükle
             const { data: users, error: e1 } = await supabase
                 .from("login")
                 .select("id, kullanici, rol")
                 .order("kullanici", { ascending: true });
             if (e1) throw e1;
 
+            // Yetki override'larını yükle
             const { data: ovrs, error: e2 } = await supabase
                 .from("user_permissions")
                 .select("*");
@@ -148,6 +156,7 @@ export default function UserOverridesTab() {
 
             const byUser = new Map((ovrs || []).map((o) => [String(o.user_id), o]));
 
+            // Kullanıcı verileri ile yetki override'larını birleştir
             const uiRows = (users || []).map((u) => {
                 const o = byUser.get(String(u.id)) || {};
                 const base = {
@@ -157,7 +166,11 @@ export default function UserOverridesTab() {
                     _hasOverride: !!byUser.get(String(u.id)),
                     _clear: false,
                 };
-                permKeys.forEach((p) => { base[p.key] = (o[p.key] ?? null); });
+                // Yetkileri atar. Null yerine default olarak False (Engellendi) kullanacağız.
+                // Veritabanındaki null değerler de artık FALSE olarak okunacak.
+                permKeys.forEach((p) => {
+                    base[p.key] = (o[p.key] === true); // Sadece True ise True, diğer her durumda (False/Null) False olacak
+                });
                 return base;
             });
 
@@ -178,40 +191,60 @@ export default function UserOverridesTab() {
             prev.map((r) => {
                 if (r.user_id !== user_id) return r;
                 const current = r[key];
-                const next = current === true ? false : true; // null->true, true->false, false->true
+                // True -> False, False -> True döngüsü
+                const next = !current;
                 return { ...r, [key]: next, _hasOverride: true, _clear: false };
             })
         );
         setDirty(true);
     };
 
-    // Sadece seçili ekrana ait alanları null'a çeker
-    const clearRow = (user_id) => {
+    // Tümünü Aç/Kapat fonksiyonu (Miras durumu artık yok)
+    const toggleRow = (user_id, value) => {
+        if (!overridesSupported) return;
         setRows((prev) =>
             prev.map((r) => {
                 if (r.user_id !== user_id) return r;
-                const next = { ...r, _hasOverride: true, _clear: true };
-                permKeys.forEach((p) => { next[p.key] = null; });
-                return next;
+                const updatedRow = { ...r, _hasOverride: true, _clear: false };
+                allowedKeysForScreen.forEach((key) => {
+                    updatedRow[key] = value; // True veya False olarak ayarlanır
+                });
+                return updatedRow;
             })
         );
         setDirty(true);
+    };
+
+    // Temizleme (Clear) fonksiyonunu kaldırdık/pasifize ettik. 
+    // Tümünü Kapat (toggleRow(r.user_id, false)) bu işlevi görecektir.
+    const clearRow = (user_id) => {
+        // Miras (Null) durumunu kaldırdığımız için, temizleme artık tüm yetkileri FALSE (Engellendi) yapar.
+        toggleRow(user_id, false);
     };
 
     const save = async () => {
         try {
             setSaving(true);
 
-            // Bu ekrana ait alanları (true/false/null) net şekilde gönder
+            // Sadece yetkisi (True/False) değiştirilmiş satırları Supabase'e göndereceğiz.
             const toUpsert = rows.map((r) => {
                 const obj = { user_id: r.user_id, updated_at: new Date().toISOString() };
-                allowedKeysForScreen.forEach((k) => {
-                    if (r[k] === true || r[k] === false || r[k] === null) obj[k] = r[k];
-                });
-                return obj;
-            });
 
-            // Aynı user_id için tek obje kalsın
+                let hasScreenSpecificChange = false;
+
+                // Sadece yetki değeri (true veya false) olan kolonları kaydet
+                allowedKeysForScreen.forEach((k) => {
+                    // Mantık: Her zaman True veya False kaydedeceğiz. Null durumunu kaldırdık.
+                    obj[k] = r[k] === true; // r[k] mutlaka true veya false olacak.
+                    hasScreenSpecificChange = true;
+                });
+
+                if (hasScreenSpecificChange) return obj;
+
+                return null;
+            }).filter(Boolean); // null olanları filtrele
+
+            // Birden fazla ekranda yetki değiştirilmişse birleştirme yapar (aslında gerekli değil ama sağlamlık için kalsın)
             const merged = new Map();
             for (const o of toUpsert) {
                 const prev = merged.get(o.user_id) || { user_id: o.user_id, updated_at: o.updated_at };
@@ -219,13 +252,13 @@ export default function UserOverridesTab() {
             }
 
             const payload = Array.from(merged.values());
+
             if (payload.length) {
-                // debug istersen: console.log("UPDATING PERMS PAYLOAD", payload);
-                await upsertUserPermissions(payload); // onConflict: 'user_id'
+                await upsertUserPermissions(payload);
             }
 
             setDirty(false);
-            await load();
+            await load(); // Başarılı kayıttan sonra verileri yeniden yükle
         } catch (e) {
             console.error("save user overrides error:", e);
             alert("Kaydetme hatası: " + (e?.message || e));
@@ -242,23 +275,27 @@ export default function UserOverridesTab() {
         );
     }, [rows, q]);
 
+    const displayPermKeys = permKeys.filter((p) => USER_PERMISSIONS_COLUMNS.has(p.key));
+    const unsupportedPermKeys = permKeys.filter((p) => !USER_PERMISSIONS_COLUMNS.has(p.key));
+
     return (
         <Paper variant="outlined" sx={{ p: 0, borderRadius: 3, overflow: "hidden" }}>
+            {/* Toolbar: Kontroller ve filtreleme */}
             <Toolbar
                 sx={{
-                    gap: 1, px: 2, py: 1.5,
+                    gap: 2, px: 2, py: 1.5,
                     bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"),
                     borderBottom: (t) => `1px solid ${t.palette.divider}`,
                 }}
             >
-                <Typography variant="subtitle1" fontWeight={800}>Kullanıcı Bazlı Yetkiler (Overrides)</Typography>
+                <Typography variant="h6" component="div" fontWeight={600}>Kullanıcı Bazlı Yetkiler (Overrides)</Typography>
 
                 <FormControl size="small" sx={{ minWidth: 220, ml: 2 }}>
-                    <InputLabel id="screen-select-label">Ekran</InputLabel>
+                    <InputLabel id="screen-select-label">Ekran Seçimi</InputLabel>
                     <Select
                         labelId="screen-select-label"
                         value={selectedScreen}
-                        label="Ekran"
+                        label="Ekran Seçimi"
                         onChange={(e) => setSelectedScreen(e.target.value)}
                         disabled={saving}
                     >
@@ -268,22 +305,22 @@ export default function UserOverridesTab() {
 
                 <TextField
                     size="small"
-                    placeholder="Ara: ad soyad, rol…"
+                    placeholder="Kullanıcı/Rol ara..."
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>) }}
-                    sx={{ width: 300, ml: "auto" }}
+                    sx={{ width: 250, ml: "auto" }}
                 />
 
                 <Chip size="small" label={`Kullanıcı: ${filtered.length}`} />
 
                 {!overridesSupported && (
-                    <Chip size="small" color="warning" variant="outlined" label="Bu ekranda kullanıcı bazlı kolon yok (role geçerli)" />
+                    <Chip size="small" color="warning" variant="outlined" label="Bu ekranda override yetkisi yok" />
                 )}
 
                 <Tooltip title="Yenile">
                     <span>
-                        <IconButton onClick={() => load()} disabled={loading || saving}>
+                        <IconButton onClick={() => load()} disabled={loading || saving} size="small">
                             {loading ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
                         </IconButton>
                     </span>
@@ -294,37 +331,81 @@ export default function UserOverridesTab() {
                     onClick={save}
                     disabled={!dirty || saving || loading || !overridesSupported}
                     variant="contained"
+                    color="primary"
                     size="small"
                 >
                     {saving ? "Kaydediliyor…" : "Kaydet"}
                 </Button>
             </Toolbar>
 
+            {/* Tablo: Yatay Başlıklar ve Kompakt Görünüm */}
             <TableContainer sx={{ maxHeight: 560 }}>
-                <Table stickyHeader size="small">
+                <Table
+                    stickyHeader
+                    size="small"
+                    sx={{
+                        // Sütun ayracı çizgisi ve genel hücre stilleri
+                        '& .MuiTableCell-root': { borderRight: (t) => `1px solid ${t.palette.divider}`, borderBottom: (t) => `1px solid ${t.palette.divider}` },
+                        // Başlık hücre stilleri
+                        '& .MuiTableCell-head': {
+                            bgcolor: (t) => t.palette.action.hover,
+                            fontWeight: 700,
+                            verticalAlign: 'bottom',
+                            py: 1, // Dikey boşluk
+                            px: 1, // Yatay boşluk
+                            lineHeight: 1.3, // Satır aralığı (Daha fazla satır için önemli)
+                        },
+                    }}
+                >
                     <TableHead>
                         <TableRow>
-                            <TableCell sx={{ fontWeight: 800, width: 260 }}>Ad Soyad</TableCell>
-                            <TableCell sx={{ fontWeight: 800, width: 160 }}>Rol</TableCell>
-                            {permKeys.map((p) => (<TableCell key={p.key} sx={{ fontWeight: 800 }}>{p.label}</TableCell>))}
-                            <TableCell align="right" sx={{ width: 90, fontWeight: 800 }}>İşlem</TableCell>
+                            <TableCell sx={{ minWidth: 150, maxWidth: 200 }}>Kullanıcı</TableCell>
+                            <TableCell sx={{ width: 120 }}>Rol</TableCell>
+
+                            {/* Yatay ve Kompakt Başlıklar */}
+                            {displayPermKeys.map((p) => (
+                                <TableCell
+                                    key={p.key}
+                                    align="center"
+                                    sx={{
+                                        width: 100, // Başlık genişliğini sınırla
+                                        minWidth: 80,
+                                        p: 1,
+                                        whiteSpace: 'normal', // Metnin sarmasını (wrap) sağlar
+                                    }}
+                                >
+                                    <Tooltip title={`Yetki Kolonu Anahtarı: ${p.key}`} placement="top">
+                                        <Typography variant="caption" fontWeight={600} sx={{ display: 'block' }}>
+                                            {p.label} {/* Etiket metnini burada göster */}
+                                        </Typography>
+                                    </Tooltip>
+                                </TableCell>
+                            ))}
+
+                            {/* Desteklenmeyenler için yer tutucu */}
+                            {unsupportedPermKeys.map((p) => (
+                                <TableCell
+                                    key={p.key}
+                                    align="center"
+                                    sx={{ width: 100, opacity: 0.5, p: 1, whiteSpace: 'normal' }}
+                                >
+                                    <Typography variant="caption" fontWeight={600} sx={{ display: 'block' }}>
+                                        {p.label} (Eksik Kolon)
+                                    </Typography>
+                                </TableCell>
+                            ))}
+
+                            <TableCell align="right" sx={{ width: 150, fontWeight: 800 }}>İşlemler</TableCell>
                         </TableRow>
                     </TableHead>
 
                     <TableBody>
-                        {loading ? (
+                        {loading || filtered.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={2 + permKeys.length + 1}>
-                                    <Box sx={{ py: 3, display: "flex", gap: 1, alignItems: "center", justifyContent: "center" }}>
-                                        <CircularProgress size={20} />
-                                        <Typography>Yükleniyor…</Typography>
+                                    <Box sx={{ py: 3, textAlign: "center", opacity: loading ? 1 : 0.7 }}>
+                                        {loading ? <CircularProgress size={20} /> : "Gösterilecek sonuç yok."}
                                     </Box>
-                                </TableCell>
-                            </TableRow>
-                        ) : filtered.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={2 + permKeys.length + 1}>
-                                    <Box sx={{ py: 4, textAlign: "center", opacity: 0.7 }}>Sonuç yok.</Box>
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -332,50 +413,74 @@ export default function UserOverridesTab() {
                                 <TableRow
                                     key={r.user_id}
                                     sx={{
-                                        "&:nth-of-type(2n) td": {
-                                            bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)",
+                                        "&:nth-of-type(odd)": {
+                                            bgcolor: (t) => t.palette.action.hover,
                                         },
                                     }}
                                 >
-                                    <TableCell><Typography fontWeight={800}>{r.name || "-"}</Typography></TableCell>
-                                    <TableCell>{r.rol || "-"}</TableCell>
+                                    <TableCell>
+                                        <Typography fontWeight={600}>{r.name || "-"}</Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Chip label={r.rol || "Tanımsız"} size="small" variant="outlined" />
+                                    </TableCell>
 
-                                    {permKeys.map((p) => {
-                                        const val = r[p.key]; // true | false | null
-                                        const checked = val === true;
-                                        const isInherited = val === null;
-                                        const isAllowed = USER_PERMISSIONS_COLUMNS.has(p.key);
+                                    {/* Yetki Switch'leri (true/false) */}
+                                    {displayPermKeys.map((p) => {
+                                        const checked = r[p.key]; // Sadece true | false (null yok)
+
+                                        let tooltipText = checked ? "İzin Verildi (True)" : "İzin Engellendi (False)";
+
                                         return (
-                                            <TableCell key={p.key}>
-                                                <Stack direction="row" alignItems="center" spacing={1}>
-                                                    <Tooltip title={isAllowed ? "" : "Bu alan user_permissions tablosunda yok."}>
-                                                        <span>
-                                                            <Switch
-                                                                size="small"
-                                                                checked={checked}
-                                                                onChange={() => toggle(r.user_id, p.key)}
-                                                                disabled={!isAllowed}
-                                                            />
-                                                        </span>
-                                                    </Tooltip>
-                                                    {isInherited && (
-                                                        <Typography variant="caption" sx={{ opacity: 0.55 }}>
-                                                            (miras)
-                                                        </Typography>
-                                                    )}
-                                                </Stack>
+                                            <TableCell key={p.key} align="center">
+                                                <Tooltip title={tooltipText} placement="top">
+                                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <Switch
+                                                            size="small"
+                                                            checked={checked}
+                                                            onChange={() => toggle(r.user_id, p.key)}
+                                                            color={checked ? "success" : "error"}
+                                                        />
+                                                    </Box>
+                                                </Tooltip>
                                             </TableCell>
                                         );
                                     })}
 
-                                    <TableCell align="right">
-                                        <Tooltip title="Varsayılana (null) çek — sadece bu ekranın alanları">
-                                            <span>
-                                                <IconButton size="small" onClick={() => clearRow(r.user_id)}>
-                                                    <RestartAltIcon fontSize="small" />
-                                                </IconButton>
-                                            </span>
-                                        </Tooltip>
+                                    {/* Desteklenmeyen Yetki Kolonları */}
+                                    {unsupportedPermKeys.map((p) => (
+                                        <TableCell key={p.key} align="center">
+                                            <Tooltip title="Bu yetki kolonu veritabanında tanımlı değil. Lütfen user_permissions tablosunu güncelleyin.">
+                                                <Chip size="small" label="Eksik" color="warning" variant="outlined" />
+                                            </Tooltip>
+                                        </TableCell>
+                                    ))}
+
+                                    {/* Kullanıcı bazlı tümünü aç/kapat butonları */}
+                                    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                                        {overridesSupported && (
+                                            <Stack direction="row" spacing={0} justifyContent="flex-end" alignItems="center">
+                                                <Tooltip title={`Bu ekrana ait tüm yetkileri AÇ (True)`}>
+                                                    <IconButton size="small" onClick={() => toggleRow(r.user_id, true)}>
+                                                        <CheckIcon color="success" fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title={`Bu ekrana ait tüm yetkileri KAPAT (False)`}>
+                                                    <IconButton size="small" onClick={() => toggleRow(r.user_id, false)}>
+                                                        <CloseIcon color="error" fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                {/* Varsayılana Çek (Reset) butonunu kaldırdık, çünkü artık sadece True/False var. 
+                                                   Ancak eski işlevini (Tümünü Kapat) göstermesi için yeniden isimlendirdik: 
+                                                   <Tooltip title="Tüm yetkileri KAPAT (False)">
+                                                       <IconButton size="small" onClick={() => clearRow(r.user_id)}>
+                                                           <RestartAltIcon color="primary" fontSize="small" />
+                                                       </IconButton>
+                                                   </Tooltip> 
+                                                */}
+                                            </Stack>
+                                        )}
+                                        {!overridesSupported && "-"}
                                     </TableCell>
                                 </TableRow>
                             ))

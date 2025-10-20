@@ -1,5 +1,6 @@
 // src/adminPanel/tabs/PagePermissionsTab.js
-import React, { useEffect, useMemo, useState } from "react";
+// DİKKAT: useCallback import'u eklendi!
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
     Box, Paper, Typography, Table, TableHead, TableRow, TableCell, TableBody,
     TableContainer, Toolbar, Chip, Switch, Tooltip, IconButton, Button,
@@ -84,8 +85,8 @@ export default function PagePermissionsTab() {
     const [dirty, setDirty] = useState(false);
     const [q, setQ] = useState("");
 
-    /** ---- Veri yükleme (Değişiklik yapılmadı) ---- */
-    const load = async () => {
+    /** ---- Veri yükleme (DEĞİŞİKLİK YAPILDI: useCallback kullanıldı) ---- */
+    const load = useCallback(async () => {
         setLoading(true);
         try {
             const { data: users, error: e1 } = await supabase
@@ -110,6 +111,7 @@ export default function PagePermissionsTab() {
                     rol: u.rol || "",
                     _hasRow: !!byUser.get(String(u.id)),
                 };
+                // cols bağımlılığı burada kullanılıyor.
                 cols.forEach(({ col }) => { base[col] = dbRow[col] ?? false; });
                 return base;
             });
@@ -122,9 +124,10 @@ export default function PagePermissionsTab() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [cols]); // <-- load fonksiyonu içinde kullanılan 'cols' bağımlılık olarak eklendi.
 
-    useEffect(() => { load(); }, []);
+    // Satır 127: DEĞİŞİKLİK YAPILDI: 'load' bağımlılık olarak eklendi.
+    useEffect(() => { load(); }, [load]);
 
     /** ---- Etkileşimler (Değişiklik yapılmadı) ---- */
     const toggle = (user_id, col) => {
@@ -170,6 +173,7 @@ export default function PagePermissionsTab() {
             if (!payload.length) { setSaving(false); return; }
             await upsertUserPageAccess(payload);
             setDirty(false);
+            // load fonksiyonu artık useCallback ile sarmalandığı için çağrımı güvenlidir.
             await load();
         } catch (e) {
             console.error("save user_page_access error:", e);

@@ -1,4 +1,3 @@
-// src/Anasayfa.jsx
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
@@ -9,7 +8,6 @@ import { supabase } from "./supabaseClient";
 import { motion } from "framer-motion";
 import {
     Box,
-    Container,
     Paper,
     Stack,
     Typography,
@@ -31,15 +29,12 @@ import { alpha, styled, useTheme } from "@mui/material/styles";
 import {
     // İKONLAR
     Refresh as RefreshIcon,
-    Speed as SpeedIcon,
     CheckCircleOutline as CheckIcon,
     LocalShipping as TruckIcon,
     ReportProblem as AlertIcon,
     AccessTime as TimeIcon,
-    Warning as WarningIcon,
     CalendarToday as CalendarIcon,
     Person as PersonIcon,
-    AddCircleOutline as AddIcon,
 } from "@mui/icons-material";
 
 
@@ -48,7 +43,7 @@ const PRIMARY_NEON = "#6dd5ed"; // Açık Mavi (Cyan)
 const SECONDARY_NEON = "#2193b0"; // Koyu Mavi
 
 /* ----------------- GEREKSİZ COMPONENTLER KALDIRILDI ----------------- */
-function LogisticsHero() { return null; }
+// function LogisticsHero() { return null; } // Artık kullanılmıyor
 
 // Yeni: Tablo paneli için başlık stili
 const TablePanelTitle = styled(Typography)(({ theme }) => ({
@@ -142,11 +137,7 @@ const rowSX = {
 
 const getTodayDate = () => new Date().toISOString().slice(0, 10);
 const fmtTR = (iso) => iso ? new Date(iso).toLocaleDateString("tr-TR") : '—';
-const getDateAny = (r) => {
-    const raw = r?.tamamlanma_tarihi || r?.sefer_tarihi || r?.tarih || r?.created_at || r?.date || r?.updated_at;
-    if (!raw) return null; const s = String(raw);
-    return s.length >= 10 ? s.slice(0, 10) : s;
-};
+// const getDateAny = (r) => { /* ...kullanılmadığı için kaldırıldı */ };
 
 // Sadece limitli fetch fonksiyonu
 async function fetchLimitedData(table, limit = 50) {
@@ -221,11 +212,7 @@ function getSeferDetayUpdates(detaylar, targetDate) {
         .map(username => ({ username, ...counts[username] }))
         .sort((a, b) => b.total - a.total);
 }
-// Diğer yardımcı fonksiyonların yer tutucuları...
-function BarList({ data = [], max = 10, height = 20 }) { return null; }
-function monthBounds(monthKeyStr) { return { start: new Date(), end: new Date(), days: 30 }; }
-function overlaps(aStart, aEnd, bStart, bEnd) { return true; }
-function clampToMonthRange(startISO, endISO, monthStart, monthEnd) { return { start: new Date(), end: new Date() }; }
+// Diğer yardımcı fonksiyonların yer tutucuları kaldırıldı (BarList, monthBounds, vb.)
 
 
 /* ----------------- Page ----------------- */
@@ -248,6 +235,7 @@ export default function Anasayfa() {
 
     const allActiveCount = seferler.length;
 
+    // fetch data fonksiyonu (useCallback ile sarmalandı)
     const fetchData = useCallback(async () => {
         try {
             setLoading(true); setErr("");
@@ -293,12 +281,14 @@ export default function Anasayfa() {
         } finally {
             setLoading(false);
         }
-    }, [today]);
+    }, [today]); // today değişkeni dışarıdan geldiği için bağımlılık olarak eklendi.
+
     useEffect(() => { fetchData(); }, [fetchData]);
 
     const lastUpdated = useMemo(
+        // Artık sadece anlık zamanı döndürüyor, bağımlılıklar kaldırıldı.
         () => new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-        [dailyKPIs, seferDetaylari.length]
+        []
     );
 
     // **********************************************************
@@ -317,7 +307,7 @@ export default function Anasayfa() {
         kesintiler.forEach(r => logs.push(createLogEntry(r, 'Kesinti/Hata', themePalette.error.main, <AlertIcon />)));
 
         return logs.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 15);
-    }, [tamamlanan, seferler, izinler, kesintiler, themePalette]);
+    }, [tamamlanan, seferler, izinler, kesintiler, themePalette.success.main, themePalette.primary.main, themePalette.warning.main, themePalette.error.main]);
 
     // SEFER DETAY GÜNCELLEME ANALİZİ
     const userUpdateCounts = useMemo(() => {
@@ -527,7 +517,7 @@ export default function Anasayfa() {
                                         <Divider sx={{ mb: 2, borderColor: alpha(PRIMARY_NEON, 0.3) }} />
 
                                         <List dense sx={{ maxHeight: 350, overflowY: 'auto' }}>
-                                            {liveFeed.map((log, index) => (
+                                            {liveFeed.map((log) => (
                                                 <ListItem
                                                     key={log.id}
                                                     disablePadding

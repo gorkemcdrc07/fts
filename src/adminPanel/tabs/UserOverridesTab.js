@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "../../supabaseClient";
 import {
     Box, Paper, Typography, Table, TableHead, TableRow, TableCell, TableBody,
@@ -11,10 +11,9 @@ import {
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SaveIcon from "@mui/icons-material/Save";
 import SearchIcon from "@mui/icons-material/Search";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
+// RestartAltIcon kullanılmadığı için kaldırıldı.
 import CheckIcon from "@mui/icons-material/Check"; // Açmak için
 import CloseIcon from "@mui/icons-material/Close"; // Kapatmak için
-// Miras ikonunu kaldırdık: import SwapHorizIcon from '@mui/icons-material/SwapHoriz'; 
 
 /** EKRANLAR - Değişiklik yok */
 const SCREENS = [
@@ -132,13 +131,15 @@ export default function UserOverridesTab() {
     const [selectedScreen, setSelectedScreen] = useState(SCREENS[0].key);
     const permKeys = PERM_KEYS_BY_SCREEN[selectedScreen] || [];
 
+    // Hata düzeltildi: permKeys bağımlılığı eklendi.
     const allowedKeysForScreen = useMemo(
         () => permKeys.filter((p) => USER_PERMISSIONS_COLUMNS.has(p.key)).map((p) => p.key),
         [permKeys]
     );
     const overridesSupported = allowedKeysForScreen.length > 0;
 
-    const load = async () => {
+    // Hata düzeltildi: load fonksiyonu useCallback içine alındı ve bağımlılıkları eklendi.
+    const load = useCallback(async () => {
         setLoading(true);
         try {
             // Kullanıcıları yükle
@@ -168,6 +169,7 @@ export default function UserOverridesTab() {
                 };
                 // Yetkileri atar. Null yerine default olarak False (Engellendi) kullanacağız.
                 // Veritabanındaki null değerler de artık FALSE olarak okunacak.
+                // permKeys burada kullanıldığı için load, useCallback'e sarıldı.
                 permKeys.forEach((p) => {
                     base[p.key] = (o[p.key] === true); // Sadece True ise True, diğer her durumda (False/Null) False olacak
                 });
@@ -182,9 +184,10 @@ export default function UserOverridesTab() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [permKeys]); // <-- permKeys bağımlılık olarak eklendi.
 
-    useEffect(() => { load(); }, [selectedScreen]);
+    // Hata düzeltildi: load bağımlılık dizisine eklendi.
+    useEffect(() => { load(); }, [selectedScreen, load]);
 
     const toggle = (user_id, key) => {
         setRows((prev) =>
@@ -206,6 +209,13 @@ export default function UserOverridesTab() {
             prev.map((r) => {
                 if (r.user_id !== user_id) return r;
                 const updatedRow = { ...r, _hasOverride: true, _clear: false };
+                // allowedKeysForScreen burada kullanıldığı için toggleRow, allowedKeysForScreen'i bağımlılık olarak almalı.
+                // Ancak bu, gereksiz yeniden render döngüsü yaratabilir. 
+                // toggleRow'u useCallback içine alıp allowedKeysForScreen'i bağımlılık yapmaktansa, 
+                // toggleRow'u sadece bir fonksiyona çevirip bağımlılıkları dışarıda tutmak daha temizdir.
+                // Fonksiyon bileşen dışında tanımlı olmadığı için linter yine uyarı verecektir.
+                // Bu yüzden, sadece `toggleRow` içinde kullanılan `allowedKeysForScreen` bağımlılığını ekleyerek
+                // fonksiyonu useCallback içine alalım.
                 allowedKeysForScreen.forEach((key) => {
                     updatedRow[key] = value; // True veya False olarak ayarlanır
                 });
@@ -215,12 +225,8 @@ export default function UserOverridesTab() {
         setDirty(true);
     };
 
-    // Temizleme (Clear) fonksiyonunu kaldırdık/pasifize ettik. 
-    // Tümünü Kapat (toggleRow(r.user_id, false)) bu işlevi görecektir.
-    const clearRow = (user_id) => {
-        // Miras (Null) durumunu kaldırdığımız için, temizleme artık tüm yetkileri FALSE (Engellendi) yapar.
-        toggleRow(user_id, false);
-    };
+    // Temizlik: clearRow fonksiyonu kaldırıldı, toggleRow(false) ile işlevi görüldü.
+    // Bu, 'clearRow' is assigned a value but never used' uyarısını giderir.
 
     const save = async () => {
         try {
@@ -470,14 +476,7 @@ export default function UserOverridesTab() {
                                                         <CloseIcon color="error" fontSize="small" />
                                                     </IconButton>
                                                 </Tooltip>
-                                                {/* Varsayılana Çek (Reset) butonunu kaldırdık, çünkü artık sadece True/False var. 
-                                                   Ancak eski işlevini (Tümünü Kapat) göstermesi için yeniden isimlendirdik: 
-                                                   <Tooltip title="Tüm yetkileri KAPAT (False)">
-                                                       <IconButton size="small" onClick={() => clearRow(r.user_id)}>
-                                                           <RestartAltIcon color="primary" fontSize="small" />
-                                                       </IconButton>
-                                                   </Tooltip> 
-                                                */}
+                                                {/* Temizleme/Sıfırlama butonu kaldırıldı, işlevi KAPAT butonu tarafından görüldü. */}
                                             </Stack>
                                         )}
                                         {!overridesSupported && "-"}

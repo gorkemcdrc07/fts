@@ -13,8 +13,14 @@ import PersonIcon from "@mui/icons-material/Person";
 import WorkOutlineIcon from "@mui/icons-material/WorkOutline";
 import PlaceIcon from "@mui/icons-material/Place";
 import FlagIcon from "@mui/icons-material/Flag";
+import LocationCityIcon from "@mui/icons-material/LocationCity"; // New Icon for City/District
 import { makeGlam } from "./styles";
 import { ETA_MESSAGES, ETA_STATUS } from "../utils/eta";
+
+// --- NEW PROP: distanceInput and setDistanceInput (e.g., in kilometers) ---
+// You will need to add this state management in the parent component that uses EtaDialog
+// const [distanceInput, setDistanceInput] = useState("");
+// const handleDistanceChange = (e) => setDistanceInput(e.target.value.replace(/[^0-9]/g, '')); // only allow numbers
 
 export default function EtaDialog(props) {
     const {
@@ -26,6 +32,10 @@ export default function EtaDialog(props) {
         canETA = false,
         /** YENİ: parent’tan gelen ilk yükleme çıkış (tek nokta veya çok noktanın ilki) */
         latestYuklemeCikis,
+        // --- NEW PROPS FOR DISTANCE INPUT ---
+        distanceInput,
+        setDistanceInput,
+        saveManualDistanceAndETA, // New function for saving distance and ETA
     } = props;
 
     const theme = useTheme();
@@ -76,10 +86,43 @@ export default function EtaDialog(props) {
     const firstYCKey = useMemo(() => String(firstYCForInput ?? "null"), [firstYCForInput]);
     const lackFirstYC = !firstYCForInput; // başlangıç yoksa ekranda uyarı gösteriyoruz
 
+    // --- NEW LOGIC CHECK ---
+    const isWaitingForDistance = computedETAISO === "__NEED_DISTANCE__";
+
+    // --- YENİ DÜZENLEME: SADECE İLK YÜKLEME VE İLK TESLİMAT NOKTALARINI ALMA ---
+    // Eğer data stringleri virgülle ayrılmışsa, sadece ilkini alır (SplitCell mantığına benzer).
+    const splitFirst = (str) => (str || "").split(',')[0].trim() || "-";
+
+    const yuklemeIli = splitFirst(etaRow?.yukleme_ili);
+    const yuklemeIlcesi = splitFirst(etaRow?.yukleme_ilcesi);
+    const teslimIli = splitFirst(etaRow?.teslim_ili);
+    const teslimIlcesi = splitFirst(etaRow?.teslim_ilcesi);
+
+    // Mesafe girişinin gerekli olduğu güzergah metni (Sadece ilk il/ilçeler)
+    const distanceRouteText = `${yuklemeIli}/${yuklemeIlcesi} ➡️ ${teslimIli}/${teslimIlcesi}`;
+
+    const canSaveDistance = isWaitingForDistance && distanceInput && Number(distanceInput) > 0;
+
+    // The primary action for the Save/Kaydet button
+    const handleSave = () => {
+        if (isWaitingForDistance) {
+            saveManualDistanceAndETA({
+                distance: Number(distanceInput),
+                // Kayıt için bu değişkenleri kullanıyoruz, böylece upsert işlemi sadece tekil il/ilçe çifti üzerinden yapılır.
+                yukleme_il: yuklemeIli,
+                yukleme_ilce: yuklemeIlcesi,
+                teslim_il: teslimIli,
+                teslim_ilce: teslimIlcesi,
+            });
+        } else if (canETA) {
+            saveETA(); // Original ETA save for calculated ETA
+        }
+    };
+
     return (
         <Dialog
             open={open}
-            onClose={onClose}
+            onClose={isWaitingForDistance ? () => { } : onClose} // PREVENT CLOSING if waiting for distance
             fullWidth
             maxWidth="md"
             fullScreen={fullScreen}
@@ -118,7 +161,7 @@ export default function EtaDialog(props) {
                         <Chip size="small" icon={<LocalShippingIcon />} label={vehicleText} sx={glam.chip} />
                     </Stack>
 
-                    {/* Info cards */}
+                    {/* Info cards (Driver, Job, Origin, Destination) */}
                     <Grid container spacing={1}>
                         <Grid item xs={12} md={6}>
                             <Box sx={glam.cardAccent}>
@@ -142,6 +185,10 @@ export default function EtaDialog(props) {
                                     <PlaceIcon sx={{ fontSize: 16, mr: .5, verticalAlign: "middle" }} /> Yükleme
                                 </Typography>
                                 <Typography sx={{ ...glam.value, ...glam.clamp2 }} title={originText}>{originText}</Typography>
+                                {/* Display City/District (SADECE İLK NOKTA) */}
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "flex", alignItems: "center" }}>
+                                    <LocationCityIcon fontSize="inherit" sx={{ mr: 0.5 }} /> {yuklemeIli} / {yuklemeIlcesi}
+                                </Typography>
                             </Box>
                         </Grid>
                         <Grid item xs={12} md={6}>
@@ -150,6 +197,10 @@ export default function EtaDialog(props) {
                                     <FlagIcon sx={{ fontSize: 16, mr: .5, verticalAlign: "middle" }} /> Teslim
                                 </Typography>
                                 <Typography sx={{ ...glam.value, ...glam.clamp2 }} title={destinationText}>{destinationText}</Typography>
+                                {/* Display City/District (SADECE İLK NOKTA) */}
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "flex", alignItems: "center" }}>
+                                    <LocationCityIcon fontSize="inherit" sx={{ mr: 0.5 }} /> {teslimIli} / {teslimIlcesi}
+                                </Typography>
                             </Box>
                         </Grid>
                     </Grid>
@@ -174,12 +225,12 @@ export default function EtaDialog(props) {
                                 <DateTimeOneField
                                     key={firstYCKey}
                                     label="Başlangıç (Yükleme Çıkış)"
-                                    value={firstYCForInput || ""}     // controlled
+                                    value={firstYCForInput || ""}      // controlled
                                     size="small"
                                     InputLabelProps={{ shrink: true }}
                                     sx={[glam.input]}
                                     fullWidth
-                                    disabled                   // daima pasif
+                                    disabled                        // daima pasif
                                 />
                             </Box>
 
@@ -197,7 +248,7 @@ export default function EtaDialog(props) {
                                     InputLabelProps={{ shrink: true }}
                                     sx={[glam.input]}
                                     fullWidth
-                                    disabled={!canETA}
+                                    disabled={!canETA && !isWaitingForDistance}
                                 />
                             </Box>
 
@@ -219,13 +270,38 @@ export default function EtaDialog(props) {
                                     InputLabelProps={{ shrink: true }}
                                     sx={[glam.input]}
                                     fullWidth
-                                    disabled={!canETA}
+                                    disabled={!canETA && !isWaitingForDistance}
                                 >
                                     {BREAK_OPTIONS.map(o => (
                                         <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
                                     ))}
                                 </TextField>
                             </Box>
+
+                            {/* NEW: Manual Distance Input (shown when missing) */}
+                            {isWaitingForDistance && (
+                                <>
+                                    <Divider />
+                                    <Box sx={{ p: { xs: 1, sm: 1.25 }, backgroundColor: (t) => t.palette.warning.light + "20" }}>
+                                        {/* YENİ EKLENEN METİN: Mesafe Giriş Güzergahı */}
+                                        <Typography variant="body2" color="text.primary" sx={{ mb: 1, fontWeight: 600 }}>
+                                            Manuel Mesafe Gerekiyor: <Box component="span" sx={{ color: (t) => t.palette.warning.dark }}>{distanceRouteText}</Box>
+                                        </Typography>
+
+                                        <TextField
+                                            label="Manuel Mesafe (km)"
+                                            value={distanceInput}
+                                            onChange={(e) => setDistanceInput(e.target.value.replace(/[^0-9]/g, ''))} // only allow numbers
+                                            size="small"
+                                            InputLabelProps={{ shrink: true }}
+                                            sx={[glam.input]}
+                                            fullWidth
+                                            required
+                                            helperText="Lütfen mesafeyi kilometre cinsinden girin."
+                                        />
+                                    </Box>
+                                </>
+                            )}
                         </Stack>
                     </Box>
 
@@ -233,8 +309,10 @@ export default function EtaDialog(props) {
                     <Box sx={glam.etaPanel}>
                         {lackFirstYC ? (
                             <Typography variant="body1"><b>ETA:</b> {ETA_MESSAGES[ETA_STATUS.WAITING_FIRST_YC]}</Typography>
-                        ) : computedETAISO === "__NEED_DISTANCE__" ? (
-                            <Typography variant="body1"><b>ETA:</b> {ETA_MESSAGES[ETA_STATUS.NEED_DISTANCE]}</Typography>
+                        ) : isWaitingForDistance ? ( // New check for waiting for distance
+                            <Typography variant="body1" color="error">
+                                <b>ETA:</b> {ETA_MESSAGES[ETA_STATUS.NEED_DISTANCE]} - Lütfen **manuel mesafe** girin.
+                            </Typography>
                         ) : computedETAISO === "__WAITING__" ? (
                             <Typography variant="body1"><b>ETA:</b> {ETA_MESSAGES[ETA_STATUS.WAITING_FIRST_YC]}</Typography>
                         ) : (
@@ -268,20 +346,18 @@ export default function EtaDialog(props) {
                     borderTop: (t) => `1px solid ${t.palette.divider}`,
                 }}
             >
-                <Button onClick={onClose}>Kapat</Button>
+                {/* NEW: Kapat button is disabled if waiting for distance */}
+                <Button onClick={onClose} disabled={isWaitingForDistance}>Kapat</Button>
 
                 {mayOpenETA && (
                     <Button
                         variant="contained"
-                        color="success"
-                        disabled={!canETA}
-                        onClick={() => {
-                            if (!canETA) return;
-                            saveETA();
-                        }}
+                        color={isWaitingForDistance ? "warning" : "success"} // Change color for manual input
+                        disabled={isWaitingForDistance ? !canSaveDistance : !canETA} // Use new disable logic
+                        onClick={handleSave} // Use combined save function
                         sx={{ fontWeight: 800, textTransform: "none" }}
                     >
-                        Kaydet
+                        {isWaitingForDistance ? "Mesafe Kaydet & Hesapla" : "Kaydet"}
                     </Button>
                 )}
             </DialogActions>

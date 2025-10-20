@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/adminPanel/tabs/RolesTab.js
+// DİKKAT: useCallback import'u eklendi!
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "../../supabaseClient";
 import {
     Box, Paper, Typography, Table, TableHead, TableRow, TableCell, TableBody,
@@ -132,7 +134,8 @@ export default function RolesTab() {
     const [selectedScreen, setSelectedScreen] = useState(SCREENS[0].key);
     const permKeys = PERM_KEYS_BY_SCREEN[selectedScreen] || [];
 
-    const load = async (screen = selectedScreen) => {
+    // DEĞİŞİKLİK YAPILDI: load fonksiyonu useCallback ile sarmalandı
+    const load = useCallback(async (screen = selectedScreen) => {
         setLoading(true);
         try {
             await ensureRolesExist();
@@ -148,7 +151,7 @@ export default function RolesTab() {
                     role_key: r.key,
                     role_name: role?.name || r.name,
                 };
-                // sadece bu ekranda görünen kolonları oku/yaz
+                // permKeys burada kullanıldığı için useCallback bağımlılığına eklendi.
                 permKeys.forEach((p) => { base[p.key] = !!existing?.[p.key]; });
                 return base;
             });
@@ -161,9 +164,11 @@ export default function RolesTab() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [permKeys, selectedScreen]); // <-- 'permKeys' ve 'selectedScreen' bağımlılık olarak eklendi.
 
-    useEffect(() => { load(selectedScreen); /* eslint-disable-next-line */ }, [selectedScreen]);
+    // DEĞİŞİKLİK YAPILDI: load bağımlılık dizisine eklendi.
+    // selectedScreen değiştiğinde de load'un tekrar çalışmasını sağlar.
+    useEffect(() => { load(selectedScreen); /* eslint-disable-next-line */ }, [selectedScreen, load]);
 
     const toggle = (role_id, key) => {
         setRows((prev) => prev.map((r) => (r.role_id === role_id ? { ...r, [key]: !r[key] } : r)));
@@ -188,6 +193,7 @@ export default function RolesTab() {
 
             await safeUpsertRolePerms(payload);
             setDirty(false);
+            await load(); // load artık useCallback içinde, güvenle çağrılabilir.
         } catch (e) {
             console.error("save roles error:", e);
             alert("Kaydetme hatası: " + (e?.message || e));
@@ -228,6 +234,7 @@ export default function RolesTab() {
 
                 <Tooltip title="Yenile">
                     <span>
+                        {/* load çağrımı useCallback içinde olduğu için güvenlidir */}
                         <IconButton onClick={() => load(selectedScreen)} disabled={loading || saving}>
                             {loading ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
                         </IconButton>

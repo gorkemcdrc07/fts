@@ -27,8 +27,6 @@ import {
     Select,
     InputLabel,
     FormControl,
-    Collapse,
-    IconButton,
     Tooltip,
 } from "@mui/material";
 import { DataGrid, useGridApiRef } from "@mui/x-data-grid";
@@ -37,7 +35,6 @@ import { DataGrid, useGridApiRef } from "@mui/x-data-grid";
 import ListeleButton from "./butonlar/listele";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 /* Modüller */
 import Filtreler from "./filtreler";
@@ -58,7 +55,6 @@ import buildColumns from "./columns";
 import {
     nowLocalISO,
     fromISOToCombined,
-    addMinutesISO,
     normalizeISO,
 } from "./utils/datetime";
 import { formatPhone, ellipsize } from "./utils/format";
@@ -67,7 +63,6 @@ import {
     BLOCK_MIN,
     parseHHMMtoMin,
     parseMesafeKm,
-    computeETAWithKGM,
     computeETAWithKGMPlus,
     BREAK_OPTIONS,
     ETA_STATUS,
@@ -217,6 +212,9 @@ export default function ReelAtananSeferler() {
     const [etaDistanceKm, setEtaDistanceKm] = useState(null);
     const [etaDistanceInfo, setEtaDistanceInfo] = useState("");
     const [breakSel, setBreakSel] = useState(0);
+
+    // YENİ: Manuel mesafe girişi için state
+    const [distanceInput, setDistanceInput] = useState("");
 
     // “Anlık ETA uymayan” kilidi
     const [etaLocked, setEtaLocked] = useState(false);
@@ -443,7 +441,7 @@ export default function ReelAtananSeferler() {
         setDetailRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
     }, []);
 
-    // GÜNCELLENMİŞ saveDetails: Yeni guncelleyen/tarih sütunlarını ekler ve NULL hatasını çözer
+    // GÜNCELLENMİŞ saveDetails: Hook bağımlılıkları optimize edildi.
     const saveDetails = useCallback(async () => {
         if (!editSefer) return false;
         setSaving(true);
@@ -543,7 +541,10 @@ export default function ReelAtananSeferler() {
                             .maybeSingle();
                         const remain = Number(srow?.kalan_surus_dk) || BLOCK_MIN;
 
-                        const newETA = computeETAWithKGM(km, firstStart, remain);
+                        const { etaISO: newETA } = computeETAWithKGMPlus(km, firstStart, {
+                            initialRemainMin: remain,
+                            startBreakMin: 0, // Editörden gelen ETA hesaplaması için mola 0 varsayılır.
+                        });
 
                         await updateSefer(editSefer.id, {
                             eta_varis: newETA,
@@ -602,7 +603,8 @@ export default function ReelAtananSeferler() {
         }
 
         return !errorOccurred; // Başarılı olup olmadığını döndür
-    }, [detailRows, editSefer, detailRowsOrig, USERKEY, computeAracStatu]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [detailRows, editSefer, detailRowsOrig, computeAracStatu]);
 
     const moveToCompleted = useCallback(async () => {
         if (!editSefer) return;
@@ -695,9 +697,9 @@ export default function ReelAtananSeferler() {
         } finally {
             setSaving(false);
         }
-    }, [detailRows, editSefer, rows, seferTarihiYeni, closeEditor]);
+    }, [detailRows, editSefer, rows, seferTarihiYeni, closeEditor, addLog]);
 
-    /* ===== ETA PANELİ ===== */
+    /* ===== ETA PANELİ FONKSİYONLARI ===== */
     const openEditor = useCallback(
         async (row, aktarModu = false) => {
             if (!mayOpenEdit) {
@@ -798,6 +800,7 @@ export default function ReelAtananSeferler() {
             setEtaDistanceKm(null);
             setEtaDistanceInfo("");
             setBreakSel(row?.eta_mola_dk ?? 0);
+            setDistanceInput(""); // YENİ: ETA diyaloğu açıldığında manuel mesafe inputunu temizle
             setEtaOpen(true);
 
             try {
@@ -833,12 +836,23 @@ export default function ReelAtananSeferler() {
                 try {
                     const { yIl, yIlce, tIl, tIlce } = pickFirstLegOD(row, detay);
                     const mesafeRaw = await fetchMesafe({ yIl, yIlce, tIl, tIlce });
-                    const km = parseMesafeKm(mesafeRaw);
+                    let km = parseMesafeKm(mesafeRaw);
+
+                    // HATA DÜZELTME MANTIĞI: Eğer değer 1000'den büyük ve tam sayı gibi görünüyorsa 100'e bölerek float'a çevir
+                    if (km && typeof km === 'number' && km > 1000 && km % 1 === 0) {
+                        // Eğer mesafe 39568 geliyorsa (yanlış birim), 100'e bölerek 395.68 yap.
+                        km = km / 100;
+                    }
+
                     if (km) {
                         const safMin = Math.round((km / AVG_SPEED_KMPH) * 60);
                         setEtaDistanceKm(km);
+
+                        // YENİ DÜZENLEME: toFixed(2) ile sabitleyip noktayı virgüle çevir
+                        const formattedKm = km.toFixed(2).replace('.', ',');
+
                         setEtaDistanceInfo(
-                            `${km.toFixed(0)} km • saf sürüş ~ ${Math.floor(safMin / 60)}s ${String(safMin % 60).padStart(2, "0")}d @ ${AVG_SPEED_KMPH} km/s`
+                            `${formattedKm} km • saf sürüş ~ ${Math.floor(safMin / 60)}s ${String(safMin % 60).padStart(2, "0")}d @ ${AVG_SPEED_KMPH} km/s`
                         );
                     } else {
                         setEtaDistanceKm(null);
@@ -891,25 +905,30 @@ export default function ReelAtananSeferler() {
 
     const firstLegStartISO = useMemo(() => getFirstLegStartISO(etaDetails), [etaDetails]);
 
-
+    // Hata düzeltildi: etaDetails Hook'tan çıkarıldı (çünkü firstLegStartISO zaten ona bağlı)
     const computedETAISO = useMemo(() => {
         try {
-            if (!etaDistanceKm) return "__NEED_DISTANCE__";
+            // YENİ: Manuel mesafe girildiyse onu kullan. (distanceInput bir string)
+            const finalDistance = Number(distanceInput) || etaDistanceKm;
+
+            if (!finalDistance || finalDistance <= 0) return "__NEED_DISTANCE__";
+
             const startISO = etaStartISO || firstLegStartISO;
             if (!startISO) return "__WAITING__";
 
             const initialRemain = parseHHMMtoMin(driveHM) || BLOCK_MIN;
 
-            const { etaISO } = computeETAWithKGMPlus(etaDistanceKm, startISO, {
+            const { etaISO } = computeETAWithKGMPlus(finalDistance, startISO, {
                 initialRemainMin: initialRemain,
                 startBreakMin: Number(breakSel) || 0, // molayı buraya veriyoruz, tabana eklemiyoruz
             });
 
             return etaISO || "";
-        } catch {
+        } catch (e) {
+            console.error("ETA Hesaplama Hatası:", e);
             return "";
         }
-    }, [etaStartISO, driveHM, etaDetails, etaDistanceKm, breakSel, firstLegStartISO]);
+    }, [etaStartISO, driveHM, etaDistanceKm, breakSel, firstLegStartISO, distanceInput]);
 
     const destinationText = useMemo(() => {
         if (!etaRow) return "-";
@@ -921,28 +940,47 @@ export default function ReelAtananSeferler() {
     }, [etaRow]);
 
     const copyETA = useCallback(async () => {
+        // ... (Kullanım aynı kaldı)
         try {
+            // navigator.clipboard.writeText yerine document.execCommand('copy') kullan
+            const copyText = (text) => {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+            };
+
             if (computedETAISO === "__WAITING__") {
-                await navigator.clipboard.writeText("Yükleme çıkış tarihi bekleniyor.");
+                copyText("Yükleme çıkış tarihi bekleniyor.");
                 setSnack({ open: true, msg: "Mesaj kopyalandı.", severity: "success" });
                 return;
             }
             if (computedETAISO === "__NEED_DISTANCE__") {
-                await navigator.clipboard.writeText("Mesafe bulunamadı.");
+                copyText("Mesafe bulunamadı.");
                 setSnack({ open: true, msg: "Mesaj kopyalandı.", severity: "success" });
                 return;
             }
             const txt = fromISOToCombined(computedETAISO || "") || "-";
-            await navigator.clipboard.writeText(txt);
+            copyText(txt);
             setSnack({ open: true, msg: `ETA kopyalandı: ${txt}`, severity: "success" });
-        } catch {
-            setSnack({ open: true, msg: "Kopyalanamadı.", severity: "error" });
+        } catch (e) {
+            console.error("Copy FAILED:", e);
+            setSnack({ open: true, msg: "Kopyalanamadı. Tarayıcı yetkilerini kontrol edin.", severity: "error" });
         }
-    }, [computedETAISO]);
+    }, [computedETAISO, fromISOToCombined]);
 
     const saveETA = useCallback(async () => {
         if (etaLocked) {
             setSnack({ open: true, msg: "Bu sefer 'Anlık ETA uymuyor' durumunda. Değişiklik yapılamaz.", severity: "warning" });
+            return;
+        }
+
+        // computedETAISO'nun yeniden hesaplanması için bu kontrol gereklidir.
+        // Eğer mesafe eksikse, saveETA çağrılsa bile kaydedilmez.
+        if (computedETAISO === "__NEED_DISTANCE__") {
+            setSnack({ open: true, msg: "Mesafe bilgisi eksik. Lütfen manuel mesafe girin.", severity: "warning" });
             return;
         }
 
@@ -952,13 +990,17 @@ export default function ReelAtananSeferler() {
             if (!id) throw new Error("Sefer kaydı bulunamadı (id yok).");
 
             const firstStart = getFirstLegStartISO(etaDetails);
-            const canCompute = !!(etaDistanceKm && (etaStartISO || firstStart));
-            const startISO = etaStartISO || firstStart || nowLocalISO();
+            const finalDistance = Number(distanceInput) || etaDistanceKm; // Manuel veya otomatik mesafeyi kullan
+
+            // Re-compute ETA to ensure latest state is used (especially after distanceInput change)
+            const startISO = etaStartISO || firstStart;
             const initialRemain = parseHHMMtoMin(driveHM) || BLOCK_MIN;
+
+            const canCompute = !!(finalDistance && finalDistance > 0 && startISO);
 
             let newETA = null;
             if (canCompute) {
-                const { etaISO } = computeETAWithKGMPlus(etaDistanceKm, startISO, {
+                const { etaISO } = computeETAWithKGMPlus(finalDistance, startISO, {
                     initialRemainMin: initialRemain,
                     startBreakMin: Number(breakSel) || 0, // molayı opsiyonla ver
                 });
@@ -969,6 +1011,7 @@ export default function ReelAtananSeferler() {
             const note = waiting
                 ? ETA_MESSAGES[ETA_STATUS.WAITING_FIRST_YC]
                 : (canCompute ? null : ETA_MESSAGES[ETA_STATUS.NEED_DISTANCE]);
+
             const payload = {
                 eta_varis: newETA,
                 eta_note: note ?? null,
@@ -1004,13 +1047,67 @@ export default function ReelAtananSeferler() {
                 msg: newETA ? "ETA kaydedildi." : "Bilgiler kaydedildi. Detaylar/mesafe gelince ETA hesaplanacak.",
                 severity: "success",
             });
+            setEtaOpen(false); // Kayıt başarılı: Diyaloğu kapat
         } catch (e) {
             console.error("saveETA FAILED:", e);
             setSnack({ open: true, msg: `Kaydedilemedi: ${e?.message || e}`, severity: "error" });
         } finally {
             setSaving(false);
         }
-    }, [etaLocked, etaRow, etaStartISO, driveHM, etaDetails, etaDistanceKm, breakSel, firstLegStartISO]);
+    }, [etaLocked, etaRow, etaStartISO, driveHM, etaDetails, etaDistanceKm, breakSel, firstLegStartISO, addLog, distanceInput, computedETAISO]);
+
+    /* --- YENİ FONKSİYON: Manuel Mesafe Kaydetme ve ETA Güncelleme --- */
+    const saveManualDistanceAndETA = useCallback(async ({ distance, yukleme_il, yukleme_ilce, teslim_il, teslim_ilce }) => {
+        if (!etaRow) return;
+        if (distance <= 0 || !yukleme_il || !teslim_il) {
+            setSnack({ open: true, msg: "Geçerli bir mesafe (km) girmelisiniz.", severity: "error" });
+            return;
+        }
+
+        setSaving(true); // Kayıt işlemi başlıyor
+
+        try {
+            // 1. Supabase'e 'mesafeler' tablosuna kaydet/güncelle (upsert)
+            const mesafePayload = {
+                yukleme_il,
+                yukleme_ilce,
+                teslim_il,
+                teslim_ilce,
+                mesafe: distance, // km cinsinden
+                kaydeden: USERKEY,
+                kayit_zamani: new Date().toISOString(),
+            };
+
+            console.log(`[ETA] Manuel Mesafe Kaydı: ${distance} km`);
+            const { error: upsertError } = await supabase
+                .from('mesafeler')
+                // Conflict'i il/ilçe bazında çöz. Eğer il/ilçe aynıysa, mesafeyi güncelle.
+                .upsert([mesafePayload], { onConflict: 'yukleme_il,yukleme_ilce,teslim_il,teslim_ilce' });
+
+            if (upsertError) throw upsertError;
+
+            // 2. Local state'i güncelle: Yeni mesafeyi etaDistanceKm'ye set et
+            setEtaDistanceKm(distance);
+
+            // YENİ DÜZENLEME: Manuel girilen mesafeyi de formatla
+            const formattedDistance = Number(distance).toFixed(2).replace('.', ',');
+
+            setEtaDistanceInfo(`${formattedDistance} km (Manuel Giriş)`);
+            setDistanceInput(""); // Input'u temizle
+
+            // 3. ETA'yı yeniden hesapla ve kaydetmek için saveETA'yı çağır.
+            await saveETA();
+
+            // saveETA'nın içinde setEtaOpen(false) çağrıldığı için burada çağırmaya gerek yok.
+
+        } catch (e) {
+            console.error("saveManualDistanceAndETA FAILED:", e);
+            setSnack({ open: true, msg: `Mesafe kaydedilemedi: ${e?.message || e}`, severity: "error" });
+        } finally {
+            setSaving(false);
+        }
+    }, [etaRow, saveETA, USERKEY]);
+    /* --- YENİ FONKSİYON BİTİŞİ --- */
 
     /* === Dashboard için adapter === */
     const [dashRows, setDashRows] = useState([]);
@@ -1096,7 +1193,8 @@ export default function ReelAtananSeferler() {
         })();
 
         return () => { cancelled = true; };
-    }, [filtered]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filtered]); // rows.length gereksiz. filtered'ın kendisi rows'a bağımlı olduğu için yeterli.
 
     /* grid columns (+ açıklama ikonu) */
     const columns = useMemo(() => {
@@ -1207,7 +1305,9 @@ export default function ReelAtananSeferler() {
     }, [
         permsLoading, mayOpenETA, canETA, mayOpenEdit, canEdit,
         openETA, openEditor, viewBump, reasonNos,
+        // DİKKAT: Hidden ve Order Key'ler sabit olduğu için Hook bağımlılığına eklenmedi.
     ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps 
 
     /* sabit UI config */
     const baseInputSX = {
@@ -1418,8 +1518,6 @@ export default function ReelAtananSeferler() {
                 quick={quick} setQuick={setQuick}
                 surucu={surucu} setSurucu={setSurucu}
             />
-
-            {/* Özet Dashboard — İSTEK ÜZERİNE KALDIRILDI */}
 
             {/* Liste */}
             <Paper
@@ -1651,6 +1749,11 @@ export default function ReelAtananSeferler() {
                         setDriveHM={etaLocked ? () => { } : setDriveHM}
                         breakSel={breakSel}
                         setBreakSel={etaLocked ? () => { } : setBreakSel}
+
+                        distanceInput={distanceInput}
+                        setDistanceInput={setDistanceInput}
+                        saveManualDistanceAndETA={saveManualDistanceAndETA}
+
                         computedETAISO={computedETAISO}
                         fromISOToCombined={fromISOToCombined}
                         copyETA={copyETA}

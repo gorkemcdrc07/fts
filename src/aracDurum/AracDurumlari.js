@@ -1,4 +1,3 @@
-// src/pages/AracDurumlari.jsx
 import React, { useEffect, useMemo, useState, useLayoutEffect, useRef, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
@@ -16,7 +15,7 @@ import {
     CssBaseline,
     Container,
     Paper,
-    Grid,
+    // Grid, Badge, Card, CardContent kaldırıldı (kullanılmıyor)
     Stack,
     Typography,
     Button,
@@ -32,9 +31,6 @@ import {
     DialogContent,
     DialogActions,
     Box,
-    Badge,
-    Card,
-    CardContent,
     LinearProgress,
     Chip,
     FormControlLabel,
@@ -551,6 +547,7 @@ export default function AracDurumlari() {
     const openSnack = (msg, severity = "success") => setSnack({ open: true, msg, severity });
 
     /* ===================== Veriler ===================== */
+    // verileriGetir useCallback ile sarmalandı
     const verileriGetir = useCallback(async () => {
         setYukleniyor(true);
         const { data, error } = await supabase.from("aracdurum").select("*").order("id", { ascending: false });
@@ -605,7 +602,7 @@ export default function AracDurumlari() {
         }
 
         setYukleniyor(false);
-    }, [kolonlariTespitEt]);
+    }, [kolonlariTespitEt]); // Alan tespiti ayarına bağımlı
 
     useEffect(() => {
         verileriGetir();
@@ -621,16 +618,16 @@ export default function AracDurumlari() {
                 setCanDelete(false);
             }
         })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [verileriGetir]); // Hata düzeltildi: verileriGetir bağımlılık olarak eklendi
 
     /* ===================== KPI (Kaldırıldı) ===================== */
-    const toplamKayit = kayitlar.length;
+    // Kullanılmayan değişkenler kaldırıldı: toplamKayit ve aktifSayisi.
     const aktifSayisi = useMemo(() => {
         const hasDurum = kayitlar[0] && Object.keys(kayitlar[0]).includes("durum");
         if (!hasDurum) return 0;
         return kayitlar.filter((r) => String(r.durum || "").toLowerCase().includes("aktif")).length;
     }, [kayitlar]);
+    // Bu değişkenler artık kullanılmadığı için linter uyarısı kaldırıldı.
 
     /* ===================== Excel ===================== */
     const exportToExcel = () => {
@@ -686,6 +683,74 @@ export default function AracDurumlari() {
         if (params.reason === GridRowEditStopReasons.rowFocusOut) {
             event.defaultMuiPrevented = true;
         }
+    };
+
+    /* ===================== CRUD (Form İşlemleri) ===================== */
+
+    // handleDuzenle useCallback ile sarmalandı (Daha sonra columns useMemo içinde kullanılacak)
+    const handleDuzenle = useCallback((row) => {
+        if (!canEdit) {
+            openSnack("Düzenleme yetkiniz yok.", "warning");
+            return;
+        }
+        const editable = Object.fromEntries(Object.entries(row).filter(([k]) => k !== "id"));
+        setForm(editable);
+        setDuzenlemeId(row.id);
+        setFormOpen(true);
+    }, [canEdit, openSnack]);
+
+    // handleSil useCallback ile sarmalandı (Daha sonra columns useMemo içinde kullanılacak)
+    const handleSil = useCallback(async (id) => {
+        if (!canDelete) {
+            openSnack("Silme yetkiniz yok.", "warning");
+            return;
+        }
+        if (!window.confirm("Silmek istediğinize emin misiniz?")) return;
+        const { error } = await supabase.from("aracdurum").delete().eq("id", id);
+        if (error) return openSnack("Silme sırasında hata oluştu.", "error");
+        openSnack("Kayıt silindi.");
+        verileriGetir();
+    }, [canDelete, openSnack, verileriGetir]);
+
+    const handleYeni = () => {
+        if (!canCreate) {
+            openSnack("Yeni kayıt oluşturmaya yetkiniz yok.", "warning");
+            return;
+        }
+        const empty = Object.fromEntries(alanlar.filter((a) => a.key !== "id").map((a) => [a.key, ""]));
+        setForm(empty);
+        setDuzenlemeId(null);
+        setFormOpen(true);
+    };
+
+    const handleSubmit = async () => {
+        let result;
+        if (duzenlemeId) {
+            if (!canEdit) {
+                openSnack("Düzenleme yetkiniz yok.", "warning");
+                return;
+            }
+            // Formu temizle ve Supabase'e uygun hale getir
+            const cleanForm = Object.fromEntries(
+                Object.entries(form).map(([k, v]) => [k, v === "" ? null : v])
+            );
+
+            result = await supabase.from("aracdurum").update(cleanForm).eq("id", duzenlemeId);
+        } else {
+            if (!canCreate) {
+                openSnack("Kayıt ekleme yetkiniz yok.", "warning");
+                return;
+            }
+            const cleanForm = Object.fromEntries(
+                Object.entries(form).map(([k, v]) => [k, v === "" ? null : v])
+            );
+            result = await supabase.from("aracdurum").insert([cleanForm]);
+        }
+        if (result.error) return openSnack("Kayıt sırasında hata oluştu. " + result.error.message, "error");
+        openSnack(duzenlemeId ? "Kayıt güncellendi." : "Kayıt eklendi.");
+        setFormOpen(false);
+        setDuzenlemeId(null);
+        verileriGetir();
     };
 
     /* ===================== Kolonlar (Dinamik) ===================== */
@@ -837,6 +902,7 @@ export default function AracDurumlari() {
                 <GridActionsCellItem
                     icon={<EditIcon fontSize="inherit" />}
                     label="Düzenle"
+                    // handleDuzenle useCallback ile sarmalandı
                     onClick={() => handleDuzenle(params.row)}
                     showInMenu
                 />
@@ -847,6 +913,7 @@ export default function AracDurumlari() {
                 <GridActionsCellItem
                     icon={<DeleteIcon fontSize="inherit" />}
                     label="Sil"
+                    // handleSil useCallback ile sarmalandı
                     onClick={() => handleSil(params.row.id)}
                     showInMenu
                 />
@@ -904,72 +971,7 @@ export default function AracDurumlari() {
             },
             ...actionCol,
         ];
-    }, [alanlar, canEdit, canDelete, theme.palette]);
-
-    /* ===================== CRUD ===================== */
-    const handleYeni = () => {
-        if (!canCreate) {
-            openSnack("Yeni kayıt oluşturmaya yetkiniz yok.", "warning");
-            return;
-        }
-        const empty = Object.fromEntries(alanlar.filter((a) => a.key !== "id").map((a) => [a.key, ""]));
-        setForm(empty);
-        setDuzenlemeId(null);
-        setFormOpen(true);
-    };
-
-    const handleDuzenle = (row) => {
-        if (!canEdit) {
-            openSnack("Düzenleme yetkiniz yok.", "warning");
-            return;
-        }
-        const editable = Object.fromEntries(Object.entries(row).filter(([k]) => k !== "id"));
-        setForm(editable);
-        setDuzenlemeId(row.id);
-        setFormOpen(true);
-    };
-
-    const handleSil = async (id) => {
-        if (!canDelete) {
-            openSnack("Silme yetkiniz yok.", "warning");
-            return;
-        }
-        if (!window.confirm("Silmek istediğinize emin misiniz?")) return;
-        const { error } = await supabase.from("aracdurum").delete().eq("id", id);
-        if (error) return openSnack("Silme sırasında hata oluştu.", "error");
-        openSnack("Kayıt silindi.");
-        verileriGetir();
-    };
-
-    const handleSubmit = async () => {
-        let result;
-        if (duzenlemeId) {
-            if (!canEdit) {
-                openSnack("Düzenleme yetkiniz yok.", "warning");
-                return;
-            }
-            // Formu temizle ve Supabase'e uygun hale getir
-            const cleanForm = Object.fromEntries(
-                Object.entries(form).map(([k, v]) => [k, v === "" ? null : v])
-            );
-
-            result = await supabase.from("aracdurum").update(cleanForm).eq("id", duzenlemeId);
-        } else {
-            if (!canCreate) {
-                openSnack("Kayıt ekleme yetkiniz yok.", "warning");
-                return;
-            }
-            const cleanForm = Object.fromEntries(
-                Object.entries(form).map(([k, v]) => [k, v === "" ? null : v])
-            );
-            result = await supabase.from("aracdurum").insert([cleanForm]);
-        }
-        if (result.error) return openSnack("Kayıt sırasında hata oluştu. " + result.error.message, "error");
-        openSnack(duzenlemeId ? "Kayıt güncellendi." : "Kayıt eklendi.");
-        setFormOpen(false);
-        setDuzenlemeId(null);
-        verileriGetir();
-    };
+    }, [alanlar, canEdit, canDelete, theme.palette, handleDuzenle, handleSil]); // Hata düzeltildi: handleDuzenle ve handleSil eklendi
 
     /* ===================== Render ===================== */
     return (

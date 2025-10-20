@@ -122,7 +122,7 @@ export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
     // ✅ Cumartesi 12:00 sonrası kuralını uygula
     start = applySaturdayRule(start);
 
-    const kmPerMin = opt.speedKmh / 60;
+    const kmPerMin = opt.speedKmh / 60; // Tanım kaldı
     let remainingKm = Math.max(0, distanceKm);
 
     let t = new Date(start);
@@ -202,9 +202,11 @@ export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
         }
 
         const canDriveMin = Math.min(remainToBreak, remainInDay);
-        const canDriveKm = canDriveMin * (opt.speedKmh / 60);
+        // Düzeltildi: kmPerMin kullanıldı
+        const canDriveKm = canDriveMin * kmPerMin;
         const driveKm = Math.min(remainingKm, canDriveKm);
-        const driveMin = Math.max(1, Math.round(driveKm / (opt.speedKmh / 60)));
+        // Düzeltildi: kmPerMin kullanıldı
+        const driveMin = Math.max(1, Math.round(driveKm / kmPerMin));
 
         t = addMinutes(t, driveMin);
         remainingKm -= driveKm;
@@ -242,8 +244,8 @@ export function computeETAWithKGM(distanceKm, startISO, initialRemainMin = BLOCK
 }
 
 /* ===========================
-   YENİ: Güvenli yardımcılar denemeleri
-   =========================== */
+    YENİ: Güvenli yardımcılar denemeleri
+    =========================== */
 export function getFirstYuklemeCikis(etaRow) {
     return etaRow?.sefer_detaylari?.[0]?.yukleme_cikis ?? null;
 }

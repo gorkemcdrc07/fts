@@ -242,7 +242,7 @@ export function computeETAWithKGM(distanceKm, startISO, initialRemainMin = BLOCK
 }
 
 /* ===========================
-   YENİ: Güvenli yardımcılar
+   YENİ: Güvenli yardımcılar denemeleri
    =========================== */
 export function getFirstYuklemeCikis(etaRow) {
     return etaRow?.sefer_detaylari?.[0]?.yukleme_cikis ?? null;

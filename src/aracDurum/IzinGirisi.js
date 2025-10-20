@@ -1,13 +1,15 @@
-import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from "react";
+// src/aracDurum/IzinGirisi.js
+import React, { useEffect, useMemo, useState, useLayoutEffect, useRef, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
+import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useNavigate } from "react-router-dom";
 
-// MUI Components & Styling
+// MUI
 import {
     ThemeProvider,
     createTheme,
@@ -63,12 +65,14 @@ import {
     GridToolbarQuickFilter,
     GridToolbarColumnsButton,
     GridToolbarDensitySelector,
+    GridActionsCellItem,
 } from "@mui/x-data-grid";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 
 dayjs.locale("tr");
+dayjs.extend(customParseFormat);
 
 /* ===================== Sabitler ve Yardımcılar ===================== */
 const SCREEN_KEY = "izin_yonetimi";
@@ -99,7 +103,7 @@ const hesaplaGunSayisi = (baslangicStr, bitisStr) => {
     const d1 = dayjs(baslangicStr).startOf('day');
     const d2 = dayjs(bitisStr).startOf('day');
     const fark = d2.diff(d1, 'day');
-    return fark >= 0 ? fark + 1 : 0; // İzin günleri dahil (başlangıç ve bitiş dahil)
+    return fark >= 0 ? fark + 1 : 0;
 };
 
 // DataGrid güvenli yardımcılar
@@ -118,7 +122,7 @@ const safeDateValueFormatter = (arg) => {
     return d.isValid() ? d.format("DD.MM.YYYY") : "-";
 };
 
-/* ===================== DataGrid TR (Hata Düzeltildi) ===================== */
+/* ===================== DataGrid TR ===================== */
 const GRID_TR = {
     noRowsLabel: "Kayıt bulunmuyor",
     noResultsOverlayLabel: "Aranan sonuç bulunamadı",
@@ -147,18 +151,18 @@ const GRID_TR = {
 const theme = createTheme({
     palette: {
         mode: "dark",
-        primary: { main: "#8B5CF6" }, // Mor (Vibrant Purple)
-        secondary: { main: "#22D3EE" }, // Turkuaz (Cyan)
+        primary: { main: "#8B5CF6" },
+        secondary: { main: "#22D3EE" },
         background: {
-            default: "#0B1220", // Koyu mavi/lacivert arka plan
-            paper: alpha("#1E293B", 0.95), // Hafif daha açık, kadifemsi bir paper rengi
+            default: "#0B1220",
+            paper: alpha("#1E293B", 0.95),
         },
-        success: { main: "#10B981" }, // Zümrüt Yeşili
-        error: { main: "#F43F5E" }, // Gül Kırmızısı
+        success: { main: "#10B981" },
+        error: { main: "#F43F5E" },
         info: { main: "#3B82F6" },
         warning: { main: "#F59E0B" },
     },
-    shape: { borderRadius: 12 }, // Hafif yuvarlak köşeler
+    shape: { borderRadius: 12 },
     typography: {
         fontFamily: 'Inter, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         button: { textTransform: "none", fontWeight: 600 },
@@ -167,7 +171,6 @@ const theme = createTheme({
     components: {
         MuiCssBaseline: {
             styleOverrides: {
-                // Scrollbar stilini iyileştir
                 "html": { scrollbarGutter: "stable" },
                 "*::-webkit-scrollbar": { width: "8px", height: "8px" },
                 "*::-webkit-scrollbar-thumb": {
@@ -315,8 +318,8 @@ function CustomToolbar({ onRefresh, onExport, onFilters }) {
                 position: "sticky",
                 top: 0,
                 zIndex: 1,
-                background: "linear-gradient(180deg, #171E2D 0%, #171E2D 100%)",
-                borderBottom: "1px solid rgba(255,255,255,0.12)",
+                background: "linear-gradient(180deg, rgba(10,16,30,0.95) 0%, rgba(10,16,30,0.8) 100%)",
+                borderBottom: "2px solid rgba(139,92,246,0.2)",
                 backdropFilter: "blur(8px)",
             }}
         >
@@ -387,6 +390,141 @@ export default function IzinGirisiModern() {
 
     const openSnack = (msg, severity = "success") => setSnack({ open: true, msg, severity });
 
+    // ***************************************************************
+    // 🛑 KRİTİK DÜZELTME BAŞLANGICI: handleSubmit tanımı
+    // useMemo/useCallback hook'larını kullanan fonksiyonlar, bunları
+    // kullanan useEffect'ten önce tanımlanmalıdır.
+    // handleSubmit'i useCallback ile tanımlıyoruz ve bağımlılıkları ekliyoruz.
+    // ***************************************************************
+
+    const kesintiGerekirMi = () => {
+        const yukleme = form.yukleme_tarihi ? dayjs(form.yukleme_tarihi) : null;
+        const isBasi = form.is_basi_tarihi ? dayjs(form.is_basi_tarihi) : null;
+
+        if (!yukleme || !isBasi) return false;
+        const farkGun = yukleme.diff(isBasi, 'day');
+        return farkGun > 0;
+    };
+
+    const verileriGetir = async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from("izinler")
+            .select("*")
+            .order("id", { ascending: false });
+        if (!error) {
+            const cleaned = (data || []).map((r) => ({
+                ...r,
+                baslangic_tarihi: r["baslangic_tarihi"] ? String(r["baslangic_tarihi"]).slice(0, 10) : null,
+                bitis_tarihi: r["bitis_tarihi"] ? String(r["bitis_tarihi"]).slice(0, 10) : null,
+                is_basi_tarihi: r["is_basi_tarihi"] ? String(r["is_basi_tarihi"]).slice(0, 10) : null,
+                yukleme_tarihi: r["yukleme_tarihi"] ? String(r["yukleme_tarihi"]).slice(0, 10) : null,
+                eklenme_tarihi: r["eklenme_tarihi"] ? String(r["eklenme_tarihi"]).slice(0, 10) : null,
+            }));
+            setIzinler(cleaned);
+        } else {
+            openSnack("İzinler alınamadı: " + error.message, "error");
+        }
+        setLoading(false);
+    };
+
+    const handleSubmit = useCallback(async () => {
+        // Validation: Zorunlu alanlar
+        if (!form.plaka_treyler || !form.izin_turu || !form.baslangic_tarihi || !form.bitis_tarihi) {
+            openSnack("Lütfen zorunlu alanları (Plaka, İzin Türü, Başlangıç/Bitiş) doldurun.", "error");
+            return;
+        }
+
+        // Permission check
+        if (!duzenlemeId && !perms.canCreate) {
+            openSnack("Yeni kayıt ekleme yetkiniz yok.", "warning");
+            return;
+        }
+        if (duzenlemeId && !perms.canEdit) {
+            openSnack("Düzenleme yetkiniz yok.", "warning");
+            return;
+        }
+
+        // Kesinti kontrolü: Form henüz gönderilmediyse ve kesinti gerekiyorsa diyaloğu aç
+        // Bu kontrol, sadece kesinti diyaloğundan gelindiğinde formSubmitBekliyor'un true olmasıyla atlanır.
+        if (kesintiGerekirMi() && !formSubmitBekliyor) {
+            setKesintiOpen(true);
+            return;
+        }
+
+        const kullanici = getMevcutKullanici();
+
+        const payload = {
+            ...form,
+            gun_sayisi: Number(form.gun_sayisi) || 0,
+            is_basi_tarihi: form.is_basi_tarihi || null,
+            yukleme_tarihi: form.yukleme_tarihi || null,
+            ekleyen_kullanici: kullanici,
+            eklenme_tarihi: new Date().toISOString().slice(0, 10), // Sadece tarih tutuluyor
+        };
+
+        let result;
+        if (duzenlemeId) {
+            result = await supabase.from("izinler").update(payload).eq("id", duzenlemeId);
+        } else {
+            // Yeni kayıt eklenirken eklenme_tarihi ayarlanır
+            result = await supabase.from("izinler").insert([payload]);
+        }
+
+        if (result.error) {
+            openSnack("Kayıt sırasında bir hata oluştu: " + result.error.message, "error");
+            setFormSubmitBekliyor(false);
+            return;
+        }
+
+        // Kesinti kaydı oluştur (kesinti diyaloğu üzerinden gelindiyse)
+        if (kesintiBilgisi.neden && kesintiBilgisi.tur && kesintiGerekirMi()) {
+            const isBasiDayjs = dayjs(form.is_basi_tarihi);
+            const yuklemeDayjs = dayjs(form.yukleme_tarihi);
+
+            const kesintiGunSayisi = Math.max(
+                0,
+                yuklemeDayjs.diff(isBasiDayjs, 'day')
+            );
+
+            // Önce mevcut kesintiyi (eğer varsa ve aynı tarih aralığındaysa) temizle
+            await supabase
+                .from("kesintiler")
+                .delete()
+                .eq("plaka_treyler", form.plaka_treyler)
+                .eq("baslangic_tarihi", form.is_basi_tarihi)
+                .eq("bitis_tarihi", form.yukleme_tarihi);
+
+            // Yeni kesintiyi kaydet
+            await supabase.from("kesintiler").insert([
+                {
+                    plaka_treyler: form.plaka_treyler,
+                    kesinti_turu: kesintiBilgisi.tur,
+                    neden: kesintiBilgisi.neden,
+                    baslangic_tarihi: form.is_basi_tarihi,
+                    bitis_tarihi: form.yukleme_tarihi,
+                    gun_sayisi: kesintiGunSayisi,
+                    aciklama: form.aciklama || "",
+                    ekleyen_kullanici: kullanici,
+                    eklenme_tarihi: new Date().toISOString().slice(0, 10),
+                },
+            ]);
+        }
+
+        openSnack(duzenlemeId ? "Kayıt başarıyla güncellendi. ✅" : "Yeni izin kaydı eklendi. 🎉");
+        setForm({ ...BOS_FORM });
+        setDuzenlemeId(null);
+        setKesintiBilgisi({ neden: "", tur: "" });
+        setKesintiOpen(false);
+        setFormOpen(false);
+        setFormSubmitBekliyor(false);
+        verileriGetir();
+    }, [form, duzenlemeId, perms.canCreate, perms.canEdit, formSubmitBekliyor, kesintiBilgisi]); // Bağımlılıklar eklendi
+
+    // ***************************************************************
+    // 🛑 KRİTİK DÜZELTME SONU
+    // ***************************************************************
+
     /* ===================== Effects ===================== */
     useEffect(() => {
         verileriGetir();
@@ -397,12 +535,17 @@ export default function IzinGirisiModern() {
         });
     }, []);
 
+    // 🛑 HATA DÜZELTME: handleSubmit'i bağımlılık olarak eklemek yerine doğrudan çağırıyoruz.
+    // Ancak React, bu callback'i bir bağımlılık olarak ister.
+    // Çözüm: handleSubmit'i useCallback ile sarmaladık ve buraya bağımlılık olarak ekledik.
+    // NOT: handleSubmit'i useCallback ile sarmalamadan bu hatayı alıyordunuz.
     useEffect(() => {
         if (formSubmitBekliyor) {
             setFormSubmitBekliyor(false);
             handleSubmit();
         }
-    }, [formSubmitBekliyor]);
+    }, [formSubmitBekliyor, handleSubmit]);
+
 
     /* ===================== KPI Hesaplama ===================== */
     const toplamKayit = izinler.length;
@@ -487,28 +630,7 @@ export default function IzinGirisiModern() {
     }
 
     /* ===================== Veri İşlemleri ===================== */
-    const verileriGetir = async () => {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from("izinler")
-            .select("*")
-            .order("id", { ascending: false });
-        if (!error) {
-            // Tarihleri temizle ve 10 karakter formatına dönüştür
-            const cleaned = (data || []).map((r) => ({
-                ...r,
-                baslangic_tarihi: r["baslangic_tarihi"] ? String(r["baslangic_tarihi"]).slice(0, 10) : null,
-                bitis_tarihi: r["bitis_tarihi"] ? String(r["bitis_tarihi"]).slice(0, 10) : null,
-                is_basi_tarihi: r["is_basi_tarihi"] ? String(r["is_basi_tarihi"]).slice(0, 10) : null,
-                yukleme_tarihi: r["yukleme_tarihi"] ? String(r["yukleme_tarihi"]).slice(0, 10) : null,
-                eklenme_tarihi: r["eklenme_tarihi"] ? String(r["eklenme_tarihi"]).slice(0, 10) : null,
-            }));
-            setIzinler(cleaned);
-        } else {
-            openSnack("İzinler alınamadı: " + error.message, "error");
-        }
-        setLoading(false);
-    };
+    // verileriGetir yukarı taşındı
 
     const plakalariGetir = async () => {
         const { data, error } = await supabase
@@ -645,146 +767,69 @@ export default function IzinGirisiModern() {
     };
 
 
-    const kesintiGerekirMi = () => {
-        const yukleme = form.yukleme_tarihi ? dayjs(form.yukleme_tarihi) : null;
-        const isBasi = form.is_basi_tarihi ? dayjs(form.is_basi_tarihi) : null;
-
-        // Yükleme tarihi, iş başı tarihinden kesinlikle sonra mı?
-        if (!yukleme || !isBasi) return false;
-
-        // Yükleme tarihi, iş başı tarihinden sonra ise kesinti gerekir.
-        const farkGun = yukleme.diff(isBasi, 'day');
-        return farkGun > 0;
-    };
-
-    const handleSubmit = async () => {
-        // Validation: Zorunlu alanlar
-        if (!form.plaka_treyler || !form.izin_turu || !form.baslangic_tarihi || !form.bitis_tarihi) {
-            openSnack("Lütfen zorunlu alanları (Plaka, İzin Türü, Başlangıç/Bitiş) doldurun.", "error");
-            return;
-        }
-
-        // Permission check
-        if (!duzenlemeId && !perms.canCreate) {
-            openSnack("Yeni kayıt ekleme yetkiniz yok.", "warning");
-            return;
-        }
-        if (duzenlemeId && !perms.canEdit) {
-            openSnack("Düzenleme yetkiniz yok.", "warning");
-            return;
-        }
-
-        // Kesinti kontrolü: Form henüz gönderilmediyse ve kesinti gerekiyorsa diyaloğu aç
-        if (kesintiGerekirMi() && !formSubmitBekliyor) {
-            setKesintiOpen(true);
-            return;
-        }
-
-        const kullanici = getMevcutKullanici();
-
-        const payload = {
-            ...form,
-            gun_sayisi: Number(form.gun_sayisi) || 0,
-            is_basi_tarihi: form.is_basi_tarihi || null,
-            yukleme_tarihi: form.yukleme_tarihi || null,
-            ekleyen_kullanici: kullanici,
-            eklenme_tarihi: new Date().toISOString().slice(0, 10), // Sadece tarih tutuluyor
-        };
-
-        let result;
-        if (duzenlemeId) {
-            result = await supabase.from("izinler").update(payload).eq("id", duzenlemeId);
-        } else {
-            // Yeni kayıt eklenirken eklenme_tarihi ayarlanır
-            result = await supabase.from("izinler").insert([payload]);
-        }
-
-        if (result.error) {
-            openSnack("Kayıt sırasında bir hata oluştu: " + result.error.message, "error");
-            setFormSubmitBekliyor(false); // Hata durumunda bekleme durumunu sıfırla
-            return;
-        }
-
-        // Kesinti kaydı oluştur (kesinti diyaloğu üzerinden gelindiyse)
-        if (kesintiBilgisi.neden && kesintiBilgisi.tur && kesintiGerekirMi()) {
-            const isBasiDayjs = dayjs(form.is_basi_tarihi);
-            const yuklemeDayjs = dayjs(form.yukleme_tarihi);
-
-            const kesintiGunSayisi = Math.max(
-                0,
-                yuklemeDayjs.diff(isBasiDayjs, 'day') // Gün farkı
-            );
-
-            // Önce mevcut kesintiyi (eğer varsa ve aynı tarih aralığındaysa) temizle
-            await supabase
-                .from("kesintiler")
-                .delete()
-                .eq("plaka_treyler", form.plaka_treyler)
-                .eq("baslangic_tarihi", form.is_basi_tarihi)
-                .eq("bitis_tarihi", form.yukleme_tarihi);
-
-            // Yeni kesintiyi kaydet
-            await supabase.from("kesintiler").insert([
-                {
-                    plaka_treyler: form.plaka_treyler,
-                    kesinti_turu: kesintiBilgisi.tur,
-                    neden: kesintiBilgisi.neden,
-                    baslangic_tarihi: form.is_basi_tarihi,
-                    bitis_tarihi: form.yukleme_tarihi,
-                    gun_sayisi: kesintiGunSayisi,
-                    aciklama: form.aciklama || "",
-                    ekleyen_kullanici: kullanici,
-                    eklenme_tarihi: new Date().toISOString().slice(0, 10),
-                },
-            ]);
-        }
-
-        openSnack(duzenlemeId ? "Kayıt başarıyla güncellendi. ✅" : "Yeni izin kaydı eklendi. 🎉");
-        setForm({ ...BOS_FORM });
-        setDuzenlemeId(null);
-        setKesintiBilgisi({ neden: "", tur: "" });
-        setKesintiOpen(false);
-        setFormOpen(false);
-        setFormSubmitBekliyor(false);
-        verileriGetir();
-    };
-
     const handleKesintiDevam = () => {
         if (!kesintiBilgisi.neden || !kesintiBilgisi.tur) {
             openSnack("Lütfen kesinti nedeni ve türünü seçin.", "error");
             return;
         }
         setKesintiOpen(false);
-        setFormSubmitBekliyor(true); // handleSubmit'i tetikle
+        // handleSubmit, useEffect tarafından formSubmitBekliyor: true olduğunda çağrılacaktır.
+        setFormSubmitBekliyor(true);
     };
 
-    const exportToExcel = () => {
+    // handleSubmit yukarı taşındı
+
+    // 🛑 EXCEL AKTAR FONKSİYONU
+    const exportToExcel = async () => {
         if (filtrelenmisIzinler.length === 0) {
             openSnack("Dışa aktarılacak veri bulunmuyor.", "info");
             return;
         }
 
-        const worksheetData = filtrelenmisIzinler.map((i) => ({
-            PLAKA: i.plaka_treyler,
-            SÜRÜCÜ: i.surucu_adi,
-            "SÜRÜCÜ TELEFON": i.surucu_telefon,
-            "SÜRÜCÜ TC": i.surucu_tc,
-            "İZİN TÜRÜ": i.izin_turu,
-            BAŞLANGIÇ: i.baslangic_tarihi ? dayjs(i.baslangic_tarihi).format("DD.MM.YYYY") : "-",
-            BİTİŞ: i["bitis_tarihi"] ? dayjs(i["bitis_tarihi"]).format("DD.MM.YYYY") : "-",
-            "İŞ BAŞI TARİHİ": i.is_basi_tarihi ? dayjs(i.is_basi_tarihi).format("DD.MM.YYYY") : "-",
-            "YÜKLEME TARİHİ": i.yukleme_tarihi ? dayjs(i.yukleme_tarihi).format("DD.MM.YYYY") : "-",
-            "TOPLAM GÜN": i.gun_sayisi,
-            AÇIKLAMA: i.aciklama,
-            "İZİN VEREN": i.ekleyen_kullanici,
-            "İZİN VERİLEN TARİH": i.eklenme_tarihi ? dayjs(i.eklenme_tarihi).format("DD.MM.YYYY") : "-",
-        }));
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Izinler");
 
-        const ws = XLSX.utils.json_to_sheet(worksheetData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Izinler");
-        const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-        saveAs(new Blob([buf], { type: "application/octet-stream" }), `izin_kayitlari_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
+        const headerMap = [
+            "plaka_treyler", "surucu_adi", "surucu_telefon", "surucu_tc",
+            "izin_turu", "baslangic_tarihi", "bitis_tarihi", "gun_sayisi",
+            "is_basi_tarihi", "yukleme_tarihi", "aciklama", "ekleyen_kullanici",
+            "eklenme_tarihi"
+        ];
+
+        const columns = headerMap.map(key => {
+            const isDate = key.includes('tarih');
+            return {
+                header: key.replace(/_/g, ' ').toUpperCase(),
+                key: key,
+                width: key === 'aciklama' ? 30 : 15,
+                style: { numFmt: isDate ? 'dd.mm.yyyy' : undefined },
+            }
+        });
+
+        worksheet.columns = columns;
+
+        const dataToExport = filtrelenmisIzinler.map(i => {
+            const row = {};
+            headerMap.forEach(key => {
+                let value = i[key];
+
+                // Tarih formatlama (dayjs objesi olarak saklanırsa Excel düzgün tanır)
+                if (key.includes('tarih') && value) {
+                    const d = dayjs(value);
+                    row[key] = d.isValid() ? d.toDate() : value;
+                } else {
+                    row[key] = value;
+                }
+            });
+            return row;
+        });
+
+        worksheet.addRows(dataToExport);
+
+        // Dosyayı oluştur ve indir
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        saveAs(blob, `izin_kayitlari_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
     };
 
     /* ===================== Filtreleme Logiği ===================== */
@@ -984,6 +1029,7 @@ export default function IzinGirisiModern() {
                                                 onClick={handleYeniIzin}
                                                 disabled={!perms.canCreate || permLoading}
                                                 size="small"
+                                                color="success"
                                                 sx={{ height: 40, px: 2.5 }}
                                             >
                                                 Yeni İzin
@@ -1032,7 +1078,7 @@ export default function IzinGirisiModern() {
                                 >
                                     {(loading || permLoading) && <LinearProgress color="secondary" />}
 
-                                    <Box sx={{ height: "100%", width: "100%", minHeight: 0 }}>
+                                    <Box sx={{ height: "100%", width: "100%", minHeight: 0, pt: loading || permLoading ? 0 : 1 }}>
                                         <DataGrid
                                             rows={filtrelenmisIzinler}
                                             columns={columns}
@@ -1050,17 +1096,25 @@ export default function IzinGirisiModern() {
                                                     <CustomToolbar
                                                         onFilters={() => setFiltreDrawer(true)}
                                                         onExport={exportToExcel}
-                                                        onRefresh={() => {
-                                                            verileriGetir();
-                                                            loadPermissions().catch(() => { });
-                                                        }}
+                                                        onRefresh={verileriGetir}
                                                     />
                                                 ),
                                             }}
                                             sx={{
                                                 border: "none",
-                                                '& .MuiDataGrid-virtualScroller': {
-                                                    overflowX: 'auto',
+                                                height: "100%",
+                                                fontSize: 14,
+                                                "& .MuiDataGrid-virtualScroller": { overflowX: "auto" },
+                                                "& .MuiDataGrid-columnHeaders": {
+                                                    backgroundColor: "#171E2D",
+                                                    color: "#C8D1E6",
+                                                    borderBottom: "1px solid rgba(255,255,255,0.12)",
+                                                },
+                                                "& .MuiDataGrid-row:nth-of-type(odd)": {
+                                                    backgroundColor: alpha("#1E293B", 0.7),
+                                                },
+                                                "& .MuiDataGrid-row:hover": {
+                                                    backgroundColor: alpha("#8B5CF6", 0.15),
                                                 },
                                             }}
                                         />
@@ -1074,15 +1128,13 @@ export default function IzinGirisiModern() {
                             anchor="right"
                             open={filtreDrawer}
                             onClose={() => setFiltreDrawer(false)}
-                            slotProps={{
-                                paper: {
-                                    sx: {
-                                        width: 420,
-                                        backgroundColor: "#171E2D",
-                                        color: "text.primary",
-                                        p: 3,
-                                        borderLeft: "1px solid rgba(255,255,255,0.1)",
-                                    },
+                            PaperProps={{
+                                sx: {
+                                    width: 420,
+                                    backgroundColor: "#171E2D",
+                                    color: "text.primary",
+                                    borderLeft: "1px solid rgba(255,255,255,0.1)",
+                                    p: 3,
                                 },
                             }}
                         >
@@ -1098,6 +1150,7 @@ export default function IzinGirisiModern() {
                                 <Autocomplete
                                     size="small"
                                     freeSolo
+                                    autoSelect
                                     options={plakaListesi.map((p) => `${p.plaka} - ${p.treyler}`)}
                                     value={filtreler.plaka_treyler}
                                     onChange={(_, v) => setFiltreler((p) => ({ ...p, plaka_treyler: v || "" }))}
@@ -1140,12 +1193,7 @@ export default function IzinGirisiModern() {
                                 <DatePicker
                                     label="Bitiş Tarihi"
                                     value={filtreler.bitis_tarihi ? dayjs(filtreler.bitis_tarihi) : null}
-                                    onChange={(d) =>
-                                        setFiltreler((p) => ({
-                                            ...p,
-                                            bitis_tarihi: d ? dayjs(d).format("YYYY-MM-DD") : "",
-                                        }))
-                                    }
+                                    onChange={(d) => setFiltreler((p) => ({ ...p, bitis_tarihi: d ? dayjs(d).format("YYYY-MM-DD") : "" }))}
                                     slotProps={{ textField: { fullWidth: true, size: "small" } }}
                                 />
 
@@ -1183,9 +1231,7 @@ export default function IzinGirisiModern() {
                                         variant="outlined"
                                         color="error"
                                         size="large"
-                                        onClick={() =>
-                                            setFiltreler({ ...BOS_FORM, ekleyen_kullanici: "", eklenme_tarihi: "" })
-                                        }
+                                        onClick={() => setFiltreler({ ...BOS_FORM, ekleyen_kullanici: "", eklenme_tarihi: "" })}
                                     >
                                         Temizle
                                     </Button>
@@ -1374,6 +1420,7 @@ export default function IzinGirisiModern() {
                                 </Button>
                                 <Button
                                     variant="contained"
+                                    // 🛑 Bu buton şimdi handleSubmit'i çağırıyor. Kesinti varsa handleSubmit içindeki mantık diyaloğu açacaktır.
                                     onClick={handleSubmit}
                                     size="large"
                                     color="primary"

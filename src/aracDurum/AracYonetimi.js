@@ -3,7 +3,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
-import * as XLSX from "xlsx";
+// import * as XLSX from "xlsx"; // 🛑 KALDIRILDI!
+import ExcelJS from "exceljs"; // ✅ EXCELJS EKLENDİ!
 import { saveAs } from "file-saver";
 
 // MUI
@@ -60,6 +61,17 @@ import {
 
 import { DataGrid, GridToolbar, gridClasses } from "@mui/x-data-grid";
 
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+
+import dayjs from "dayjs";
+import "dayjs/locale/tr";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+
+dayjs.locale("tr");
+dayjs.extend(customParseFormat);
+
 /* ===================== Görsel Sabitler ===================== */
 const HOME_PATH = "/anasayfa";
 
@@ -90,6 +102,7 @@ const theme = createTheme({
         success: { main: '#10B981' },
         error: { main: '#F43F5E' },
         warning: { main: '#FBBF24' },
+        info: { main: '#3B82F6' }, // Mavi
     },
     typography: {
         fontFamily: 'Inter, sans-serif',
@@ -259,7 +272,7 @@ async function fetchAracPerms() {
     const kullaniciId = parseInt(localStorage.getItem("kullaniciId"));
     if (!kullaniciId) return { canCreate: false, canEdit: false, canDelete: false };
 
-    // 1) USER OVERRIDE (user_permissions: AYON_* kolonları, screen_key YOK)
+    // 1) USER OVERRIDE (user_permissions: AYON_* kolonları, screen_key yok)
     const { data: up } = await supabase
         .from("user_permissions")
         .select("ayon_create, ayon_edit, ayon_delete")
@@ -738,26 +751,75 @@ export default function AracYonetimiMUI() {
         setBilgiModalAcik(true);
     }, []);
 
-    const excelAktar = useCallback(() => {
+    // 🛑 EXCEL AKTAR FONKSİYONU DEĞİŞTİRİLDİ
+    const excelAktar = useCallback(async () => {
         const liste = araclar;
         if (!liste.length) return openSnack("Aktarılacak araç bulunamadı", "warning");
-        const dataToExport = liste.map(({ plaka, treyler, surucu_adi, surucu_telefon, surucu_tc, statu }) => ({
-            Plaka: plaka,
-            Treyler: treyler,
-            "Sürücü Adı": surucu_adi,
-            Telefon: surucu_telefon,
-            TC: surucu_tc,
-            Statü: statu,
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet(`${tab} Araçlar`);
+
+        // Sütun başlıklarını ve veriyi almak için geçici bir yapı.
+        // Bu yapı, DataGrid'deki sütun sırasına uymak zorunda değildir, ancak okunabilir olmalıdır.
+        const headerMap = {
+            plaka: "Plaka",
+            treyler: "Treyler",
+            surucu_adi: "Sürücü Adı",
+            surucu_telefon: "Telefon",
+            surucu_tc: "TC",
+            statu: "Statü",
+            cekici_muayene: "Çekici Muayene Bitiş",
+            dorse_muayene: "Dorse Muayene Bitiş",
+            trafik_sigorta: "Trafik Sigorta Bitiş",
+            arac_yil: "Araç Yılı",
+            dorse_yil: "Dorse Yılı",
+            bolge: "Bölge",
+            arac_tip: "Araç Tip",
+            dorse_tip: "Dorse Tip",
+            liftmaster: "Liftmaster",
+            tedarikci_isim: "Tedarikçi",
+            guncelleme_tarihi: "Son Güncelleme",
+        };
+
+        const columns = Object.entries(headerMap).map(([key, header]) => ({
+            header: header,
+            key: key,
+            width: key.includes("muayene") || key.includes("sigorta") || key.includes("guncel") ? 20 : 15,
+            style: {
+                numFmt: key.includes("tarih") ? 'dd.mm.yyyy' : undefined,
+            }
         }));
-        const ws = XLSX.utils.json_to_sheet(dataToExport);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Araçlar");
-        const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-        const blob = new Blob([buffer], { type: "application/octet-stream" });
+
+        worksheet.columns = columns;
+
+        // Veri formatlama
+        const dataToExport = liste.map((arac) => {
+            const row = {};
+            Object.keys(headerMap).forEach(key => {
+                let value = arac[key];
+
+                // Tarih formatlama
+                if (key.includes("muayene") || key.includes("sigorta") || key.includes("tarih")) {
+                    row[key] = value ? dayjs(value).toDate() : null; // Date objesi olarak sakla
+                } else if (key.includes("yil")) {
+                    row[key] = Number(value) || null; // Sayısal yıl
+                } else {
+                    row[key] = value;
+                }
+            });
+            return row;
+        });
+
+        worksheet.addRows(dataToExport);
+
+        // Dosyayı oluştur ve indir
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
         saveAs(blob, `arac_listesi_${tab}.xlsx`);
     }, [araclar, openSnack, tab]);
 
-    // GRID sütunları
+
+    // GRID sütunları (Aynı kalır, actions'a handleDuzenle/handleSilIstegi eklendi)
     const columns = useMemo(
         () => [
             { field: "plaka", headerName: "Plaka", minWidth: 120, flex: 0.9 },
@@ -1115,13 +1177,17 @@ export default function AracYonetimiMUI() {
                                     }}
                                     sx={{
                                         border: "none",
+                                        fontSize: 14,
                                         height: "100%",
                                         [`& .${gridClasses.columnHeaders}`]: {
                                             background: "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
                                             color: "#C8D1E6",
                                             borderBottomColor: "rgba(255,255,255,0.10)",
                                             fontWeight: 700,
+                                            fontSize: 16,
+                                            padding: '0 10px'
                                         },
+                                        "& .MuiDataGrid-columnHeaderTitle": { whiteSpace: "normal", lineHeight: 1.2 },
                                         "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": {
                                             backgroundColor: "rgba(255,255,255,0.02)",
                                         },
@@ -1174,7 +1240,7 @@ export default function AracYonetimiMUI() {
                         <SubtleDivider />
 
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            İpucu: Tablo araç çubuğundan (Quick filter / Columns / Filters / Density) hızla filtreleme yapabilirsiniz.
+                            Hızlı filtreleme için ana tablo araç çubuğunu kullanabilirsiniz.
                         </Typography>
 
                         {/* FİLTRE KONTROLLERİ */}

@@ -55,7 +55,9 @@ import {
     ArrowBackIosNew as ArrowBackIcon,
 } from "@mui/icons-material";
 
-import { utils as XLSXUtils, writeFile as XLSXWriteFile } from "xlsx";
+// 🛑 ESKİ XLSX IMPORT'U KALDIRILDI. YERİNE EXCELJS EKLENDİ.
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
 /* ===================== Sabitler & Yetkilendirme ===================== */
 const HOME_PATH = "/anasayfa";
@@ -534,33 +536,68 @@ export default function AracCariVeFiyat() {
         }
     };
 
-    /* --------- Excel Export (Aynı kalır) --------- */
-    const exportToExcel = () => {
+    /* --------- Excel Export (DEĞİŞTİRİLDİ) --------- */
+    const exportToExcel = async () => {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Araç Cari ve Fiyat');
+
+        // Sütun Tanımları
+        const columns = [
+            { header: "Plaka", key: "plaka", width: 12 },
+            { header: "Cari ID", key: "cari_id", width: 10 },
+            { header: "Cari Adı", key: "cari_adi", width: 28 },
+            { header: "Araç Sahibi", key: "arac_sahip", width: 20 },
+            { header: "Odak Araç Çalışma Tipi", key: "odak_arac_calisma_tipi", width: 20 },
+            { header: "Aylık Kira", key: "aylik_kira", width: 14, style: { numFmt: '"₺"#,##0.00' } },
+            { header: "Aylık Sürücü", key: "aylik_surucu", width: 14, style: { numFmt: '"₺"#,##0.00' } },
+            { header: "Toplam Tutar", key: "toplam_tutar", width: 14, style: { numFmt: '"₺"#,##0.00', font: { bold: true } } },
+            { header: "Çalışma Günü", key: "calisma_gunu", width: 8 },
+            { header: "Pasif", key: "pasif", width: 10 },
+            { header: "Açıklama", key: "aciklama", width: 30 },
+            { header: "Düzenleyen", key: "duzenleyen", width: 14 },
+            { header: "Düzenleme Tarihi", key: "duzenleme_yapilan_tarih", width: 20, style: { numFmt: 'dd/mm/yyyy hh:mm' } },
+        ];
+
+        worksheet.columns = columns;
+
+        // Veri Satırları
         const data = sorted.map((r) => ({
-            Plaka: r.plaka ?? "", "Cari ID": r.cari_id ?? "", "Cari Adı": r.cari_adi ?? "",
-            "Araç Sahibi": r.arac_sahip ?? "", "Odak Araç Çalışma Tipi": r.odak_arac_calisma_tipi ?? "",
-            "Aylık Kira": toNumberLoose(r.aylik_kira), "Aylık Sürücü": toNumberLoose(r.aylik_surucu),
-            "Toplam Tutar": toNumberLoose(r.aylik_kira) + toNumberLoose(r.aylik_surucu),
-            "Çalışma Günü": r.calisma_gunu ?? "", Pasif: r.pasif ? "Evet" : "Hayır",
-            Açıklama: r.aciklama ?? "", Düzenleyen: r.duzenleme_yapan_kullanici ?? "",
-            "Düzenleme Tarihi": r.duzenleme_yapilan_tarih ? formatDate(r.duzenleme_yapilan_tarih) : "",
+            plaka: r.plaka ?? "",
+            cari_id: r.cari_id ?? "",
+            cari_adi: r.cari_adi ?? "",
+            arac_sahip: r.arac_sahip ?? "",
+            odak_arac_calisma_tipi: r.odak_arac_calisma_tipi ?? "",
+            aylik_kira: toNumberLoose(r.aylik_kira) || 0,
+            aylik_surucu: toNumberLoose(r.aylik_surucu) || 0,
+            toplam_tutar: toNumberLoose(r.aylik_kira) + toNumberLoose(r.aylik_surucu),
+            calisma_gunu: r.calisma_gunu ?? "",
+            pasif: r.pasif ? "Evet" : "Hayır",
+            aciklama: r.aciklama ?? "",
+            duzenleyen: r.duzenleme_yapan_kullanici ?? "",
+            duzenleme_yapilan_tarih: r.duzenleme_yapilan_tarih ? new Date(r.duzenleme_yapilan_tarih) : null,
         }));
 
-        data.push({});
-        data.push({
-            Plaka: "TOPLAM (filtrelenmiş):", "Cari ID": "", "Cari Adı": "", "Araç Sahibi": "",
-            "Aylık Kira": totals.kira, "Aylık Sürücü": totals.surucu, "Toplam Tutar": totals.toplam,
-            "Çalışma Günü": "", Pasif: "", Açıklama: "", Düzenleyen: "", "Düzenleme Tarihi": "",
+        worksheet.addRows(data);
+
+        // Toplam Satırını Ekleme
+        worksheet.addRow({}); // Boş satır
+        const totalRow = worksheet.addRow({
+            plaka: "TOPLAM (filtrelenmiş):",
+            aylik_kira: totals.kira,
+            aylik_surucu: totals.surucu,
+            toplam_tutar: totals.toplam,
         });
 
-        const ws = XLSXUtils.json_to_sheet(data, { skipHeader: false });
-        ws["!cols"] = [
-            { wch: 12 }, { wch: 10 }, { wch: 28 }, { wch: 20 }, { wch: 20 }, { wch: 14 },
-            { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 30 }, { wch: 14 }, { wch: 20 },
-        ];
-        const wb = XLSXUtils.book_new();
-        XLSXUtils.book_append_sheet(wb, ws, "AraçCariFiyat");
-        XLSXWriteFile(wb, `arac_cari_fiyat_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        // Toplam satırını biçimlendir
+        totalRow.font = { bold: true };
+        totalRow.getCell(6).numFmt = '"₺"#,##0.00'; // Aylık Kira
+        totalRow.getCell(7).numFmt = '"₺"#,##0.00'; // Aylık Sürücü
+        totalRow.getCell(8).numFmt = '"₺"#,##0.00'; // Toplam Tutar
+
+        // Excel dosyasını oluşturma ve indirme
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        saveAs(blob, `arac_cari_fiyat_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
     /* ---------------------------------------------------- */
@@ -742,8 +779,8 @@ export default function AracCariVeFiyat() {
                 background: (t) =>
                     t.palette.mode === "dark"
                         ? `radial-gradient(1200px 600px at 10% -10%, rgba(120,119,198,0.18), transparent 60%),
-                           radial-gradient(900px 500px at 100% 0%, rgba(56,189,248,0.12), transparent 60%),
-                           ${t.palette.background.default}`
+                            radial-gradient(900px 500px at 100% 0%, rgba(56,189,248,0.12), transparent 60%),
+                            ${t.palette.background.default}`
                         : "linear-gradient(180deg, #f0f4f9 0%, #ffffff 60%)",
             }}
         >

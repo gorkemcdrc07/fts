@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
-import * as XLSX from "xlsx";
+// import * as XLSX from "xlsx"; // Hata veren XLSX importu kaldırıldı
+import * as ExcelJS from "exceljs"; // 👈 Yerine ExcelJS import edildi
 import { Helmet } from "react-helmet-async";
 import { useNavigate } from "react-router-dom";
 
@@ -680,28 +681,83 @@ export default function KesintiGirisi() {
         verileriGetir();
     };
 
-    const handleExportExcel = () => {
+    // ExcelJS ile aktarımı gerçekleştiren fonksiyon
+    const handleExportExcel = async () => {
         if (filtrelenmisKesintiler.length === 0) {
             openSnack("Aktarılacak filtrelenmiş kayıt bulunamadı.", "warning");
             return;
         }
 
-        const worksheet = XLSX.utils.json_to_sheet(
-            filtrelenmisKesintiler.map((k) => ({
-                Plaka: k.plaka_treyler,
-                Tür: k.kesinti_turu,
-                Neden: k.neden,
-                Başlangıç: k.baslangic_tarihi ? dayjs(k.baslangic_tarihi).format("DD.MM.YYYY") : "-",
-                Bitiş: k.bitis_tarihi ? dayjs(k.bitis_tarihi).format("DD.MM.YYYY") : "-",
-                Gün: k.gun_sayisi,
-                Açıklama: k.aciklama,
-                Ekleyen: k.ekleyen_kullanici,
-                Eklenme_Tarihi: k.eklenme_tarihi ? dayjs(k.eklenme_tarihi).format("DD.MM.YYYY HH:mm") : "-",
-            }))
-        );
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Kesinti Kayıtları");
-        XLSX.writeFile(workbook, `kesinti_kayitlari_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = getMevcutKullanici();
+        workbook.lastModifiedBy = getMevcutKullanici();
+        workbook.created = new Date();
+        workbook.modified = new Date();
+        workbook.properties.date1904 = true;
+
+        const worksheet = workbook.addWorksheet("Kesinti Kayıtları");
+
+        // Sütun Tanımları
+        const columns = [
+            { header: "Plaka", key: "plaka", width: 18 },
+            { header: "Tür", key: "tur", width: 15 },
+            { header: "Neden", key: "neden", width: 18 },
+            { header: "Başlangıç", key: "baslangic", width: 15, style: { numFmt: 'dd.mm.yyyy' } },
+            { header: "Bitiş", key: "bitis", width: 15, style: { numFmt: 'dd.mm.yyyy' } },
+            { header: "Gün", key: "gun", width: 10 },
+            { header: "Açıklama", key: "aciklama", width: 40 },
+            { header: "Ekleyen", key: "ekleyen", width: 15 },
+            { header: "Eklenme Tarihi", key: "eklenme_tarihi", width: 22, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
+        ];
+        worksheet.columns = columns;
+
+        // Verileri Satırlara Ekleme
+        const rows = filtrelenmisKesintiler.map((k) => ({
+            plaka: k.plaka_treyler || "-",
+            tur: k.kesinti_turu || "-",
+            neden: k.neden || "-",
+            baslangic: safeDateValueGetter(k.baslangic_tarihi), // Date nesnesi olarak gönder
+            bitis: safeDateValueGetter(k.bitis_tarihi), // Date nesnesi olarak gönder
+            gun: k.gun_sayisi || 0,
+            aciklama: k.aciklama || "-",
+            ekleyen: k.ekleyen_kullanici || "-",
+            eklenme_tarihi: safeDateValueGetter(k.eklenme_tarihi), // Date nesnesi olarak gönder
+        }));
+
+        worksheet.addRows(rows);
+
+        // Header Style
+        worksheet.getRow(1).eachCell((cell) => {
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF8B5CF6' } // Primary color
+            };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = {
+                top: { style: 'thin' },
+                left: { style: 'thin' },
+                bottom: { style: 'thin' },
+                right: { style: 'thin' }
+            };
+        });
+
+        // Excel dosyasını kaydetme
+        try {
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `kesinti_kayitlari_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            openSnack("Excel aktarımı başarılı.", "success");
+        } catch (e) {
+            console.error("Excel aktarım hatası:", e);
+            openSnack("Excel aktarımı sırasında bir hata oluştu.", "error");
+        }
     };
 
     /* ===================== Columns ===================== */
@@ -945,7 +1001,7 @@ export default function KesintiGirisi() {
                                     <CloseIcon />
                                 </IconButton>
                             </Stack>
-                            <Divider sx={{ mb: 3, borderColor: "rgba(255,255,255,0.12)" }} /> {/* Düzeltilen Satır */}
+                            <Divider sx={{ mb: 3, borderColor: "rgba(255,255,255,0.12)" }} />
 
                             <Stack spacing={2.5}>
                                 <Autocomplete

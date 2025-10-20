@@ -1,3 +1,4 @@
+// src/raporlar/yuklemedeBekleme.js
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 
@@ -7,12 +8,14 @@ import duration from "dayjs/plugin/duration";
 import "dayjs/locale/tr";
 
 // Excel
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
 // MUI
 import {
     Box, Button, Card, CardContent, Chip, Container, Grid, IconButton,
-    InputAdornment, Paper, Stack, Tab, Tabs, TextField, Tooltip, Typography, Alert
+    InputAdornment, Paper, Stack, Tab, Tabs, TextField, Tooltip, Typography, Alert,
+    CircularProgress
 } from "@mui/material";
 
 // DataGrid
@@ -33,8 +36,8 @@ dayjs.extend(duration);
 dayjs.locale("tr");
 
 /* ===================== Sabitler / Şemalar ===================== */
-const DETAIL_TABLE = "sefer_detaylari";
-const SUMMARY_TABLE = "seferler";
+const DETAIL_TABLE = "tamamlanan_detaylar";
+const SUMMARY_TABLE = "tamamlanan_seferler";
 const TARGET_WAIT_MINUTES = 240;
 const TODAY_DATE_ISO = dayjs().format("YYYY-MM-DD");
 
@@ -44,8 +47,12 @@ const SUMMARY_COLS = [
     "musteri_adi", "yukleme_noktasi", "teslim_noktasi", "proje_adi",
 ].join(',');
 
+// ✅ DÜZELTME: sefer_id yerine sefer_no kullanılıyor
 const DETAIL_COLS = [
-    "sefer_id", "nokta_sirasi", "yukleme_noktasi", "teslim_noktasi",
+    "sefer_no", // <-- Anahtar düzeltildi
+    "nokta_sirasi",
+    "yukleme_noktasi",
+    "teslim_noktasi",
     "yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis",
     "yukleme_varis_guncelleyen", "yukleme_varis_guncelleme_tarihi",
     "yukleme_cikis_guncelleyen", "yukleme_cikis_guncelleme_tarihi",
@@ -54,18 +61,28 @@ const DETAIL_COLS = [
 ].join(',');
 
 /* ===================== Yardımcılar ===================== */
-const parseDT = (v) => { if (!v && v !== 0) return null; const d = dayjs(v); return d.isValid() ? d : null; };
-const diffMinutes = (start, end) => { const s = parseDT(start); const e = parseDT(end); if (!s || !e) return null; const m = e.diff(s, "minute"); return Number.isFinite(m) && m >= 0 ? m : null; };
-const fmtDateTR = (v) => { const d = parseDT(v); return d ? d.format("DD.MM.YYYY HH:mm") : "—"; };
-const fmtMinutes = (min) => { if (min === null || min === undefined) return "—"; const n = Math.round(Number(min)); if (!Number.isFinite(n) || n < 0) return "—"; const h = Math.floor(n / 60); const m = Math.floor(n % 60); if (h <= 0) return `${m} dk`; return `${h} sa ${m.toString().padStart(2, "0")} dk`; };
-const firstOf = (obj, keys) => { for (const k of keys) { const v = obj?.[k]; if (v !== undefined && v !== null && v !== "") return v; } return null; };
 const safeVF = (fn) => (p) => fn ? fn(p.value) : p.value;
-const downloadExcel = (data, filename) => {
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "BeklemeAnaliz");
-    XLSX.writeFile(wb, filename);
+
+const firstOf = (obj, keys) => { for (const k of keys) { const v = obj?.[k]; if (v !== undefined && v !== null && v !== "") return v; } return null; };
+
+const parseDT = (v) => { if (!v && v !== 0) return null; const d = dayjs(v); return d.isValid() ? d : null; };
+
+const diffMinutes = (start, end) => { const s = parseDT(start); const e = parseDT(end); if (!s || !e) return null; const m = e.diff(s, "minute"); return Number.isFinite(m) && m >= 0 ? m : null; };
+
+const fmtDateTR = (v) => { const d = parseDT(v); return d ? d.format("DD.MM.YYYY HH:mm") : "—"; };
+
+const minToHM = (m) => {
+    const mm = Math.max(0, Math.round(m || 0));
+    const h = Math.floor(mm / 60);
+    const r = mm % 60;
+    if (h && r) return `${h} sa ${r} dk`;
+    if (h) return `${h} sa`;
+    return `${r} dk`;
 };
+
+const fmtMinutes = (min) => { if (min === null || min === undefined) return "—"; const n = Math.round(Number(min)); return minToHM(n); };
+
+function calcETAFromDistance() { return null; }
 
 
 /* ===================== Küçük UI Bileşenleri ===================== */
@@ -113,19 +130,37 @@ export default function YuklemedeBekleme() {
         setLoading(true); setFetchError(null);
         const startDate = dayjs(dateFilter).startOf('day').toISOString();
         const endDate = dayjs(dateFilter).add(1, 'day').startOf('day').toISOString();
+
+        // 1. Özet verileri çek
         const { data: summaryData, error: summaryError } = await supabase.from(SUMMARY_TABLE).select(SUMMARY_COLS).gte("sefer_tarihi", startDate).lt("sefer_tarihi", endDate);
+
         if (summaryError) { setFetchError(`Veritabanı Hatası: ${summaryError.message}`); setLoading(false); return; }
+
         const summaryResult = summaryData || [];
         if (summaryResult.length === 0) { setRows([]); setDetailByNo(new Map()); setLoading(false); return; }
-        const seferIds = summaryResult.map(r => r.id);
-        const { data: detailData, error: detailError } = await supabase.from(DETAIL_TABLE).select(DETAIL_COLS).in("sefer_id", seferIds);
+
+        // 2. Detay verilerini sefer_no'ya göre çek (Düzeltme Uygulandı)
+        const seferNos = summaryResult.map(r => r.sefer_no).filter(Boolean);
+
+        const { data: detailData, error: detailError } = await supabase.from(DETAIL_TABLE)
+            .select(DETAIL_COLS)
+            .in("sefer_no", seferNos); // ✅ sefer_no üzerinden filtreleme
+
         if (detailError) {
             console.error("Detay tablosu alınamadı:", detailError.message);
             setFetchError(`Detay verisi alınamadı: ${detailError.message}`);
         }
+
         const detailResult = detailData || [];
         const byNo = new Map();
-        summaryResult.forEach(s => { const detailsForSefer = detailResult.filter(d => d.sefer_id === s.id).sort((a, b) => (a.nokta_sirasi ?? 999) - (b.nokta_sirasi ?? 999)); byNo.set(s.sefer_no, detailsForSefer); });
+
+        // 3. Verileri eşleştir
+        summaryResult.forEach(s => {
+            const detailsForSefer = detailResult
+                .filter(d => d.sefer_no === s.sefer_no) // ✅ sefer_no ile eşleştirme
+                .sort((a, b) => (a.nokta_sirasi ?? 999) - (b.nokta_sirasi ?? 999));
+            byNo.set(s.sefer_no, detailsForSefer);
+        });
 
         const all = summaryResult.map((r, i) => {
             const sefer_no = firstOf(r, ["sefer_no"]) || `NO-${r.id ?? i}`;
@@ -146,16 +181,51 @@ export default function YuklemedeBekleme() {
 
     const filtered = useMemo(() => { const minTime = Number(minDakika) || 0; return rows.filter((r) => r.bekleme_dk >= minTime).sort((a, b) => (b.bekleme_dk ?? 0) - (a.bekleme_dk ?? 0)); }, [rows, minDakika]);
 
-    const handleExport = () => {
+    // 🛑 EXCEL EXPORT FONKSİYONU DÜZELTİLDİ
+    const handleExport = async () => {
         if (!filtered.length) return;
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Bekleme Analiz Raporu");
+
         const dataToExport = filtered.map(r => ({
-            "Sefer No": r.sefer_no, "Plaka": r.plaka, "Treyler": r.treyler, "Şoför": r.surucu_ad_soyad,
-            "Proje Adı": r.proje_adi, "Yükleme Noktası": r.yukleme_noktasi, "Yükleme İli": r.yukleme_ili,
-            "Teslim Noktası": r.teslim_noktasi, "Teslim İli": r.teslim_ili, "Varış Zamanı": fmtDateTR(r.yukleme_varis),
-            "Çıkış Zamanı": fmtDateTR(r.yukleme_cikis), "Bekleme (dk)": r.bekleme_dk,
+            "Sefer No": r.sefer_no,
+            "Plaka": r.plaka,
+            "Treyler": r.treyler,
+            "Şoför": r.surucu_ad_soyad,
+            "Proje Adı": r.proje_adi,
+            "Yükleme Noktası": r.yukleme_noktasi,
+            "Yükleme İli": r.yukleme_ili,
+            "Teslim Noktası": r.teslim_noktasi,
+            "Teslim İli": r.teslim_ili,
+            "Varış Zamanı": r.yukleme_varis ? dayjs(r.yukleme_varis).toDate() : null, // ExcelJS Date objesi
+            "Çıkış Zamanı": r.yukleme_cikis ? dayjs(r.yukleme_cikis).toDate() : null, // ExcelJS Date objesi
+            "Bekleme (dk)": r.bekleme_dk,
+            "Bekleme Süresi": minToHM(r.bekleme_dk),
         }));
+
+        worksheet.columns = [
+            { header: "Sefer No", key: "Sefer No", width: 14 },
+            { header: "Plaka", key: "Plaka", width: 10 },
+            { header: "Treyler", key: "Treyler", width: 10 },
+            { header: "Şoför", key: "Şoför", width: 20 },
+            { header: "Proje Adı", key: "Proje Adı", width: 20 },
+            { header: "Yükleme Noktası", key: "Yükleme Noktası", width: 25 },
+            { header: "Yükleme İli", key: "Yükleme İli", width: 15 },
+            { header: "Teslim Noktası", key: "Teslim Noktası", width: 25 },
+            { header: "Teslim İli", key: "Teslim İli", width: 15 },
+            { header: "Varış Zamanı", key: "Varış Zamanı", width: 20, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
+            { header: "Çıkış Zamanı", key: "Çıkış Zamanı", width: 20, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
+            { header: "Bekleme (dk)", key: "Bekleme (dk)", width: 12 },
+            { header: "Bekleme Süresi", key: "Bekleme Süresi", width: 18 },
+        ];
+
+        worksheet.addRows(dataToExport);
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
         const filename = `yuklemede_bekleme_${dayjs(dateFilter).format("YYYYMMDD")}.xlsx`;
-        downloadExcel(dataToExport, filename);
+        saveAs(blob, filename);
     };
 
     const stopRows = useMemo(() => {

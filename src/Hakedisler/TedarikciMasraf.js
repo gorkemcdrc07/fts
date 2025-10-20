@@ -1,7 +1,8 @@
 // src/Hakedisler/TedarikciMasraf.js
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "../supabaseClient";
-import * as XLSX from "xlsx";
+// import * as XLSX from "xlsx"; // 🛑 KALDIRILDI!
+import ExcelJS from "exceljs"; // ✅ EXCELJS EKLENDİ!
 import { saveAs } from "file-saver";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -476,45 +477,56 @@ export default function TedarikciMasraf() {
 
     const gridRows = useMemo(() => (filtrelenmis || []).map((m, i) => ({ id: m.id ?? `row-${i}`, ...m })), [filtrelenmis]);
 
-    const exportToExcel = () => {
+    // 🛑 EXCEL EXPORT FONKSİYONU DEĞİŞTİRİLDİ
+    const exportToExcel = async () => {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Tedarikçi Masrafları");
+
+        // Veri hazırlığı
         const excelData = (filtrelenmis || []).map((m) => ({
             "Sefer No": m.sefer_no,
             Tedarikçi: m.tedarikci,
-            Tarih: formatDateTR(m.tarih),
+            Tarih: formatDateTR(m.tarih), // String format
             "Masraf Nedeni": m.neden,
-            Bedel: Number(m.bedel ?? 0),
+            Bedel: Number(m.bedel ?? 0), // Sayısal değer
             Açıklama: m.aciklama,
             Statu: m.statu,
             "REEL'e İşlendi": m.reel_islendi ? "Evet" : "Hayır",
         }));
-        const sheet = XLSX.utils.json_to_sheet(excelData);
 
-        // Autofit
-        const cols = Object.keys(excelData[0] || {}).map((k) => ({ wch: Math.max(12, k.length + 2) }));
-        const rowsAuto = excelData.map((row) => Object.values(row).map((v) => (v ? String(v).length + 2 : 10)));
-        if (rowsAuto.length) {
-            rowsAuto[0].forEach((_, i) => {
-                cols[i].wch = Math.max(cols[i].wch, Math.min(40, Math.max(...rowsAuto.map((r) => r[i] || 10))));
-            });
-        }
-        sheet["!cols"] = cols;
+        // Sütun tanımları (header, key ve genişlik)
+        const columns = [
+            { header: "Sefer No", key: "Sefer No", width: 15 },
+            { header: "Tedarikçi", key: "Tedarikçi", width: 25 },
+            { header: "Tarih", key: "Tarih", width: 15, style: { numFmt: 'dd.mm.yyyy' } },
+            { header: "Masraf Nedeni", key: "Masraf Nedeni", width: 25 },
+            { header: "Bedel", key: "Bedel", width: 15, style: { numFmt: '#,##0.00 [$₺-tr-TR]' } }, // Para birimi formatı
+            { header: "Açıklama", key: "Açıklama", width: 40 },
+            { header: "Statu", key: "Statu", width: 15 },
+            { header: "REEL'e İşlendi", key: "REEL'e İşlendi", width: 18 },
+        ];
 
-        // Currency format for Bedel (index 4 — zero-based)
-        const range = XLSX.utils.decode_range(sheet["!ref"] || "A1:A1");
-        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
-            const C = 4;
-            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-            const cell = sheet[cellRef];
-            if (cell && typeof cell.v === "number") {
-                cell.t = "n";
-                cell.z = "#,##0.00 [$₺-tr-TR]";
-            }
-        }
+        worksheet.columns = columns;
 
-        const book = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(book, sheet, "Masraflar");
-        const excelBuffer = XLSX.write(book, { bookType: "xlsx", type: "array" });
-        const blob = new Blob([excelBuffer], { type: "application/octet-stream" });
+        // Veriyi ekle
+        worksheet.addRows(excelData);
+
+        // Toplam Bedel Satırı
+        worksheet.addRow({}); // Boş satır
+        const totalRow = worksheet.addRow({
+            "Sefer No": "TOPLAM TUTAR:",
+            Bedel: toplamBedel,
+        });
+
+        // Biçimlendirme (Bedel ve Toplam Satırı)
+        totalRow.font = { bold: true };
+        totalRow.getCell("Bedel").numFmt = '#,##0.00 [$₺-tr-TR]';
+        totalRow.getCell("Sefer No").alignment = { horizontal: 'left' };
+
+
+        // Dosyayı oluştur ve indir
+        const excelBuffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
         saveAs(blob, `tedarikci_masraflari_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
     };
 
@@ -702,9 +714,6 @@ export default function TedarikciMasraf() {
                                 </>
                             )}
 
-                            {/* Perm durum göstergesi (opsiyonel) */}
-                            {permLoading ? <Chip size="small" variant="outlined" label="Yetkiler yükleniyor…" /> : null}
-
                             {/* 🧭 Geri / Anasayfa / Yeni */}
                             <Button size="small" variant="outlined" onClick={() => navigate(-1)} title="Geri">
                                 Geri
@@ -797,6 +806,7 @@ export default function TedarikciMasraf() {
                             display: "flex",
                             gap: 1.5,
                             flexWrap: "wrap",
+                            alignItems: "center",
                         }}
                     >
                         <TextField

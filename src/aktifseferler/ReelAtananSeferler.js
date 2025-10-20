@@ -1,4 +1,3 @@
-// src/aktifseferler/ReelAtananSeferler.js
 import React, { useCallback, useEffect, useMemo, useState, Suspense, lazy } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
@@ -28,6 +27,7 @@ import {
     InputLabel,
     FormControl,
     Tooltip,
+    Grid,
 } from "@mui/material";
 import { DataGrid, useGridApiRef } from "@mui/x-data-grid";
 
@@ -99,7 +99,7 @@ const isUUID = (v) =>
 export default function ReelAtananSeferler() {
     /* DataGrid apiRef + kullanıcı anahtarları */
     const apiRef = useGridApiRef();
-    // GÜNCELLEYEN BİLGİSİ İÇİN KULLANILACAK: localStorage.getItem("kullanici") olarak düzeltildi
+    // GÜNCELLEYEN BİLGİSİ İÇİN KULLANILACAK
     const USERKEY = (localStorage.getItem("kullanici") || "GENERIC").toUpperCase();
     const ORDER_KEY = `aktifseferler.columnOrder.${USERKEY}`;
     const HIDDEN_KEY = `aktifseferler.hiddenColumns.${USERKEY}`;
@@ -441,17 +441,16 @@ export default function ReelAtananSeferler() {
         setDetailRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
     }, []);
 
-    // GÜNCELLENMİŞ saveDetails: Hook bağımlılıkları optimize edildi.
+    // GÜNCELLENMİŞ saveDetails: Güncelleyen/Tarih alanlarını otomatik doldurur ve state'i günceller.
     const saveDetails = useCallback(async () => {
         if (!editSefer) return false;
         setSaving(true);
 
-        // DÜZELTİLDİ: localStorage.getItem("kullanici") kullanılıyor
         const currentUserName = (localStorage.getItem("kullanici") || "GENERIC").toUpperCase();
         const currentTimestamp = new Date().toISOString();
         const timeFields = ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"];
 
-        let successfullyUpdatedRows = []; // Yeni kaydedilen bilgileri tutacak
+        let successfullyUpdatedRows = [];
         let errorOccurred = false;
 
         try {
@@ -459,10 +458,10 @@ export default function ReelAtananSeferler() {
             const upserts = detailRows.map((d, i) => {
                 const original = detailRowsOrig[i] || {};
 
-                // CRITICAL: Supabase'e göndermeden önce tüm boş stringleri null'a dönüştür
+                // 1. Supabase'e göndermeden önce tüm boş stringleri null'a dönüştür
                 const cleaned_d = {};
                 for (const key in d) {
-                    cleaned_d[key] = clean(d[key]) || null; // clean() "" döndürüyorsa, null'a dönüştür
+                    cleaned_d[key] = clean(d[key]) || null;
                 }
 
                 const updatedRow = {
@@ -475,30 +474,29 @@ export default function ReelAtananSeferler() {
                     teslim_noktasi: cleaned_d.teslim_noktasi,
                     teslim_ili: cleaned_d.teslim_ili,
                     teslim_ilcesi: cleaned_d.teslim_ilcesi,
-                    // Zaman alanları (Artık cleaned_d'den geliyor ve boşsa NULL)
                     yukleme_varis: cleaned_d.yukleme_varis,
                     yukleme_cikis: cleaned_d.yukleme_cikis,
                     teslim_varis: cleaned_d.teslim_varis,
                     teslim_cikis: cleaned_d.teslim_cikis,
 
                     arac_statu: computeAracStatu(detailRows) || null,
-                    kayit_zamani: new Date().toISOString(), // Genel kayıt zamanı
+                    kayit_zamani: new Date().toISOString(),
                 };
 
-                // YENİ MANTIK: Hangi tarih alanının değiştiğini kontrol et ve yeni sütunları doldur
+                // 2. YENİ MANTIK: Hangi tarih alanının değiştiğini kontrol et ve yeni sütunları doldur/koru
                 timeFields.forEach(field => {
-                    // Karşılaştırma için clean edilmiş değeri kullan
                     const currentValue = cleaned_d[field]; // null veya ISO string
                     const originalValue = clean(original[field]) || null; // null veya ISO string
 
                     if (currentValue !== originalValue) {
-                        // Alan değişti! Güncelleyen ve tarihi kodda ayarla.
+                        // Alan değişti: Yeni güncelleyen bilgisini yaz
                         updatedRow[`${field}_guncelleyen`] = currentUserName;
                         updatedRow[`${field}_guncelleme_tarihi`] = currentTimestamp;
                     } else {
-                        // Alan değişmedi. Eski güncelleyen bilgisini koru.
+                        // Alan değişmedi: Eski güncelleyen bilgisini koru
                         const originalUser = original[`${field}_guncelleyen`] ?? null;
-                        const originalDate = clean(original[`${field}_guncelleme_tarihi`]) || null; // CRITICAL: Boş stringi null yap
+                        // Orijinal tarih değeri de temizlenmeli, aksi takdirde Supabase'e boş string gider.
+                        const originalDate = clean(original[`${field}_guncelleme_tarihi`]) || null;
 
                         updatedRow[`${field}_guncelleyen`] = originalUser;
                         updatedRow[`${field}_guncelleme_tarihi`] = originalDate;
@@ -506,19 +504,16 @@ export default function ReelAtananSeferler() {
                 });
 
                 // Başarılı olursa kullanılacak güncel state'i tut
-                // Bu, aynı zamanda yeni kaydedilen _guncelleyen alanlarını da içerir.
                 successfullyUpdatedRows.push({ ...d, ...updatedRow });
                 return updatedRow; // Supabase'e gönderilecek payload
             });
 
-            // CRITICAL DÜZELTME: Güvenli Promise Çözümlemesi
             const upsertResult = await upsertDetaylar(upserts);
             if (upsertResult && upsertResult.error) {
                 throw upsertResult.error;
             }
 
-
-            // BAŞARILI KAYIT SONRASI STATE GÜNCELLEMESİ (CRITICAL)
+            // BAŞARILI KAYIT SONRASI STATE GÜNCELLEMESİ (Çok önemli!)
             // Detay state'ini, yeni kaydedilen guncelleyen/tarih bilgileriyle güncelle
             setDetailRows(successfullyUpdatedRows);
             // Orijinal (snapshot) state'ini de aynı verilerle güncelle
@@ -527,7 +522,7 @@ export default function ReelAtananSeferler() {
 
             // Auto ETA kısmı aynı kalır
             try {
-                const firstStart = getFirstLegStartISO(successfullyUpdatedRows); // Yeni state'i kullan
+                const firstStart = getFirstLegStartISO(successfullyUpdatedRows);
                 if (editSefer?.id) {
                     const { yIl, yIlce, tIl, tIlce } = pickFirstLegOD(editSefer || {}, successfullyUpdatedRows);
                     const mesafeRaw = await fetchMesafe({ yIl, yIlce, tIl, tIlce });
@@ -543,7 +538,7 @@ export default function ReelAtananSeferler() {
 
                         const { etaISO: newETA } = computeETAWithKGMPlus(km, firstStart, {
                             initialRemainMin: remain,
-                            startBreakMin: 0, // Editörden gelen ETA hesaplaması için mola 0 varsayılır.
+                            startBreakMin: 0,
                         });
 
                         await updateSefer(editSefer.id, {
@@ -602,9 +597,9 @@ export default function ReelAtananSeferler() {
             setSaving(false);
         }
 
-        return !errorOccurred; // Başarılı olup olmadığını döndür
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [detailRows, editSefer, detailRowsOrig, computeAracStatu]);
+        return !errorOccurred;
+    }, [editSefer, detailRows, detailRowsOrig]);
+
 
     const moveToCompleted = useCallback(async () => {
         if (!editSefer) return;
@@ -614,6 +609,7 @@ export default function ReelAtananSeferler() {
             const seferAna = rows.find((r) => r.id === editSefer.id) || editSefer;
             const seferTarihiFinal = seferTarihiYeni || seferAna.sefer_tarihi || null;
 
+            // 1. Ana Sefer Kaydı (tamamlanan_seferler) - Sadece ana kolonlar
             const anaPayload = {
                 arac_statu: seferAna.arac_statu ?? null,
                 sefer_tarihi: seferTarihiFinal,
@@ -643,24 +639,25 @@ export default function ReelAtananSeferler() {
                 eta_mola_dk: seferAna.eta_mola_dk ?? null,
             };
 
+            // 2. Detay Kaydı (tamamlanan_detaylar) - 8 yeni denetim kolonu dahil
             const detPayload = detailRows.map((d, i) => ({
                 sefer_no: seferAna.sefer_no,
                 nokta_sirasi: i,
-                proje_adi: clean(d.proje_adi),
-                yukleme_noktasi: clean(d.yukleme_noktasi),
-                yukleme_ili: clean(d.yukleme_ili),
-                yukleme_ilcesi: clean(d.yukleme_ilcesi),
-                teslim_noktasi: clean(d.teslim_noktasi),
-                teslim_ili: clean(d.teslim_ili),
-                teslim_ilcesi: clean(d.teslim_ilcesi),
-                // CRITICAL: Tamamlananlara aktarırken de boş stringleri null yap
+                proje_adi: clean(d.proje_adi) || null,
+                yukleme_noktasi: clean(d.yukleme_noktasi) || null,
+                yukleme_ili: clean(d.yukleme_ili) || null,
+                yukleme_ilcesi: clean(d.yukleme_ilcesi) || null,
+                teslim_noktasi: clean(d.teslim_noktasi) || null,
+                teslim_ili: clean(d.teslim_ili) || null,
+                teslim_ilcesi: clean(d.teslim_ilcesi) || null,
                 yukleme_varis: clean(d.yukleme_varis) || null,
                 yukleme_cikis: clean(d.yukleme_cikis) || null,
                 teslim_varis: clean(d.teslim_varis) || null,
                 teslim_cikis: clean(d.teslim_cikis) || null,
                 kayit_zamani: new Date().toISOString(),
                 arac_statu: seferAna.arac_statu ?? null,
-                // YENİ EKLENEN 8 KOLON (detailRows'taki son veriyi tamamlananlara aktarıyoruz)
+
+                // CRITICAL GÜNCELLEME: Güncelleyen ve tarih bilgilerini aktif detay state'inden aktar
                 yukleme_varis_guncelleyen: d.yukleme_varis_guncelleyen || null,
                 yukleme_varis_guncelleme_tarihi: clean(d.yukleme_varis_guncelleme_tarihi) || null,
                 yukleme_cikis_guncelleyen: d.yukleme_cikis_guncelleyen || null,
@@ -671,11 +668,13 @@ export default function ReelAtananSeferler() {
                 teslim_cikis_guncelleme_tarihi: clean(d.teslim_cikis_guncelleme_tarihi) || null,
             }));
 
+            // Tamamlanan seferi kaydet/güncelle
             const { error: e1 } = await supabase
                 .from("tamamlanan_seferler")
                 .upsert(anaPayload, { onConflict: "sefer_no" });
             if (e1) throw e1;
 
+            // Tamamlanan detayları kaydet/güncelle
             if (detPayload.length) {
                 const { error: e2 } = await supabase
                     .from("tamamlanan_detaylar")
@@ -683,9 +682,11 @@ export default function ReelAtananSeferler() {
                 if (e2) throw e2;
             }
 
+            // Orijinal aktif seferi sil
             await supabase.from("sefer_detaylari").delete().eq("sefer_id", seferAna.id);
             await supabase.from("seferler").delete().eq("id", seferAna.id);
 
+            // UI'ı güncelle
             setRows((prev) => prev.filter((r) => r.id !== seferAna.id));
             closeEditor();
 
@@ -734,10 +735,11 @@ export default function ReelAtananSeferler() {
                     yukleme_cikis: pick("yukleme_cikis", i),
                     teslim_varis: pick("teslim_varis", i),
                     teslim_cikis: pick("teslim_cikis", i),
+                    // Yeni 8 kolon başlangıçta boş kalır (veri tabanından çekilmediği varsayılır)
                 }));
             }
 
-            // Gelen datayı state'e yüklerken, yeni 8 kolonu da dahil et (varsayım)
+            // Gelen datayı state'e yüklerken, yeni 8 kolonu da dahil et
             const mapDetay = (d) => ({
                 ...d,
                 proje_adi: d.proje_adi ?? "",
@@ -800,7 +802,7 @@ export default function ReelAtananSeferler() {
             setEtaDistanceKm(null);
             setEtaDistanceInfo("");
             setBreakSel(row?.eta_mola_dk ?? 0);
-            setDistanceInput(""); // YENİ: ETA diyaloğu açıldığında manuel mesafe inputunu temizle
+            setDistanceInput("");
             setEtaOpen(true);
 
             try {
@@ -840,7 +842,6 @@ export default function ReelAtananSeferler() {
 
                     // HATA DÜZELTME MANTIĞI: Eğer değer 1000'den büyük ve tam sayı gibi görünüyorsa 100'e bölerek float'a çevir
                     if (km && typeof km === 'number' && km > 1000 && km % 1 === 0) {
-                        // Eğer mesafe 39568 geliyorsa (yanlış birim), 100'e bölerek 395.68 yap.
                         km = km / 100;
                     }
 
@@ -848,7 +849,6 @@ export default function ReelAtananSeferler() {
                         const safMin = Math.round((km / AVG_SPEED_KMPH) * 60);
                         setEtaDistanceKm(km);
 
-                        // YENİ DÜZENLEME: toFixed(2) ile sabitleyip noktayı virgüle çevir
                         const formattedKm = km.toFixed(2).replace('.', ',');
 
                         setEtaDistanceInfo(
@@ -905,10 +905,8 @@ export default function ReelAtananSeferler() {
 
     const firstLegStartISO = useMemo(() => getFirstLegStartISO(etaDetails), [etaDetails]);
 
-    // Hata düzeltildi: etaDetails Hook'tan çıkarıldı (çünkü firstLegStartISO zaten ona bağlı)
     const computedETAISO = useMemo(() => {
         try {
-            // YENİ: Manuel mesafe girildiyse onu kullan. (distanceInput bir string)
             const finalDistance = Number(distanceInput) || etaDistanceKm;
 
             if (!finalDistance || finalDistance <= 0) return "__NEED_DISTANCE__";
@@ -920,7 +918,7 @@ export default function ReelAtananSeferler() {
 
             const { etaISO } = computeETAWithKGMPlus(finalDistance, startISO, {
                 initialRemainMin: initialRemain,
-                startBreakMin: Number(breakSel) || 0, // molayı buraya veriyoruz, tabana eklemiyoruz
+                startBreakMin: Number(breakSel) || 0,
             });
 
             return etaISO || "";
@@ -940,9 +938,7 @@ export default function ReelAtananSeferler() {
     }, [etaRow]);
 
     const copyETA = useCallback(async () => {
-        // ... (Kullanım aynı kaldı)
         try {
-            // navigator.clipboard.writeText yerine document.execCommand('copy') kullan
             const copyText = (text) => {
                 const textarea = document.createElement('textarea');
                 textarea.value = text;
@@ -977,8 +973,6 @@ export default function ReelAtananSeferler() {
             return;
         }
 
-        // computedETAISO'nun yeniden hesaplanması için bu kontrol gereklidir.
-        // Eğer mesafe eksikse, saveETA çağrılsa bile kaydedilmez.
         if (computedETAISO === "__NEED_DISTANCE__") {
             setSnack({ open: true, msg: "Mesafe bilgisi eksik. Lütfen manuel mesafe girin.", severity: "warning" });
             return;
@@ -990,7 +984,7 @@ export default function ReelAtananSeferler() {
             if (!id) throw new Error("Sefer kaydı bulunamadı (id yok).");
 
             const firstStart = getFirstLegStartISO(etaDetails);
-            const finalDistance = Number(distanceInput) || etaDistanceKm; // Manuel veya otomatik mesafeyi kullan
+            const finalDistance = Number(distanceInput) || etaDistanceKm;
 
             // Re-compute ETA to ensure latest state is used (especially after distanceInput change)
             const startISO = etaStartISO || firstStart;
@@ -1002,7 +996,7 @@ export default function ReelAtananSeferler() {
             if (canCompute) {
                 const { etaISO } = computeETAWithKGMPlus(finalDistance, startISO, {
                     initialRemainMin: initialRemain,
-                    startBreakMin: Number(breakSel) || 0, // molayı opsiyonla ver
+                    startBreakMin: Number(breakSel) || 0,
                 });
                 newETA = etaISO || null;
             }
@@ -1064,16 +1058,15 @@ export default function ReelAtananSeferler() {
             return;
         }
 
-        setSaving(true); // Kayıt işlemi başlıyor
+        setSaving(true);
 
         try {
-            // 1. Supabase'e 'mesafeler' tablosuna kaydet/güncelle (upsert)
             const mesafePayload = {
                 yukleme_il,
                 yukleme_ilce,
                 teslim_il,
                 teslim_ilce,
-                mesafe: distance, // km cinsinden
+                mesafe: distance,
                 kaydeden: USERKEY,
                 kayit_zamani: new Date().toISOString(),
             };
@@ -1081,24 +1074,18 @@ export default function ReelAtananSeferler() {
             console.log(`[ETA] Manuel Mesafe Kaydı: ${distance} km`);
             const { error: upsertError } = await supabase
                 .from('mesafeler')
-                // Conflict'i il/ilçe bazında çöz. Eğer il/ilçe aynıysa, mesafeyi güncelle.
                 .upsert([mesafePayload], { onConflict: 'yukleme_il,yukleme_ilce,teslim_il,teslim_ilce' });
 
             if (upsertError) throw upsertError;
 
-            // 2. Local state'i güncelle: Yeni mesafeyi etaDistanceKm'ye set et
             setEtaDistanceKm(distance);
 
-            // YENİ DÜZENLEME: Manuel girilen mesafeyi de formatla
             const formattedDistance = Number(distance).toFixed(2).replace('.', ',');
 
             setEtaDistanceInfo(`${formattedDistance} km (Manuel Giriş)`);
-            setDistanceInput(""); // Input'u temizle
+            setDistanceInput("");
 
-            // 3. ETA'yı yeniden hesapla ve kaydetmek için saveETA'yı çağır.
             await saveETA();
-
-            // saveETA'nın içinde setEtaOpen(false) çağrıldığı için burada çağırmaya gerek yok.
 
         } catch (e) {
             console.error("saveManualDistanceAndETA FAILED:", e);
@@ -1194,7 +1181,7 @@ export default function ReelAtananSeferler() {
 
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filtered]); // rows.length gereksiz. filtered'ın kendisi rows'a bağımlı olduğu için yeterli.
+    }, [filtered]);
 
     /* grid columns (+ açıklama ikonu) */
     const columns = useMemo(() => {
@@ -1305,7 +1292,6 @@ export default function ReelAtananSeferler() {
     }, [
         permsLoading, mayOpenETA, canETA, mayOpenEdit, canEdit,
         openETA, openEditor, viewBump, reasonNos,
-        // DİKKAT: Hidden ve Order Key'ler sabit olduğu için Hook bağımlılığına eklenmedi.
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps 
 
@@ -1338,7 +1324,7 @@ export default function ReelAtananSeferler() {
             const sefer_id = isUUID(sefer_id_raw) ? sefer_id_raw : null;
 
             const sefer_no = (reasonRow?.sefer_no || "").toString().trim() || null;
-            const kaydeden = localStorage.getItem("kullanici") || "-"; // Düzeltildi
+            const kaydeden = localStorage.getItem("kullanici") || "-";
 
             const sefer_tarihi = reasonRow?.sefer_tarihi || null;
             const eta_varis = reasonRow?.eta_varis || reasonRow?.eta || null;
@@ -1590,6 +1576,9 @@ export default function ReelAtananSeferler() {
                             fontSize: 14.5,
                         },
                         "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": { backgroundColor: COLORS.zebra },
+                        "& .MuiDataGrid-row:hover": {
+                            // Hover stilini buraya ekleyin
+                        },
                     }}
                 />
             </Paper>
@@ -1667,7 +1656,7 @@ export default function ReelAtananSeferler() {
                                     tarihDegisti = true;
                                 }
 
-                                // 2) detayları kaydet ve yeni state'i al
+                                // 2) detayları kaydet ve yeni state'i al (saveDetails artık güncelleyen/tarihleri de set eder)
                                 const success = await saveDetails();
                                 if (!success) {
                                     return;
@@ -1687,12 +1676,14 @@ export default function ReelAtananSeferler() {
                                 const changedFields = [];
                                 const detailedChanges = {};
 
+                                // detailRowsOrig ve detailRows state'leri saveDetails içinde güncellendiği için burası doğru çalışır.
                                 detailRows.forEach((row, idx) => {
                                     const orig = detailRowsOrig[idx] || {};
                                     timeKeys.forEach((k) => {
-                                        // Burada detailRows'u kontrol ediyoruz, çünkü saveDetails state'i güncelledi.
-                                        const beforeVal = String(orig?.[k] ?? "");
-                                        const afterVal = String(row?.[k] ?? "");
+                                        // row, en son kaydedilen güncel veriyi (guncelleyenler dahil) içerir
+                                        // orig, saveDetails çağrılmadan önceki snapshot'ı içerir.
+                                        const beforeVal = String(clean(orig?.[k] ?? ""));
+                                        const afterVal = String(clean(row?.[k] ?? ""));
                                         if (beforeVal !== afterVal) {
                                             const tag = `${k}[${idx + 1}]`;
                                             changedFields.push(tag);

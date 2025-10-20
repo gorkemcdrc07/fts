@@ -11,8 +11,11 @@ import {
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import { alpha } from "@mui/system";
-import * as XLSX from "xlsx";
+
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 import { supabase } from "../supabaseClient";
+
 
 /* =========================================================== */
 /* ==================== KOYU TEMA SABİTLERİ ================== */
@@ -72,6 +75,24 @@ const getTodayDateString = () => {
     return `${year}-${month}-${day}`;
 };
 
+// 🟢 YENİ HELPER: Zaman dilimi kaymasını önlemek için tarihleri UTC olarak kaydeder
+const createExcelDate = (isoString) => {
+    if (!isoString) return null;
+    const d = new Date(isoString);
+    if (Number.isNaN(d.getTime())) return null;
+
+    // Yerel saati alıp, bunu UTC saati olarak kabul eden bir Date objesi oluşturur.
+    // Bu, Excel'in zaman dilimi dönüşümlerini yapmasını engeller.
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const day = d.getDate();
+    const hours = d.getHours();
+    const minutes = d.getMinutes();
+    const seconds = d.getSeconds();
+
+    return new Date(Date.UTC(year, month, day, hours, minutes, seconds));
+};
+
 /* =========================================================== */
 /* ============== ETA HESABI (KGM 4.5s + 45dk) =============== */
 /* =========================================================== */
@@ -80,9 +101,6 @@ const getTodayDateString = () => {
  * distanceKm: sayı (örn 528)
  * startIso: sefer başlangıç zamanı (ISO)
  * avgKmh: ortalama hız (default 65)
- * Kurallar:
- *  - 4.5 saat sürüş → 45 dk mola (her dolu 4.5 saat diliminde)
- *  - Günlük 11s dinlenme burada uygulanmıyor (istersen ekleriz)
  */
 function calcETAFromDistance({ distanceKm, startIso, avgKmh = 65 }) {
     if (!distanceKm || !startIso) return null;
@@ -107,16 +125,9 @@ async function fetchPerformanceData(startDate, endDate) {
     const rangeMin = `${startDate || ""}T00:00:00`;
     const rangeMax = `${endDate || ""}T23:59:59`;
 
-    // sadece AKTİF seferler
-    const activeSeferSelectQuery = `
-    id, sefer_no, sefer_tarihi, plaka, surucu_ad_soyad, 
-    eta_varis, eta_note, 
-    sefer_detaylari(
-      teslim_varis, nokta_sirasi,
-      yukleme_ili, yukleme_ilcesi, teslim_ili, teslim_ilcesi,
-      yukleme_noktasi, teslim_noktasi
-    )
-  `;
+    // Sorgu formatı düzeltildi ve teslim_varis kullanıldı
+    const activeSeferSelectQuery = `id,sefer_no,sefer_tarihi,plaka,surucu_ad_soyad,eta_varis,eta_note,sefer_detaylari(teslim_varis,nokta_sirasi,yukleme_ili,yukleme_ilcesi,teslim_ili,teslim_ilcesi,yukleme_noktasi,teslim_noktasi)`;
+
     const { data: activeData, error: activeError } = await supabase
         .from('seferler')
         .select(activeSeferSelectQuery)
@@ -133,6 +144,7 @@ async function fetchPerformanceData(startDate, endDate) {
         const firstDeliveryDetail = (sefer.sefer_detaylari || [])
             .sort((a, b) => (a.nokta_sirasi || 0) - (b.nokta_sirasi || 0))[0];
 
+        // Veritabanı şemasına göre 'teslim_varis' kullanılıyor.
         const firstDeliveryTimeISO = firstDeliveryDetail?.teslim_varis || null;
         const deliveryTime = firstDeliveryTimeISO ? new Date(firstDeliveryTimeISO) : null;
 
@@ -144,7 +156,9 @@ async function fetchPerformanceData(startDate, endDate) {
         if (deliveryTime && eta) {
             fark_dk_signed = Math.round((deliveryTime.getTime() - eta.getTime()) / 60000); // +gecikme, -erken
             fark_dk = Math.abs(fark_dk_signed);
-            durum = fark_dk_signed > 0 ? 'GECİKMİŞ' : 'ERKEN';
+            durum = fark_dk_signed > 5 ? 'GECİKMİŞ' : fark_dk_signed < -5 ? 'ERKEN' : 'ZAMANINDA';
+        } else if (sefer.eta_note) {
+            durum = 'VERİ EKSİK';
         }
 
         let eta_display = sefer.eta_varis ? fmt(sefer.eta_varis) : (sefer.eta_note || '-');
@@ -159,6 +173,7 @@ async function fetchPerformanceData(startDate, endDate) {
             surucu: sefer.surucu_ad_soyad,
             sefer_tarihi: sefer.sefer_tarihi,
             eta_gosterim: eta_display,
+            // Fiili teslimat zamanı olarak teslim_varis kullanılır
             ilk_teslim_varis: firstDeliveryTimeISO,
             fark_dk_signed,
             fark_dk,
@@ -449,38 +464,46 @@ export default function Dashboard({ onOpenRow }) {
         loadData();
     };
 
-    // Excel'e Aktar
-    const handleExportExcel = React.useCallback(() => {
+    // 🛑 EXCEL EXPORT FONKSİYONU DÜZELTİLDİ
+    const handleExportExcel = React.useCallback(async () => {
         const rows = filteredReport.map(r => ({
             Tip: r.sefer_tipi,
             "Sefer No": r.sefer_no,
             Plaka: r.plaka,
-            "Tarih": fmt(r.sefer_tarihi),
+            // 🛑 DÜZELTME: createExcelDate kullanıldı
+            "Tarih": createExcelDate(r.sefer_tarihi),
             "ETA / Not": r.eta_gosterim,
-            "Teslim Varış": fmt(r.ilk_teslim_varis),
-            "Fark": r.fark_dk !== null
-                ? `${(r.fark_dk_signed ?? 0) > 0 ? 'Gecikti ' : 'Erken '}${minToHM(r.fark_dk)}`
-                : '-',
+            // 🛑 DÜZELTME: createExcelDate kullanıldı
+            "Teslim Varış": createExcelDate(r.ilk_teslim_varis),
+            "Fark": r.fark_dk !== null ?
+                `${(r.fark_dk_signed ?? 0) > 0 ? 'Gecikti ' : 'Erken '}${minToHM(r.fark_dk)}` : '-',
             "Durum": r.durum,
         }));
 
-        const ws = XLSX.utils.json_to_sheet(rows);
-        ws['!cols'] = [
-            { wch: 10 },
-            { wch: 14 },
-            { wch: 12 },
-            { wch: 18 },
-            { wch: 30 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 28 },
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('ETA Raporu');
+
+        worksheet.columns = [
+            { header: "Tip", key: "Tip", width: 10 },
+            { header: "Sefer No", key: "Sefer No", width: 14 },
+            { header: "Plaka", key: "Plaka", width: 12 },
+            // 🛑 DÜZELTME: Tarih formatına saat eklendi
+            { header: "Tarih", key: "Tarih", width: 18, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
+            { header: "ETA / Not", key: "ETA / Not", width: 30 },
+            // 🛑 DÜZELTME: Teslim Varış formatına saat eklendi
+            { header: "Teslim Varış", key: "Teslim Varış", width: 18, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
+            { header: "Fark", key: "Fark", width: 18 },
+            { header: "Durum", key: "Durum", width: 18 },
         ];
 
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'ETA Raporu');
+        worksheet.addRows(rows);
 
-        const fileName = `eta_rapor_${startDate}_${endDate}.xlsx`;
-        XLSX.writeFile(wb, fileName);
+        // Dosyayı oluştur ve indir
+        const fileName = `eta_rapor_${getTodayDateString()}.xlsx`;
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        saveAs(blob, fileName);
+
     }, [filteredReport, startDate, endDate]);
 
     return (

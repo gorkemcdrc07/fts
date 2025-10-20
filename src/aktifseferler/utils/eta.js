@@ -73,7 +73,7 @@ function applySaturdayRule(date) {
 
 /** startISO parse:
  * - "YYYY-MM-DDTHH:mm[:ss][±TZ]" -> Date
- * - "DD.MM.YYYY HH:mm" (yerel)   -> Date
+ * - "DD.MM.YYYY HH:mm" (yerel)  -> Date
  */
 function parseStartLocal(startISO) {
     if (!startISO) return null;
@@ -99,7 +99,7 @@ export const defaultRegOptions = {
     dailyDriveLimitMin: 9 * 60,
     allowExtendedDailyDrive: true,
     useExtendedToday: false,
-    dailyRestMin: DAILY_REST_MIN,
+    dailyRestMin: 11 * 60,
     allowReducedDailyRest: true,
     useReducedRestToday: false,
     enforceWeeklyLimits: false,
@@ -109,6 +109,77 @@ export const defaultRegOptions = {
     currentFortnightDrivenMin: 0,
     startBreakMin: 0,
 };
+
+// 🟢 YENİ YARDIMCI FONKSİYON: 17:00 Kuralını Uygula
+/**
+ * @param {Date} date - Hesaplanan ETA tarihi
+ * @param {number} totalBreakMin - Toplam mola dakikası (meta verisi için)
+ * @param {number} totalRestMin - Toplam dinlenme dakikası (meta verisi için)
+ * @returns {{ date: Date, totalBreakMin: number, totalRestMin: number }}
+ */
+function apply1700Rule(date, totalBreakMin, totalRestMin) {
+    const d = new Date(date);
+    const hour = d.getHours();
+    const dayOfWeek = d.getDay(); // 0=Pazar, 6=Cumartesi
+
+    // 1. Kural: Eğer saat 17:00 veya sonrası ise (17:00 ve sonrası, yani saat 17)
+    if (hour >= 17) {
+        // Pazar'a denk gelirse (yarın Pazartesi 08:00) veya Cumartesi ise (yarın Pazar, sonraki Pazartesi 08:00)
+
+        let newDate = new Date(d);
+        let minutesToWait = 0;
+
+        // Saat farkını hesapla: 17:00'den o günün 00:00'ına (7 saat) + 8 saat
+        // Veya daha basit:
+        // Mevcut zamanı sıfırla (00:00'a al) ve 1 gün + 8 saat ekle
+
+        // Önce saati 00:00'a ayarla (yani yarının 00:00'ı)
+        newDate.setDate(newDate.getDate() + 1);
+        newDate.setHours(0, 0, 0, 0);
+
+        // Şimdi 08:00'ı ekle
+        newDate.setHours(8);
+
+        // Pazar'dan (0) Pazartesi'ye (1) atlama kontrolü (bu zaten yukarıdaki setDate ile halledildi)
+        // Ancak Cumartesi (6) ise, Pazar'ı atlayıp Pazartesi'ye gitmeli.
+
+        if (dayOfWeek === 6) { // Cumartesi (17:00 ve sonrası) ise
+            // Pazartesi'ye atla (Pazar'ı atla)
+            newDate.setDate(newDate.getDate() + 1);
+            // Total mola/dinlenmeye ekleme yapmamız gerekir (15 saat mola)
+            minutesToWait = 24 * 60 - (hour * 60 + d.getMinutes()) + 8 * 60;
+        } else if (dayOfWeek === 5 && hour >= 17) { // Cuma 17:00 sonrası ise
+            // Cumartesi'yi atla, Pazartesi'ye git
+            newDate.setDate(newDate.getDate() + 2);
+            minutesToWait = 24 * 60 + 8 * 60 - (hour * 60 + d.getMinutes());
+        }
+
+        // Yukarıdaki mantık biraz karmaşıklaştı, basitleştirelim:
+        // Her zaman 1 gün sonrasının 08:00'ına at, sonra hafta sonu kontrolü yap.
+
+        // Yeni tarihi belirle: Ertesi gün 08:00
+        let targetDate = new Date(d);
+        targetDate.setDate(targetDate.getDate() + 1);
+        targetDate.setHours(8, 0, 0, 0); // Ertesi gün 08:00
+
+        // Hedef gün Pazar (0) veya Cumartesi (6) ise, Pazartesi'ye (1) atla
+        while (targetDate.getDay() === 0 || targetDate.getDay() === 6) {
+            targetDate.setDate(targetDate.getDate() + 1);
+        }
+
+        // Geçen zamanı dinlenmeye ekleyebiliriz. (Sadece meta için, hesaplamayı etkilemez)
+        minutesToWait = Math.round((targetDate.getTime() - d.getTime()) / minToMs(1));
+
+        return {
+            date: targetDate,
+            totalBreakMin: totalBreakMin, // Buraya dinlenme süresini ekleyebilirsiniz
+            totalRestMin: totalRestMin + minutesToWait,
+        };
+    }
+
+    return { date: d, totalBreakMin, totalRestMin };
+}
+
 
 /** KGM kurallarıyla ETA simülasyonu */
 export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
@@ -122,7 +193,7 @@ export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
     // ✅ Cumartesi 12:00 sonrası kuralını uygula
     start = applySaturdayRule(start);
 
-    const kmPerMin = opt.speedKmh / 60; // Tanım kaldı
+    const kmPerMin = opt.speedKmh / 60;
     let remainingKm = Math.max(0, distanceKm);
 
     let t = new Date(start);
@@ -162,6 +233,8 @@ export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
         split.minutesDrivenSince15 >= BLOCK_MIN;
 
     while (remainingKm > 0.01) {
+        // ... (Haftalık/İki Haftalık Kural Ekleme Noktası 1 buraya gelebilir)
+
         const remainInDay = todayLimit() - drivenTodayMin;
         if (remainInDay <= 0) {
             const restMin = todayRest();
@@ -202,10 +275,8 @@ export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
         }
 
         const canDriveMin = Math.min(remainToBreak, remainInDay);
-        // Düzeltildi: kmPerMin kullanıldı
         const canDriveKm = canDriveMin * kmPerMin;
         const driveKm = Math.min(remainingKm, canDriveKm);
-        // Düzeltildi: kmPerMin kullanıldı
         const driveMin = Math.max(1, Math.round(driveKm / kmPerMin));
 
         t = addMinutes(t, driveMin);
@@ -221,6 +292,13 @@ export function computeETAWithKGMPlus(distanceKm, startISO, options = {}) {
 
         if (remainingKm <= 0.01) break;
     }
+
+    // 🟢 YENİ KURAL UYGULAMASI: 17:00 Kuralı
+    const ruleResult = apply1700Rule(t, totalBreakMin, totalRestMin);
+    t = ruleResult.date;
+    totalBreakMin = ruleResult.totalBreakMin;
+    totalRestMin = ruleResult.totalRestMin;
+
 
     return {
         etaISO: toLocalISO(t),

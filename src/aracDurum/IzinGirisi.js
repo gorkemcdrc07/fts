@@ -7,7 +7,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import { useNavigate } from "react-router-dom";
 
-// MUI
+// MUI Components & Styling
 import {
     ThemeProvider,
     createTheme,
@@ -42,16 +42,21 @@ import {
     LinearProgress,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import AddIcon from "@mui/icons-material/Add";
-import DownloadIcon from "@mui/icons-material/Download";
-import FilterListIcon from "@mui/icons-material/FilterList";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import CloseIcon from "@mui/icons-material/Close";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import ArrowBackIcon from "@mui/icons-material/ArrowBackIosNew";
-import HomeIcon from "@mui/icons-material/HomeOutlined";
 
+// MUI Icons
+import AddIcon from "@mui/icons-material/AddOutlined";
+import DownloadIcon from "@mui/icons-material/DownloadOutlined";
+import FilterListIcon from "@mui/icons-material/FilterListOutlined";
+import EditIcon from "@mui/icons-material/EditOutlined";
+import DeleteIcon from "@mui/icons-material/DeleteOutlined";
+import CloseIcon from "@mui/icons-material/CloseOutlined";
+import RefreshIcon from "@mui/icons-material/RefreshOutlined";
+import ArrowBackIcon from "@mui/icons-material/ArrowBackIosNewOutlined";
+import HomeIcon from "@mui/icons-material/HomeOutlined";
+import CheckCircleIcon from "@mui/icons-material/CheckCircleOutline";
+import WarningIcon from "@mui/icons-material/WarningAmberOutlined";
+
+// DataGrid Components & Date Pickers
 import {
     DataGrid,
     GridToolbarContainer,
@@ -59,23 +64,190 @@ import {
     GridToolbarColumnsButton,
     GridToolbarDensitySelector,
 } from "@mui/x-data-grid";
-
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 
 dayjs.locale("tr");
 
-/* ===================== Yetki: ekran anahtarı ===================== */
-/* Bu sayfa İzin Yönetimi ekranı için çalışır */
+/* ===================== Sabitler ve Yardımcılar ===================== */
 const SCREEN_KEY = "izin_yonetimi";
-
-/* ===================== Zoom’dan Bağımsız Ekrana Sığdırma ===================== */
 const HOME_PATH = "/anasayfa";
 const BASE_WIDTH = 1920;
 const BASE_HEIGHT = 1080;
 const MAX_SCALE = Infinity;
 
+const BOS_FORM = {
+    plaka_treyler: "",
+    surucu_adi: "",
+    surucu_telefon: "",
+    surucu_tc: "",
+    izin_turu: "",
+    baslangic_tarihi: "",
+    bitis_tarihi: "",
+    gun_sayisi: "",
+    is_basi_tarihi: "",
+    yukleme_tarihi: "",
+    aciklama: "",
+};
+const IZIN_TURLERI = ["İzin", "Bakım İzni", "Mazeret İzni"];
+
+const getMevcutKullanici = () => localStorage.getItem("kullanici") || "Bilinmeyen Kullanıcı";
+
+const hesaplaGunSayisi = (baslangicStr, bitisStr) => {
+    if (!baslangicStr || !bitisStr) return 0;
+    const d1 = dayjs(baslangicStr).startOf('day');
+    const d2 = dayjs(bitisStr).startOf('day');
+    const fark = d2.diff(d1, 'day');
+    return fark >= 0 ? fark + 1 : 0; // İzin günleri dahil (başlangıç ve bitiş dahil)
+};
+
+// DataGrid güvenli yardımcılar
+const safeGetVal = (arg) => (arg && typeof arg === "object" && "value" in arg ? arg.value : arg);
+const safeDateValueGetter = (arg) => {
+    const v = safeGetVal(arg);
+    if (!v) return null;
+    const s = String(v).slice(0, 10);
+    const d = dayjs(s);
+    return d.isValid() ? d.toDate() : null;
+};
+const safeDateValueFormatter = (arg) => {
+    const v = safeGetVal(arg);
+    if (!v) return "-";
+    const d = dayjs(v);
+    return d.isValid() ? d.format("DD.MM.YYYY") : "-";
+};
+
+/* ===================== DataGrid TR (Hata Düzeltildi) ===================== */
+const GRID_TR = {
+    noRowsLabel: "Kayıt bulunmuyor",
+    noResultsOverlayLabel: "Aranan sonuç bulunamadı",
+    errorOverlayDefaultLabel: "Bir hata oluştu.",
+    toolbarColumns: "Sütunlar",
+    toolbarFilters: "Filtreler",
+    toolbarDensity: "Sıklık",
+    toolbarDensityCompact: "Sıkı",
+    toolbarDensityStandard: "Standart",
+    toolbarDensityComfortable: "Rahat",
+    toolbarExport: "Dışa aktar",
+    toolbarQuickFilterPlaceholder: "Hızlı Ara...",
+    columnMenuLabel: "Menü",
+    columnMenuShowColumns: "Sütunları göster",
+    columnMenuFilter: "Filtrele",
+    columnMenuHideColumn: "Sütunu gizle",
+    columnMenuUnsort: "Sıralamayı kaldır",
+    columnMenuSortAsc: "Artan sırala",
+    columnMenuSortDesc: "Azalan sırala",
+    columnsPanelTextFieldLabel: "Sütun ara",
+    columnsPanelShowAllButton: "Hepsini göster",
+    columnsPanelHideAllButton: "Hepsini gizle",
+};
+
+/* ===================== Tema Tanımı (Modern) ===================== */
+const theme = createTheme({
+    palette: {
+        mode: "dark",
+        primary: { main: "#8B5CF6" }, // Mor (Vibrant Purple)
+        secondary: { main: "#22D3EE" }, // Turkuaz (Cyan)
+        background: {
+            default: "#0B1220", // Koyu mavi/lacivert arka plan
+            paper: alpha("#1E293B", 0.95), // Hafif daha açık, kadifemsi bir paper rengi
+        },
+        success: { main: "#10B981" }, // Zümrüt Yeşili
+        error: { main: "#F43F5E" }, // Gül Kırmızısı
+        info: { main: "#3B82F6" },
+        warning: { main: "#F59E0B" },
+    },
+    shape: { borderRadius: 12 }, // Hafif yuvarlak köşeler
+    typography: {
+        fontFamily: 'Inter, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        button: { textTransform: "none", fontWeight: 600 },
+        h4: { fontWeight: 800 },
+    },
+    components: {
+        MuiCssBaseline: {
+            styleOverrides: {
+                // Scrollbar stilini iyileştir
+                "html": { scrollbarGutter: "stable" },
+                "*::-webkit-scrollbar": { width: "8px", height: "8px" },
+                "*::-webkit-scrollbar-thumb": {
+                    backgroundColor: alpha("#8B5CF6", 0.5),
+                    borderRadius: "10px",
+                },
+                "*::-webkit-scrollbar-track": { backgroundColor: alpha("#1E293B", 0.7) },
+            }
+        },
+        MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
+        MuiCard: {
+            styleOverrides: {
+                root: {
+                    boxShadow: "0 10px 30px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.05) inset",
+                    backdropFilter: "blur(4px)",
+                    backgroundColor: alpha("#1E293B", 0.9),
+                }
+            }
+        },
+        MuiButton: {
+            styleOverrides: {
+                root: {
+                    borderRadius: 10,
+                    boxShadow: "0 4px 15px rgba(139,92,246,0.2)",
+                    transition: "all 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms",
+                    ":hover": { boxShadow: "0 6px 20px rgba(139,92,246,0.3)" },
+                },
+                outlined: {
+                    border: "1px solid rgba(255,255,255,0.12)",
+                }
+            },
+        },
+        MuiDialog: {
+            styleOverrides: {
+                paper: {
+                    background: "linear-gradient(180deg, #1E293B 0%, #171E2D 100%)",
+                    boxShadow: "0 15px 45px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)",
+                    backdropFilter: "blur(12px)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                },
+            },
+        },
+        MuiTextField: {
+            defaultProps: { variant: "outlined" },
+            styleOverrides: {
+                root: {
+                    "& .MuiOutlinedInput-root": {
+                        borderRadius: 10,
+                        backgroundColor: alpha("#1E293B", 0.7),
+                        "&:hover fieldset": { borderColor: `${alpha("#8B5CF6", 0.7)} !important` },
+                    },
+                    "& .MuiInputLabel-root.Mui-focused": { color: "#8B5CF6" },
+                }
+            },
+        },
+        MuiDataGrid: {
+            styleOverrides: {
+                root: {
+                    border: "none",
+                    borderRadius: 12,
+                    "& .MuiDataGrid-columnHeaders": {
+                        backgroundColor: "#171E2D",
+                        borderBottom: "1px solid rgba(255,255,255,0.12)",
+                    },
+                    "& .MuiDataGrid-cell": {
+                        borderBottom: "1px solid rgba(255,255,255,0.08)",
+                    },
+                    "& .MuiDataGrid-row:nth-of-type(odd)": {
+                        backgroundColor: alpha("#1E293B", 0.7),
+                    },
+                    "& .MuiDataGrid-row:hover": {
+                        backgroundColor: alpha("#8B5CF6", 0.15),
+                    },
+                },
+            }
+        },
+    },
+});
+
+/* ===================== Zoom'dan Bağımsız Ekrana Sığdırma (Scaled Container) ===================== */
 function useContainerScale(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = MAX_SCALE) {
     const ref = useRef(null);
     const [scale, setScale] = useState(1);
@@ -111,9 +283,9 @@ function ScaleToFit({ children }) {
                 justifyItems: "start",
                 alignItems: "start",
                 background:
-                    "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.15), transparent 40%)," +
-                    "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.20), transparent 50%)," +
-                    "linear-gradient(180deg, #050816 0%, #0B1220 100%)",
+                    "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.25), transparent 60%)," +
+                    "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.30), transparent 70%)," +
+                    "linear-gradient(180deg, #0B1220 0%, #050816 100%)",
             }}
         >
             <Box
@@ -132,177 +304,65 @@ function ScaleToFit({ children }) {
     );
 }
 
-/* ===================== DataGrid TR ===================== */
-const GRID_TR = {
-    noRowsLabel: "Kayıt bulunmuyor",
-    noResultsOverlayLabel: "Sonuç bulunamadı",
-    errorOverlayDefaultLabel: "Bir hata oluştu.",
-    toolbarColumns: "Sütunlar",
-    toolbarFilters: "Filtreler",
-    toolbarDensity: "Sıklık",
-    toolbarDensityCompact: "Sıkı",
-    toolbarDensityStandard: "Standart",
-    toolbarDensityComfortable: "Rahat",
-    toolbarExport: "Dışa aktar",
-    toolbarQuickFilterPlaceholder: "Ara…",
-    columnMenuLabel: "Menü",
-    columnMenuShowColumns: "Sütunları göster",
-    columnMenuFilter: "Filtrele",
-    columnMenuHideColumn: "Sütunu gizle",
-    columnMenuUnsort: "Sıralamayı kaldır",
-    columnMenuSortAsc: "Artan sırala",
-    columnMenuSortDesc: "Azalan sırala",
-    columnsPanelTextFieldLabel: "Sütun ara",
-    columnsPanelShowAllButton: "Hepsini göster",
-    columnsPanelHideAllButton: "Hepsini gizle",
-};
-
-/* ===================== Helpers ===================== */
-const BOS_FORM = {
-    plaka_treyler: "",
-    surucu_adi: "",
-    surucu_telefon: "",
-    surucu_tc: "",
-    izin_turu: "",
-    baslangic_tarihi: "",
-    bitis_tarihi: "",
-    gun_sayisi: "",
-    is_basi_tarihi: "",
-    yukleme_tarihi: "",
-    aciklama: "",
-};
-const IZIN_TURLERI = ["İzin", "Bakım İzni", "Mazeret İzni"];
-
-const getMevcutKullanici = () => localStorage.getItem("kullanici") || "Bilinmeyen Kullanıcı";
-
-const hesaplaGunSayisi = (baslangicStr, bitisStr) => {
-    if (!baslangicStr || !bitisStr) return 0;
-    const d1 = new Date(baslangicStr);
-    const d2 = new Date(bitisStr);
-    d1.setHours(0, 0, 0, 0);
-    d2.setHours(0, 0, 0, 0);
-    const fark = (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24);
-    return fark > 0 ? fark : 0;
-};
-
-// DataGrid güvenli yardımcılar
-const safeGetVal = (arg) => (arg && typeof arg === "object" && "value" in arg ? arg.value : arg);
-const safeDateValueGetter = (arg) => {
-    const v = safeGetVal(arg);
-    if (!v) return null;
-    const s = String(v).slice(0, 10);
-    const d = dayjs(s);
-    return d.isValid() ? d.toDate() : null;
-};
-const safeDateValueFormatter = (arg) => {
-    const v = safeGetVal(arg);
-    if (!v) return "-";
-    const d = dayjs(v);
-    return d.isValid() ? d.format("DD.MM.YYYY") : "-";
-};
-
-/* ===================== Tema ===================== */
-const theme = createTheme({
-    palette: {
-        mode: "dark",
-        primary: { main: "#8B5CF6" },
-        secondary: { main: "#22D3EE" },
-        background: { default: "#050816", paper: alpha("#0B1220", 0.9) },
-        success: { main: "#22C55E" },
-        error: { main: "#EF4444" },
-    },
-    shape: { borderRadius: 16 },
-    typography: {
-        fontFamily: 'Inter, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-        button: { textTransform: "none", fontWeight: 700 },
-    },
-    components: {
-        MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
-        MuiButton: {
-            styleOverrides: {
-                root: {
-                    borderRadius: 12,
-                    boxShadow: "0 6px 20px rgba(139,92,246,0.25)",
-                    ":hover": { boxShadow: "0 8px 24px rgba(139,92,246,0.35)" },
-                },
-            },
-        },
-        MuiDialog: {
-            styleOverrides: {
-                paper: {
-                    background: "linear-gradient(180deg, rgba(10,16,30,0.95) 0%, rgba(10,16,30,0.85) 100%)",
-                    boxShadow: "0 10px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)",
-                    backdropFilter: "blur(10px)",
-                    border: "1px solid rgba(255,255,255,0.06)",
-                },
-            },
-        },
-        MuiTextField: {
-            defaultProps: { variant: "outlined" },
-            styleOverrides: { root: { "& .MuiOutlinedInput-root": { borderRadius: 12 } } },
-        },
-    },
-});
-
-/* ============= Toolbar ============= */
+/* ============= Custom Toolbar ============= */
 function CustomToolbar({ onRefresh, onExport, onFilters }) {
     return (
         <GridToolbarContainer
             sx={{
-                px: 1,
-                py: 0.5,
-                gap: 1,
+                px: 2,
+                py: 1,
+                gap: 1.5,
                 position: "sticky",
                 top: 0,
                 zIndex: 1,
-                background: "linear-gradient(180deg, rgba(15,23,42,0.9) 0%, rgba(15,23,42,0.6) 100%)",
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-                backdropFilter: "blur(6px)",
+                background: "linear-gradient(180deg, #171E2D 0%, #171E2D 100%)",
+                borderBottom: "1px solid rgba(255,255,255,0.12)",
+                backdropFilter: "blur(8px)",
             }}
         >
             <GridToolbarColumnsButton />
             <GridToolbarDensitySelector />
             <Box sx={{ flexGrow: 1 }} />
             <GridToolbarQuickFilter debounceMs={300} />
-            <Tooltip title="Filtreler">
-                <IconButton onClick={onFilters}>
+            <Tooltip title="Detaylı Filtreler">
+                <IconButton color="primary" onClick={onFilters}>
                     <FilterListIcon />
                 </IconButton>
             </Tooltip>
-            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExport}>
-                Excel
+            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExport} size="small">
+                Excel'e Aktar
             </Button>
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={onRefresh}>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={onRefresh} size="small">
                 Yenile
             </Button>
         </GridToolbarContainer>
     );
 }
 
-/* ===================== Component ===================== */
+/* ===================== Ana Bileşen ===================== */
 export default function IzinGirisiModern() {
     const navigate = useNavigate();
 
-    // data
+    // Data State
     const [izinler, setIzinler] = useState([]);
     const [plakaListesi, setPlakaListesi] = useState([]);
 
-    // ui
+    // UI State
     const [loading, setLoading] = useState(false);
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
     const [filtreDrawer, setFiltreDrawer] = useState(false);
 
-    // form
+    // Form State
     const [form, setForm] = useState({ ...BOS_FORM });
     const [formOpen, setFormOpen] = useState(false);
     const [duzenlemeId, setDuzenlemeId] = useState(null);
 
-    // kesinti dialog
+    // Kesinti Dialog State
     const [kesintiOpen, setKesintiOpen] = useState(false);
     const [kesintiBilgisi, setKesintiBilgisi] = useState({ neden: "", tur: "" });
     const [formSubmitBekliyor, setFormSubmitBekliyor] = useState(false);
 
-    // filtreler
+    // Filtre State
     const [filtreler, setFiltreler] = useState({
         plaka_treyler: "",
         surucu_adi: "",
@@ -317,7 +377,7 @@ export default function IzinGirisiModern() {
         eklenme_tarihi: "",
     });
 
-    // ==== YETKİ DURUMU ====
+    // Yetki State
     const [permLoading, setPermLoading] = useState(true);
     const [perms, setPerms] = useState({
         canCreate: false,
@@ -344,7 +404,7 @@ export default function IzinGirisiModern() {
         }
     }, [formSubmitBekliyor]);
 
-    /* ===================== KPI ===================== */
+    /* ===================== KPI Hesaplama ===================== */
     const toplamKayit = izinler.length;
     const buAy = izinler.filter(
         (r) => r.baslangic_tarihi && dayjs(r.baslangic_tarihi).isSame(dayjs(), "month")
@@ -368,7 +428,7 @@ export default function IzinGirisiModern() {
                 return;
             }
 
-            // 2) Rol ID: login.rol UUID ise direkt kullan; değilse roles.key'den bul
+            // 2) Rol ID
             const ROLE_NAME_TO_KEY = { YÖNETİCİ: "YONETICI", OPERASYON: "OPERASYON", TAKİP: "TAKIP" };
             const looksLikeUUID = (s) =>
                 typeof s === "string" &&
@@ -391,7 +451,7 @@ export default function IzinGirisiModern() {
                 }
             }
 
-            // 3) Rol izinleri (role_permissions: ekran anahtarı = izin_yonetimi)
+            // 3) Rol izinleri (role_permissions)
             let roleCreate = false,
                 roleEdit = false,
                 roleDelete = false;
@@ -407,14 +467,14 @@ export default function IzinGirisiModern() {
                 roleDelete = !!rp?.izin_delete;
             }
 
-            // 4) Kullanıcı override (user_permissions: screen_key YOK!)
+            // 4) Kullanıcı override (user_permissions)
             const { data: up } = await supabase
                 .from("user_permissions")
                 .select("izin_create, izin_edit, izin_delete")
                 .eq("user_id", userRow.id)
                 .maybeSingle();
 
-            // 5) Etkin izin = override varsa onu kullan; yoksa rol
+            // 5) Etkin izin
             const coalesce = (u, r) => (typeof u === "boolean" ? u : !!r);
             const canCreate = coalesce(up?.izin_create, roleCreate);
             const canEdit = coalesce(up?.izin_edit, roleEdit);
@@ -426,7 +486,7 @@ export default function IzinGirisiModern() {
         }
     }
 
-    /* ===================== Data ===================== */
+    /* ===================== Veri İşlemleri ===================== */
     const verileriGetir = async () => {
         setLoading(true);
         const { data, error } = await supabase
@@ -434,6 +494,7 @@ export default function IzinGirisiModern() {
             .select("*")
             .order("id", { ascending: false });
         if (!error) {
+            // Tarihleri temizle ve 10 karakter formatına dönüştür
             const cleaned = (data || []).map((r) => ({
                 ...r,
                 baslangic_tarihi: r["baslangic_tarihi"] ? String(r["baslangic_tarihi"]).slice(0, 10) : null,
@@ -444,7 +505,7 @@ export default function IzinGirisiModern() {
             }));
             setIzinler(cleaned);
         } else {
-            openSnack("İzinler alınamadı.", "error");
+            openSnack("İzinler alınamadı: " + error.message, "error");
         }
         setLoading(false);
     };
@@ -452,12 +513,12 @@ export default function IzinGirisiModern() {
     const plakalariGetir = async () => {
         const { data, error } = await supabase
             .from("plakalar")
-            .select("*")
+            .select("plaka, treyler, surucu_adi, surucu_telefon, surucu_tc")
             .or("statu.is.null,statu.neq.ÇIKARILDI");
         if (!error && data) setPlakaListesi(data);
     };
 
-    /* ===================== Handlers ===================== */
+    /* ===================== Handler Fonksiyonları ===================== */
     const handleFormChange = (name, value) => {
         const next = { ...form, [name]: value };
 
@@ -467,9 +528,13 @@ export default function IzinGirisiModern() {
                 const farkGun = hesaplaGunSayisi(baslangic_tarihi, bitis_tarihi);
                 next.gun_sayisi = farkGun > 0 ? farkGun : 0;
 
-                const bitis = new Date(bitis_tarihi);
-                bitis.setDate(bitis.getDate() + 1); // iş başı ertesi gün
-                next.is_basi_tarihi = bitis.toISOString().split("T")[0];
+                // İş başı tarihi: bitiş tarihinin ertesi günü
+                const bitis = dayjs(bitis_tarihi);
+                const isBasi = bitis.add(1, 'day');
+                next.is_basi_tarihi = isBasi.isValid() ? isBasi.format("YYYY-MM-DD") : null;
+            } else {
+                next.gun_sayisi = 0;
+                next.is_basi_tarihi = null;
             }
         }
 
@@ -488,7 +553,7 @@ export default function IzinGirisiModern() {
                 surucu_tc: secilen.surucu_tc || "",
             }));
         } else {
-            setForm((prev) => ({ ...prev, plaka_treyler: value || "" }));
+            setForm((prev) => ({ ...prev, plaka_treyler: value || "", surucu_adi: "", surucu_telefon: "", surucu_tc: "" }));
         }
     };
 
@@ -500,6 +565,7 @@ export default function IzinGirisiModern() {
         setForm({ ...BOS_FORM });
         setDuzenlemeId(null);
         setFormOpen(true);
+        setKesintiBilgisi({ neden: "", tur: "" });
     };
 
     const handleDuzenle = (row) => {
@@ -522,6 +588,7 @@ export default function IzinGirisiModern() {
         });
         setDuzenlemeId(row.id);
         setFormOpen(true);
+        setKesintiBilgisi({ neden: "", tur: "" });
     };
 
     const handleSil = async (id) => {
@@ -529,23 +596,38 @@ export default function IzinGirisiModern() {
             openSnack("Silme yetkiniz yok.", "warning");
             return;
         }
-        if (!window.confirm("Silmek istediğinize emin misiniz?")) return;
+        if (!window.confirm("Bu izni kalıcı olarak silmek istediğinizden emin misiniz?")) return;
 
-        const { data: izinKaydi } = await supabase.from("izinler").select("*").eq("id", id).single();
+        // 1. İzin kaydını al
+        const { data: izinKaydi, error: fetchErr } = await supabase.from("izinler").select("plaka_treyler, is_basi_tarihi, yukleme_tarihi").eq("id", id).maybeSingle();
 
-        if (!izinKaydi) {
-            openSnack("Silinecek kayıt bulunamadı.", "warning");
+        if (fetchErr || !izinKaydi) {
+            openSnack("Silinecek kayıt bulunamadı veya bir hata oluştu.", "error");
             return;
         }
 
+        // 2. İzin kaydını sil
         const { error: silErr } = await supabase.from("izinler").delete().eq("id", id);
         if (silErr) {
-            openSnack("Silme sırasında hata oluştu.", "error");
+            openSnack("İzin kaydı silinirken hata oluştu: " + silErr.message, "error");
             return;
         }
 
+        // 3. İlgili kesintiyi sil (varsa)
+        if (izinKaydi.is_basi_tarihi && izinKaydi.yukleme_tarihi && izinKaydi.plaka_treyler) {
+            // Sadece eşleşen Kesintiyi sil: Plaka, Başlangıç ve Bitiş tarihleri aynı olan
+            await supabase
+                .from("kesintiler")
+                .delete()
+                .eq("plaka_treyler", izinKaydi.plaka_treyler)
+                .eq("baslangic_tarihi", izinKaydi.is_basi_tarihi)
+                .eq("bitis_tarihi", izinKaydi.yukleme_tarihi);
+        }
+
+        // 4. Plaka statüsünü güncelle (basitleştirilmiş)
         const [plaka, treyler] = (izinKaydi.plaka_treyler || "").split(" - ");
         if (plaka && treyler) {
+            // Plaka statüsünü "İZİNDEN ÇIKTI" olarak güncelle
             await supabase
                 .from("plakalar")
                 .update({
@@ -558,20 +640,31 @@ export default function IzinGirisiModern() {
                 .eq("treyler", treyler);
         }
 
-        openSnack("Kayıt silindi.");
+        openSnack("Kayıt başarıyla silindi.", "info");
         verileriGetir();
     };
 
+
     const kesintiGerekirMi = () => {
-        const yukleme = form.yukleme_tarihi ? new Date(form.yukleme_tarihi) : null;
-        const isBasi = form.is_basi_tarihi ? new Date(form.is_basi_tarihi) : null;
+        const yukleme = form.yukleme_tarihi ? dayjs(form.yukleme_tarihi) : null;
+        const isBasi = form.is_basi_tarihi ? dayjs(form.is_basi_tarihi) : null;
+
+        // Yükleme tarihi, iş başı tarihinden kesinlikle sonra mı?
         if (!yukleme || !isBasi) return false;
-        const farkGun = Math.ceil((yukleme.getTime() - isBasi.getTime()) / (1000 * 60 * 60 * 24));
+
+        // Yükleme tarihi, iş başı tarihinden sonra ise kesinti gerekir.
+        const farkGun = yukleme.diff(isBasi, 'day');
         return farkGun > 0;
     };
 
     const handleSubmit = async () => {
-        // create vs edit kontrolü
+        // Validation: Zorunlu alanlar
+        if (!form.plaka_treyler || !form.izin_turu || !form.baslangic_tarihi || !form.bitis_tarihi) {
+            openSnack("Lütfen zorunlu alanları (Plaka, İzin Türü, Başlangıç/Bitiş) doldurun.", "error");
+            return;
+        }
+
+        // Permission check
         if (!duzenlemeId && !perms.canCreate) {
             openSnack("Yeni kayıt ekleme yetkiniz yok.", "warning");
             return;
@@ -581,12 +674,13 @@ export default function IzinGirisiModern() {
             return;
         }
 
-        const kullanici = getMevcutKullanici();
-
+        // Kesinti kontrolü: Form henüz gönderilmediyse ve kesinti gerekiyorsa diyaloğu aç
         if (kesintiGerekirMi() && !formSubmitBekliyor) {
             setKesintiOpen(true);
             return;
         }
+
+        const kullanici = getMevcutKullanici();
 
         const payload = {
             ...form,
@@ -594,29 +688,34 @@ export default function IzinGirisiModern() {
             is_basi_tarihi: form.is_basi_tarihi || null,
             yukleme_tarihi: form.yukleme_tarihi || null,
             ekleyen_kullanici: kullanici,
-            eklenme_tarihi: new Date().toISOString(),
+            eklenme_tarihi: new Date().toISOString().slice(0, 10), // Sadece tarih tutuluyor
         };
 
         let result;
         if (duzenlemeId) {
             result = await supabase.from("izinler").update(payload).eq("id", duzenlemeId);
         } else {
+            // Yeni kayıt eklenirken eklenme_tarihi ayarlanır
             result = await supabase.from("izinler").insert([payload]);
         }
 
         if (result.error) {
-            openSnack("Kayıt sırasında bir hata oluştu.", "error");
+            openSnack("Kayıt sırasında bir hata oluştu: " + result.error.message, "error");
+            setFormSubmitBekliyor(false); // Hata durumunda bekleme durumunu sıfırla
             return;
         }
 
-        const yukleme = form.yukleme_tarihi ? new Date(form.yukleme_tarihi) : null;
-        const isBasi = form.is_basi_tarihi ? new Date(form.is_basi_tarihi) : null;
-        if (kesintiBilgisi.neden && kesintiBilgisi.tur && isBasi && yukleme) {
+        // Kesinti kaydı oluştur (kesinti diyaloğu üzerinden gelindiyse)
+        if (kesintiBilgisi.neden && kesintiBilgisi.tur && kesintiGerekirMi()) {
+            const isBasiDayjs = dayjs(form.is_basi_tarihi);
+            const yuklemeDayjs = dayjs(form.yukleme_tarihi);
+
             const kesintiGunSayisi = Math.max(
                 0,
-                Math.ceil((yukleme.getTime() - isBasi.getTime()) / (1000 * 60 * 60 * 24))
+                yuklemeDayjs.diff(isBasiDayjs, 'day') // Gün farkı
             );
 
+            // Önce mevcut kesintiyi (eğer varsa ve aynı tarih aralığındaysa) temizle
             await supabase
                 .from("kesintiler")
                 .delete()
@@ -624,6 +723,7 @@ export default function IzinGirisiModern() {
                 .eq("baslangic_tarihi", form.is_basi_tarihi)
                 .eq("bitis_tarihi", form.yukleme_tarihi);
 
+            // Yeni kesintiyi kaydet
             await supabase.from("kesintiler").insert([
                 {
                     plaka_treyler: form.plaka_treyler,
@@ -634,29 +734,41 @@ export default function IzinGirisiModern() {
                     gun_sayisi: kesintiGunSayisi,
                     aciklama: form.aciklama || "",
                     ekleyen_kullanici: kullanici,
-                    eklenme_tarihi: new Date().toISOString(),
+                    eklenme_tarihi: new Date().toISOString().slice(0, 10),
                 },
             ]);
         }
 
-        openSnack(duzenlemeId ? "Kayıt güncellendi." : "Kayıt eklendi.");
+        openSnack(duzenlemeId ? "Kayıt başarıyla güncellendi. ✅" : "Yeni izin kaydı eklendi. 🎉");
         setForm({ ...BOS_FORM });
         setDuzenlemeId(null);
         setKesintiBilgisi({ neden: "", tur: "" });
         setKesintiOpen(false);
         setFormOpen(false);
+        setFormSubmitBekliyor(false);
         verileriGetir();
     };
 
     const handleKesintiDevam = () => {
+        if (!kesintiBilgisi.neden || !kesintiBilgisi.tur) {
+            openSnack("Lütfen kesinti nedeni ve türünü seçin.", "error");
+            return;
+        }
         setKesintiOpen(false);
-        setFormSubmitBekliyor(true);
+        setFormSubmitBekliyor(true); // handleSubmit'i tetikle
     };
 
     const exportToExcel = () => {
-        const worksheetData = izinler.map((i) => ({
+        if (filtrelenmisIzinler.length === 0) {
+            openSnack("Dışa aktarılacak veri bulunmuyor.", "info");
+            return;
+        }
+
+        const worksheetData = filtrelenmisIzinler.map((i) => ({
             PLAKA: i.plaka_treyler,
             SÜRÜCÜ: i.surucu_adi,
+            "SÜRÜCÜ TELEFON": i.surucu_telefon,
+            "SÜRÜCÜ TC": i.surucu_tc,
             "İZİN TÜRÜ": i.izin_turu,
             BAŞLANGIÇ: i.baslangic_tarihi ? dayjs(i.baslangic_tarihi).format("DD.MM.YYYY") : "-",
             BİTİŞ: i["bitis_tarihi"] ? dayjs(i["bitis_tarihi"]).format("DD.MM.YYYY") : "-",
@@ -672,42 +784,43 @@ export default function IzinGirisiModern() {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Izinler");
         const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-        saveAs(new Blob([buf], { type: "application/octet-stream" }), "izin_kayitlari.xlsx");
+        saveAs(new Blob([buf], { type: "application/octet-stream" }), `izin_kayitlari_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
     };
 
-    /* ===================== Filtering ===================== */
+    /* ===================== Filtreleme Logiği ===================== */
     const filtrelenmisIzinler = useMemo(() => {
         const matches = (item, key, val) =>
             val === "" || String(item[key] || "").toLowerCase().includes(String(val).toLowerCase());
 
         return izinler.filter((i) => {
+            // Başlangıç Ay/Yıl Filtresi
             const ayOk =
                 !filtreler.baslangic_tarihi ||
                 (i.baslangic_tarihi &&
                     dayjs(i.baslangic_tarihi).format("YYYY-MM") === filtreler.baslangic_tarihi);
 
+            // Diğer alanlar
             const diger =
                 matches(i, "plaka_treyler", filtreler.plaka_treyler) &&
                 matches(i, "surucu_adi", filtreler.surucu_adi) &&
                 matches(i, "izin_turu", filtreler.izin_turu) &&
-                matches(i, "bitis_tarihi", filtreler.bitis_tarihi) &&
-                matches(i, "is_basi_tarihi", filtreler.is_basi_tarihi) &&
-                matches(i, "yukleme_tarihi", filtreler.yukleme_tarihi) &&
+                (filtreler.bitis_tarihi === "" || i.bitis_tarihi === filtreler.bitis_tarihi) &&
+                (filtreler.is_basi_tarihi === "" || i.is_basi_tarihi === filtreler.is_basi_tarihi) &&
+                (filtreler.yukleme_tarihi === "" || i.yukleme_tarihi === filtreler.yukleme_tarihi) &&
                 (filtreler.gun_sayisi === "" || Number(i.gun_sayisi) === Number(filtreler.gun_sayisi)) &&
                 matches(i, "aciklama", filtreler.aciklama) &&
                 matches(i, "ekleyen_kullanici", filtreler.ekleyen_kullanici) &&
-                matches(i, "eklenme_tarihi", filtreler.eklenme_tarihi);
+                (filtreler.eklenme_tarihi === "" || i.eklenme_tarihi === filtreler.eklenme_tarihi);
+
 
             return ayOk && diger;
         });
     }, [izinler, filtreler]);
 
-    /* ===================== Columns ===================== */
+    /* ===================== DataGrid Kolonları ===================== */
     const columns = [
         { field: "plaka_treyler", headerName: "PLAKA", flex: 1, minWidth: 160 },
         { field: "surucu_adi", headerName: "SÜRÜCÜ", flex: 1, minWidth: 140 },
-        { field: "surucu_telefon", headerName: "TELEFON", flex: 1, minWidth: 140 },
-        { field: "surucu_tc", headerName: "TC", flex: 1, minWidth: 140 },
         { field: "izin_turu", headerName: "İZİN TÜRÜ", flex: 0.9, minWidth: 140 },
         {
             field: "baslangic_tarihi",
@@ -745,7 +858,7 @@ export default function IzinGirisiModern() {
             valueGetter: safeDateValueGetter,
             valueFormatter: safeDateValueFormatter,
         },
-        { field: "gun_sayisi", headerName: "GÜN", width: 90 },
+        { field: "gun_sayisi", headerName: "GÜN", width: 90, type: 'number' },
         { field: "aciklama", headerName: "AÇIKLAMA", flex: 1.2, minWidth: 220 },
         { field: "ekleyen_kullanici", headerName: "İZİN VEREN", flex: 1, minWidth: 150 },
         {
@@ -756,11 +869,23 @@ export default function IzinGirisiModern() {
             renderCell: (params) => {
                 const eksik = !params.row.yukleme_tarihi || !params.row.is_basi_tarihi;
                 return eksik ? (
-                    <Tooltip title="Eksik: İş Başı ve/veya Yükleme yok">
-                        <Chip size="small" color="error" variant="outlined" label="Eksik" />
+                    <Tooltip title="İş Başı ve/veya Yükleme tarihi eksik">
+                        <Chip
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                            label="Eksik"
+                            icon={<WarningIcon fontSize="small" />}
+                        />
                     </Tooltip>
                 ) : (
-                    <Chip size="small" color="success" label="Tam" />
+                    <Chip
+                        size="small"
+                        color="success"
+                        variant="filled"
+                        label="Tamam"
+                        icon={<CheckCircleIcon fontSize="small" />}
+                    />
                 );
             },
         },
@@ -770,12 +895,15 @@ export default function IzinGirisiModern() {
             width: 130,
             sortable: false,
             filterable: false,
+            align: 'center',
+            headerAlign: 'center',
             renderCell: (params) => (
-                <Stack direction="row" spacing={1}>
+                <Stack direction="row" spacing={0.5}>
                     <Tooltip title={perms.canEdit ? "Düzenle" : "Yetkiniz yok"}>
                         <span>
                             <IconButton
                                 size="small"
+                                color="primary"
                                 onClick={() => handleDuzenle(params.row)}
                                 disabled={!perms.canEdit}
                             >
@@ -809,20 +937,20 @@ export default function IzinGirisiModern() {
                     <Container
                         maxWidth={false}
                         disableGutters
-                        sx={{ width: 1920, height: 1080, mx: "auto", p: 2, boxSizing: "border-box" }}
+                        sx={{ width: 1920, height: 1080, mx: "auto", p: 3, boxSizing: "border-box" }}
                     >
                         <Helmet>
-                            <title>İZİN GİRİŞLERİ</title>
+                            <title>İZİN KAYITLARI YÖNETİMİ | ODYSSEY</title>
                         </Helmet>
 
-                        <Stack spacing={2} sx={{ height: "100%", minHeight: 0 }}>
+                        <Stack spacing={3} sx={{ height: "100%", minHeight: 0 }}>
                             {/* Header + Actions */}
                             <Stack
                                 direction={{ xs: "column", md: "row" }}
                                 alignItems={{ xs: "flex-start", md: "center" }}
                                 justifyContent="space-between"
                                 gap={2}
-                                sx={{ mb: 1.5 }}
+                                sx={{ mb: 1 }}
                             >
                                 <Stack>
                                     <Typography
@@ -834,33 +962,29 @@ export default function IzinGirisiModern() {
                                             WebkitTextFillColor: "transparent",
                                         }}
                                     >
-                                        İzin Girişleri
+                                        İZİN KAYITLARI YÖNETİMİ
                                     </Typography>
                                     <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                                        Kayıtları yönetin, filtreleyin ve dışa aktarın.
+                                        Personel ve araç izin girişlerini yönetin.
                                     </Typography>
                                 </Stack>
 
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                    <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
+                                <Stack direction="row" spacing={1.5} alignItems="center">
+                                    <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} size="small">
                                         Geri
                                     </Button>
-                                    <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
+                                    <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)} size="small">
                                         Anasayfa
                                     </Button>
-                                    <Button variant="outlined" startIcon={<FilterListIcon />} onClick={() => setFiltreDrawer(true)}>
-                                        Filtreler
-                                    </Button>
-                                    <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportToExcel}>
-                                        Excel'e Aktar
-                                    </Button>
-                                    <Tooltip title={perms.canCreate ? "" : "Yetkiniz yok"}>
+                                    <Tooltip title={perms.canCreate ? "Yeni İzin Kaydı Ekle" : "Yetkiniz yok"}>
                                         <span>
                                             <Button
                                                 variant="contained"
                                                 startIcon={<AddIcon />}
                                                 onClick={handleYeniIzin}
                                                 disabled={!perms.canCreate || permLoading}
+                                                size="small"
+                                                sx={{ height: 40, px: 2.5 }}
                                             >
                                                 Yeni İzin
                                             </Button>
@@ -870,32 +994,23 @@ export default function IzinGirisiModern() {
                             </Stack>
 
                             {/* KPI Cards */}
-                            <Grid container spacing={2}>
+                            <Grid container spacing={3}>
                                 {[
                                     { label: "Toplam Kayıt", value: toplamKayit, color: "primary" },
-                                    { label: "Bu Ay", value: buAy, color: "secondary" },
+                                    { label: `Bu Ay İzin`, value: buAy, color: "secondary" },
+                                    { label: "Filtrelenmiş Kayıt", value: filtrelenmisIzinler.length, color: "success" },
+                                    { label: "Yetki Durumu", value: permLoading ? "Yükleniyor..." : "Tamam", color: permLoading ? "warning" : "info" },
                                 ].map((kpi, idx) => (
                                     <Grid item xs={12} sm={6} md={3} key={idx}>
-                                        <Card
-                                            sx={{
-                                                borderRadius: 3,
-                                                background: `linear-gradient(180deg, ${alpha("#ffffff", 0.04)} 0%, ${alpha(
-                                                    "#ffffff",
-                                                    0.02
-                                                )} 100%)`,
-                                                border: "1px solid rgba(255,255,255,0.06)",
-                                                height: "100%",
-                                                minWidth: 220,
-                                            }}
-                                        >
+                                        <Card sx={{ borderRadius: 3, height: "100%", minWidth: 200 }}>
                                             <CardContent>
                                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                                    <Typography variant="subtitle2" color="text.secondary">
+                                                    <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
                                                         {kpi.label}
                                                     </Typography>
-                                                    <Badge color={kpi.color} variant="dot" overlap="circular" />
+                                                    <Badge color={kpi.color} variant="dot" overlap="circular" sx={{ '& .MuiBadge-dot': { width: 10, height: 10, borderRadius: '50%' } }} />
                                                 </Stack>
-                                                <Typography variant="h4" mt={0.5} fontWeight={800}>
+                                                <Typography variant="h4" mt={0.5} fontWeight={800} color={`${kpi.color}.main`}>
                                                     {kpi.value}
                                                 </Typography>
                                                 <LinearProgress sx={{ mt: 2, height: 6, borderRadius: 3 }} color={kpi.color} variant="determinate" value={100} />
@@ -906,19 +1021,19 @@ export default function IzinGirisiModern() {
                             </Grid>
 
                             {/* Grid */}
-                            <Box sx={{ mt: 2 }}>
+                            <Box sx={{ flexGrow: 1, minHeight: 0 }}>
                                 <Paper
                                     sx={{
-                                        height: 710,
+                                        height: 750,
                                         borderRadius: 3,
-                                        border: "1px solid rgba(255,255,255,0.06)",
+                                        border: "1px solid rgba(255,255,255,0.12)",
+                                        overflow: 'hidden',
                                     }}
                                 >
-                                    {(loading || permLoading) && <LinearProgress />}
+                                    {(loading || permLoading) && <LinearProgress color="secondary" />}
 
-                                    <Box sx={{ height: "100%", overflow: "auto", pb: 1 }}>
+                                    <Box sx={{ height: "100%", width: "100%", minHeight: 0 }}>
                                         <DataGrid
-                                            style={{ height: "100%" }}
                                             rows={filtrelenmisIzinler}
                                             columns={columns}
                                             getRowId={(r) => r.id}
@@ -927,8 +1042,8 @@ export default function IzinGirisiModern() {
                                             pagination={false}
                                             hideFooter
                                             density="compact"
-                                            rowHeight={44}
-                                            columnHeaderHeight={86}
+                                            rowHeight={40}
+                                            columnHeaderHeight={48}
                                             localeText={GRID_TR}
                                             slots={{
                                                 toolbar: () => (
@@ -944,23 +1059,8 @@ export default function IzinGirisiModern() {
                                             }}
                                             sx={{
                                                 border: "none",
-                                                pb: 0.5,
-                                                "& .MuiDataGrid-columnHeaders": {
-                                                    background: "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
-                                                    color: "#C8D1E6",
-                                                    borderBottomColor: "rgba(255,255,255,0.08)",
-                                                    fontWeight: 700,
-                                                    alignItems: "stretch",
-                                                },
-                                                "& .MuiDataGrid-columnHeader": { py: 0.5 },
-                                                "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": {
-                                                    backgroundColor: "rgba(255,255,255,0.02)",
-                                                },
-                                                "& .MuiDataGrid-cell": {
-                                                    borderBottomColor: "rgba(255,255,255,0.06)",
-                                                },
-                                                "& .MuiDataGrid-row:hover .MuiDataGrid-cell": {
-                                                    backgroundColor: "rgba(139,92,246,0.10)",
+                                                '& .MuiDataGrid-virtualScroller': {
+                                                    overflowX: 'auto',
                                                 },
                                             }}
                                         />
@@ -978,24 +1078,25 @@ export default function IzinGirisiModern() {
                                 paper: {
                                     sx: {
                                         width: 420,
-                                        backgroundColor: "#0F172A",
+                                        backgroundColor: "#171E2D",
                                         color: "text.primary",
-                                        p: 2,
-                                        borderLeft: "1px solid rgba(255,255,255,0.06)",
+                                        p: 3,
+                                        borderLeft: "1px solid rgba(255,255,255,0.1)",
                                     },
                                 },
                             }}
                         >
-                            <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                <Typography variant="h6">Detaylı Filtreler</Typography>
+                            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                                <Typography variant="h5" fontWeight={700} color="secondary.main">Detaylı Filtreler</Typography>
                                 <IconButton onClick={() => setFiltreDrawer(false)}>
                                     <CloseIcon />
                                 </IconButton>
                             </Stack>
-                            <Divider sx={{ my: 2, borderColor: "rgba(255,255,255,0.12)" }} />
+                            <Divider sx={{ mb: 3, borderColor: "rgba(255,255,255,0.12)" }} />
 
-                            <Stack spacing={2}>
+                            <Stack spacing={2.5}>
                                 <Autocomplete
+                                    size="small"
                                     freeSolo
                                     options={plakaListesi.map((p) => `${p.plaka} - ${p.treyler}`)}
                                     value={filtreler.plaka_treyler}
@@ -1005,13 +1106,15 @@ export default function IzinGirisiModern() {
                                 />
 
                                 <TextField
-                                    label="Sürücü"
+                                    size="small"
+                                    label="Sürücü Adı"
                                     value={filtreler.surucu_adi}
                                     onChange={(e) => setFiltreler((p) => ({ ...p, surucu_adi: e.target.value }))}
                                     fullWidth
                                 />
 
                                 <Autocomplete
+                                    size="small"
                                     freeSolo
                                     options={IZIN_TURLERI}
                                     value={filtreler.izin_turu}
@@ -1021,8 +1124,9 @@ export default function IzinGirisiModern() {
                                 />
 
                                 <DatePicker
-                                    label="Başlangıç (Ay)"
+                                    label="Başlangıç Ay/Yıl"
                                     views={["year", "month"]}
+                                    format="MM/YYYY"
                                     value={filtreler.baslangic_tarihi ? dayjs(filtreler.baslangic_tarihi) : null}
                                     onChange={(d) =>
                                         setFiltreler((p) => ({
@@ -1030,7 +1134,7 @@ export default function IzinGirisiModern() {
                                             baslangic_tarihi: d ? dayjs(d).format("YYYY-MM") : "",
                                         }))
                                     }
-                                    slotProps={{ textField: { fullWidth: true } }}
+                                    slotProps={{ textField: { fullWidth: true, size: "small" } }}
                                 />
 
                                 <DatePicker
@@ -1042,34 +1146,11 @@ export default function IzinGirisiModern() {
                                             bitis_tarihi: d ? dayjs(d).format("YYYY-MM-DD") : "",
                                         }))
                                     }
-                                    slotProps={{ textField: { fullWidth: true } }}
-                                />
-
-                                <DatePicker
-                                    label="İş Başı Tarihi"
-                                    value={filtreler.is_basi_tarihi ? dayjs(filtreler.is_basi_tarihi) : null}
-                                    onChange={(d) =>
-                                        setFiltreler((p) => ({
-                                            ...p,
-                                            is_basi_tarihi: d ? dayjs(d).format("YYYY-MM-DD") : "",
-                                        }))
-                                    }
-                                    slotProps={{ textField: { fullWidth: true } }}
-                                />
-
-                                <DatePicker
-                                    label="Yükleme Tarihi"
-                                    value={filtreler.yukleme_tarihi ? dayjs(filtreler.yukleme_tarihi) : null}
-                                    onChange={(d) =>
-                                        setFiltreler((p) => ({
-                                            ...p,
-                                            yukleme_tarihi: d ? dayjs(d).format("YYYY-MM-DD") : "",
-                                        }))
-                                    }
-                                    slotProps={{ textField: { fullWidth: true } }}
+                                    slotProps={{ textField: { fullWidth: true, size: "small" } }}
                                 />
 
                                 <TextField
+                                    size="small"
                                     label="Toplam Gün"
                                     type="number"
                                     value={filtreler.gun_sayisi}
@@ -1077,13 +1158,15 @@ export default function IzinGirisiModern() {
                                     fullWidth
                                 />
                                 <TextField
+                                    size="small"
                                     label="Açıklama"
                                     value={filtreler.aciklama}
                                     onChange={(e) => setFiltreler((p) => ({ ...p, aciklama: e.target.value }))}
                                     fullWidth
                                 />
                                 <TextField
-                                    label="İzin Veren"
+                                    size="small"
+                                    label="İzin Veren Kullanıcı"
                                     value={filtreler.ekleyen_kullanici}
                                     onChange={(e) =>
                                         setFiltreler((p) => ({
@@ -1094,30 +1177,19 @@ export default function IzinGirisiModern() {
                                     fullWidth
                                 />
 
-                                <Stack direction="row" spacing={1} sx={{ pt: 1 }}>
+                                <Stack direction="row" spacing={1.5} sx={{ pt: 1 }}>
                                     <Button
                                         fullWidth
                                         variant="outlined"
                                         color="error"
+                                        size="large"
                                         onClick={() =>
-                                            setFiltreler({
-                                                plaka_treyler: "",
-                                                surucu_adi: "",
-                                                izin_turu: "",
-                                                baslangic_tarihi: "",
-                                                bitis_tarihi: "",
-                                                is_basi_tarihi: "",
-                                                yukleme_tarihi: "",
-                                                gun_sayisi: "",
-                                                aciklama: "",
-                                                ekleyen_kullanici: "",
-                                                eklenme_tarihi: "",
-                                            })
+                                            setFiltreler({ ...BOS_FORM, ekleyen_kullanici: "", eklenme_tarihi: "" })
                                         }
                                     >
                                         Temizle
                                     </Button>
-                                    <Button fullWidth variant="contained" onClick={() => setFiltreDrawer(false)}>
+                                    <Button fullWidth variant="contained" color="primary" size="large" onClick={() => setFiltreDrawer(false)}>
                                         Uygula
                                     </Button>
                                 </Stack>
@@ -1125,15 +1197,15 @@ export default function IzinGirisiModern() {
                         </Drawer>
 
                         {/* Form Dialog */}
-                        <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="xl" fullWidth>
-                            <DialogTitle sx={{ pb: 0 }}>
+                        <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="lg" fullWidth>
+                            <DialogTitle sx={{ pb: 0, pt: 3, px: 3 }}>
                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                                     <Stack>
-                                        <Typography variant="h6" fontWeight={800}>
-                                            {duzenlemeId ? "Kaydı Düzenle" : "Yeni İzin"}
+                                        <Typography variant="h5" fontWeight={800} color="primary.light">
+                                            {duzenlemeId ? "İzin Kaydını Düzenle 📝" : "Yeni İzin Kaydı Girişi ➕"}
                                         </Typography>
-                                        <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                                            Lütfen zorunlu alanları doldurun. ( * )
+                                        <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.5 }}>
+                                            Lütfen zorunlu alanları (*) eksiksiz doldurun.
                                         </Typography>
                                     </Stack>
                                     <IconButton onClick={() => setFormOpen(false)}>
@@ -1146,13 +1218,14 @@ export default function IzinGirisiModern() {
                                 dividers
                                 sx={{
                                     mt: 2,
-                                    borderTop: "1px solid rgba(255,255,255,0.06)",
+                                    borderTop: "1px solid rgba(255,255,255,0.1)",
                                     display: "grid",
                                     gap: 3,
                                     gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
                                     p: 3,
                                 }}
                             >
+                                {/* Plaka - Treyler */}
                                 <Autocomplete
                                     size="small"
                                     freeSolo
@@ -1167,21 +1240,13 @@ export default function IzinGirisiModern() {
                                             label="Plaka - Treyler *"
                                             fullWidth
                                             required
-                                            helperText="Araç plaka ve treyler"
+                                            helperText="Araç plaka ve treyler bilgisini seçin"
                                         />
                                     )}
                                     sx={{ gridColumn: { xs: "1", md: "1 / span 2" } }}
                                 />
 
-                                <TextField
-                                    size="small"
-                                    label="Sürücü Adı"
-                                    placeholder="Ad Soyad"
-                                    value={form.surucu_adi}
-                                    onChange={(e) => handleFormChange("surucu_adi", e.target.value)}
-                                    fullWidth
-                                />
-
+                                {/* İzin Türü */}
                                 <Autocomplete
                                     size="small"
                                     freeSolo
@@ -1195,76 +1260,104 @@ export default function IzinGirisiModern() {
                                             label="İzin Türü *"
                                             required
                                             fullWidth
-                                            helperText="İzin, Bakım İzni, Mazeret"
+                                            helperText="İzin, Bakım İzni, Mazeret vb."
                                         />
                                     )}
                                 />
 
+                                {/* Sürücü Adı */}
+                                <TextField
+                                    size="small"
+                                    label="Sürücü Adı"
+                                    placeholder="Ad Soyad"
+                                    value={form.surucu_adi}
+                                    onChange={(e) => handleFormChange("surucu_adi", e.target.value)}
+                                    fullWidth
+                                    helperText="Plaka seçiminde otomatik dolar"
+                                />
+                                {/* Sürücü Telefon */}
+                                <TextField
+                                    size="small"
+                                    label="Sürücü Telefon"
+                                    value={form.surucu_telefon}
+                                    onChange={(e) => handleFormChange("surucu_telefon", e.target.value)}
+                                    fullWidth
+                                    helperText="Plaka seçiminde otomatik dolar"
+                                />
+                                {/* Sürücü TC */}
+                                <TextField
+                                    size="small"
+                                    label="Sürücü TC"
+                                    value={form.surucu_tc}
+                                    onChange={(e) => handleFormChange("surucu_tc", e.target.value)}
+                                    fullWidth
+                                    helperText="Plaka seçiminde otomatik dolar"
+                                />
+
+
+                                {/* Başlangıç Tarihi */}
                                 <DatePicker
-                                    label="Başlangıç *"
+                                    label="Başlangıç Tarihi *"
                                     value={form.baslangic_tarihi ? dayjs(form.baslangic_tarihi) : null}
                                     onChange={(d) => handleFormChange("baslangic_tarihi", d ? dayjs(d).format("YYYY-MM-DD") : "")}
                                     slotProps={{
-                                        textField: {
-                                            fullWidth: true,
-                                            required: true,
-                                            size: "small",
-                                            helperText: "İzin başlangıç tarihi",
-                                        },
+                                        textField: { fullWidth: true, required: true, size: "small", helperText: "İzinin başladığı gün" },
                                     }}
                                 />
 
+                                {/* Bitiş Tarihi */}
                                 <DatePicker
-                                    label="Bitiş *"
+                                    label="Bitiş Tarihi *"
                                     value={form.bitis_tarihi ? dayjs(form.bitis_tarihi) : null}
                                     onChange={(d) => handleFormChange("bitis_tarihi", d ? dayjs(d).format("YYYY-MM-DD") : "")}
                                     slotProps={{
-                                        textField: {
-                                            fullWidth: true,
-                                            required: true,
-                                            size: "small",
-                                            helperText: "İzin bitiş tarihi",
-                                        },
+                                        textField: { fullWidth: true, required: true, size: "small", helperText: "İzinin sona erdiği gün" },
                                     }}
                                 />
 
+                                {/* İş Başı Tarihi */}
                                 <DatePicker
-                                    label="İş Başı"
+                                    label="İş Başı Tarihi"
                                     value={form.is_basi_tarihi ? dayjs(form.is_basi_tarihi) : null}
                                     onChange={(d) => handleFormChange("is_basi_tarihi", d ? dayjs(d).format("YYYY-MM-DD") : "")}
                                     slotProps={{
-                                        textField: {
-                                            fullWidth: true,
-                                            size: "small",
-                                            helperText: "Otomatik: bitiş + 1 gün",
-                                        },
+                                        textField: { fullWidth: true, size: "small", helperText: "Otomatik hesaplanır (Bitiş + 1)" },
                                     }}
+                                    disabled
                                 />
 
+                                {/* Yükleme Tarihi */}
                                 <DatePicker
-                                    label="Yükleme"
+                                    label="Yükleme Tarihi"
                                     value={form.yukleme_tarihi ? dayjs(form.yukleme_tarihi) : null}
                                     onChange={(d) => handleFormChange("yukleme_tarihi", d ? dayjs(d).format("YYYY-MM-DD") : "")}
                                     slotProps={{
-                                        textField: {
-                                            fullWidth: true,
-                                            size: "small",
-                                            helperText: "Opsiyonel",
-                                        },
+                                        textField: { fullWidth: true, size: "small", helperText: "İş başı sonrası ilk yükleme tarihi (Opsiyonel)" },
                                     }}
                                 />
 
-                                <TextField size="small" label="Gün Sayısı" value={form.gun_sayisi || ""} fullWidth disabled />
-
+                                {/* Gün Sayısı (Disabled) */}
                                 <TextField
                                     size="small"
-                                    label="Açıklama"
+                                    label="Toplam Gün"
+                                    value={form.gun_sayisi || 0}
+                                    fullWidth
+                                    disabled
+                                    helperText="Başlangıç ve bitiş dahil gün sayısı"
+                                />
+
+                                <Box sx={{ gridColumn: { xs: "1", md: "1 / -1" } }} />
+
+                                {/* Açıklama (Geniş alan) */}
+                                <TextField
+                                    size="small"
+                                    label="Açıklama / Notlar"
                                     value={form.aciklama}
                                     onChange={(e) => handleFormChange("aciklama", e.target.value)}
                                     fullWidth
                                     multiline
-                                    minRows={6}
-                                    placeholder="Gerekçe ve notlar..."
+                                    minRows={4}
+                                    placeholder="Gerekçe, ek notlar veya kesinti açıklaması..."
                                     sx={{ gridColumn: { xs: "1", md: "1 / -1" } }}
                                 />
                             </DialogContent>
@@ -1272,31 +1365,41 @@ export default function IzinGirisiModern() {
                             <DialogActions
                                 sx={{
                                     p: 3,
-                                    position: "sticky",
-                                    bottom: 0,
-                                    background: "linear-gradient(180deg, rgba(10,16,30,0.9) 0%, rgba(10,16,30,0.95) 100%)",
-                                    borderTop: "1px solid rgba(255,255,255,0.06)",
+                                    justifyContent: 'flex-end',
+                                    borderTop: "1px solid rgba(255,255,255,0.1)",
                                 }}
                             >
-                                <Button variant="contained" onClick={handleSubmit} size="large" sx={{ px: 4, py: 1.5 }}>
-                                    {duzenlemeId ? "Güncelle" : "Kaydet"}
-                                </Button>
                                 <Button variant="text" onClick={() => setFormOpen(false)} size="large">
                                     Kapat
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    onClick={handleSubmit}
+                                    size="large"
+                                    color="primary"
+                                    disabled={!form.plaka_treyler || !form.izin_turu || !form.baslangic_tarihi || !form.bitis_tarihi}
+                                    sx={{ px: 4, py: 1.5 }}
+                                >
+                                    {duzenlemeId ? "GÜNCELLE" : "KAYDET"}
                                 </Button>
                             </DialogActions>
                         </Dialog>
 
                         {/* Kesinti Diyaloğu */}
-                        <Dialog open={kesintiOpen} onClose={() => setKesintiOpen(false)}>
-                            <DialogTitle>Kesinti Tespiti</DialogTitle>
+                        <Dialog open={kesintiOpen} onClose={() => setKesintiOpen(false)} maxWidth="sm" fullWidth>
+                            <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'warning.main' }}>
+                                <WarningIcon /> Kesinti Tespiti
+                            </DialogTitle>
                             <DialogContent dividers>
+                                <Typography sx={{ mb: 2 }}>
+                                    **İş Başı Tarihi** ({safeDateValueFormatter({ value: form.is_basi_tarihi })}) ile **Yükleme Tarihi** ({safeDateValueFormatter({ value: form.yukleme_tarihi })}) arasında **{Math.max(0, dayjs(form.yukleme_tarihi).diff(dayjs(form.is_basi_tarihi), 'day'))} gün** fark tespit edildi. Bu durum için bir **kesinti kaydı** oluşturulmalıdır.
+                                </Typography>
                                 <Grid container spacing={2}>
                                     <Grid item xs={12} md={6}>
-                                        <FormControl fullWidth>
-                                            <InputLabel>Kesinti Nedeni</InputLabel>
+                                        <FormControl fullWidth size="small">
+                                            <InputLabel>Kesinti Nedeni *</InputLabel>
                                             <Select
-                                                label="Kesinti Nedeni"
+                                                label="Kesinti Nedeni *"
                                                 value={kesintiBilgisi.neden}
                                                 onChange={(e) => setKesintiBilgisi((p) => ({ ...p, neden: e.target.value }))}
                                             >
@@ -1307,10 +1410,10 @@ export default function IzinGirisiModern() {
                                     </Grid>
 
                                     <Grid item xs={12} md={6}>
-                                        <FormControl fullWidth>
-                                            <InputLabel>Kesinti Türü</InputLabel>
+                                        <FormControl fullWidth size="small">
+                                            <InputLabel>Kesinti Türü *</InputLabel>
                                             <Select
-                                                label="Kesinti Türü"
+                                                label="Kesinti Türü *"
                                                 value={kesintiBilgisi.tur}
                                                 onChange={(e) => setKesintiBilgisi((p) => ({ ...p, tur: e.target.value }))}
                                             >
@@ -1319,38 +1422,40 @@ export default function IzinGirisiModern() {
                                                 <MenuItem value="Arıza">Arıza</MenuItem>
                                                 <MenuItem value="Kaza">Kaza</MenuItem>
                                                 <MenuItem value="Bölgede İş Yok">Bölgede İş Yok</MenuItem>
+                                                <MenuItem value="Diğer">Diğer</MenuItem>
                                             </Select>
                                         </FormControl>
                                     </Grid>
 
-                                    <Grid item xs={12} md={6}>
-                                        <TextField label="Plaka - Treyler" value={form.plaka_treyler} fullWidth disabled />
+                                    <Grid item xs={12}>
+                                        <TextField size="small" label="Plaka - Treyler" value={form.plaka_treyler} fullWidth disabled />
                                     </Grid>
-                                    <Grid item xs={12} md={3}>
-                                        <TextField label="Başlangıç" value={form.is_basi_tarihi || ""} fullWidth disabled />
+                                    <Grid item xs={6}>
+                                        <TextField size="small" label="Başlangıç (İş Başı)" value={safeDateValueFormatter({ value: form.is_basi_tarihi })} fullWidth disabled />
                                     </Grid>
-                                    <Grid item xs={12} md={3}>
-                                        <TextField label="Bitiş" value={form.yukleme_tarihi || ""} fullWidth disabled />
+                                    <Grid item xs={6}>
+                                        <TextField size="small" label="Bitiş (Yükleme)" value={safeDateValueFormatter({ value: form.yukleme_tarihi })} fullWidth disabled />
                                     </Grid>
                                 </Grid>
                             </DialogContent>
-                            <DialogActions>
+                            <DialogActions sx={{ p: 2 }}>
+                                <Button variant="text" onClick={() => setKesintiOpen(false)}>
+                                    Vazgeç
+                                </Button>
                                 <Button
                                     variant="contained"
+                                    color="warning"
                                     disabled={!kesintiBilgisi.neden || !kesintiBilgisi.tur}
                                     onClick={handleKesintiDevam}
                                 >
-                                    Devam Et
-                                </Button>
-                                <Button variant="text" onClick={() => setKesintiOpen(false)}>
-                                    Vazgeç
+                                    Kesintiyi Kaydet ve Devam Et
                                 </Button>
                             </DialogActions>
                         </Dialog>
 
                         <Snackbar
                             open={snack.open}
-                            autoHideDuration={2500}
+                            autoHideDuration={3000}
                             onClose={() => setSnack((s) => ({ ...s, open: false }))}
                             anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                         >
@@ -1358,7 +1463,7 @@ export default function IzinGirisiModern() {
                                 onClose={() => setSnack((s) => ({ ...s, open: false }))}
                                 severity={snack.severity}
                                 variant="filled"
-                                sx={{ width: "100%" }}
+                                sx={{ width: "100%", borderRadius: 2 }}
                             >
                                 {snack.msg}
                             </Alert>

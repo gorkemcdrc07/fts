@@ -23,6 +23,8 @@ import {
     Divider,
     Skeleton,
     Button,
+    useTheme,
+    CircularProgress, // <-- Eklendi
 } from "@mui/material";
 import {
     Search as SearchIcon,
@@ -32,6 +34,8 @@ import {
     RadioButtonUnchecked as RadioButtonUncheckedIcon,
     HourglassBottom as HourglassBottomIcon,
     ErrorOutline as ErrorOutlineIcon,
+    ArrowBackIosNew as ArrowBackIcon,
+    Close as CloseIcon, // <-- Eklendi
 } from "@mui/icons-material";
 
 /** Dates */
@@ -46,16 +50,14 @@ dayjs.extend(timezone);
 dayjs.locale("tr");
 
 // ---- Helpers ----
-// Uygulamanızdaki gerçek ana sayfa yolu
-const HOME_PATH = "/anasayfa"; // sizde neyse: "/dashboard" vb.
-
+const HOME_PATH = "/anasayfa";
 const IST_TZ = "Europe/Istanbul";
 
 const DURUM_RENK = {
-    // backend'deki durum string'lerine göre güncelle
     TAMAMLANDI: { color: "success", icon: <CheckCircleIcon fontSize="small" /> },
     BEKLEMEDE: { color: "warning", icon: <HourglassBottomIcon fontSize="small" /> },
     "DEVAM EDİYOR": { color: "info", icon: <RadioButtonUncheckedIcon fontSize="small" /> },
+    HATA: { color: "error", icon: <ErrorOutlineIcon fontSize="small" /> },
 };
 
 function fmtDT(value, withTime = true) {
@@ -77,6 +79,7 @@ function useDebounced(val, ms = 350) {
 // ---- Component ----
 export default function TumGorevler() {
     const navigate = useNavigate();
+    const theme = useTheme();
 
     const [gorevler, setGorevler] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -145,6 +148,7 @@ export default function TumGorevler() {
         return { toplam, durumCounts };
     }, [filtered]);
 
+    // CSV Export
     const exportCSV = () => {
         const rows = filtered.map((g) => ({
             ID: g.id,
@@ -179,14 +183,15 @@ export default function TumGorevler() {
             component={motion.div}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
             sx={{
                 minHeight: "100dvh",
                 py: { xs: 2, md: 4 },
+                // Modernleştirilmiş Arka Plan
                 background: (t) =>
                     t.palette.mode === "dark"
-                        ? "linear-gradient(180deg,#0b1020,#0e1428)"
-                        : "linear-gradient(180deg,#f6f9ff,#f4f7ff)",
+                        ? "radial-gradient(1200px 600px at 10% -10%, rgba(56,189,248,0.18), transparent 60%), linear-gradient(180deg,#0b1020,#0e1428)"
+                        : "radial-gradient(1200px 600px at 90% 110%, rgba(109,40,249,0.08), transparent 60%), linear-gradient(180deg,#f6f9ff,#f4f7ff)",
             }}
         >
             <Container
@@ -197,16 +202,18 @@ export default function TumGorevler() {
                 }}
             >
                 <Paper
-                    elevation={6}
+                    elevation={12} // Daha belirgin gölge
                     sx={{
-                        borderRadius: 4,
+                        borderRadius: 4, // Yumuşak köşeler
                         overflow: "hidden",
-                        backdropFilter: "saturate(140%) blur(10px)",
-                        bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.9)"),
-                        border: (t) => `1px solid ${t.palette.mode === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"}`,
+                        // Şeffaflık ve Blur efekti
+                        backdropFilter: "saturate(140%) blur(12px)",
+                        bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)"),
+                        border: (t) => `1px solid ${t.palette.mode === "dark" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)"}`,
+                        boxShadow: `0 20px 40px rgba(0,0,0,0.15)`,
                     }}
                 >
-                    {/* Üst Şerit */}
+                    {/* ÜST BAŞLIK VE TOOLBAR */}
                     <Box
                         sx={{
                             px: { xs: 2, md: 3 },
@@ -216,65 +223,102 @@ export default function TumGorevler() {
                             justifyContent: "space-between",
                             gap: 2,
                             flexWrap: "wrap",
+                            bgcolor: (t) => (t.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(240, 245, 250, 0.6)'),
+                            borderBottom: '1px solid',
+                            borderColor: 'divider',
                         }}
                     >
-                        <Typography variant="h6" fontWeight={800}>
-                            Tüm Görevler
+                        <Typography
+                            variant="h5"
+                            fontWeight={900}
+                            sx={{
+                                // Başlığa modern gradient renk
+                                background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                                WebkitBackgroundClip: "text",
+                                WebkitTextFillColor: "transparent",
+                            }}
+                        >
+                            TÜM GÖREVLERİNİZ 🎯
                         </Typography>
 
-                        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ flex: 1, justifyContent: "flex-end" }}>
+                        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1, justifyContent: "flex-end" }}>
                             <TextField
-                                placeholder="Başlık / açıklama / durum / kullanıcı ara…"
+                                placeholder="Başlık, kullanıcı veya durum ara…"
                                 value={q}
                                 onChange={(e) => setQ(e.target.value)}
                                 size="small"
-                                sx={{ minWidth: 260, maxWidth: 420 }}
+                                sx={{ minWidth: 200, maxWidth: 350 }}
                                 InputProps={{
                                     startAdornment: (
                                         <InputAdornment position="start">
                                             <SearchIcon sx={{ opacity: 0.7 }} />
                                         </InputAdornment>
                                     ),
+                                    endAdornment: q && (
+                                        <InputAdornment position="end">
+                                            <IconButton onClick={() => setQ("")} size="small">
+                                                <CloseIcon fontSize="small" />
+                                            </IconButton>
+                                        </InputAdornment>
+                                    ),
                                 }}
                             />
+
                             <Tooltip title="Yenile">
                                 <span>
-                                    <IconButton onClick={fetchGorevler} disabled={loading}>
+                                    <IconButton onClick={fetchGorevler} disabled={loading} color="primary" size="medium">
                                         <RefreshIcon />
                                     </IconButton>
                                 </span>
                             </Tooltip>
 
-                            {/* ⬇️ Eklendi: Geri & Anasayfa (işlevlere dokunmadan) */}
-                            <Button size="small" variant="outlined" onClick={() => navigate(-1)}>
+                            <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} size="small" sx={{ textTransform: 'none' }}>
                                 Geri
                             </Button>
-                            <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
-                                Anasayfa
-                            </Button>
 
-                            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportCSV} disabled={loading || !filtered.length}>
-                                Dışa Aktar (CSV)
+                            <Button variant="outlined" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)} size="small" sx={{ textTransform: 'none' }}>
+                                Anasayfa
                             </Button>
                         </Stack>
                     </Box>
 
-                    {/* Sayaçlar */}
-                    <Box sx={{ px: { xs: 2, md: 3 }, pb: 2 }}>
-                        <Stack direction="row" spacing={1.25} flexWrap="wrap">
-                            <Chip variant="outlined" label={`Toplam: ${sayilar.toplam}`} />
-                            {Object.entries(sayilar.durumCounts).map(([key, val]) => {
-                                const m = DURUM_RENK[key] || {};
-                                return (
-                                    <Chip
-                                        key={key}
-                                        color={m.color || "default"}
-                                        icon={m.icon || undefined}
-                                        variant="outlined"
-                                        label={`${key}: ${val}`}
-                                    />
-                                );
-                            })}
+                    {/* Sayaçlar ve Dışa Aktar */}
+                    <Box sx={{ px: { xs: 2, md: 3 }, py: 2 }}>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems="center">
+                            {/* Sayaçlar */}
+                            <Stack direction="row" spacing={1.5} flexWrap="wrap">
+                                <Chip
+                                    variant="filled"
+                                    color="primary"
+                                    sx={{ fontWeight: 700 }}
+                                    label={`Toplam Görev: ${sayilar.toplam}`}
+                                />
+                                {Object.entries(sayilar.durumCounts).map(([key, val]) => {
+                                    const m = DURUM_RENK[key] || {};
+                                    return (
+                                        <Chip
+                                            key={key}
+                                            color={m.color || "default"}
+                                            icon={m.icon || undefined}
+                                            variant="outlined"
+                                            label={`${key}: ${val}`}
+                                        />
+                                    );
+                                })}
+                                {loading && <Chip label="Yükleniyor..." size="small" icon={<CircularProgress size={14} />} />}
+                            </Stack>
+
+                            {/* Dışa Aktar Butonu */}
+                            <Button
+                                variant="contained"
+                                color="success"
+                                startIcon={<DownloadIcon />}
+                                onClick={exportCSV}
+                                disabled={loading || !filtered.length}
+                                sx={{ textTransform: 'none', fontWeight: 600, flexShrink: 0 }}
+                            >
+                                Tümünü Dışa Aktar (CSV)
+                            </Button>
                         </Stack>
                     </Box>
 
@@ -283,87 +327,76 @@ export default function TumGorevler() {
                     {/* İçerik */}
                     <Box sx={{ px: { xs: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
                         {loading ? (
+                            // Yüklenme (Skeleton)
                             <Grid container spacing={2.5}>
                                 {Array.from({ length: 6 }).map((_, i) => (
                                     <Grid item xs={12} sm={6} lg={4} key={i}>
-                                        <Card variant="outlined" sx={{ borderRadius: 3 }}>
-                                            <CardHeader
-                                                title={<Skeleton width="60%" />}
-                                                subheader={<Skeleton width="40%" />}
-                                                sx={{ pb: 0 }}
-                                            />
-                                            <CardContent>
-                                                <Stack spacing={1}>
-                                                    <Skeleton variant="text" width="80%" />
-                                                    <Skeleton variant="text" width="70%" />
-                                                    <Skeleton variant="text" width="90%" />
-                                                    <Skeleton variant="rectangular" height={24} />
-                                                </Stack>
-                                            </CardContent>
-                                        </Card>
+                                        <SkeletonCard />
                                     </Grid>
                                 ))}
                             </Grid>
                         ) : filtered.length === 0 ? (
+                            // Kayıt Bulunamadı
                             <Stack alignItems="center" justifyContent="center" sx={{ py: 8 }} spacing={2}>
-                                <ErrorOutlineIcon sx={{ fontSize: 56, opacity: 0.55 }} />
-                                <Typography variant="h6" fontWeight={700} sx={{ opacity: 0.85 }}>
-                                    Görev bulunamadı
+                                <ErrorOutlineIcon sx={{ fontSize: 64, color: 'error.main', opacity: 0.7 }} />
+                                <Typography variant="h5" fontWeight={700} color="text.primary">
+                                    Görev bulunamadı 😟
                                 </Typography>
                                 <Typography sx={{ opacity: 0.7, textAlign: "center" }}>
-                                    Filtreyi temizleyip tekrar deneyebilir ya da sayfayı yenileyebilirsiniz.
+                                    Aradığınız kriterlere uyan bir görev yok. Lütfen arama veya filtreleri kontrol edin.
                                 </Typography>
                             </Stack>
                         ) : (
+                            // Görev Listesi
                             <Grid container spacing={2.5}>
                                 {filtered.map((g) => {
                                     const durumKey = (g.durum || "").toUpperCase();
                                     const m = DURUM_RENK[durumKey] || {};
                                     return (
                                         <Grid item xs={12} sm={6} lg={4} key={g.id}>
-                                            <Card
-                                                variant="outlined"
-                                                component={motion.div}
-                                                initial={{ opacity: 0, y: 6 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ duration: 0.25, ease: "easeOut" }}
-                                                sx={{ borderRadius: 3, height: "100%" }}
-                                            >
-                                                <CardHeader
-                                                    title={
-                                                        <Stack direction="row" alignItems="center" spacing={1}>
-                                                            <Typography variant="subtitle1" fontWeight={800} noWrap title={g.baslik}>
-                                                                {g.baslik || "-"}
+                                            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: "easeOut" }}>
+                                                <Card
+                                                    elevation={3} // Hafif yükselti
+                                                    sx={{ borderRadius: 3, height: "100%", transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-3px)', boxShadow: theme.shadows[6] } }}
+                                                >
+                                                    <CardHeader
+                                                        title={
+                                                            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+                                                                <Typography variant="subtitle1" fontWeight={800} noWrap title={g.baslik} sx={{ maxWidth: '60%' }}>
+                                                                    {g.baslik || "-"}
+                                                                </Typography>
+                                                                <Chip
+                                                                    size="small"
+                                                                    color={m.color || "default"}
+                                                                    variant="soft" // Yumuşak dolgu
+                                                                    icon={m.icon || undefined}
+                                                                    label={g.durum || "-"}
+                                                                />
+                                                            </Stack>
+                                                        }
+                                                        subheader={
+                                                            <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 600 }}>
+                                                                Atayan: <b style={{ color: theme.palette.primary.dark }}>{g.atayan?.kullanici || "-"}</b>
                                                             </Typography>
-                                                            <Chip
-                                                                size="small"
-                                                                color={m.color || "default"}
-                                                                variant="outlined"
-                                                                icon={m.icon || undefined}
-                                                                label={g.durum || "-"}
-                                                            />
+                                                        }
+                                                        sx={{ pb: 1 }}
+                                                    />
+                                                    <CardContent sx={{ pt: 0 }}>
+                                                        <Divider sx={{ mb: 1.5 }} />
+                                                        <Stack spacing={0.75}>
+                                                            <Row label="Görev Alan" value={g.atanan?.kullanici || "-"} primary />
+                                                            <Row label="Görev Tarihi" value={fmtDT(g.gorev_verilen_tarih)} />
+                                                            <Row label="Son Teslim" value={fmtDT(g.duedate)} highlight />
+                                                            {g.aciklama && <Row label="Açıklama" value={g.aciklama} multiline />}
+                                                            <Row label="Kabul Tarihi" value={fmtDT(g.gorev_kabul_tarih)} />
+                                                            <Row label="Tamamlanma" value={fmtDT(g.teslim_tarihi)} />
+                                                            {g.kullanici_aciklama && (
+                                                                <Row label="Kullanıcı Notu" value={g.kullanici_aciklama} multiline />
+                                                            )}
                                                         </Stack>
-                                                    }
-                                                    subheader={
-                                                        <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                                                            Görev Veren: <b>{g.atayan?.kullanici || "-"}</b>
-                                                        </Typography>
-                                                    }
-                                                />
-                                                <CardContent sx={{ pt: 0 }}>
-                                                    <Stack spacing={0.75}>
-                                                        <Row label="Görev Verilen Tarih" value={fmtDT(g.gorev_verilen_tarih)} />
-                                                        <Row label="Görev Alan" value={g.atanan?.kullanici || "-"} />
-                                                        {g.aciklama && <Row label="Açıklama" value={g.aciklama} multiline />}
-                                                        <Row label="Son Teslim Tarihi" value={fmtDT(g.duedate)} />
-                                                        <Row label="Görev Kabul" value={fmtDT(g.gorev_kabul_tarih)} />
-                                                        <Row label="Tamamlanma" value={fmtDT(g.teslim_tarihi)} />
-                                                        {g.kullanici_aciklama && (
-                                                            <Row label="Kullanıcı Açıklaması" value={g.kullanici_aciklama} multiline />
-                                                        )}
-                                                    </Stack>
-                                                </CardContent>
-                                            </Card>
+                                                    </CardContent>
+                                                </Card>
+                                            </motion.div>
                                         </Grid>
                                     );
                                 })}
@@ -376,22 +409,54 @@ export default function TumGorevler() {
     );
 }
 
-/** Küçük bilgi satırı bileşeni */
-function Row({ label, value, multiline = false }) {
+// ---- Yardımcı Bileşenler ----
+
+/** Küçük bilgi satırı bileşeni (Güncellendi) */
+function Row({ label, value, multiline = false, highlight = false, primary = false }) {
+    const theme = useTheme();
+    const isPlaceholder = value === "-";
+    const color = highlight ? theme.palette.error.main : isPlaceholder ? theme.palette.text.secondary : (primary ? theme.palette.info.main : theme.palette.text.primary);
+
     return (
-        <Stack direction="row" spacing={1} alignItems="flex-start">
-            <Typography variant="body2" sx={{ opacity: 0.7, minWidth: 170 }}>
-                {label} :
+        <Stack direction="row" spacing={1} alignItems={multiline ? "flex-start" : "center"}>
+            <Typography variant="body2" sx={{ opacity: 0.7, minWidth: 120, fontWeight: 500 }}>
+                {label}:
             </Typography>
             {multiline ? (
-                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", flexGrow: 1, color, fontSize: 13.5 }}>
                     {value}
                 </Typography>
             ) : (
-                <Typography variant="body2" noWrap title={String(value || "")}>
-                    {value}
-                </Typography>
+                <Tooltip title={String(value || "")}>
+                    <Typography variant="body2" noWrap sx={{ flexGrow: 1, color, fontWeight: highlight || primary ? 600 : 400, fontSize: 13.5 }}>
+                        {value}
+                    </Typography>
+                </Tooltip>
             )}
         </Stack>
+    );
+}
+
+/** Skeleton Card Bileşeni */
+function SkeletonCard() {
+    return (
+        <Card variant="outlined" sx={{ borderRadius: 3, height: "100%" }}>
+            <CardHeader
+                avatar={<Skeleton variant="circular" width={40} height={40} />}
+                title={<Skeleton width="60%" height={20} />}
+                subheader={<Skeleton width="40%" height={15} />}
+                sx={{ pb: 1 }}
+            />
+            <CardContent sx={{ pt: 0 }}>
+                <Divider sx={{ mb: 1.5 }} />
+                <Stack spacing={1}>
+                    <Skeleton variant="text" width="85%" />
+                    <Skeleton variant="text" width="70%" />
+                    <Skeleton variant="text" width="90%" />
+                    <Skeleton variant="text" width="60%" />
+                    <Skeleton variant="text" width="75%" />
+                </Stack>
+            </CardContent>
+        </Card>
     );
 }

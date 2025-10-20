@@ -1,244 +1,321 @@
-/* Açık tema */
+/* ========================================= */
+/* GENEL PALET VE DEĞİŞKENLER */
+/* ========================================= */
+:root {
+    /* Varsayılan: Açık Tema */
+    --color-sidebar-bg: #f5f7fa; /* Yumuşak Beyaz */
+    --color-text: #2c3e50; /* Koyu Gri Metin */
+    --color-border: rgba(0, 0, 0, 0.08);
+    --color-primary: #3498db; /* Mavi Vurgu */
+    --color-active-bg: rgba(52, 152, 219, 0.1); /* Aktif Zemin Hafif Mavi */
+    --color-active-text: #3498db; /* Aktif Metin Mavi */
+
+    --color-category-bg: #eaf1f7;
+    --color-shadow: rgba(0, 0, 0, 0.05);
+    --color-badge: #e74c3c; /* Kırmızı */
+
+    --sidebar-w-acik: 260px;
+    --sidebar-w-kapali: 72px;
+    --sidebar-transition: 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+    --border-radius-m: 10px;
+    --border-radius-l: 16px;
+}
+
+    /* Koyu Tema Ayarları */
+    :root[data-theme="dark"] {
+        --color-sidebar-bg: #1e2733; /* Koyu Mavi-Gri */
+        --color-text: #ecf0f1; /* Açık Gri Metin */
+        --color-border: rgba(255, 255, 255, 0.1);
+        --color-primary: #a0d8ef; /* Açık Mavi Vurgu */
+        --color-active-bg: rgba(160, 216, 239, 0.12);
+        --color-active-text: #a0d8ef;
+        --color-category-bg: #273746;
+        --color-shadow: rgba(0, 0, 0, 0.5);
+        --color-badge: #e74c3c;
+    }
+
+/* ========================================= */
+/* TEMEL SİDEBAR YAPISI */
+/* ========================================= */
+
 .sidebar {
     height: 100vh;
-    background-color: #f8fafc;
-    color: #1f2937;
-    width: 240px;
-    transition: width 0.3s ease, background-color 0.3s ease, color 0.3s ease;
+    background-color: var(--color-sidebar-bg);
+    color: var(--color-text);
+    width: var(--sidebar-w-acik);
+    transition: width var(--sidebar-transition), background-color 0.3s ease, color 0.3s ease;
     display: flex;
     flex-direction: column;
     position: fixed;
     left: 0;
     top: 0;
     z-index: 1001;
-    overflow: hidden;
+    overflow-x: hidden;
+    /* Modernizasyon: Glassmorphism/Layering için hafif şeffaflık ve blur */
+    background-color: var(--color-sidebar-bg);
+    backdrop-filter: blur(8px);
+    border-right: 1px solid var(--color-border);
+    font-family: 'Inter', sans-serif; /* Daha modern font */
+    box-shadow: 4px 0 20px var(--color-shadow);
 }
 
     .sidebar.kapali {
-        width: 60px;
+        width: var(--sidebar-w-kapali);
     }
 
 .sidebar-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
-    height: 50px;
-    border-bottom: 1px solid #d1d5db;
+    padding: 15px 12px;
+    min-height: 60px; /* Navbar ile uyumlu yükseklik */
+    border-bottom: 1px solid var(--color-border);
 }
 
 .logo {
-    font-size: 18px;
-    font-weight: bold;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
     white-space: nowrap;
-    color: inherit;
+    /* Gradyan Logo Vurgusu */
+    background: linear-gradient(90deg, #6dd5ed, #2193b0);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: var(--color-text); /* Fallback */
 }
 
+:root[data-theme="dark"] .logo {
+    background: linear-gradient(90deg, #a0d8ef, #61dafb);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+
+/* Toggle Butonu */
 .toggle-btn {
-    background: none;
+    background: var(--color-category-bg);
     border: none;
-    color: #1f2937;
+    color: var(--color-text);
     font-size: 20px;
     cursor: pointer;
-    padding: 4px 8px;
-    transition: transform 0.3s ease, color 0.3s ease;
+    padding: 8px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
     user-select: none;
+    display: flex; /* İkon merkezlemesi için */
+    align-items: center;
+    justify-content: center;
 }
 
 .sidebar.kapali .toggle-btn {
-    transform: rotate(90deg);
+    transform: rotate(180deg);
 }
 
 .toggle-btn:hover {
-    color: #2563eb;
-    transform: scale(1.15) rotate(var(--toggle-rotate, 0deg));
+    background-color: var(--color-active-bg);
+    color: var(--color-primary);
+    transform: scale(1.1);
 }
 
 .toggle-btn:active {
-    transform: scale(0.95) rotate(var(--toggle-rotate, 0deg));
+    transform: scale(0.9);
 }
 
 .sidebar-menu {
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    padding: 10px 0;
-    background-color: inherit;
+    padding: 8px 0;
+    overflow-y: auto; /* Scrollbar gerektiğinde çıksın */
+    overflow-x: hidden;
 }
 
+/* ========================================= */
+/* KATEGORİ VE MENÜ ÖĞELERİ */
+/* ========================================= */
+
 .sidebar-category {
-    padding: 14px 16px;
-    font-weight: bold;
+    padding: 10px 15px;
+    margin: 4px 10px;
+    border-radius: var(--border-radius-s); /* Daha küçük kategori yuvarlaklığı */
+    font-size: 13px;
+    font-weight: 600;
     display: flex;
     align-items: center;
     gap: 10px;
     cursor: pointer;
-    background-color: #e5e7eb;
-    border-bottom: 1px solid #d1d5db;
-    transition: background 0.2s;
-    color: inherit;
+    background-color: var(--color-category-bg);
+    border: 1px solid var(--color-border);
+    transition: all 0.3s ease;
+    color: var(--color-text);
+    text-transform: uppercase;
 }
 
     .sidebar-category:hover {
-        background-color: #d1d5db;
+        background-color: color-mix(in srgb, var(--color-category-bg) 90%, var(--color-primary));
+        transform: translateY(-2px); /* Hafif 3D efekti */
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     }
+
+.sidebar.kapali .sidebar-category {
+    justify-content: center;
+}
+
+    .sidebar.kapali .sidebar-category .arrow,
+    .sidebar.kapali .sidebar-category .label,
+    .sidebar.kapali .sidebar-category .badge-wrapper {
+        display: none;
+    }
+
+.sidebar-category .ikon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
 
 .arrow {
     margin-left: auto;
-    font-size: 12px;
-    opacity: 0.6;
-    color: #6b7280;
+    font-size: 18px; /* Daha modern bir ikon için büyük punto */
+    opacity: 0.8;
+    color: var(--color-text);
+    transition: transform 0.3s ease;
 }
 
 .sidebar-submenu {
     overflow: hidden;
     transition: max-height 0.3s ease;
-    background-color: #f8fafc;
+    padding: 5px 0; /* Submenu padding */
 }
 
+/* Navigasyon Öğe Stili (En Çok Değişen Kısım) */
 .sidebar-item {
-    margin: 6px 12px;
+    margin: 4px 10px;
     padding: 10px 12px;
-    border-radius: 8px;
-    background-color: #f1f5f9;
+    border-radius: var(--border-radius-m); /* Yuvarlak köşeler */
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     cursor: pointer;
-    font-size: 14px;
-    transition: background 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    color: #1f2937;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-text);
+    transition: all 0.25s cubic-bezier(0.2, 0.6, 0.4, 1);
+    background-color: transparent; /* Varsayılan Arkaplanı Kaldır */
+    box-shadow: none; /* Varsayılan Gölgeleri Kaldır */
     user-select: none;
-    position: relative;
 }
 
+    .sidebar-item .ikon {
+        font-size: 20px;
+        color: var(--color-text);
+        transition: color 0.25s ease;
+        flex-shrink: 0;
+    }
+
+    /* Hover Etkileşimi */
     .sidebar-item:hover {
-        background-color: #e2e8f0;
-        transform: translateX(4px) scale(1.05);
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        background-color: color-mix(in srgb, var(--color-active-bg) 50%, transparent);
+        transform: translateX(3px); /* Daha zarif kayma */
+        box-shadow: 0 2px 10px var(--color-shadow);
+        color: var(--color-primary);
     }
 
-    .sidebar-item:active {
-        transform: translateX(2px) scale(0.97);
-        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
-    }
+        .sidebar-item:hover .ikon {
+            color: var(--color-primary);
+        }
 
+    /* Aktif (Seçili) Öğe Stili */
     .sidebar-item.aktif {
-        background-color: #2563eb;
+        background-color: var(--color-active-bg);
         font-weight: 600;
-        color: white;
-        box-shadow: 0 0 10px #2563ebaa;
+        color: var(--color-active-text);
+        /* Hafif parlayan çerçeve efekti */
+        border: 1px solid var(--color-primary);
+        box-shadow: 0 0 10px var(--color-primary)33;
+        transform: none; /* Aktif öğe sabit kalsın */
     }
 
-/* Badge (bildirim rozet) */
+        .sidebar-item.aktif .ikon {
+            color: var(--color-active-text);
+        }
+
+/* Kapalı Sidebar'da İkon Yerleşimi */
+.sidebar.kapali .sidebar-item {
+    justify-content: center;
+    padding: 10px 0; /* İkonu ortalamak için */
+}
+
+    .sidebar.kapali .sidebar-item span.item-text,
+    .sidebar.kapali .sidebar-item .badge-wrapper {
+        display: none; /* Metin ve rozetleri gizle */
+    }
+
+
+/* Rozetler (Badge) */
+.badge-wrapper {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+}
+
 .badge {
-    background-color: red;
+    background-color: var(--color-badge);
     color: white;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-weight: bold;
-    margin-left: 6px;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: 700;
     display: inline-block;
     vertical-align: middle;
+    /* Canlılık */
+    box-shadow: 0 2px 4px rgba(231, 76, 60, 0.4);
 }
-/* Popup Bildirim (Sağ altta çıkan kutu) */
+
+/* ========================================= */
+/* POPUP BİLDİRİM STİLLERİ (TOAST) */
+/* ========================================= */
+
 .popup-bildirim {
     position: fixed;
-    bottom: 40px; /* Ekranın altından biraz yukarı */
-    right: 40px; /* Sağdan biraz içeri */
-    background-color: #333;
-    color: white;
-    padding: 20px 30px; /* Daha geniş ve yüksek padding */
-    font-size: 18px; /* Yazı tipi büyüklüğü */
-    border-radius: 10px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    bottom: 25px;
+    right: 25px;
+    background-color: var(--color-category-bg);
+    color: var(--color-text);
+    padding: 16px 24px;
+    font-size: 15px;
+    border-radius: var(--border-radius-m);
+    /* Daha belirgin gölge */
+    box-shadow: 0 8px 25px var(--color-shadow);
+    border: 1px solid var(--color-border);
     opacity: 0;
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transition: all 0.3s ease-out;
     z-index: 9999;
-    max-width: 350px; /* Maksimum genişlik */
+    max-width: 320px;
     font-weight: 600;
+    /* Modernizasyon: Hafif blur */
+    backdrop-filter: blur(5px);
 }
 
     .popup-bildirim.show {
         opacity: 1;
-        transform: translateY(-10px);
+        transform: translateY(0); /* Hafif yukarı kayma yerine, yerinde belirme */
+        animation: bounceIn 0.5s ease-out;
     }
 
-/* Koyu tema */
-:root[data-theme="dark"] .sidebar {
-    background-color: #1f2937;
-    color: white;
-}
-
-    :root[data-theme="dark"] .sidebar.kapali {
-        width: 60px;
+@keyframes bounceIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.8) translateY(20px);
     }
 
-:root[data-theme="dark"] .sidebar-header {
-    border-bottom: 1px solid #374151;
-}
-
-:root[data-theme="dark"] .logo {
-    color: white;
-}
-
-:root[data-theme="dark"] .toggle-btn {
-    color: white;
-}
-
-:root[data-theme="dark"] .sidebar-menu {
-    background-color: #1f2937;
-}
-
-:root[data-theme="dark"] .sidebar-category {
-    background-color: #111827;
-    border-bottom: 1px solid #374151;
-    color: white;
-}
-
-    :root[data-theme="dark"] .sidebar-category:hover {
-        background-color: #1e293b;
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
     }
-
-:root[data-theme="dark"] .arrow {
-    color: #9ca3af;
 }
 
-:root[data-theme="dark"] .sidebar-submenu {
-    background-color: #1f2937;
-}
-
-:root[data-theme="dark"] .sidebar-item {
-    background-color: #2d3748;
-    color: white;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-}
-
-    :root[data-theme="dark"] .sidebar-item:hover {
-        background-color: #4b5563;
-        transform: translateX(4px) scale(1.05);
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.5);
-    }
-
-    :root[data-theme="dark"] .sidebar-item:active {
-        transform: translateX(2px) scale(0.97);
-        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
-    }
-
-    :root[data-theme="dark"] .sidebar-item.aktif {
-        background-color: #2563eb;
-        color: white;
-        box-shadow: 0 0 12px #2563ebcc;
-    }
-
-:root[data-theme="dark"] .badge {
-    background-color: #ef4444;
-    color: white;
-}
+/* Koyu Temada Popup Vurgusu */
 :root[data-theme="dark"] .popup-bildirim {
-    background-color: #334155; /* daha açık koyu tonu */
-    color: #f8fafc;
+    background-color: var(--color-category-bg);
+    color: var(--color-text);
 }
-

@@ -1,10 +1,42 @@
 // src/Hakedisler/HakedisSeferleri.js
 import React, { useCallback, useRef, useState, useEffect } from "react";
-import "./HakedisSeferleri.css";
+// import "./HakedisSeferleri.css"; // 👈 CSS dosyasını artık kullanmıyoruz
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@mui/material";
-import { HomeOutlined as HomeIcon } from "@mui/icons-material";
+
+// MUI ve Iconlar
+import {
+    Box,
+    Container,
+    Paper,
+    Typography,
+    Button,
+    Stack,
+    LinearProgress,
+    CircularProgress,
+    Chip,
+    Divider,
+    TableContainer,
+    Table,
+    TableHead,
+    TableRow,
+    TableCell,
+    TableBody,
+} from "@mui/material";
+import {
+    HomeOutlined as HomeIcon,
+    ArrowBackIosNew as ArrowBackIcon,
+    FilePresent as FilePresentIcon,
+    Download as DownloadIcon,
+    CloudUpload as CloudUploadIcon,
+    Calculate as CalculateIcon,
+    Send as SendIcon,
+    DeleteForever as DeleteForeverIcon,
+} from "@mui/icons-material";
+
+// XLSX importları (kodun orjinal haliyle korunur)
+import * as XLSX from "xlsx";
+
 
 /** Ekran anahtarı & izin anahtarı */
 const SCREEN_KEY = "hakedis_seferleri";
@@ -41,28 +73,23 @@ const DISPLAY_HEADERS = [
     "Çalışma Günü",
 ];
 
-// URL sabitleri (HakedisSeferleri.js)
+// TMS URL sabitleri (korunur)
 const IS_PROD = process.env.NODE_ENV === "production";
 const PROXY_BASE = IS_PROD ? "/api" : "/reel-api";
-
 const TMS_LOGIN_URL = `${PROXY_BASE}${IS_PROD ? "/reel-auth/login" : "/api/auth/login"}`;
-const TMS_ADD_EXPENSE_URL = `${PROXY_BASE}${IS_PROD ? "/tmsdespatchincomeexpenses/addexpense" : "/api/tmsdespatchincomeexpenses/addexpense"
-    }`;
+const TMS_ADD_EXPENSE_URL = `${PROXY_BASE}${IS_PROD ? "/tmsdespatchincomeexpenses/addexpense" : "/api/tmsdespatchincomeexpenses/addexpense"}`;
 
-/** Yardımcılar */
+
+/** Yardımcılar (Korunur) */
 const normalize = (s) => String(s ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-
-/** Metni TR formatından sayıya çevirir (YUVARLAMA YOK) */
-const toNumber = (v) => {
+const toNumber = (v) => { /* ... (fonksiyon içeriği korunur) ... */
     if (v === null || v === undefined || v === "") return null;
     if (typeof v === "number") return Number.isFinite(v) ? v : null;
     const s = String(v).trim().replace(/\./g, "").replace(",", ".");
     const n = Number(s);
     return Number.isFinite(n) ? n : null;
 };
-
-/** API'ye gönderilecek ondalık (varsayılan 2 hane) değeri güvenli üretir */
-const toApiDecimal2 = (v, digits = 2) => {
+const toApiDecimal2 = (v, digits = 2) => { /* ... (fonksiyon içeriği korunur) ... */
     const n = toNumber(v);
     if (n === null) return { number: 0, cents: 0, string: (0).toFixed(digits) };
     const factor = 10 ** digits;
@@ -70,9 +97,7 @@ const toApiDecimal2 = (v, digits = 2) => {
     const fixed = (cents / factor).toFixed(digits);
     return { number: Number(fixed), cents, string: fixed };
 };
-
-/** API'ye gönderilecek ondalık değeri (digits hane) güvenli üretir (genel sürüm) */
-const toApiDecimal = (v, digits = 2) => {
+const toApiDecimal = (v, digits = 2) => { /* ... (fonksiyon içeriği korunur) ... */
     const n = toNumber(v);
     const z = Number((0).toFixed(digits));
     if (n === null) return { number: z, scaled: 0, string: (0).toFixed(digits) };
@@ -81,23 +106,17 @@ const toApiDecimal = (v, digits = 2) => {
     const fixed = (scaled / factor).toFixed(digits);
     return { number: Number(fixed), scaled, string: fixed };
 };
-
-/** Yalnızca rakamları bırakır (ID alanları için) */
-const toPlainDigits = (v) => {
+const toPlainDigits = (v) => { /* ... (fonksiyon içeriği korunur) ... */
     if (v === null || v === undefined) return "";
     return String(v).trim().replace(/[.,\s]/g, "");
 };
-
-/** KM gösterimi (binlik ayraç) */
-const fmtKm = (v) =>
+const fmtKm = (v) => /* ... (fonksiyon içeriği korunur) ... */
     v === null || v === undefined || v === ""
         ? "—"
         : typeof v === "number"
             ? v.toLocaleString("tr-TR")
             : String(v);
-
-/** TRY para gösterimi — HER ZAMAN 4 ondalık */
-const fmtTRY = (v) =>
+const fmtTRY = (v) => /* ... (fonksiyon içeriği korunur) ... */
     v === null || v === undefined || v === ""
         ? "—"
         : new Intl.NumberFormat("tr-TR", {
@@ -106,17 +125,13 @@ const fmtTRY = (v) =>
             minimumFractionDigits: 4,
             maximumFractionDigits: 4,
         }).format(Number(v));
-
-/** TR tarih gösterimi */
-const fmtDateTR = (d) => {
+const fmtDateTR = (d) => { /* ... (fonksiyon içeriği korunur) ... */
     if (!d) return "—";
     const dt = d instanceof Date ? d : new Date(d);
     if (Number.isNaN(dt.getTime())) return String(d);
     return dt.toLocaleDateString("tr-TR");
 };
-
-/** ISO (yyyy-mm-dd) tarih üretimi */
-const toISODate = (d) => {
+const toISODate = (d) => { /* ... (fonksiyon içeriği korunur) ... */
     if (!d) return null;
     const dt = d instanceof Date ? d : new Date(d);
     if (Number.isNaN(dt.getTime())) return null;
@@ -125,9 +140,7 @@ const toISODate = (d) => {
     const dd = String(dt.getDate()).padStart(2, "0");
     return `${y}-${m}-${dd}`;
 };
-
-/** İstenilen ondalık haneye yuvarlar (varsayılan 4) */
-const roundN = (x, n = 4) => {
+const roundN = (x, n = 4) => { /* ... (fonksiyon içeriği korunur) ... */
     if (x === null || x === undefined || x === "") return null;
     const num = Number(x);
     if (!Number.isFinite(num)) return null;
@@ -135,11 +148,10 @@ const roundN = (x, n = 4) => {
     return Math.round(num * f) / f;
 };
 
-/* ---------------------- TOKEN ÖNBELLEK / YENİLEME ---------------------- */
+/* ---------------------- TOKEN ÖNBELLEK / YENİLEME (Korunur) ---------------------- */
 let tokenCache = { value: "", obtainedAt: 0 };
 const TOKEN_MAX_AGE_MS = 4 * 60 * 1000;
-
-async function loginToTMSWithLocalReelCreds() {
+async function loginToTMSWithLocalReelCreds() { /* ... (fonksiyon içeriği korunur) ... */
     const userName = (localStorage.getItem("Reel-kullanici") || "").trim();
     const password = localStorage.getItem("Reel-sifre") || "";
     if (!userName || !password) {
@@ -169,14 +181,12 @@ async function loginToTMSWithLocalReelCreds() {
     }
     return token;
 }
-
-async function fetchFreshToken() {
+async function fetchFreshToken() { /* ... (fonksiyon içeriği korunur) ... */
     const t = await loginToTMSWithLocalReelCreds();
     tokenCache = { value: t, obtainedAt: Date.now() };
     return t;
 }
-
-async function ensureValidToken() {
+async function ensureValidToken() { /* ... (fonksiyon içeriği korunur) ... */
     const age = Date.now() - tokenCache.obtainedAt;
     if (!tokenCache.value || age > TOKEN_MAX_AGE_MS) {
         return await fetchFreshToken();
@@ -184,10 +194,9 @@ async function ensureValidToken() {
     return tokenCache.value;
 }
 
-/* ---------------------- NETWORK DAYANIKLILIK ARAÇLARI ---------------------- */
+/* ---------------------- NETWORK DAYANIKLILIK ARAÇLARI (Korunur) ---------------------- */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function fetchWithTimeout(url, opts = {}, timeoutMs = 30000) {
+async function fetchWithTimeout(url, opts = {}, timeoutMs = 30000) { /* ... (fonksiyon içeriği korunur) ... */
     const ctl = new AbortController();
     const id = setTimeout(() => ctl.abort(), timeoutMs);
     try {
@@ -197,8 +206,7 @@ async function fetchWithTimeout(url, opts = {}, timeoutMs = 30000) {
         clearTimeout(id);
     }
 }
-
-async function resilientPost(url, body, { maxRetries = 3, baseDelay = 200 } = {}) {
+async function resilientPost(url, body, { maxRetries = 3, baseDelay = 200 } = {}) { /* ... (fonksiyon içeriği korunur) ... */
     let attempt = 0;
     let lastErr;
     while (attempt <= maxRetries) {
@@ -256,8 +264,7 @@ async function resilientPost(url, body, { maxRetries = 3, baseDelay = 200 } = {}
     }
     throw lastErr || new Error("Bilinmeyen hata");
 }
-
-async function runWithConcurrencyLimit(jobs, limit, onProgress) {
+async function runWithConcurrencyLimit(jobs, limit, onProgress) { /* ... (fonksiyon içeriği korunur) ... */
     let idx = 0;
     let done = 0;
     const errors = [];
@@ -282,44 +289,31 @@ async function runWithConcurrencyLimit(jobs, limit, onProgress) {
     return { errors };
 }
 
-/* ---------------------- YETKİLER ---------------------- */
+/* ---------------------- YETKİLER (Korunur) ---------------------- */
 function coalesceOverride(overrideVal, roleVal) {
     return overrideVal === true || overrideVal === false ? overrideVal : !!roleVal;
 }
-
 const looksLikeUUID = (s) =>
     typeof s === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
-
-async function loadUploadPermission(kullanici) {
-    // 1) kullanıcıyı bul
-    const { data: userRow, error: eU } = await supabase
-        .from("login")
-        .select("id, kullanici, rol")
-        .eq("kullanici", kullanici)
-        .maybeSingle();
+async function loadUploadPermission(kullanici) { /* ... (fonksiyon içeriği korunur) ... */
+    const { data: userRow, error: eU } = await supabase.from("login").select("id, kullanici, rol").eq("kullanici", kullanici).maybeSingle();
     if (eU) throw eU;
 
     if (!userRow) return { canUpload: false };
 
-    // 2) rol id al
     let roleId = null;
     if (userRow.rol) {
         if (looksLikeUUID(userRow.rol)) {
             roleId = userRow.rol;
         } else {
             const roleKey = String(userRow.rol).toUpperCase();
-            const { data: roleRow, error: eR } = await supabase
-                .from("roles")
-                .select("id,key")
-                .eq("key", roleKey)
-                .maybeSingle();
+            const { data: roleRow, error: eR } = await supabase.from("roles").select("id,key").eq("key", roleKey).maybeSingle();
             if (eR) throw eR;
             roleId = roleRow?.id || null;
         }
     }
 
-    // 3) role_permissions (bu ekran)
     let rolePerm = {};
     if (roleId) {
         const { data: rp, error: eRP } = await supabase
@@ -332,17 +326,13 @@ async function loadUploadPermission(kullanici) {
         rolePerm = rp || {};
     }
 
-    // 4) user_permissions override (tek satır/kullanıcı — screen_key yok)
     const { data: up, error: eUP } = await supabase
         .from("user_permissions")
         .select("*")
         .eq("user_id", userRow.id)
         .maybeSingle();
     if (eUP) throw eUP;
-
-    // 5) etkin izin
     const canUpload = coalesceOverride(up?.[UPLOAD_COL], rolePerm?.[UPLOAD_COL]);
-
     return { canUpload: !!canUpload };
 }
 
@@ -364,13 +354,9 @@ export default function HakedisSeferleri({ onFileReady }) {
     const inputRef = useRef(null);
     const navigate = useNavigate();
 
-    const ACCEPT = [
-        ".csv",
-        "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ].join(",");
+    const ACCEPT = [".csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"].join(",");
 
-    // YETKİYİ YÜKLE
+    // YETKİYİ YÜKLE (Korunur)
     useEffect(() => {
         (async () => {
             try {
@@ -395,17 +381,16 @@ export default function HakedisSeferleri({ onFileReady }) {
         setExportMsg("");
     };
 
-    // Excel (.xlsx) şablon indir — izin gerektirmez
+    // Excel (.xlsx) şablon indir (Korunur)
     const handleDownloadTemplate = async () => {
-        const mod = await import("xlsx");
-        const XLSX = mod.default ?? mod;
+        const mod = XLSX;
         const aoa = [TEMPLATE_HEADERS];
-        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        const ws = mod.utils.aoa_to_sheet(aoa);
         ws["!autofilter"] = { ref: "A1:F1" };
         ws["!cols"] = [{ wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 30 }];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Sefer Şablon");
-        const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+        const wb = mod.utils.book_new();
+        mod.utils.book_append_sheet(wb, ws, "Sefer Şablon");
+        const wbout = mod.write(wb, { bookType: "xlsx", type: "array" });
         const blob = new Blob([wbout], {
             type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         });
@@ -431,30 +416,28 @@ export default function HakedisSeferleri({ onFileReady }) {
         return "";
     };
 
-    const handleFiles = useCallback(
-        (files) => {
-            // İZİN YOKSA ÇIK
-            if (!perms.canUpload) {
-                setFile(null);
-                setFileError("Dosya yükleme yetkiniz yok.");
-                return;
-            }
-            const f = files?.[0];
-            const err = validateFile(f);
-            if (err) {
-                setFile(null);
-                setFileError(err);
-                return;
-            }
-            setFileError("");
-            setFile(f);
-            setRows([]);
-            setSummary(null);
-            setExportMsg("");
-        },
-        [perms.canUpload]
-    );
+    // Dosya İşleme (Korunur)
+    const handleFiles = useCallback((files) => {
+        if (!perms.canUpload) {
+            setFile(null);
+            setFileError("Dosya yükleme yetkiniz yok.");
+            return;
+        }
+        const f = files?.[0];
+        const err = validateFile(f);
+        if (err) {
+            setFile(null);
+            setFileError(err);
+            return;
+        }
+        setFileError("");
+        setFile(f);
+        setRows([]);
+        setSummary(null);
+        setExportMsg("");
+    }, [perms.canUpload]);
 
+    // Drag & Drop İşlemleri (MUI stillerine uyum için güncellenir)
     const onDragEnter = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -478,15 +461,14 @@ export default function HakedisSeferleri({ onFileReady }) {
         const dt = e.dataTransfer;
         if (dt?.files?.length) handleFiles(dt.files);
     };
-
     const openFileDialog = () => {
         if (!perms.canUpload) return;
         inputRef.current?.click();
     };
     const onInputChange = (e) => handleFiles(e.target.files);
 
-    // Supabase: plakalara göre toplu çek
-    const fetchSupabaseByPlates = async (plates) => {
+    // Supabase: plakalara göre toplu çek (Korunur)
+    const fetchSupabaseByPlates = async (plates) => { /* ... (fonksiyon içeriği korunur) ... */
         if (!supabase)
             throw new Error(
                 "Supabase ayarları eksik. .env’i kontrol edin ve dev server’ı yeniden başlatın."
@@ -520,8 +502,8 @@ export default function HakedisSeferleri({ onFileReady }) {
         return map;
     };
 
-    // Dosyayı oku -> Supabase ile eşleştir -> türet -> tabloya yaz
-    const parseSelectedFile = async () => {
+    // Dosyayı oku -> Supabase ile eşleştir -> türet -> tabloya yaz (Korunur)
+    const parseSelectedFile = async () => { /* ... (fonksiyon içeriği korunur) ... */
         if (!file) {
             setFileError("Önce bir dosya seçiniz.");
             return;
@@ -530,8 +512,7 @@ export default function HakedisSeferleri({ onFileReady }) {
         setFileError("");
 
         try {
-            const mod = await import("xlsx");
-            const XLSX = mod.default ?? mod;
+            const mod = XLSX;
             const isCsv = file.name.toLowerCase().endsWith(".csv");
 
             const data = await new Promise((resolve, reject) => {
@@ -542,12 +523,12 @@ export default function HakedisSeferleri({ onFileReady }) {
                 else reader.readAsArrayBuffer(file);
             });
 
-            const wb = isCsv ? XLSX.read(data, { type: "string" }) : XLSX.read(data, { type: "array" });
+            const wb = isCsv ? mod.read(data, { type: "string" }) : mod.read(data, { type: "array" });
             const sheetName = wb.SheetNames?.[0];
             if (!sheetName) throw new Error("Çalışma sayfası bulunamadı.");
             const sheet = wb.Sheets[sheetName];
 
-            const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+            const aoa = mod.utils.sheet_to_json(sheet, { header: 1, defval: "" });
             if (!aoa.length) {
                 setRows([]);
                 return;
@@ -565,7 +546,7 @@ export default function HakedisSeferleri({ onFileReady }) {
 
             const excelSerialToDate = (n) => {
                 try {
-                    const d = (mod.default ?? mod).SSF?.parse_date_code?.(Number(n));
+                    const d = (mod.SSF)?.parse_date_code?.(Number(n));
                     if (!d) return null;
                     return new Date(
                         Date.UTC(d.y, (d.m || 1) - 1, d.d || 1, d.H || 0, d.M || 0, d.S || 0)
@@ -663,7 +644,8 @@ export default function HakedisSeferleri({ onFileReady }) {
         }
     };
 
-    const handleCalculate = () => {
+    // Hesaplama (Korunur)
+    const handleCalculate = () => { /* ... (fonksiyon içeriği korunur) ... */
         if (!rows.length) return;
 
         const plateKmTotals = rows.reduce((map, r) => {
@@ -728,8 +710,8 @@ export default function HakedisSeferleri({ onFileReady }) {
         setSummary(s);
     };
 
-    /** REEL’E AKTAR (güncel): Havuz + backoff + timeout ile dayanıklı gönderim */
-    const handleExportReel = async () => {
+    /** REEL’E AKTAR (Korunur) */
+    const handleExportReel = async () => { /* ... (fonksiyon içeriği korunur) ... */
         if (!rows.length) return;
 
         setExporting(true);
@@ -849,11 +831,10 @@ export default function HakedisSeferleri({ onFileReady }) {
         }
     };
 
-    // Excel'e Aktar
-    const handleExportExcel = async () => {
+    // Excel'e Aktar (Korunur)
+    const handleExportExcel = async () => { /* ... (fonksiyon içeriği korunur) ... */
         if (!rows.length) return;
-        const mod = await import("xlsx");
-        const XLSX = mod.default ?? mod;
+        const mod = XLSX;
 
         const aoa = [DISPLAY_HEADERS];
         rows.forEach((r) => {
@@ -864,12 +845,8 @@ export default function HakedisSeferleri({ onFileReady }) {
                     if (h === "TMSDespatchId" || h === "Cari ID") return toPlainDigits(v);
                     if (
                         [
-                            "Aylık Kira",
-                            "Aylık sürücü",
-                            "Hak Ediş Kira",
-                            "Hak Ediş Sürücü",
-                            "Sefer Kira Maliyeti",
-                            "Sefer Sürücü Maliyeti",
+                            "Aylık Kira", "Aylık sürücü", "Hak Ediş Kira", "Hak Ediş Sürücü",
+                            "Sefer Kira Maliyeti", "Sefer Sürücü Maliyeti",
                         ].includes(h)
                     )
                         return Number(v ?? 0);
@@ -879,13 +856,13 @@ export default function HakedisSeferleri({ onFileReady }) {
             );
         });
 
-        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        const ws = mod.utils.aoa_to_sheet(aoa);
         ws["!autofilter"] = { ref: `A1:${String.fromCharCode(65 + DISPLAY_HEADERS.length - 1)}1` };
         ws["!cols"] = DISPLAY_HEADERS.map(() => ({ wch: 16 }));
 
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Hakediş Seferleri");
-        const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+        const wb = mod.utils.book_new();
+        mod.utils.book_append_sheet(wb, ws, "Hakediş Seferleri");
+        const wbout = mod.write(wb, { bookType: "xlsx", type: "array" });
         const blob = new Blob([wbout], {
             type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         });
@@ -902,290 +879,344 @@ export default function HakedisSeferleri({ onFileReady }) {
     const dropzoneDisabled = permLoading || !perms.canUpload;
 
     return (
-        <div className="hs-card fade-in">
-            {/* Üst Bar */}
-            <div className="hs-header">
-                <h1 className="hs-title">Hakediş Seferleri</h1>
-
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button
-                        type="button"
-                        className="btn"
-                        onClick={() => navigate(-1)}
-                        aria-label="Geri dön"
-                        title="Geri"
-                    >
-                        ← Geri
-                    </button>
-                    <Button size="small" variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
-                        Anasayfa
-                    </Button>
-                    <button
-                        type="button"
-                        onClick={handleDownloadTemplate}
-                        className="btn btn-primary"
-                        aria-label="Şablon indir"
-                    >
-                        <span className="pill">⬇️</span> Şablon indir
-                    </button>
-                </div>
-            </div>
-
-            {/* Yetki uyarısı */}
-            {dropzoneDisabled && (
-                <div
-                    className="hs-card"
-                    style={{
-                        marginTop: 8,
-                        background: "rgba(239,68,68,0.07)",
-                        border: "1px solid rgba(239,68,68,0.25)",
-                        color: "#991b1b",
-                        fontWeight: 600,
+        <Box
+            sx={{
+                minHeight: "100dvh",
+                py: 4,
+                px: { xs: 1.5, md: 2.5 },
+                background: (t) =>
+                    t.palette.mode === "dark"
+                        ? `radial-gradient(1200px 600px at 10% -10%, rgba(120,119,198,0.18), transparent 60%),
+                           radial-gradient(900px 500px at 100% 0%, rgba(56,189,248,0.12), transparent 60%),
+                           ${t.palette.background.default}`
+                        : "linear-gradient(180deg, #f0f4f9 0%, #ffffff 60%)",
+            }}
+        >
+            <Container maxWidth="xl" disableGutters>
+                <Paper
+                    elevation={16}
+                    sx={{
+                        borderRadius: 4,
+                        overflow: "hidden",
+                        backdropFilter: "blur(12px)",
+                        border: (t) => `1px solid ${t.palette.divider}`,
+                        boxShadow: (t) =>
+                            t.palette.mode === "dark"
+                                ? "0 20px 60px rgba(0,0,0,0.5)"
+                                : "0 25px 50px rgba(38, 78, 118, 0.15)",
+                        p: { xs: 2, md: 4 },
                     }}
                 >
-                    {permLoading ? "Yetkiler yükleniyor…" : "Dosya yükleme yetkiniz yok."}
-                </div>
-            )}
-
-            {/* Yükleme Alanı */}
-            <div
-                className={`hs-dropzone ${dragActive ? "is-dragover" : ""} ${dropzoneDisabled ? "is-disabled" : ""}`}
-                onDragEnter={onDragEnter}
-                onDragOver={onDragOver}
-                onDragLeave={onDragLeave}
-                onDrop={onDrop}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") openFileDialog();
-                }}
-                aria-label="Dosya sürükleyip bırakın veya seçin"
-                style={dropzoneDisabled ? { pointerEvents: "none", opacity: 0.6 } : undefined}
-            >
-                <input
-                    ref={inputRef}
-                    type="file"
-                    accept={ACCEPT}
-                    className="hs-file-input"
-                    onChange={onInputChange}
-                    id="hs-file"
-                    disabled={dropzoneDisabled}
-                />
-                <div className="hs-dz-icon">📄</div>
-                <div className="hs-dz-title">Dosyanı sürükleyip bırak</div>
-                <div className="hs-dz-hint">CSV, XLSX, XLS — max 20MB</div>
-                <div className="hs-or">veya</div>
-                <div className="hs-filepicker">
-                    <label
-                        htmlFor="hs-file"
-                        className={`btn btn-ghost ${dropzoneDisabled ? "is-disabled" : ""}`}
-                        onClick={(e) => {
-                            if (dropzoneDisabled) e.preventDefault();
-                        }}
-                        title={dropzoneDisabled ? "Dosya yükleme yetkiniz yok" : "Belgelerden yükle"}
+                    {/* HEDER VE NAVİGASYON */}
+                    <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        alignItems={{ xs: "start", sm: "center" }}
+                        justifyContent="space-between"
+                        spacing={2}
+                        pb={3}
                     >
-                        Belgelerden yükle
-                    </label>
-                </div>
-            </div>
-
-            {/* Seçilen Dosya Bilgisi + Yükle + (Hesapla / Reel’e Aktar) */}
-            <div className="mt-4">
-                {fileError ? (
-                    <p className="text-sm" style={{ color: "rgb(239, 68, 68)" }}>{fileError}</p>
-                ) : file ? (
-                    <div className="hs-file-row">
-                        <div className="hs-file-info">
-                            <div className="hs-file-badge">📄</div>
-                            <div>
-                                <div className="hs-file-name">{file.name}</div>
-                                <div className="hs-file-meta">
-                                    {(file.size / 1024).toFixed(1)} KB · {file.type || "bilinmeyen tür"}
-                                </div>
-                            </div>
-                        </div>
-                        <div className="hs-row-actions" style={{ gap: 8, flexWrap: "wrap" }}>
-                            <button type="button" onClick={parseSelectedFile} className="btn-upload" disabled={parsing}>
-                                {parsing ? "İşleniyor..." : "Yükle"}
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={handleCalculate}
-                                className="btn"
-                                disabled={!rows.length}
-                                title={!rows.length ? "Önce Yükle ile verileri getir" : "Toplamları hesapla"}
-                            >
-                                Hesapla
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={handleExportReel}
-                                className="btn btn-primary"
-                                disabled={!rows.length || exporting}
-                                title={!rows.length ? "Önce Yükle ile verileri getir" : "Reel’e aktar"}
-                            >
-                                {exporting ? "Aktarılıyor..." : "Reel’e Aktar"}
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={handleExportExcel}
-                                className="btn btn-secondary"
-                                disabled={!rows.length}
-                                title="Excel'e aktar"
-                            >
-                                Excel'e Aktar
-                            </button>
-
-                            <button type="button" onClick={resetState} className="btn-remove">
-                                Kaldır
-                            </button>
-                        </div>
-                    </div>
-                ) : null}
-            </div>
-
-            {/* Hesapla özeti */}
-            {summary && (
-                <div className="hs-card" style={{ marginTop: 12 }}>
-                    <div className="hs-table-header">
-                        <div className="hs-table-title">Özet</div>
-                        <div className="hs-table-meta">{summary.kayit} satır</div>
-                    </div>
-                    <div className="hs-table-scroll" style={{ overflow: "visible", border: "0", borderRadius: 0 }}>
-                        <table className="hs-table" style={{ minWidth: 0 }}>
-                            <tbody>
-                                <tr>
-                                    <th>Toplam KM</th>
-                                    <td>{fmtKm(summary.toplamKm)}</td>
-                                    <th>Aylık Kira</th>
-                                    <td>{fmtTRY(summary.aylikKira)}</td>
-                                    <th>Aylık sürücü</th>
-                                    <td>{fmtTRY(summary.aylikSurucu)}</td>
-                                </tr>
-                                <tr>
-                                    <th>Hak Ediş Kira</th>
-                                    <td>{fmtTRY(summary.hakEdisKira)}</td>
-                                    <th>Hak Ediş Sürücü</th>
-                                    <td>{fmtTRY(summary.hakEdisSurucu)}</td>
-                                    <th>Sefer Maliyetleri</th>
-                                    <td>
-                                        {fmtTRY(summary.seferKira)} (Kira) + {fmtTRY(summary.seferSurucu)} (Sürücü)
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* Progress Overlay */}
-            {exporting && (
-                <div
-                    style={{
-                        position: "fixed",
-                        inset: 0,
-                        backgroundColor: "rgba(0,0,0,0.45)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        zIndex: 9999,
-                    }}
-                >
-                    <div
-                        style={{
-                            background: "#111827",
-                            color: "#fff",
-                            padding: "16px 20px",
-                            borderRadius: 12,
-                            boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-                            minWidth: 260,
-                            textAlign: "center",
-                            fontWeight: 600,
-                        }}
-                    >
-                        <div style={{ fontSize: 16, marginBottom: 8 }}>Gönderiliyor…</div>
-                        <div style={{ fontSize: 24 }}>
-                            {progress.current}/{progress.total}
-                        </div>
-                        <div
-                            style={{
-                                marginTop: 12,
-                                height: 8,
-                                borderRadius: 999,
-                                background: "rgba(255,255,255,0.15)",
-                                overflow: "hidden",
+                        <Typography
+                            variant="h4"
+                            fontWeight={900}
+                            sx={{
+                                background: "linear-gradient(90deg, #6d28d9, #0ea5e9)",
+                                WebkitBackgroundClip: "text",
+                                WebkitTextFillColor: "transparent",
                             }}
                         >
-                            <div
-                                style={{
-                                    width: `${progress.total ? (progress.current / progress.total) * 100 : 0}%`,
-                                    height: "100%",
-                                }}
+                            Hakediş Seferleri Yükleme 📂
+                        </Typography>
+                        <Stack direction="row" spacing={1} flexShrink={0}>
+                            <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
+                                Geri
+                            </Button>
+                            <Button variant="outlined" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
+                                Anasayfa
+                            </Button>
+                        </Stack>
+                    </Stack>
+
+                    <Divider sx={{ mb: 3 }} />
+
+                    {/* ŞABLON VE YETKİ ALANI */}
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" mb={3} flexWrap="wrap" spacing={2}>
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            startIcon={<DownloadIcon />}
+                            onClick={handleDownloadTemplate}
+                            sx={{ textTransform: 'none', fontWeight: 600 }}
+                        >
+                            Excel Şablon İndir
+                        </Button>
+                        <Chip
+                            label={permLoading ? "Yetkiler yükleniyor..." : perms.canUpload ? "Yükleme Yetkisi: Var" : "Yükleme Yetkisi: Yok"}
+                            color={permLoading ? "default" : perms.canUpload ? "success" : "error"}
+                            variant="outlined"
+                        />
+                    </Stack>
+
+                    {/* YÜKLEME ALANI (Drag & Drop) */}
+                    <Box
+                        onDragEnter={onDragEnter}
+                        onDragOver={onDragOver}
+                        onDragLeave={onDragLeave}
+                        onDrop={onDrop}
+                        onClick={openFileDialog}
+                        sx={{
+                            border: `2px dashed ${dragActive ? 'primary.main' : 'divider'}`,
+                            borderRadius: 2,
+                            p: 6,
+                            textAlign: 'center',
+                            cursor: dropzoneDisabled ? 'not-allowed' : 'pointer',
+                            opacity: dropzoneDisabled ? 0.6 : 1,
+                            transition: 'all 0.3s',
+                            bgcolor: dragActive ? 'primary.light' : 'background.default',
+                            boxShadow: dragActive ? 4 : 0,
+                        }}
+                    >
+                        <input
+                            ref={inputRef}
+                            type="file"
+                            accept={ACCEPT}
+                            onChange={onInputChange}
+                            style={{ display: 'none' }}
+                            disabled={dropzoneDisabled}
+                        />
+                        <FilePresentIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1.5 }} />
+                        <Typography variant="h6" fontWeight={700}>
+                            Dosyanı Buraya Sürükle veya Tıkla
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            CSV, XLSX, XLS formatları desteklenir. (Max 20MB)
+                        </Typography>
+                        {fileError && (
+                            <Chip
+                                label={fileError}
+                                color="error"
+                                sx={{ mt: 2, bgcolor: 'error.main', color: 'error.contrastText' }}
                             />
-                        </div>
-                    </div>
-                </div>
-            )}
+                        )}
+                        {file && !fileError && (
+                            <Chip
+                                label={`Seçilen Dosya: ${file.name} (Tıkla/Sürükle ile Değiştir)`}
+                                color="info"
+                                sx={{ mt: 2 }}
+                            />
+                        )}
+                    </Box>
 
-            {/* Aktarım mesajı */}
-            {!!exportMsg && (
-                <div className="hs-card" style={{ marginTop: 12 }}>
-                    <div className="hs-table-meta">{exportMsg}</div>
-                </div>
-            )}
+                    {/* İŞLEM BUTONLARI */}
+                    {file && !fileError && (
+                        <Stack direction="row" spacing={1.5} mt={3} flexWrap="wrap">
+                            <Button
+                                variant="contained"
+                                color="secondary"
+                                startIcon={parsing ? <CircularProgress size={16} color="inherit" /> : <CloudUploadIcon />}
+                                onClick={parseSelectedFile}
+                                disabled={parsing}
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                            >
+                                {parsing ? "Veriler İşleniyor..." : "1. Yükle ve Eşleştir"}
+                            </Button>
 
-            {/* Tablo */}
-            {rows.length > 0 && (
-                <div className="hs-table-wrap">
-                    <div className="hs-table-header">
-                        <div className="hs-table-title">Yüklenen Kayıtlar</div>
-                        <div className="hs-table-meta">{rows.length} satır</div>
-                    </div>
-                    <div className="hs-table-scroll">
-                        <table className="hs-table">
-                            <thead>
-                                <tr>
-                                    {DISPLAY_HEADERS.map((h) => (
-                                        <th key={h}>{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map((r, i) => (
-                                    <tr key={i}>
-                                        {DISPLAY_HEADERS.map((h) => {
-                                            const v = r[h];
-                                            if (h === "Sefer Tarihi") return <td key={h + i}>{fmtDateTR(v)}</td>;
-                                            if (h === "TMSDespatchId" || h === "Cari ID") return <td key={h + i}>{toPlainDigits(v)}</td>;
-                                            if (
-                                                [
-                                                    "Aylık Kira",
-                                                    "Aylık sürücü",
-                                                    "Hak Ediş Kira",
-                                                    "Hak Ediş Sürücü",
-                                                    "Sefer Kira Maliyeti",
-                                                    "Sefer Sürücü Maliyeti",
-                                                ].includes(h)
-                                            )
-                                                return <td key={h + i}>{fmtTRY(v)}</td>;
-                                            if (h === "Toplam KM" || h === "Çalışma Günü") return <td key={h + i}>{fmtKm(v)}</td>;
-                                            return <td key={h + i}>{(v ?? "") === "" ? "—" : String(v)}</td>;
-                                        })}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div style={{ marginTop: 16, textAlign: "right" }}>
-                        <button type="button" onClick={handleExportExcel} className="btn btn-primary" style={{ minWidth: 160 }}>
-                            Excel’e Aktar
-                        </button>
-                    </div>
-                </div>
-            )}
-        </div>
+                            <Button
+                                variant="contained"
+                                color="info"
+                                startIcon={<CalculateIcon />}
+                                onClick={handleCalculate}
+                                disabled={!rows.length || exporting}
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                            >
+                                2. Hesapla
+                            </Button>
+
+                            <Button
+                                variant="contained"
+                                color="success"
+                                startIcon={exporting ? <CircularProgress size={16} color="inherit" /> : <SendIcon />}
+                                onClick={handleExportReel}
+                                disabled={!rows.length || exporting}
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                            >
+                                3. Reel'e Aktar
+                            </Button>
+
+                            <Button
+                                variant="outlined"
+                                color="secondary"
+                                startIcon={<DownloadIcon />}
+                                onClick={handleExportExcel}
+                                disabled={!rows.length || exporting}
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                            >
+                                Excel'e Aktar
+                            </Button>
+
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                startIcon={<DeleteForeverIcon />}
+                                onClick={resetState}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                Kaldır
+                            </Button>
+                        </Stack>
+                    )}
+
+                    {/* AKTARIM DURUM VE İLERLEME */}
+                    {exporting && (
+                        <Paper elevation={4} sx={{ mt: 3, p: 2, bgcolor: 'warning.light', color: 'warning.contrastText' }}>
+                            <Typography variant="subtitle1" fontWeight={700} mb={1}>
+                                TMS'e Aktarım Devam Ediyor...
+                            </Typography>
+                            <Stack direction="row" alignItems="center" spacing={2}>
+                                <LinearProgress
+                                    variant="determinate"
+                                    value={progress.total ? (progress.current / progress.total) * 100 : 0}
+                                    sx={{ flexGrow: 1, height: 10, borderRadius: 5, bgcolor: 'rgba(255,255,255,0.5)' }}
+                                    color="inherit"
+                                />
+                                <Typography variant="body2" fontWeight={700}>
+                                    {progress.current}/{progress.total}
+                                </Typography>
+                            </Stack>
+                        </Paper>
+                    )}
+
+                    {/* AKTARIM SONUCU / ÖZET */}
+                    {(summary || exportMsg) && (
+                        <Paper elevation={4} sx={{ mt: 3, p: 3, bgcolor: 'grey.50' }}>
+                            {/* Aktarım Mesajı */}
+                            {!!exportMsg && (
+                                <Chip
+                                    label={exportMsg}
+                                    color={exportMsg.includes("hata") || exportMsg.includes("başarısız") ? "error" : "success"}
+                                    sx={{ mb: 2, height: 'auto', '& .MuiChip-label': { whiteSpace: 'normal', py: 1 } }}
+                                />
+                            )}
+                            {/* Özet Tablo */}
+                            {summary && (
+                                <Box>
+                                    <Typography variant="h6" fontWeight={700} color="secondary.main" mb={1}>
+                                        Hesaplama Özeti ({summary.kayit} Kayıt)
+                                    </Typography>
+                                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap>
+                                        <DetailCard title="Toplam KM" value={fmtKm(summary.toplamKm)} icon="🛣️" />
+                                        <DetailCard title="Toplam Hak Ediş Kira" value={fmtTRY(summary.hakEdisKira)} icon="🏠" />
+                                        <DetailCard title="Toplam Hak Ediş Sürücü" value={fmtTRY(summary.hakEdisSurucu)} icon="👨‍💻" />
+                                        <DetailCard title="Toplam Sefer Maliyeti" value={fmtTRY(summary.seferKira + summary.seferSurucu)} icon="💸" highlight />
+                                    </Stack>
+                                </Box>
+                            )}
+                        </Paper>
+                    )}
+
+                    {/* DETAY TABLO */}
+                    {rows.length > 0 && (
+                        <Box sx={{ mt: 4 }}>
+                            <Typography variant="h6" fontWeight={700} mb={2}>
+                                Yüklenen ve Hesaplanan Detaylar
+                            </Typography>
+                            <TableContainer
+                                component={Paper}
+                                elevation={2}
+                                sx={{ maxHeight: '60vh' }}
+                            >
+                                <Table stickyHeader size="small" sx={{ minWidth: 1500 }}>
+                                    <TableHead>
+                                        <TableRow>
+                                            {DISPLAY_HEADERS.map((h) => (
+                                                <TableCell
+                                                    key={h}
+                                                    sx={{
+                                                        bgcolor: 'primary.light',
+                                                        color: 'primary.contrastText',
+                                                        fontWeight: 700,
+                                                        whiteSpace: 'nowrap',
+                                                        fontSize: 12,
+                                                        py: 1,
+                                                    }}
+                                                    align={
+                                                        ["Aylık Kira", "Aylık sürücü", "Hak Ediş Kira", "Hak Ediş Sürücü", "Sefer Kira Maliyeti", "Sefer Sürücü Maliyeti"].includes(h)
+                                                            ? 'right' : ['Toplam KM', 'Çalışma Günü'].includes(h) ? 'center' : 'left'
+                                                    }
+                                                >
+                                                    {h}
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {rows.map((r, i) => (
+                                            <TableRow
+                                                key={i}
+                                                sx={{ '&:nth-of-type(odd)': { backgroundColor: 'action.hover' } }}
+                                            >
+                                                {DISPLAY_HEADERS.map((h) => {
+                                                    const v = r[h];
+                                                    let content;
+                                                    let isMoney = ["Aylık Kira", "Aylık sürücü", "Hak Ediş Kira", "Hak Ediş Sürücü", "Sefer Kira Maliyeti", "Sefer Sürücü Maliyeti"].includes(h);
+
+                                                    if (h === "Sefer Tarihi") content = fmtDateTR(v);
+                                                    else if (h === "TMSDespatchId" || h === "Cari ID") content = toPlainDigits(v);
+                                                    else if (isMoney) content = fmtTRY(v);
+                                                    else if (h === "Toplam KM" || h === "Çalışma Günü") content = fmtKm(v);
+                                                    else content = (v ?? "") === "" ? "—" : String(v);
+
+                                                    return (
+                                                        <TableCell
+                                                            key={h + i}
+                                                            align={
+                                                                isMoney
+                                                                    ? 'right'
+                                                                    : ['Toplam KM', 'Çalışma Günü'].includes(h) ? 'center' : 'left'
+                                                            }
+                                                            sx={{
+                                                                fontSize: 11,
+                                                                py: 0.8,
+                                                                fontWeight: isMoney ? 600 : 400,
+                                                                color: isMoney ? 'success.dark' : 'text.primary',
+                                                                whiteSpace: h === "Açıklama" ? 'normal' : 'nowrap',
+                                                            }}
+                                                        >
+                                                            {content}
+                                                        </TableCell>
+                                                    );
+                                                })}
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </Box>
+                    )}
+                </Paper>
+            </Container>
+        </Box>
     );
 }
+
+// Yeni Özet Kart Bileşeni
+const DetailCard = ({ title, value, icon, highlight = false }) => (
+    <Paper
+        variant="outlined"
+        sx={{
+            p: 1.5,
+            borderRadius: 2,
+            minWidth: 150,
+            flexGrow: 1,
+            textAlign: 'center',
+            bgcolor: highlight ? 'secondary.main' : 'background.paper',
+            color: highlight ? 'secondary.contrastText' : 'text.primary',
+        }}
+    >
+        <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.1 }}>
+            {icon} {value}
+        </Typography>
+        <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 600 }}>
+            {title}
+        </Typography>
+    </Paper>
+);

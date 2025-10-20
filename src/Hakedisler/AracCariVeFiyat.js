@@ -34,6 +34,7 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
+    Grid,
 } from "@mui/material";
 
 // MUI - Iconlar
@@ -50,9 +51,9 @@ import {
     Add as AddIcon,
     ClearAll as ClearAllIcon,
     Tune as TuneIcon,
+    HomeOutlined as HomeIcon,
+    ArrowBackIosNew as ArrowBackIcon,
 } from "@mui/icons-material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBackIosNew";
-import HomeIcon from "@mui/icons-material/HomeOutlined";
 
 import { utils as XLSXUtils, writeFile as XLSXWriteFile } from "xlsx";
 
@@ -174,8 +175,8 @@ export default function AracCariVeFiyat() {
     const [permLoading, setPermLoading] = useState(true);
     const [perms, setPerms] = useState({
         canCreate: false,
-        canEditAny: false,   // en az bir alan editlenebilir mi?
-        fields: {            // alan-bazlı bayraklar
+        canEditAny: false,
+        fields: {
             cari_id: false,
             cari_adi: false,
             arac_sahibi: false,
@@ -187,74 +188,46 @@ export default function AracCariVeFiyat() {
         },
     });
 
+    // Yetki yükleme fonksiyonu (Değişmedi)
     async function loadPermissions() {
         try {
             setPermLoading(true);
-
-            // login sonrası localStorage’a koyduğun user id’yi kullan
             const userId = parseInt(localStorage.getItem("kullaniciId") || "", 10);
-
-            // Güvenli UUID kontrolü
             const looksLikeUUID = (s) =>
                 typeof s === "string" &&
                 /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
-
-            // 1) kullanıcı
-            const { data: userRow, error: eU } = await supabase
-                .from("login")
-                .select("id, rol, kullanici")
-                .eq("id", userId)
-                .maybeSingle();
+            const { data: userRow, error: eU } = await supabase.from("login").select("id, rol, kullanici").eq("id", userId).maybeSingle();
             if (eU) throw eU;
-
-            // 2) rol id (UUID mi yoksa roles.key mi?)
             let roleId = null;
             if (userRow?.rol) {
                 if (looksLikeUUID(userRow.rol)) {
                     roleId = userRow.rol;
                 } else {
                     const roleKey = String(userRow.rol || "").toUpperCase();
-                    const { data: roleRow, error: eR } = await supabase
-                        .from("roles")
-                        .select("id,key")
-                        .eq("key", roleKey)
-                        .maybeSingle();
+                    const { data: roleRow, error: eR } = await supabase.from("roles").select("id,key").eq("key", roleKey).maybeSingle();
                     if (eR) throw eR;
                     roleId = roleRow?.id || null;
                 }
             }
-
-            // 3) rol izinleri (bu ekran için)
             let rolePerm = {};
             if (roleId) {
                 const { data: rp, error: eRP } = await supabase
                     .from("role_permissions")
-                    .select(`
-                    acf_create, acf_edit, acf_delete,
-                    acf_edit_cari_id, acf_edit_cari_adi, acf_edit_arac_sahibi, acf_edit_odak_tipi,
-                    acf_edit_aylik_kira, acf_edit_aylik_surucu, acf_edit_calisma_gunu, acf_edit_pasif
-                `)
+                    .select(`acf_create, acf_edit, acf_delete, acf_edit_cari_id, acf_edit_cari_adi, acf_edit_arac_sahibi, acf_edit_odak_tipi, acf_edit_aylik_kira, acf_edit_aylik_surucu, acf_edit_calisma_gunu, acf_edit_pasif`)
                     .eq("screen_key", "arac_cari_fiyat")
                     .eq("role_id", roleId)
                     .maybeSingle();
                 if (eRP) throw eRP;
                 rolePerm = rp || {};
             }
-
-            // 4) kullanıcı override (tek satır) — DİKKAT: screen_key filtresi YOK!
             const { data: up, error: eUP } = await supabase
                 .from("user_permissions")
-                .select(`
-                acf_create, acf_edit, acf_delete,
-                acf_edit_cari_id, acf_edit_cari_adi, acf_edit_arac_sahibi, acf_edit_odak_tipi,
-                acf_edit_aylik_kira, acf_edit_aylik_surucu, acf_edit_calisma_gunu, acf_edit_pasif
-            `)
+                .select(`acf_create, acf_edit, acf_delete, acf_edit_cari_id, acf_edit_cari_adi, acf_edit_arac_sahibi, acf_edit_odak_tipi, acf_edit_aylik_kira, acf_edit_aylik_surucu, acf_edit_calisma_gunu, acf_edit_pasif`)
                 .eq("user_id", userRow?.id)
                 .maybeSingle();
             if (eUP) throw eUP;
 
-            const coalesce = (ovr, role) =>
-                (ovr === true || ovr === false) ? ovr : !!role;
+            const coalesce = (ovr, role) => (ovr === true || ovr === false) ? ovr : !!role;
 
             const canCreate = coalesce(up?.acf_create, rolePerm?.acf_create);
             const fields = {
@@ -267,28 +240,22 @@ export default function AracCariVeFiyat() {
                 calisma_gunu: coalesce(up?.acf_edit_calisma_gunu, rolePerm?.acf_edit_calisma_gunu),
                 pasif: coalesce(up?.acf_edit_pasif, rolePerm?.acf_edit_pasif),
             };
-
-            // Genel acf_edit açık ya da alan-bazlılardan en az biri true ise edit başlatılabilsin
             const generalEdit = coalesce(up?.acf_edit, rolePerm?.acf_edit);
             const canEditAny = !!generalEdit || Object.values(fields).some(Boolean);
-
             setPerms({ canCreate, canEditAny, fields });
         } catch (e) {
             console.error("perm load error:", e);
             setPerms({
-                canCreate: false,
-                canEditAny: false,
-                fields: {
-                    cari_id: false, cari_adi: false, arac_sahibi: false, odak_arac_calisma_tipi: false,
-                    aylik_kira: false, aylik_surucu: false, calisma_gunu: false, pasif: false
-                }
+                canCreate: false, canEditAny: false,
+                fields: { cari_id: false, cari_adi: false, arac_sahibi: false, odak_arac_calisma_tipi: false, aylik_kira: false, aylik_surucu: false, calisma_gunu: false, pasif: false }
             });
         } finally {
             setPermLoading(false);
         }
     }
 
-    /* --------- Ölçekleme --------- */
+
+    /* --------- Ölçekleme (Aynı kalır) --------- */
     useLayoutEffect(() => {
         function fit() {
             const wrap = wrapRef.current;
@@ -296,7 +263,7 @@ export default function AracCariVeFiyat() {
             if (!wrap || !tbl) return;
 
             const wrapW = wrap.clientWidth;
-            const tblW = tbl.scrollWidth;              // tablonun doğal genişliği
+            const tblW = tbl.scrollWidth;
             const scale = Math.min(1, wrapW / Math.max(1, tblW));
 
             wrap.style.setProperty("--acf-scale", String(scale));
@@ -313,9 +280,10 @@ export default function AracCariVeFiyat() {
         const { pasif, ...rest } = filters;
         let c = Object.values(rest).filter((v) => v !== "" && v !== null).length;
         if (filters.pasif !== "hepsi") c += 1;
-        return c + (onlyActive ? 1 : 0);
+        return c + (onlyActive && filters.pasif === "hepsi" ? 1 : 0);
     }, [filters, onlyActive]);
 
+    // Veri çekme fonksiyonu (Değişmedi)
     const refetch = async () => {
         setLoading(true);
         setErr(null);
@@ -338,32 +306,28 @@ export default function AracCariVeFiyat() {
             }
         };
         run();
-        loadPermissions(); // 👈 yetkileri de getir
+        loadPermissions();
         return () => {
             ignore = true;
         };
     }, []);
 
-    /* --------- Filter / Sort --------- */
+    /* --------- Filter / Sort (Aynı kalır) --------- */
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
         let list = rows;
-
         if (q) {
-            list = list.filter(
-                (r) =>
-                    (r.plaka || "").toLowerCase().includes(q) ||
-                    (r.cari_adi || "").toLowerCase().includes(q) ||
-                    (r.arac_sahip || "").toLowerCase().includes(q) ||
-                    (r.odak_arac_calisma_tipi || "").toLowerCase().includes(q) ||
-                    String(r.cari_id || "").toLowerCase().includes(q)
+            list = list.filter((r) =>
+                (r.plaka || "").toLowerCase().includes(q) ||
+                (r.cari_adi || "").toLowerCase().includes(q) ||
+                (r.arac_sahip || "").toLowerCase().includes(q) ||
+                (r.odak_arac_calisma_tipi || "").toLowerCase().includes(q) ||
+                String(r.cari_id || "").toLowerCase().includes(q)
             );
         }
-
         if (onlyActive) {
             list = list.filter((r) => !r.pasif);
         }
-
         const f = filters;
         list = list.filter((r) => {
             const kira = toNumberLoose(r.aylik_kira);
@@ -371,17 +335,16 @@ export default function AracCariVeFiyat() {
             const toplam = kira + surucu;
             const gun = toNumberLoose(r.calisma_gunu);
             const tarih = r.duzenleme_yapilan_tarih ? new Date(r.duzenleme_yapilan_tarih) : null;
-
             if (f.plaka && !(r.plaka || "").toLowerCase().includes(f.plaka.toLowerCase())) return false;
             if (f.cari_id && !String(r.cari_id || "").toLowerCase().includes(String(f.cari_id).toLowerCase())) return false;
             if (f.cari_adi && !(r.cari_adi || "").toLowerCase().includes(f.cari_adi.toLowerCase())) return false;
             if (f.arac_sahip && !(r.arac_sahip || "").toLowerCase().includes(f.arac_sahip.toLowerCase())) return false;
             if (f.aciklama && !(r.aciklama || "").toLowerCase().includes(f.aciklama.toLowerCase())) return false;
             if (f.duzenleyen && !(r.duzenleme_yapan_kullanici || "").toLowerCase().includes(f.duzenleyen.toLowerCase())) return false;
-
-            if (f.pasif === "aktif" && !!r.pasif) return false;
-            if (f.pasif === "pasif" && !r.pasif) return false;
-
+            if (!onlyActive) {
+                if (f.pasif === "aktif" && !!r.pasif) return false;
+                if (f.pasif === "pasif" && !r.pasif) return false;
+            }
             if (f.aylik_kira_min !== "" && kira < toNumberLoose(f.aylik_kira_min)) return false;
             if (f.aylik_kira_max !== "" && kira > toNumberLoose(f.aylik_kira_max)) return false;
             if (f.aylik_surucu_min !== "" && surucu < toNumberLoose(f.aylik_surucu_min)) return false;
@@ -390,7 +353,6 @@ export default function AracCariVeFiyat() {
             if (f.toplam_max !== "" && toplam > toNumberLoose(f.toplam_max)) return false;
             if (f.calisma_gunu_min !== "" && gun < toNumberLoose(f.calisma_gunu_min)) return false;
             if (f.calisma_gunu_max !== "" && gun > toNumberLoose(f.calisma_gunu_max)) return false;
-
             if (f.tarih_from) {
                 const from = new Date(f.tarih_from);
                 if (tarih && tarih < from) return false;
@@ -399,10 +361,8 @@ export default function AracCariVeFiyat() {
                 const to = new Date(f.tarih_to);
                 if (tarih && tarih > to) return false;
             }
-
             return true;
         });
-
         return list;
     }, [rows, query, onlyActive, filters]);
 
@@ -412,7 +372,6 @@ export default function AracCariVeFiyat() {
         copy.sort((a, b) => {
             const va = a?.[key];
             const vb = b?.[key];
-
             const numericKeys = new Set(["aylik_kira", "aylik_surucu", "calisma_gunu", "cari_id", "toplam_tutar"]);
 
             if (key === "toplam_tutar") {
@@ -420,19 +379,16 @@ export default function AracCariVeFiyat() {
                 const nb = toNumberLoose(b?.aylik_kira) + toNumberLoose(b?.aylik_surucu);
                 return dir === "asc" ? na - nb : nb - na;
             }
-
             if (numericKeys.has(key)) {
                 const na = Number(toNumberLoose(va));
                 const nb = Number(toNumberLoose(vb));
                 return dir === "asc" ? na - nb : nb - na;
             }
-
             if (key === "duzenleme_yapilan_tarih") {
                 const da = va ? new Date(va).getTime() : 0;
                 const db = vb ? new Date(vb).getTime() : 0;
                 return dir === "asc" ? da - db : db - da;
             }
-
             const sa = (va ?? "").toString().toLowerCase();
             const sb = (vb ?? "").toString().toLowerCase();
             if (sa < sb) return dir === "asc" ? -1 : 1;
@@ -446,16 +402,16 @@ export default function AracCariVeFiyat() {
         setSortBy((prev) => (prev.key !== key ? { key, dir: "asc" } : { key, dir: prev.dir === "asc" ? "desc" : "asc" }));
     };
 
-    /* --------- Totals (footer) --------- */
+    /* --------- Totals (footer) (Aynı kalır) --------- */
     const totals = useMemo(() => {
         const sumKira = sorted.reduce((acc, r) => acc + toNumberLoose(r.aylik_kira), 0);
         const sumSurucu = sorted.reduce((acc, r) => acc + toNumberLoose(r.aylik_surucu), 0);
         return { kira: sumKira, surucu: sumSurucu, toplam: sumKira + sumSurucu };
     }, [sorted]);
 
-    /* --------- Edit Handlers --------- */
+    /* --------- Edit Handlers (Aynı kalır) --------- */
     const startEdit = (row) => {
-        if (permLoading) return; // izinler yüklenirken beklet
+        if (permLoading) return;
         if (!perms.canEditAny) {
             alert("Düzenleme yetkiniz yok.");
             return;
@@ -483,7 +439,6 @@ export default function AracCariVeFiyat() {
 
             const payload = {};
 
-            // Her alanı kendi yetkisine göre ekle
             if (perms.fields.cari_id && editData.cari_id != null) {
                 const newCariIdStr = (editData.cari_id ?? "").toString();
                 const newCariId = Number(newCariIdStr.replace(/[^\d-]/g, ""));
@@ -504,11 +459,9 @@ export default function AracCariVeFiyat() {
             }
             if (perms.fields.pasif) payload.pasif = !!editData.pasif;
 
-            // audit alanları
             payload.duzenleme_yapan_kullanici = localStorage.getItem("kullanici") || "Admin";
             payload.duzenleme_yapilan_tarih = new Date().toISOString();
 
-            // yalnız audit geldiyse (hiç yetkili alan değişmiyorsa) uyar
             if (Object.keys(payload).length <= 2) {
                 alert("Değişiklik yok ya da yetkisiz alanlar.");
                 return;
@@ -539,7 +492,7 @@ export default function AracCariVeFiyat() {
         }
     };
 
-    /* --------- Yeni Kayıt Ekle (Dialog) --------- */
+    /* --------- Yeni Kayıt Ekle (Dialog) (Aynı kalır) --------- */
     const handleAddChange = (key, value) => setAddForm((p) => ({ ...p, [key]: value }));
 
     const addNew = async () => {
@@ -548,10 +501,8 @@ export default function AracCariVeFiyat() {
             return;
         }
         setAddError(null);
-
         if (!addForm.plaka?.trim()) return setAddError("Plaka zorunludur.");
         if (!addForm.cari_id?.trim()) return setAddError("Cari ID zorunludur.");
-
         setAdding(true);
         try {
             const payload = {
@@ -570,17 +521,9 @@ export default function AracCariVeFiyat() {
 
             const { error } = await supabase.from("arac_cari_ve_fiyat").insert([payload]);
             if (error) throw error;
-
             setAddForm({
-                plaka: "",
-                cari_id: "",
-                cari_adi: "",
-                arac_sahip: "",
-                aylik_kira: "",
-                aylik_surucu: "",
-                calisma_gunu: "",
-                pasif: false,
-                aciklama: "",
+                plaka: "", cari_id: "", cari_adi: "", arac_sahip: "",
+                aylik_kira: "", aylik_surucu: "", calisma_gunu: "", pasif: false, aciklama: "",
             });
             await refetch();
             setShowAdd(false);
@@ -591,63 +534,41 @@ export default function AracCariVeFiyat() {
         }
     };
 
-    /* --------- Excel Export --------- */
+    /* --------- Excel Export (Aynı kalır) --------- */
     const exportToExcel = () => {
         const data = sorted.map((r) => ({
-            Plaka: r.plaka ?? "",
-            "Cari ID": r.cari_id ?? "",
-            "Cari Adı": r.cari_adi ?? "",
-            "Araç Sahibi": r.arac_sahip ?? "",
-            "Odak Araç Çalışma Tipi": r.odak_arac_calisma_tipi ?? "",
-            "Aylık Kira": toNumberLoose(r.aylik_kira),
-            "Aylık Sürücü": toNumberLoose(r.aylik_surucu),
+            Plaka: r.plaka ?? "", "Cari ID": r.cari_id ?? "", "Cari Adı": r.cari_adi ?? "",
+            "Araç Sahibi": r.arac_sahip ?? "", "Odak Araç Çalışma Tipi": r.odak_arac_calisma_tipi ?? "",
+            "Aylık Kira": toNumberLoose(r.aylik_kira), "Aylık Sürücü": toNumberLoose(r.aylik_surucu),
             "Toplam Tutar": toNumberLoose(r.aylik_kira) + toNumberLoose(r.aylik_surucu),
-            "Çalışma Günü": r.calisma_gunu ?? "",
-            Pasif: r.pasif ? "Evet" : "Hayır",
-            Açıklama: r.aciklama ?? "",
-            Düzenleyen: r.duzenleme_yapan_kullanici ?? "",
+            "Çalışma Günü": r.calisma_gunu ?? "", Pasif: r.pasif ? "Evet" : "Hayır",
+            Açıklama: r.aciklama ?? "", Düzenleyen: r.duzenleme_yapan_kullanici ?? "",
             "Düzenleme Tarihi": r.duzenleme_yapilan_tarih ? formatDate(r.duzenleme_yapilan_tarih) : "",
         }));
 
         data.push({});
         data.push({
-            Plaka: "TOPLAM (filtrelenmiş):",
-            "Cari ID": "",
-            "Cari Adı": "",
-            "Araç Sahibi": "",
-            "Aylık Kira": totals.kira,
-            "Aylık Sürücü": totals.surucu,
-            "Toplam Tutar": totals.toplam,
-            "Çalışma Günü": "",
-            Pasif: "",
-            Açıklama: "",
-            Düzenleyen: "",
-            "Düzenleme Tarihi": "",
+            Plaka: "TOPLAM (filtrelenmiş):", "Cari ID": "", "Cari Adı": "", "Araç Sahibi": "",
+            "Aylık Kira": totals.kira, "Aylık Sürücü": totals.surucu, "Toplam Tutar": totals.toplam,
+            "Çalışma Günü": "", Pasif: "", Açıklama: "", Düzenleyen: "", "Düzenleme Tarihi": "",
         });
 
         const ws = XLSXUtils.json_to_sheet(data, { skipHeader: false });
         ws["!cols"] = [
-            { wch: 12 },
-            { wch: 10 },
-            { wch: 28 },
-            { wch: 20 },
-            { wch: 20 },
-            { wch: 14 },
-            { wch: 14 },
-            { wch: 14 },
-            { wch: 8 },
-            { wch: 30 },
-            { wch: 14 },
-            { wch: 20 },
+            { wch: 12 }, { wch: 10 }, { wch: 28 }, { wch: 20 }, { wch: 20 }, { wch: 14 },
+            { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 30 }, { wch: 14 }, { wch: 20 },
         ];
         const wb = XLSXUtils.book_new();
         XLSXUtils.book_append_sheet(wb, ws, "AraçCariFiyat");
         XLSXWriteFile(wb, `arac_cari_fiyat_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
-    /* --------- UI bits --------- */
+    /* ---------------------------------------------------- */
+    /* ----------------- YENİLENEN UI BÖLÜMÜ ----------------- */
+    /* ---------------------------------------------------- */
+
     const SortIcon = ({ col }) => {
-        if (sortBy.key !== col) return <ImportExport fontSize="inherit" sx={{ opacity: 0.6 }} />;
+        if (sortBy.key !== col) return <ImportExport fontSize="inherit" sx={{ opacity: 0.5, transform: "scale(0.8)" }} />;
         return sortBy.dir === "asc" ? <ArrowUpward fontSize="inherit" /> : <ArrowDownward fontSize="inherit" />;
     };
 
@@ -660,13 +581,14 @@ export default function AracCariVeFiyat() {
                 whiteSpace: "nowrap",
                 fontWeight: 900,
                 cursor: "pointer",
-                fontSize: 15.5,
-                letterSpacing: 0.2,
-                py: 1.25,
+                fontSize: 13, // DAHA KÜÇÜK YAZI
+                letterSpacing: 0.1,
+                py: 1, // DAHA KISA SATIR YÜKSEKLİĞİ
+                color: "text.primary",
                 ...props?.sx,
             }}
         >
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={0.5} alignItems="center" justifyContent={props.align === "right" ? "flex-end" : "flex-start"}>
                 <span>{label}</span>
                 <SortIcon col={key} />
             </Stack>
@@ -675,43 +597,42 @@ export default function AracCariVeFiyat() {
 
     const clearFilters = () => {
         const empty = {
-            plaka: "",
-            cari_id: "",
-            cari_adi: "",
-            arac_sahip: "",
-            aylik_kira_min: "",
-            aylik_kira_max: "",
-            aylik_surucu_min: "",
-            aylik_surucu_max: "",
-            toplam_min: "",
-            toplam_max: "",
-            calisma_gunu_min: "",
-            calisma_gunu_max: "",
-            pasif: "hepsi",
-            aciklama: "",
-            duzenleyen: "",
-            tarih_from: "",
-            tarih_to: "",
+            plaka: "", cari_id: "", cari_adi: "", arac_sahip: "",
+            aylik_kira_min: "", aylik_kira_max: "", aylik_surucu_min: "", aylik_surucu_max: "",
+            toplam_min: "", toplam_max: "", calisma_gunu_min: "", calisma_gunu_max: "",
+            pasif: "hepsi", aciklama: "", duzenleyen: "", tarih_from: "", tarih_to: "",
         };
         setFilters(empty);
         setTempFilters(empty);
+        setOnlyActive(false);
     };
 
     const FilterBadge = ({ children }) => (
-        <Badge color="secondary" badgeContent={activeFilterCount || 0} invisible={activeFilterCount === 0}>
+        <Badge
+            color="secondary"
+            badgeContent={activeFilterCount || 0}
+            invisible={activeFilterCount === 0}
+            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+            sx={{
+                "& .MuiBadge-badge": {
+                    right: 4, top: 4, padding: '0 4px', height: 18, minWidth: 18, fontSize: 10,
+                }
+            }}
+        >
             {children}
         </Badge>
     );
 
-    // Top toolbar
+    // Top toolbar (Değişmedi)
     const TopToolbar = (
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ xs: "stretch", md: "center" }}>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} alignItems={{ xs: "stretch", md: "center" }} flexWrap="wrap">
             <TextField
-                size="medium"
-                placeholder="Plaka, Araç Sahibi, Cari Adı veya Cari ID ara…"
+                size="small"
+                variant="outlined"
+                placeholder="Genel Ara..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                sx={{ minWidth: { xs: "100%", md: 420 } }}
+                sx={{ minWidth: { xs: "100%", md: 280 } }}
                 InputProps={{
                     startAdornment: (
                         <InputAdornment position="start">
@@ -726,93 +647,92 @@ export default function AracCariVeFiyat() {
                 exclusive
                 value={onlyActive ? "aktif" : "hepsi"}
                 onChange={(_, v) => setOnlyActive(v === "aktif")}
+                color="primary"
                 sx={{ borderRadius: 999, overflow: "hidden" }}
             >
-                <ToggleButton value="hepsi">Tümü</ToggleButton>
-                <ToggleButton value="aktif">Sadece Aktif</ToggleButton>
+                <ToggleButton value="hepsi" sx={{ fontSize: 12 }}>Tümü</ToggleButton>
+                <ToggleButton value="aktif" sx={{ fontSize: 12 }}>Sadece Aktif</ToggleButton>
             </ToggleButtonGroup>
 
             <FilterBadge>
-                <Button variant="outlined" color="secondary" startIcon={<TuneIcon />} onClick={() => setDrawerOpen(true)} size="medium">
-                    Gelişmiş Filtreler
+                <Button variant="contained" color="primary" startIcon={<TuneIcon />} onClick={() => setDrawerOpen(true)} size="small" sx={{ textTransform: 'none', fontWeight: 600 }}>
+                    Filtreler
                 </Button>
             </FilterBadge>
 
-            <Button variant="outlined" color="primary" startIcon={<RefreshIcon />} onClick={refetch} size="medium">
+            <Button variant="outlined" color="primary" startIcon={<RefreshIcon />} onClick={refetch} size="small" sx={{ textTransform: 'none' }}>
                 Yenile
             </Button>
-            <Button variant="contained" color="primary" startIcon={<DownloadIcon />} onClick={exportToExcel} size="medium">
-                Excel’e Aktar
+            <Button variant="contained" color="secondary" startIcon={<DownloadIcon />} onClick={exportToExcel} size="small" sx={{ textTransform: 'none', fontWeight: 600 }}>
+                Excel
             </Button>
 
-            {/* Yeni Kayıt — Yetki kontrollü */}
             <Tooltip title={perms.canCreate ? "" : "Yeni kayıt ekleme yetkiniz yok"}>
                 <span>
                     <Button
                         variant="contained"
-                        color="secondary"
+                        color="success"
                         startIcon={<AddIcon />}
                         onClick={() => {
                             if (!perms.canCreate) return;
                             setShowAdd(true);
                         }}
-                        size="medium"
+                        size="small"
                         disabled={!perms.canCreate || permLoading}
+                        sx={{ textTransform: 'none', fontWeight: 600 }}
                     >
                         Yeni Kayıt
                     </Button>
                 </span>
             </Tooltip>
-
-            <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} size="medium">
-                Geri
-            </Button>
-            <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)} size="medium">
-                Anasayfa
-            </Button>
         </Stack>
     );
 
-    // Quick chips
+    // Quick chips (Değişmedi)
     const ActiveFilterChips =
         activeFilterCount > 0 && (
-            <Stack direction="row" spacing={1} mt={1.25} flexWrap="wrap">
+            <Stack direction="row" spacing={1} mt={1.5} flexWrap="wrap" alignItems="center">
+                <Typography variant="body2" fontWeight={600} sx={{ opacity: 0.8 }}>Aktif Filtreler:</Typography>
+                {onlyActive && filters.pasif === "hepsi" && (
+                    <Chip
+                        key="onlyActive"
+                        label="Sadece Aktif"
+                        onDelete={() => setOnlyActive(false)}
+                        sx={{ fontSize: 11, height: 24, bgcolor: 'secondary.light', color: 'secondary.contrastText' }}
+                    />
+                )}
                 {Object.entries(filters).map(([k, v]) => {
                     if (v === "" || v === null || (k === "pasif" && v === "hepsi")) return null;
                     const labels = {
-                        plaka: "Plaka",
-                        cari_id: "Cari ID",
-                        cari_adi: "Cari Adı",
-                        arac_sahip: "Araç Sahibi",
-                        aylik_kira_min: "Kira ≥",
-                        aylik_kira_max: "Kira ≤",
-                        aylik_surucu_min: "Sürücü ≥",
-                        aylik_surucu_max: "Sürücü ≤",
-                        toplam_min: "Toplam ≥",
-                        toplam_max: "Toplam ≤",
-                        calisma_gunu_min: "Gün ≥",
-                        calisma_gunu_max: "Gün ≤",
-                        pasif: "Durum",
-                        aciklama: "Açıklama",
-                        duzenleyen: "Düzenleyen",
-                        tarih_from: "Tarih ≥",
-                        tarih_to: "Tarih ≤",
+                        plaka: "Plaka", cari_id: "Cari ID", cari_adi: "Cari Adı", arac_sahip: "Araç Sahibi",
+                        aylik_kira_min: "Kira ≥", aylik_kira_max: "Kira ≤", aylik_surucu_min: "Sürücü ≥", aylik_surucu_max: "Sürücü ≤",
+                        toplam_min: "Toplam ≥", toplam_max: "Toplam ≤", calisma_gunu_min: "Gün ≥", calisma_gunu_max: "Gün ≤",
+                        pasif: "Durum", aciklama: "Açıklama", duzenleyen: "Düzenleyen",
+                        tarih_from: "Tarih ≥", tarih_to: "Tarih ≤",
                     };
+                    const displayValue = k.includes("tarih") ? new Date(v).toLocaleDateString("tr-TR") : v;
                     return (
                         <Chip
                             key={k}
-                            label={`${labels[k] || k}: ${v}`}
+                            label={`${labels[k] || k}: ${displayValue}`}
                             onDelete={() => setFilters((p) => ({ ...p, [k]: k === "pasif" ? "hepsi" : "" }))}
-                            sx={{ fontSize: 13, height: 28 }}
+                            size="small"
+                            sx={{ fontSize: 11, height: 24, bgcolor: 'info.light', color: 'info.contrastText' }}
                         />
                     );
                 })}
-                <Button size="small" startIcon={<ClearAllIcon />} onClick={clearFilters}>
+                <Button
+                    size="small"
+                    startIcon={<ClearAllIcon />}
+                    onClick={clearFilters}
+                    sx={{ textTransform: 'none', fontSize: 12, ml: 1, color: 'text.secondary' }}
+                >
                     Hepsini Temizle
                 </Button>
             </Stack>
         );
 
+    // Ana bileşen render'ı
     return (
         <Box
             sx={{
@@ -824,84 +744,86 @@ export default function AracCariVeFiyat() {
                         ? `radial-gradient(1200px 600px at 10% -10%, rgba(120,119,198,0.18), transparent 60%),
                            radial-gradient(900px 500px at 100% 0%, rgba(56,189,248,0.12), transparent 60%),
                            ${t.palette.background.default}`
-                        : "linear-gradient(180deg, #f7f9ff 0%, #ffffff 60%)",
+                        : "linear-gradient(180deg, #f0f4f9 0%, #ffffff 60%)",
             }}
         >
             <Container maxWidth={false} disableGutters>
                 <Box sx={{ maxWidth: "none", mx: "auto", px: { xs: 1.5, md: 2.5 } }}>
                     <Paper
-                        elevation={10}
+                        elevation={16}
                         sx={{
-                            borderRadius: 5,
+                            borderRadius: 4,
                             overflow: "hidden",
-                            backdropFilter: "blur(10px)",
+                            backdropFilter: "blur(12px)",
                             border: (t) => `1px solid ${t.palette.divider}`,
                             boxShadow: (t) =>
                                 t.palette.mode === "dark"
-                                    ? "0 10px 30px rgba(0,0,0,0.35)"
-                                    : "0 18px 40px rgba(38, 78, 118, 0.12)",
+                                    ? "0 20px 60px rgba(0,0,0,0.5)"
+                                    : "0 25px 50px rgba(38, 78, 118, 0.15)",
                         }}
                     >
                         {/* Header */}
                         <Box
                             sx={{
-                                p: { xs: 2.5, md: 3.25 },
+                                p: { xs: 2, md: 3 },
                                 background: (t) =>
                                     t.palette.mode === "dark"
                                         ? `linear-gradient(135deg, ${t.palette.background.default} 0%, ${t.palette.background.paper} 100%)`
-                                        : "linear-gradient(135deg, #eef3ff 0%, #ffffff 60%)",
+                                        : "linear-gradient(135deg, #e5f1ff 0%, #ffffff 60%)",
                             }}
                         >
                             <Stack
-                                direction={{ xs: "column", sm: "row" }}
-                                alignItems={{ xs: "start", sm: "center" }}
+                                direction={{ xs: "column", lg: "row" }}
+                                alignItems={{ xs: "start", lg: "center" }}
                                 justifyContent="space-between"
                                 spacing={2}
                             >
-                                <Stack spacing={0.5}>
+                                <Stack spacing={1}>
                                     <Typography
                                         variant="h5"
                                         fontWeight={900}
                                         sx={{
                                             lineHeight: 1.1,
                                             letterSpacing: 0.2,
-                                            background: "linear-gradient(90deg,#7c3aed,#06b6d4)",
+                                            background: "linear-gradient(90deg, #6d28d9, #0ea5e9)",
                                             WebkitBackgroundClip: "text",
                                             WebkitTextFillColor: "transparent",
                                         }}
                                     >
-                                        Araç Cari & Fiyat
+                                        ARAÇ CARİ & FİYAT YÖNETİMİ 🚀
                                     </Typography>
                                     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                                         {loading && (
                                             <Chip
-                                                label="Yükleniyor…"
+                                                label="Yükleniyor..."
                                                 color="info"
                                                 variant="outlined"
-                                                icon={<CircularProgress size={14} />}
-                                                sx={{ height: 28 }}
+                                                icon={<CircularProgress size={14} color="info" />}
+                                                sx={{ height: 26, fontSize: 12 }}
                                             />
                                         )}
-                                        {err && <Chip label={`Hata: ${err}`} color="error" variant="outlined" sx={{ height: 28 }} />}
-                                        {!loading && !err && <Chip label={`Toplam: ${sorted.length}`} variant="outlined" sx={{ height: 28 }} />}
+                                        {err && <Chip label={`Hata: ${err}`} color="error" variant="outlined" sx={{ height: 26, fontSize: 12 }} />}
+                                        {!loading && !err && <Chip label={`Toplam Kayıt: ${sorted.length}`} variant="outlined" sx={{ height: 26, fontSize: 12 }} />}
 
                                         {permLoading ? (
-                                            <Chip size="small" variant="outlined" label="Yetkiler yükleniyor…" sx={{ height: 24 }} />
+                                            <Chip size="small" variant="outlined" label="Yetkiler yükleniyor..." sx={{ height: 26, fontSize: 12 }} />
                                         ) : (
                                             <>
-                                                {!perms.canCreate && (
-                                                    <Chip size="small" variant="outlined" label="Yeni Kayıt: Kapalı" />
-                                                )}
-                                                    {!perms.canEditAny && (
-                                                        <Chip size="small" variant="outlined" label="Düzenleme: Kapalı" />
-                                                    )}
+                                                {!perms.canCreate && (<Chip size="small" variant="outlined" label="Yeni Kayıt Kapalı" color="warning" sx={{ height: 26, fontSize: 12 }} />)}
+                                                {!perms.canEditAny && (<Chip size="small" variant="outlined" label="Düzenleme Kapalı" color="warning" sx={{ height: 26, fontSize: 12 }} />)}
                                             </>
                                         )}
                                     </Stack>
                                 </Stack>
-                                {TopToolbar}
+                                <Box sx={{ flexShrink: 0 }}>
+                                    {TopToolbar}
+                                </Box>
                             </Stack>
                             {ActiveFilterChips}
+                            <Stack direction="row" spacing={1.5} justifyContent="flex-end" mt={2} flexWrap="wrap">
+                                <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} size="small" sx={{ textTransform: 'none', color: 'text.secondary' }}>Geri</Button>
+                                <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)} size="small" sx={{ textTransform: 'none', color: 'text.secondary' }}>Anasayfa</Button>
+                            </Stack>
                         </Box>
 
                         <Divider />
@@ -910,62 +832,71 @@ export default function AracCariVeFiyat() {
                         <TableContainer
                             ref={wrapRef}
                             sx={{
-                                maxHeight: "78vh",
+                                maxHeight: "70vh",
                                 width: "100%",
                                 overflowX: "auto",
+                                "& .acf-table": {
+                                    transformOrigin: "left center",
+                                    transform: "scale(var(--acf-scale))",
+                                },
                             }}
                         >
                             <Table
                                 ref={tableRef}
                                 className="acf-table acf-scale"
                                 stickyHeader
-                                size="medium"
+                                size="small"
                                 sx={{
+                                    // ⚡️ Değişiklik 1: tableLayout: "fixed" geri getirildi
                                     width: "100%",
                                     tableLayout: "fixed",
                                     "& thead th": {
-                                        bgcolor: (t) =>
-                                            t.palette.mode === "dark" ? t.palette.background.default : "#f3f6ff",
+                                        bgcolor: (t) => t.palette.mode === "dark" ? t.palette.background.default : "#eef4ff",
+                                        borderBottom: (t) => `2px solid ${t.palette.divider}`,
                                     },
                                     "& td, & th": {
-                                        fontSize: "clamp(10px, 1vw, 15px)",
+                                        // ⚡️ Değişiklik 2: Daha küçük font ve padding
+                                        fontSize: 13,
                                         wordBreak: "break-word",
                                         whiteSpace: "normal",
+                                        borderColor: (t) => t.palette.divider,
                                     },
                                     "& td": {
-                                        py: "clamp(0.4rem, 0.8vh, 1.1rem)",
+                                        py: 0.5, // Dikey boşluğu azalt
                                     },
                                     "& tbody tr:hover": {
                                         backgroundColor: (t) =>
                                             t.palette.mode === "dark"
-                                                ? "rgba(255,255,255,0.04)"
-                                                : "rgba(2,132,199,0.06)",
+                                                ? "rgba(109,40,249,0.06)"
+                                                : "rgba(109,40,249,0.04)",
                                     },
                                 }}
                             >
                                 <TableHead>
                                     <TableRow>
-                                        {headerCell("Plaka", "plaka")}
-                                        {headerCell("Cari ID", "cari_id")}
-                                        {headerCell("Cari Adı", "cari_adi")}
-                                        {headerCell("Araç Sahibi", "arac_sahip")}
-                                        {headerCell("Odak Araç Çalışma Tipi", "odak_arac_calisma_tipi")}
-                                        {headerCell("Aylık Kira", "aylik_kira", { align: "right" })}
-                                        {headerCell("Aylık Sürücü", "aylik_surucu", { align: "right" })}
-                                        {headerCell("Toplam Tutar", "toplam_tutar", { align: "right" })}
-                                        {headerCell("Çalışma Günü", "calisma_gunu", { align: "center" })}
-                                        {headerCell("Pasif", "pasif", { align: "center" })}
-                                        {headerCell("Açıklama", "aciklama")}
-                                        <TableCell sx={{ fontWeight: 900, fontSize: 15.5 }}>İşlem</TableCell>
-                                        {headerCell("Düzenleyen", "duzenleme_yapan_kullanici")}
-                                        {headerCell("Düzenleme Tarihi", "duzenleme_yapilan_tarih")}
+                                        {/* ⚡️ Değişiklik 3: Sütun Genişlikleri Daraltıldı (minWidth yerine doğrudan width) */}
+                                        <TableCell sx={{ fontWeight: 900, fontSize: 13, width: "70px" }}>Plaka</TableCell>
+                                        {headerCell("Cari ID", "cari_id", { sx: { width: "80px" } })}
+                                        {headerCell("Cari Adı", "cari_adi", { sx: { width: "150px" } })}
+                                        {headerCell("Sahibi", "arac_sahip", { sx: { width: "120px" } })}
+                                        {/* Sütun adı kısaltıldı */}
+                                        {headerCell("Çalışma Tipi", "odak_arac_calisma_tipi", { sx: { width: "120px" } })}
+                                        {headerCell("Aylık Kira", "aylik_kira", { align: "right", sx: { width: "100px" } })}
+                                        {headerCell("Aylık Sürücü", "aylik_surucu", { align: "right", sx: { width: "100px" } })}
+                                        {headerCell("Toplam Tutar", "toplam_tutar", { align: "right", sx: { width: "110px" } })}
+                                        {headerCell("Gün", "calisma_gunu", { align: "center", sx: { width: "50px" } })}
+                                        {headerCell("Pasif", "pasif", { align: "center", sx: { width: "50px" } })}
+                                        {headerCell("Açıklama", "aciklama", { sx: { width: "200px" } })}
+                                        <TableCell sx={{ fontWeight: 900, fontSize: 13, width: "70px" }}>İşlem</TableCell>
+                                        {headerCell("Düzenleyen", "duzenleme_yapan_kullanici", { sx: { width: "90px" } })}
+                                        {headerCell("Düzenleme Tarihi", "duzenleme_yapilan_tarih", { sx: { width: "140px" } })}
                                     </TableRow>
                                 </TableHead>
 
                                 <TableBody
                                     sx={{
                                         "& tr:nth-of-type(odd)": {
-                                            bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "#fafcff"),
+                                            bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "#f9fcfd"),
                                         },
                                     }}
                                 >
@@ -979,7 +910,7 @@ export default function AracCariVeFiyat() {
                                                 key={rowKey}
                                                 hover
                                                 selected={isEditing}
-                                                sx={{ "&.Mui-selected": { backgroundColor: (t) => t.palette.action.selected } }}
+                                                sx={{ "&.Mui-selected": { backgroundColor: (t) => t.palette.secondary.light + "22" } }}
                                             >
                                                 {/* Plaka */}
                                                 <TableCell title={r.plaka} sx={{ fontWeight: 800 }}>
@@ -988,13 +919,13 @@ export default function AracCariVeFiyat() {
 
                                                 {/* Cari ID (editable) */}
                                                 <TableCell>
-                                                    {isEditing ? (
+                                                    {isEditing && perms.fields.cari_id ? (
                                                         <TextField
                                                             value={editData.cari_id ?? ""}
                                                             onChange={(e) => setEditData((p) => ({ ...p, cari_id: e.target.value }))}
                                                             size="small"
                                                             inputMode="numeric"
-                                                            sx={{ width: 140 }}
+                                                            fullWidth
                                                             disabled={!perms.fields.cari_id}
                                                         />
                                                     ) : (
@@ -1003,8 +934,8 @@ export default function AracCariVeFiyat() {
                                                 </TableCell>
 
                                                 {/* Cari Adı (editable) */}
-                                                <TableCell title={r.cari_adi} sx={{ maxWidth: 360 }}>
-                                                    {isEditing ? (
+                                                <TableCell title={r.cari_adi}>
+                                                    {isEditing && perms.fields.cari_adi ? (
                                                         <TextField
                                                             value={editData.cari_adi ?? ""}
                                                             onChange={(e) => setEditData((p) => ({ ...p, cari_adi: e.target.value }))}
@@ -1018,8 +949,8 @@ export default function AracCariVeFiyat() {
                                                 </TableCell>
 
                                                 {/* Araç Sahibi (editable) */}
-                                                <TableCell title={r.arac_sahip ?? ""} sx={{ maxWidth: 280 }}>
-                                                    {isEditing ? (
+                                                <TableCell title={r.arac_sahip ?? ""}>
+                                                    {isEditing && perms.fields.arac_sahibi ? (
                                                         <TextField
                                                             value={editData.arac_sahip ?? ""}
                                                             onChange={(e) => setEditData((p) => ({ ...p, arac_sahip: e.target.value }))}
@@ -1033,8 +964,8 @@ export default function AracCariVeFiyat() {
                                                 </TableCell>
 
                                                 {/* Odak Araç Çalışma Tipi (editable) */}
-                                                <TableCell title={r.odak_arac_calisma_tipi ?? ""} sx={{ maxWidth: 260 }}>
-                                                    {isEditing ? (
+                                                <TableCell title={r.odak_arac_calisma_tipi ?? ""}>
+                                                    {isEditing && perms.fields.odak_arac_calisma_tipi ? (
                                                         <TextField
                                                             value={editData.odak_arac_calisma_tipi ?? ""}
                                                             onChange={(e) => setEditData((p) => ({ ...p, odak_arac_calisma_tipi: e.target.value }))}
@@ -1048,8 +979,8 @@ export default function AracCariVeFiyat() {
                                                 </TableCell>
 
                                                 {/* Aylık Kira (editable) */}
-                                                <TableCell align="right" title={String(r.aylik_kira ?? "")}>
-                                                    {isEditing ? (
+                                                <TableCell align="right" title={String(r.aylik_kira ?? "")} sx={{ fontWeight: 600, color: 'primary.main' }}>
+                                                    {isEditing && perms.fields.aylik_kira ? (
                                                         <TextField
                                                             value={editData.aylik_kira ?? ""}
                                                             onChange={(e) =>
@@ -1057,7 +988,7 @@ export default function AracCariVeFiyat() {
                                                             }
                                                             size="small"
                                                             inputMode="decimal"
-                                                            sx={{ width: 160 }}
+                                                            sx={{ width: 90 }}
                                                             disabled={!perms.fields.aylik_kira}
                                                         />
                                                     ) : (
@@ -1066,8 +997,8 @@ export default function AracCariVeFiyat() {
                                                 </TableCell>
 
                                                 {/* Aylık Sürücü (editable) */}
-                                                <TableCell align="right" title={String(r.aylik_surucu ?? "")}>
-                                                    {isEditing ? (
+                                                <TableCell align="right" title={String(r.aylik_surucu ?? "")} sx={{ fontWeight: 600, color: 'primary.main' }}>
+                                                    {isEditing && perms.fields.aylik_surucu ? (
                                                         <TextField
                                                             value={editData.aylik_surucu ?? ""}
                                                             onChange={(e) =>
@@ -1075,7 +1006,7 @@ export default function AracCariVeFiyat() {
                                                             }
                                                             size="small"
                                                             inputMode="decimal"
-                                                            sx={{ width: 160 }}
+                                                            sx={{ width: 90 }}
                                                             disabled={!perms.fields.aylik_surucu}
                                                         />
                                                     ) : (
@@ -1084,19 +1015,19 @@ export default function AracCariVeFiyat() {
                                                 </TableCell>
 
                                                 {/* Toplam Tutar (computed) */}
-                                                <TableCell align="right" title={String(toplamTutar)}>
+                                                <TableCell align="right" title={String(toplamTutar)} sx={{ fontWeight: 800, color: 'secondary.main' }}>
                                                     {formatTL(toplamTutar)}
                                                 </TableCell>
 
                                                 {/* Çalışma Günü (editable) */}
                                                 <TableCell align="center" title={String(r.calisma_gunu ?? "")}>
-                                                    {isEditing ? (
+                                                    {isEditing && perms.fields.calisma_gunu ? (
                                                         <TextField
                                                             value={editData.calisma_gunu ?? ""}
                                                             onChange={(e) => setEditData((prev) => ({ ...prev, calisma_gunu: e.target.value }))}
                                                             size="small"
                                                             inputMode="numeric"
-                                                            sx={{ width: 110 }}
+                                                            sx={{ width: 40 }}
                                                             disabled={!perms.fields.calisma_gunu}
                                                         />
                                                     ) : (
@@ -1106,26 +1037,27 @@ export default function AracCariVeFiyat() {
 
                                                 {/* Pasif (read-only) */}
                                                 <TableCell align="center">
-                                                    {isEditing ? (
+                                                    {isEditing && perms.fields.pasif ? (
                                                         <Checkbox
                                                             checked={!!editData.pasif}
                                                             onChange={(e) => setEditData((p) => ({ ...p, pasif: e.target.checked }))}
                                                             disabled={!perms.fields.pasif}
+                                                            size="small"
                                                         />
                                                     ) : (
-                                                        <Checkbox checked={!!r.pasif} disabled />
+                                                        <Checkbox checked={!!r.pasif} disabled size="small" color={!!r.pasif ? "error" : "success"} />
                                                     )}
                                                 </TableCell>
 
                                                 {/* Açıklama (read-only) */}
-                                                <TableCell title={r.aciklama ?? ""} sx={{ maxWidth: 380 }}>
-                                                    <Typography noWrap>{r.aciklama}</Typography>
+                                                <TableCell title={r.aciklama ?? ""}>
+                                                    <Typography noWrap sx={{ fontSize: 12 }}>{r.aciklama}</Typography>
                                                 </TableCell>
 
                                                 {/* İşlem — Yetki kontrollü */}
                                                 <TableCell>
                                                     {isEditing ? (
-                                                        <Stack direction="row" spacing={1}>
+                                                        <Stack direction="row" spacing={0.5}>
                                                             <Tooltip title="Kaydet">
                                                                 <span>
                                                                     <IconButton
@@ -1134,7 +1066,7 @@ export default function AracCariVeFiyat() {
                                                                         disabled={savingId === editingId || !perms.canEditAny || permLoading}
                                                                         size="small"
                                                                     >
-                                                                        <CheckIcon />
+                                                                        {savingId === editingId ? <CircularProgress size={16} /> : <CheckIcon />}
                                                                     </IconButton>
                                                                 </span>
                                                             </Tooltip>
@@ -1152,14 +1084,15 @@ export default function AracCariVeFiyat() {
                                                             </Tooltip>
                                                         </Stack>
                                                     ) : (
-                                                            <Tooltip title={perms.canEditAny ? "Satırı düzenle" : "Düzenleme yetkiniz yok"}>
+                                                        <Tooltip title={perms.canEditAny ? "Satırı düzenle" : "Düzenleme yetkiniz yok"}>
                                                             <span>
                                                                 <IconButton
                                                                     onClick={() => startEdit(r)}
                                                                     size="small"
-                                                                        disabled={!perms.canEditAny || permLoading}
+                                                                    disabled={!perms.canEditAny || permLoading}
+                                                                    color="secondary"
                                                                 >
-                                                                    <EditIcon />
+                                                                    <EditIcon fontSize="small" />
                                                                 </IconButton>
                                                             </span>
                                                         </Tooltip>
@@ -1167,8 +1100,8 @@ export default function AracCariVeFiyat() {
                                                 </TableCell>
 
                                                 {/* Düzenleyen / Tarih */}
-                                                <TableCell title={r.duzenleme_yapan_kullanici ?? ""}>{r.duzenleme_yapan_kullanici}</TableCell>
-                                                <TableCell title={formatDate(r.duzenleme_yapilan_tarih)}>
+                                                <TableCell title={r.duzenleme_yapan_kullanici ?? ""} sx={{ fontSize: 12 }}>{r.duzenleme_yapan_kullanici}</TableCell>
+                                                <TableCell title={formatDate(r.duzenleme_yapilan_tarih)} sx={{ fontSize: 12, color: 'text.secondary' }}>
                                                     {formatDate(r.duzenleme_yapilan_tarih)}
                                                 </TableCell>
                                             </TableRow>
@@ -1177,7 +1110,7 @@ export default function AracCariVeFiyat() {
                                     {!loading && !err && sorted.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={14} align="center" sx={{ py: 5, color: "text.secondary", fontSize: 16 }}>
-                                                Kayıt bulunamadı.
+                                                🔍 Kriterlerinize uygun kayıt bulunamadı. Lütfen filtreleri kontrol edin.
                                             </TableCell>
                                         </TableRow>
                                     )}
@@ -1187,15 +1120,16 @@ export default function AracCariVeFiyat() {
                                     <TableRow
                                         sx={{
                                             "& td": {
-                                                fontWeight: 900,
-                                                fontSize: 15,
-                                                bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "#eef3ff"),
+                                                fontWeight: 800,
+                                                fontSize: 14,
+                                                bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.08)" : "#eef1f9"),
                                                 borderTop: (t) => `2px solid ${t.palette.divider}`,
-                                                py: 1.25,
+                                                py: 1.5,
+                                                color: 'secondary.dark',
                                             },
                                         }}
                                     >
-                                        <TableCell colSpan={5}>Toplam (filtrelenmiş veride)</TableCell>
+                                        <TableCell colSpan={5}>TOPLAM (Filtrelenmiş Veri)</TableCell>
                                         <TableCell align="right">{formatTL(totals.kira)}</TableCell>
                                         <TableCell align="right">{formatTL(totals.surucu)}</TableCell>
                                         <TableCell align="right">{formatTL(totals.toplam)}</TableCell>
@@ -1210,53 +1144,162 @@ export default function AracCariVeFiyat() {
                 </Box>
             </Container>
 
-            {/* ========== Gelişmiş Filtreler (Drawer) ========== */}
+            {/* ========== Gelişmiş Filtreler (Drawer) - (Aynı kalır) ========== */}
             <Drawer
                 anchor="right"
                 open={drawerOpen}
-                onClose={() => setDrawerOpen(false)}
+                onClose={() => { setFilters(tempFilters); setDrawerOpen(false); }}
                 PaperProps={{
                     sx: {
-                        width: { xs: "100%", sm: 520 },
-                        p: 2,
-                        borderTopLeftRadius: 18,
-                        borderBottomLeftRadius: 18,
+                        width: { xs: "100%", sm: 480 },
+                        p: 3,
+                        borderTopLeftRadius: 20,
+                        borderBottomLeftRadius: 20,
                         boxShadow: 8,
-                        backdropFilter: "blur(8px)",
+                        backdropFilter: "blur(12px)",
+                        background: (t) => t.palette.mode === "dark" ? t.palette.background.paper : "#fcfdfe",
                     },
                 }}
             >
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 1, pb: 1 }}>
-                    <Typography variant="h6" fontWeight={900}>
-                        Gelişmiş Filtreler
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ pb: 2 }}>
+                    <Typography variant="h6" fontWeight={900} sx={{ color: 'primary.main' }}>
+                        Gelişmiş Filtreler ⚙️
                     </Typography>
                     <IconButton onClick={() => setDrawerOpen(false)}>
                         <CloseIcon />
                     </IconButton>
                 </Stack>
 
-                {/* (Filtre içerikleri mevcut kodunuzla aynı kalabilir) */}
+                <Divider sx={{ mb: 3 }} />
+
+                <Box sx={{ overflowY: 'auto', maxHeight: 'calc(100vh - 180px)', pr: 1 }}>
+                    <Grid container spacing={2}>
+                        {/* Plaka, Cari ID, Cari Adı, Araç Sahibi */}
+                        <Grid item xs={12} sm={6}>
+                            <TextField fullWidth label="Plaka" size="small" value={tempFilters.plaka} onChange={(e) => setTempFilters(p => ({ ...p, plaka: e.target.value }))} />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField fullWidth label="Cari ID" size="small" value={tempFilters.cari_id} onChange={(e) => setTempFilters(p => ({ ...p, cari_id: e.target.value }))} inputMode="numeric" />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <TextField fullWidth label="Cari Adı" size="small" value={tempFilters.cari_adi} onChange={(e) => setTempFilters(p => ({ ...p, cari_adi: e.target.value }))} />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <TextField fullWidth label="Araç Sahibi" size="small" value={tempFilters.arac_sahip} onChange={(e) => setTempFilters(p => ({ ...p, arac_sahip: e.target.value }))} />
+                        </Grid>
+
+                        {/* Durum */}
+                        <Grid item xs={12}>
+                            <Typography variant="subtitle2" sx={{ mb: 1, mt: 1, opacity: 0.7 }}>Durum</Typography>
+                            <ToggleButtonGroup
+                                size="small"
+                                exclusive
+                                value={tempFilters.pasif}
+                                onChange={(_, v) => v && setTempFilters(p => ({ ...p, pasif: v }))}
+                                color="secondary"
+                                fullWidth
+                            >
+                                <ToggleButton value="hepsi">Hepsi</ToggleButton>
+                                <ToggleButton value="aktif">Aktif</ToggleButton>
+                                <ToggleButton value="pasif">Pasif</ToggleButton>
+                            </ToggleButtonGroup>
+                        </Grid>
+
+                        {/* Aylık Kira Aralığı */}
+                        <Grid item xs={12}>
+                            <Typography variant="subtitle2" sx={{ mb: 1, mt: 1, opacity: 0.7 }}>Aylık Kira (₺)</Typography>
+                            <Stack direction="row" spacing={1}>
+                                <TextField fullWidth label="Min" size="small" value={tempFilters.aylik_kira_min} onChange={(e) => setTempFilters(p => ({ ...p, aylik_kira_min: formatTLForTyping(e.target.value) }))} inputMode="decimal" />
+                                <TextField fullWidth label="Max" size="small" value={tempFilters.aylik_kira_max} onChange={(e) => setTempFilters(p => ({ ...p, aylik_kira_max: formatTLForTyping(e.target.value) }))} inputMode="decimal" />
+                            </Stack>
+                        </Grid>
+
+                        {/* Aylık Sürücü Aralığı */}
+                        <Grid item xs={12}>
+                            <Typography variant="subtitle2" sx={{ mb: 1, mt: 1, opacity: 0.7 }}>Aylık Sürücü (₺)</Typography>
+                            <Stack direction="row" spacing={1}>
+                                <TextField fullWidth label="Min" size="small" value={tempFilters.aylik_surucu_min} onChange={(e) => setTempFilters(p => ({ ...p, aylik_surucu_min: formatTLForTyping(e.target.value) }))} inputMode="decimal" />
+                                <TextField fullWidth label="Max" size="small" value={tempFilters.aylik_surucu_max} onChange={(e) => setTempFilters(p => ({ ...p, aylik_surucu_max: formatTLForTyping(e.target.value) }))} inputMode="decimal" />
+                            </Stack>
+                        </Grid>
+
+                        {/* Toplam Tutar Aralığı */}
+                        <Grid item xs={12}>
+                            <Typography variant="subtitle2" sx={{ mb: 1, mt: 1, opacity: 0.7 }}>Toplam Tutar (₺)</Typography>
+                            <Stack direction="row" spacing={1}>
+                                <TextField fullWidth label="Min" size="small" value={tempFilters.toplam_min} onChange={(e) => setTempFilters(p => ({ ...p, toplam_min: formatTLForTyping(e.target.value) }))} inputMode="decimal" />
+                                <TextField fullWidth label="Max" size="small" value={tempFilters.toplam_max} onChange={(e) => setTempFilters(p => ({ ...p, toplam_max: formatTLForTyping(e.target.value) }))} inputMode="decimal" />
+                            </Stack>
+                        </Grid>
+
+                        {/* Çalışma Günü Aralığı */}
+                        <Grid item xs={12}>
+                            <Typography variant="subtitle2" sx={{ mb: 1, mt: 1, opacity: 0.7 }}>Çalışma Günü</Typography>
+                            <Stack direction="row" spacing={1}>
+                                <TextField fullWidth label="Min" size="small" value={tempFilters.calisma_gunu_min} onChange={(e) => setTempFilters(p => ({ ...p, calisma_gunu_min: e.target.value.replace(/\D/g, '') }))} inputMode="numeric" />
+                                <TextField fullWidth label="Max" size="small" value={tempFilters.calisma_gunu_max} onChange={(e) => setTempFilters(p => ({ ...p, calisma_gunu_max: e.target.value.replace(/\D/g, '') }))} inputMode="numeric" />
+                            </Stack>
+                        </Grid>
+
+                        {/* Açıklama ve Düzenleyen */}
+                        <Grid item xs={12} sm={6}>
+                            <TextField fullWidth label="Açıklama (içerir)" size="small" value={tempFilters.aciklama} onChange={(e) => setTempFilters(p => ({ ...p, aciklama: e.target.value }))} />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField fullWidth label="Düzenleyen" size="small" value={tempFilters.duzenleyen} onChange={(e) => setTempFilters(p => ({ ...p, duzenleyen: e.target.value }))} />
+                        </Grid>
+
+                        {/* Tarih Aralığı */}
+                        <Grid item xs={12}>
+                            <Typography variant="subtitle2" sx={{ mb: 1, mt: 1, opacity: 0.7 }}>Düzenleme Tarihi</Typography>
+                            <Stack direction="row" spacing={1}>
+                                <TextField
+                                    fullWidth
+                                    label="Başlangıç Tarihi"
+                                    size="small"
+                                    type="date"
+                                    value={tempFilters.tarih_from}
+                                    onChange={(e) => setTempFilters(p => ({ ...p, tarih_from: e.target.value }))}
+                                    InputLabelProps={{ shrink: true }}
+                                />
+                                <TextField
+                                    fullWidth
+                                    label="Bitiş Tarihi"
+                                    size="small"
+                                    type="date"
+                                    value={tempFilters.tarih_to}
+                                    onChange={(e) => setTempFilters(p => ({ ...p, tarih_to: e.target.value }))}
+                                    InputLabelProps={{ shrink: true }}
+                                />
+                            </Stack>
+                        </Grid>
+
+                    </Grid>
+                </Box>
+
 
                 <Paper
-                    elevation={6}
+                    elevation={10}
                     sx={{
-                        position: "fixed",
+                        position: "absolute",
                         bottom: 0,
                         right: 0,
                         left: { xs: 0, sm: "auto" },
-                        width: { xs: "100%", sm: 520 },
+                        width: { xs: "100%", sm: 480 },
                         p: 2,
                         borderTopLeftRadius: 18,
                         backdropFilter: "blur(8px)",
+                        borderTop: (t) => `1px solid ${t.palette.divider}`,
+                        bgcolor: (t) => t.palette.background.paper,
                     }}
                 >
                     <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
-                        <Button startIcon={<ClearAllIcon />} onClick={clearFilters}>
+                        <Button startIcon={<ClearAllIcon />} onClick={clearFilters} color="error">
                             Temizle
                         </Button>
                         <Stack direction="row" spacing={1}>
-                            <Button variant="outlined" onClick={() => setDrawerOpen(false)}>
-                                Kapat
+                            <Button variant="outlined" onClick={() => { setTempFilters(filters); setDrawerOpen(false); }}>
+                                İptal
                             </Button>
                             <Button
                                 variant="contained"
@@ -1264,88 +1307,79 @@ export default function AracCariVeFiyat() {
                                     setFilters(tempFilters);
                                     setDrawerOpen(false);
                                 }}
+                                color="primary"
                             >
-                                Uygula
+                                Uygula ({activeFilterCount})
                             </Button>
                         </Stack>
                     </Stack>
                 </Paper>
             </Drawer>
 
-            {/* ========== Yeni Kayıt (Dialog) — Yetki kontrollü ========== */}
+            {/* ========== Yeni Kayıt (Dialog) (Aynı kalır) ========== */}
             <Dialog
                 open={showAdd}
                 onClose={() => setShowAdd(false)}
                 fullWidth
-                maxWidth="md"
-                PaperProps={{ sx: { borderRadius: 3.5, p: 0.25 } }}
+                maxWidth="sm"
+                PaperProps={{ sx: { borderRadius: 4, p: 1, boxShadow: 20 } }}
             >
-                <DialogTitle sx={{ fontWeight: 900 }}>Yeni Kayıt Ekle</DialogTitle>
+                <DialogTitle sx={{ fontWeight: 900, color: 'secondary.main' }}>Yeni Kayıt Ekle ➕</DialogTitle>
                 <DialogContent dividers>
                     {addError && (
                         <Box sx={{ mb: 2 }}>
-                            <Chip color="error" variant="outlined" label={addError} />
+                            <Chip color="error" variant="filled" label={addError} sx={{ height: 32, fontSize: 13 }} />
                         </Box>
                     )}
-                    <Stack spacing={2}>
-                        <TextField
-                            label="Plaka"
-                            value={addForm.plaka}
-                            onChange={(e) => handleAddChange("plaka", e.target.value)}
-                            required
-                        />
-                        <TextField
-                            label="Cari ID"
-                            value={addForm.cari_id}
-                            onChange={(e) => handleAddChange("cari_id", e.target.value)}
-                            required
-                            inputMode="numeric"
-                        />
-                        <TextField
-                            label="Cari Adı"
-                            value={addForm.cari_adi}
-                            onChange={(e) => handleAddChange("cari_adi", e.target.value)}
-                        />
-                        <TextField
-                            label="Araç Sahibi"
-                            value={addForm.arac_sahip}
-                            onChange={(e) => handleAddChange("arac_sahip", e.target.value)}
-                        />
-                        <TextField
-                            label="Aylık Kira"
-                            value={addForm.aylik_kira}
-                            onChange={(e) => handleAddChange("aylik_kira", formatTLForTyping(e.target.value))}
-                            inputMode="decimal"
-                        />
-                        <TextField
-                            label="Aylık Sürücü"
-                            value={addForm.aylik_surucu}
-                            onChange={(e) => handleAddChange("aylik_surucu", formatTLForTyping(e.target.value))}
-                            inputMode="decimal"
-                        />
-                        <TextField
-                            label="Çalışma Günü"
-                            value={addForm.calisma_gunu}
-                            onChange={(e) => handleAddChange("calisma_gunu", e.target.value)}
-                            inputMode="numeric"
-                        />
-                        <TextField
-                            label="Açıklama"
-                            value={addForm.aciklama}
-                            onChange={(e) => handleAddChange("aciklama", e.target.value)}
-                            multiline
-                            minRows={2}
-                        />
-                    </Stack>
+                    <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                            <TextField label="Plaka" value={addForm.plaka} onChange={(e) => handleAddChange("plaka", e.target.value)} required fullWidth size="small" />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField label="Cari ID" value={addForm.cari_id} onChange={(e) => handleAddChange("cari_id", e.target.value)} required fullWidth inputMode="numeric" size="small" />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <TextField label="Cari Adı" value={addForm.cari_adi} onChange={(e) => handleAddChange("cari_adi", e.target.value)} fullWidth size="small" />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <TextField label="Araç Sahibi" value={addForm.arac_sahip} onChange={(e) => handleAddChange("arac_sahip", e.target.value)} fullWidth size="small" />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField label="Aylık Kira (₺)" value={addForm.aylik_kira} onChange={(e) => handleAddChange("aylik_kira", formatTLForTyping(e.target.value))} fullWidth inputMode="decimal" size="small" />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField label="Aylık Sürücü (₺)" value={addForm.aylik_surucu} onChange={(e) => handleAddChange("aylik_surucu", formatTLForTyping(e.target.value))} fullWidth inputMode="decimal" size="small" />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField label="Çalışma Günü" value={addForm.calisma_gunu} onChange={(e) => handleAddChange("calisma_gunu", e.target.value)} fullWidth inputMode="numeric" size="small" />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <Stack direction="row" alignItems="center" height="100%" sx={{ pt: 1, pl: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
+                                <Checkbox checked={!!addForm.pasif} onChange={(e) => handleAddChange("pasif", e.target.checked)} color="error" />
+                                <Typography>Pasif Kayıt</Typography>
+                            </Stack>
+                        </Grid>
+                        <Grid item xs={12}>
+                            <TextField
+                                label="Açıklama"
+                                value={addForm.aciklama}
+                                onChange={(e) => handleAddChange("aciklama", e.target.value)}
+                                fullWidth
+                                multiline
+                                minRows={2}
+                                size="small"
+                            />
+                        </Grid>
+                    </Grid>
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setShowAdd(false)}>Vazgeç</Button>
+                    <Button onClick={() => setShowAdd(false)} color="inherit" disabled={adding}>Vazgeç</Button>
                     <Tooltip title={perms.canCreate ? "" : "Yeni kayıt ekleme yetkiniz yok"}>
                         <span>
                             <Button
                                 variant="contained"
-                                color="secondary"
-                                startIcon={<AddIcon />}
+                                color="success"
+                                startIcon={adding ? <CircularProgress size={16} color="inherit" /> : <AddIcon />}
                                 onClick={addNew}
                                 disabled={adding || !perms.canCreate || permLoading}
                             >

@@ -1,71 +1,183 @@
-﻿.login-bg {
+/* ========================================= */
+/* RENK PALETİ VE DEĞİŞKENLER */
+/* ========================================= */
+:root {
+    --color-bg-deep: #0b1020; /* En koyu arkaplan */
+    --color-panel-bg: rgba(17, 23, 41, 0.75); /* Panel Arkaplanı (Daha koyu Glassmorphism) */
+    --color-primary: #3b82f6; /* Ana Mavi (Hassasiyet) */
+    --color-accent: #10b981; /* Vurgu Yeşil (Güvenlik/Hız) */
+    --color-text-light: #ecf0f1; /* Açık Metin */
+    --color-shadow: rgba(0, 0, 0, 0.7);
+    --color-input-bg: rgba(255, 255, 255, 0.08); /* Giriş Kutusu İçi */
+    --color-border: rgba(255, 255, 255, 0.15);
+}
+
+/* ========================================= */
+/* GENEL VE ARKA PLAN STİLLERİ */
+/* ========================================= */
+
+.login-bg {
     height: 100vh;
     width: 100%;
-    background-repeat: no-repeat; /* ✅ tekrar etme */
-    background-size: cover; /* ✅ ekranı kapla */
-    background-position: center; /* ✅ ortala */
+    /* Not: React kodunda zaten gradyan arkaplan ve SVG animasyon kullanılıyor.
+       Bu CSS, arkaplanı ayarlamaz, sadece görsel kapsayıcı görevi görür. */
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-family: 'Segoe UI', sans-serif;
+    font-family: 'Inter', sans-serif; /* Daha modern font */
+    color: var(--color-text-light);
+    overflow: hidden; /* Animasyon taşmalarını engellemek için */
 }
 
+/* ========================================= */
+/* GİRİŞ PANELİ (MODERN GLASSMORPHISM) */
+/* ========================================= */
+
 .login-panel {
-    backdrop-filter: blur(12px);
-    background-color: rgba(255, 255, 255, 0.08);
-    padding: 30px 25px;
+    /* React kodu zaten Paper component'i ile bu kısmı yönetiyor. 
+       Ancak saf CSS sınıflarını taklit edelim. */
+    backdrop-filter: blur(18px) saturate(180%); /* Daha keskin blur */
+    background-color: var(--color-panel-bg);
+    padding: 40px 30px; /* Daha fazla boşluk */
     border-radius: 20px;
     width: 100%;
-    max-width: 350px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    color: #fff;
+    max-width: 380px; /* Biraz daha geniş alan */
+    border: 1px solid var(--color-border);
+    /* Gelişmiş 3D Derinlik ve Neon Gölge */
+    box-shadow: 0 15px 40px var(--color-shadow), 0 0 25px rgba(59, 130, 246, 0.4);
+    transition: all 0.3s ease-in-out;
 }
+
+    .login-panel:hover {
+        /* Hafif bir etkileşim hissi */
+        box-shadow: 0 18px 45px var(--color-shadow), 0 0 30px rgba(59, 130, 246, 0.6);
+        transform: translateY(-2px);
+    }
 
     .login-panel h2 {
         text-align: center;
-        margin-bottom: 20px;
-        font-size: 22px;
-        font-weight: 600;
+        margin-bottom: 30px;
+        font-size: 28px;
+        font-weight: 800;
+        /* Fütüristik metin vurgusu */
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+        color: var(--color-text-light);
     }
 
+    /* ========================================= */
+    /* INPUT STİLLERİ (Fütüristik Vurgu) */
+    /* ========================================= */
+
     .login-panel input {
+        /* Not: Bu kısım React/MUI TextField tarafından yönetilir, ancak saf CSS tanımını güncelliyoruz. */
         width: 100%;
-        padding: 6px 10px;
-        height: 34px;
-        margin: 8px 0;
-        border: none;
-        border-radius: 8px;
-        background-color: rgba(255, 255, 255, 0.15);
-        color: #fff;
-        font-size: 13px;
+        padding: 10px 15px; /* Daha büyük padding */
+        height: 48px;
+        margin: 12px 0;
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        background-color: var(--color-input-bg);
+        color: var(--color-text-light);
+        font-size: 15px;
         backdrop-filter: blur(3px);
-        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+        transition: all 0.3s ease;
     }
 
         .login-panel input::placeholder {
-            color: #ddd;
+            color: rgba(255, 255, 255, 0.5);
         }
 
         .login-panel input:focus {
             outline: none;
-            box-shadow: 0 0 0 2px #00aaff;
+            /* Neon Odaklama */
+            border-color: var(--color-accent);
+            box-shadow: 0 0 0 2px var(--color-accent), inset 0 2px 4px rgba(0, 0, 0, 0.5);
         }
+
+    /* ========================================= */
+    /* BUTON STİLLERİ (Dinamik ve Gradyan) */
+    /* ========================================= */
 
     .login-panel button {
         width: 100%;
-        padding: 10px;
-        margin-top: 10px;
-        background-color: #00aaff;
+        padding: 12px;
+        margin-top: 20px;
+        /* Gradyan Buton */
+        background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
         color: white;
         border: none;
-        border-radius: 10px;
-        font-weight: bold;
-        font-size: 15px;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 16px;
         cursor: pointer;
-        transition: background-color 0.2s;
+        /* Başlangıç gölgesi */
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        transition: all 0.3s ease;
     }
 
         .login-panel button:hover {
-            background-color: #008ecc;
+            background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+            filter: brightness(1.15); /* Parlaklığı artır */
+            /* Neon Hover Gölgesi */
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6), 0 0 20px rgba(59, 130, 246, 0.7);
+            transform: translateY(-2px);
         }
+
+        .login-panel button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+/* ========================================= */
+/* Lojistik Temalı Animasyonlar (Sadece Saf CSS Etkileşimi) */
+/* ========================================= */
+
+/* Veri Akışı Efekti (Inputa tıklandığında) */
+@keyframes data-flow-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+}
+
+.login-panel input:focus {
+    /* Daha önce tanımlanan odaklanmaya animasyon ekleniyor */
+    animation: data-flow-pulse 1s infinite;
+}
+
+/* Giriş Butonunda Yükleme/Hız Işığı Efekti (Opsiyonel, sadece görsellik için) */
+/* Gerçek yükleme animasyonu React kodunuzdaki CircularProgress ile yapılır */
+.login-panel button::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.15);
+    transform: skewX(-20deg);
+    transition: all 0.3s;
+}
+
+.login-panel button:hover::after {
+    left: 150%;
+    transition: left 0.5s ease-in-out;
+}
+
+.login-panel button { /* Posizyonu ayarlamak için */
+    position: relative;
+    overflow: hidden;
+}

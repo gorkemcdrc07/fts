@@ -48,7 +48,28 @@ const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler
 const SiparisAnaliz = lazy(() => import("./kullanıcıIslemleri/planlamaDetay/SiparisAnaliz"));
 const AdminPanel = lazy(() => import("./adminPanel/adminPanel"));
 const GorunumDuzenle = lazy(() => import("./aktifseferler/GorunumDuzenle"));
-const PagePermissionsPage = lazy(() => import("./adminPanel/PagePermissionsPage")); // Kullanıcı ekranları yönetimi
+const PagePermissionsPage = lazy(() => import("./adminPanel/PagePermissionsPage"));
+const PivotTool = lazy(() => import("./raporlar/PivotTool"));
+// YENİ EKLENTİ: ETA Uyumsuzluğu Sayfası
+const ETAUyumsuzlugu = lazy(() => import("./raporlar/ETAUyumsuzlugu"));
+
+
+// TEST VERİSİ (Component'e prop olarak gönderilecek)
+const TEST_VERILERI = {
+    "Sefer Performansı": [
+        { Yıl: 2024, Ay: "Ocak", Bölge: "A", Tutar: 1500, KM: 500 },
+        { Yıl: 2024, Ay: "Ocak", Bölge: "B", Tutar: 2000, KM: 650 },
+        { Yıl: 2024, Ay: "Şubat", Bölge: "A", Tutar: 1800, KM: 550 },
+        { Yıl: 2024, Ay: "Şubat", Bölge: "C", Tutar: 3000, KM: 700 },
+        { Yıl: 2024, Ay: "Mart", Bölge: "B", Tutar: 2200, KM: 600 },
+    ],
+    "Personel Satışları": [
+        { Personel: "Ahmet", Yıl: 2024, Satış: 12000 },
+        { Personel: "Ayşe", Yıl: 2024, Satış: 15000 },
+        { Personel: "Ahmet", Yıl: 2023, Satış: 9000 },
+    ]
+};
+
 
 function App() {
     return (
@@ -123,7 +144,29 @@ function App() {
                                 <Route path="raporlar/kpi-olcumu" element={<KpiOlcumu />} />
                                 <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
                                 <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
-                                <Route path="raporlar/tools" element={<div style={{ padding: 24 }}>ROUTE OK</div>} />
+
+                                {/* YENİ ROTA: ETA Uyumsuzluğu */}
+                                <Route
+                                    path="raporlar/eta-uyumsuz"
+                                    element={
+                                        <Suspense fallback={<div style={{ padding: 24 }}>ETA Uyumsuzluğu Raporu Yükleniyor...</div>}>
+                                            <ETAUyumsuzlugu />
+                                        </Suspense>
+                                    }
+                                />
+
+                                {/* PIVOT ARACI: Sorunlu satır düzeltildi ve PivotTool eklendi */}
+                                <Route
+                                    path="raporlar/tools"
+                                    element={
+                                        <Suspense fallback={<div style={{ padding: 24 }}>Pivot Rapor Yükleniyor...</div>}>
+                                            <PivotTool
+                                                datasets={TEST_VERILERI}
+                                                defaultDataset="Sefer Performansı"
+                                            />
+                                        </Suspense>
+                                    }
+                                />
 
                                 {/* KOCAELİ kartı */}
                                 <Route

@@ -54,6 +54,9 @@ import CloseIcon from "@mui/icons-material/Close";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ArrowBackIcon from "@mui/icons-material/ArrowBackIosNew";
 import HomeIcon from "@mui/icons-material/HomeOutlined";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 
 import {
     DataGrid,
@@ -112,10 +115,11 @@ function ScaleToFit({ children }) {
                 display: "grid",
                 justifyItems: "start",
                 alignItems: "start",
+                // MODERİNİZE ARKA PLAN STİLİ
                 background:
-                    "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.15), transparent 40%)," +
-                    "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.20), transparent 50%)," +
-                    "linear-gradient(180deg, #050816 0%, #0B1220 100%)",
+                    "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.12), transparent 40%)," +
+                    "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.15), transparent 50%)," +
+                    "linear-gradient(180deg, #02040C 0%, #08101E 100%)",
             }}
         >
             <Box
@@ -146,7 +150,7 @@ const GRID_TR = {
     toolbarDensityStandard: "Standart",
     toolbarDensityComfortable: "Rahat",
     toolbarExport: "Dışa aktar",
-    toolbarQuickFilterPlaceholder: "Ara…",
+    toolbarQuickFilterPlaceholder: "Hızlı Ara…",
     columnMenuLabel: "Menü",
     columnMenuShowColumns: "Sütunları göster",
     columnMenuFilter: "Filtrele",
@@ -157,19 +161,24 @@ const GRID_TR = {
     columnsPanelTextFieldLabel: "Sütun ara",
     columnsPanelShowAllButton: "Hepsini göster",
     columnsPanelHideAllButton: "Hepsini gizle",
+
+    // Pagination TR
+    footerRowSelected: (count) => (count !== 1 ? `${count.toLocaleString()} kayıt seçildi` : `${count.toLocaleString()} kayıt seçildi`),
+    footerTotalVisibleRows: (visibleCount, totalCount) => `${visibleCount.toLocaleString()} / ${totalCount.toLocaleString()}`,
+    footerPaginationRowsPerPage: "Sayfa başına satır:",
 };
 
-/* ===================== Tema ===================== */
+/* ===================== Tema (Daha Keskinleştirildi) ===================== */
 const theme = createTheme({
     palette: {
         mode: "dark",
-        primary: { main: "#8B5CF6" },
-        secondary: { main: "#22D3EE" },
-        background: { default: "#050816", paper: alpha("#0B1220", 0.9) },
-        success: { main: "#22C55E" },
-        error: { main: "#EF4444" },
-        warning: { main: "#F59E0B" },
-        info: { main: "#38BDF8" },
+        primary: { main: "#8B5CF6" }, // Mor
+        secondary: { main: "#22D3EE" }, // Açık Mavi
+        background: { default: "#02040C", paper: alpha("#0B1220", 0.9) },
+        success: { main: "#10B981" }, // Yeşil
+        error: { main: "#F43F5E" }, // Kırmızı
+        warning: { main: "#FBBF24" }, // Sarı/Turuncu
+        info: { main: "#3B82F6" }, // Mavi
     },
     shape: { borderRadius: 16 },
     typography: {
@@ -179,27 +188,64 @@ const theme = createTheme({
     components: {
         MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
         MuiButton: {
+            defaultProps: { variant: "contained" }, // Varsayılanı contained yapalım
             styleOverrides: {
                 root: {
                     borderRadius: 12,
-                    boxShadow: "0 6px 20px rgba(139,92,246,0.25)",
-                    ":hover": { boxShadow: "0 8px 24px rgba(139,92,246,0.35)" },
+                    boxShadow: "0 4px 12px rgba(139,92,246,0.25)", // Hafif gölge
+                    transition: "all 0.3s ease",
+                    ":hover": {
+                        boxShadow: "0 6px 16px rgba(139,92,246,0.35)",
+                        transform: 'translateY(-1px)',
+                    },
                 },
+                outlined: {
+                    background: alpha("#1E293B", 0.5), // Koyu arka plan
+                    borderColor: "rgba(255,255,255,0.15)",
+                    boxShadow: 'none',
+                    ":hover": {
+                        borderColor: "rgba(255,255,255,0.3)",
+                        backgroundColor: alpha("#1E293B", 0.7),
+                        transform: 'none',
+                    }
+                }
             },
         },
         MuiDialog: {
             styleOverrides: {
                 paper: {
-                    background: "linear-gradient(180deg, rgba(10,16,30,0.95) 0%, rgba(10,16,30,0.85) 100%)",
-                    boxShadow: "0 10px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)",
-                    backdropFilter: "blur(10px)",
-                    border: "1px solid rgba(255,255,255,0.06)",
+                    // Modern Dialog Stili
+                    background: "linear-gradient(180deg, #0F172A 0%, #08101E 100%)",
+                    boxShadow: "0 15px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)",
+                    backdropFilter: "blur(12px)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 24,
                 },
             },
         },
         MuiTextField: {
             defaultProps: { variant: "outlined" },
-            styleOverrides: { root: { "& .MuiOutlinedInput-root": { borderRadius: 12 } } },
+            styleOverrides: {
+                root: {
+                    "& .MuiOutlinedInput-root": {
+                        borderRadius: 12,
+                        backgroundColor: alpha("#10172A", 0.7), // Hafif arka plan
+                    },
+                    "& .MuiInputLabel-root": {
+                        color: alpha("#ffffff", 0.6)
+                    }
+                }
+            },
+        },
+        MuiCard: {
+            styleOverrides: {
+                root: {
+                    // KPI Kartları için Derinlik
+                    boxShadow: '0 8px 25px rgba(0,0,0,0.4)',
+                    background: 'linear-gradient(145deg, rgba(17, 24, 39, 0.9), rgba(10, 16, 28, 0.9))',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                }
+            }
         },
     },
 });
@@ -210,29 +256,30 @@ function CustomToolbar({ onRefresh, onExport, onFilters }) {
         <GridToolbarContainer
             sx={{
                 px: 1,
-                py: 0.5,
-                gap: 1,
+                py: 1, // Biraz daha fazla padding
+                gap: 1.5, // Daha fazla boşluk
                 position: "sticky",
                 top: 0,
                 zIndex: 1,
-                background: "linear-gradient(180deg, rgba(15,23,42,0.9) 0%, rgba(15,23,42,0.6) 100%)",
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-                backdropFilter: "blur(6px)",
+                // DAHA ŞIK TOOLBAR ARKA PLANI
+                background: "linear-gradient(180deg, rgba(10,16,30,0.95) 0%, rgba(10,16,30,0.8) 100%)",
+                borderBottom: "2px solid rgba(139,92,246,0.2)", // Mor çizgi
+                backdropFilter: "blur(8px)",
             }}
         >
             <GridToolbarColumnsButton />
             <GridToolbarDensitySelector />
             <Box sx={{ flexGrow: 1 }} />
-            <GridToolbarQuickFilter debounceMs={300} />
-            <Tooltip title="Filtreler">
-                <IconButton onClick={onFilters}>
+            <GridToolbarQuickFilter debounceMs={300} size="small" />
+            <Tooltip title="Detaylı Filtreler">
+                <IconButton onClick={onFilters} color="primary" sx={{ border: '1px solid #8B5CF6' }}>
                     <FilterListIcon />
                 </IconButton>
             </Tooltip>
-            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExport}>
+            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExport} size="small">
                 Excel
             </Button>
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={onRefresh}>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={onRefresh} size="small">
                 Yenile
             </Button>
         </GridToolbarContainer>
@@ -310,7 +357,8 @@ const getDateSeverity = (dateStr) => {
     if (!d) return { level: "none", days: null };
     const today = dayjs().startOf("day");
     const diff = d.diff(today, "day");
-    if (diff <= 0) return { level: "error", days: diff };
+    if (diff < 0) return { level: "error", days: diff }; // Geçmiş
+    if (diff === 0) return { level: "error", days: 0 }; // Bugün
     if (diff <= 7) return { level: "warning", days: diff };
     return { level: "success", days: diff };
 };
@@ -414,7 +462,7 @@ const looksLikeDateColumn = (key, rows) => {
 };
 
 /* ===================== ►►► YETKİ ◄◄◄ ===================== */
-const SCREEN_KEY = "arac_durumlari"; // role_permissions için screen_key
+const SCREEN_KEY = "arac_durumlari";
 const ROLE_NAME_TO_KEY = { "YÖNETİCİ": "YONETICI", "OPERASYON": "OPERASYON", "TAKİP": "TAKIP" };
 
 async function fetchPerms() {
@@ -521,6 +569,7 @@ export default function AracDurumlari() {
                     c[k] = toYearString(c[k]);
                 } else if (isDateKey(k) && c[k] != null && c[k] !== "") {
                     const d = parseDate(c[k]);
+                    // Supabase'e geri göndermek için dayjs objesi yerine standart YYYY-MM-DD string'i kullanalım
                     c[k] = d ? d.format("YYYY-MM-DD") : String(c[k]).trim();
                 }
             });
@@ -575,7 +624,7 @@ export default function AracDurumlari() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    /* ===================== KPI ===================== */
+    /* ===================== KPI (Kaldırıldı) ===================== */
     const toplamKayit = kayitlar.length;
     const aktifSayisi = useMemo(() => {
         const hasDurum = kayitlar[0] && Object.keys(kayitlar[0]).includes("durum");
@@ -653,7 +702,7 @@ export default function AracDurumlari() {
                         field: a.key,
                         headerName: header,
                         type: "number",
-                        editable: canEdit, // sadece izin varsa
+                        editable: canEdit,
                         flex: 0.6,
                         minWidth: 120,
                         valueGetter: (params) => {
@@ -665,7 +714,7 @@ export default function AracDurumlari() {
                         renderCell: (params) => {
                             const raw = safeRowVal(params, a.key);
                             const y = toYearString(raw);
-                            return <Typography variant="body2">{y || "-"}</Typography>;
+                            return <Typography variant="body2" fontWeight={600} color={theme.palette.info.light}>{y || "-"}</Typography>;
                         },
                     };
                 }
@@ -677,7 +726,7 @@ export default function AracDurumlari() {
                         field: a.key,
                         headerName: header,
                         type: "date",
-                        editable: false, // tarih hücresi formdan değişsin
+                        editable: false,
                         flex: 1,
                         minWidth: 160,
                         valueGetter: safeDateValueGetter,
@@ -686,35 +735,49 @@ export default function AracDurumlari() {
                             const d = parseDate(raw);
                             const label = d ? d.format("DD.MM.YYYY") : "-";
                             const { level, days } = getDateSeverity(raw);
+
                             const colorMap = {
-                                success: (theme) => theme.palette.success.main,
-                                warning: (theme) => theme.palette.warning.main,
-                                error: (theme) => theme.palette.error.main,
-                                none: (theme) => theme.palette.divider,
+                                success: theme.palette.success.main,
+                                warning: theme.palette.warning.main,
+                                error: theme.palette.error.main,
+                                none: theme.palette.divider,
                             };
+                            const bgColorMap = {
+                                success: alpha(theme.palette.success.main, 0.1),
+                                warning: alpha(theme.palette.warning.main, 0.1),
+                                error: alpha(theme.palette.error.main, 0.1),
+                                none: 'transparent',
+                            };
+                            const tooltipText =
+                                level === "success" ? `Rahat (${days} gün var)` :
+                                    level === "warning" ? `Yaklaşıyor (${days} gün kaldı)` :
+                                        level === "error" ? (days === 0 ? "Bugün Son Gün!" : `Geçmiş (${Math.abs(days)} gün)`) :
+                                            "Tarih yok";
+
                             return (
-                                <Stack direction="row" alignItems="center" spacing={1} sx={{ width: "100%" }}>
-                                    <Box
-                                        sx={(theme) => ({
-                                            width: 10,
-                                            height: 10,
-                                            borderRadius: "50%",
-                                            bgcolor: colorMap[level](theme),
-                                        })}
-                                        title={
-                                            level === "success"
-                                                ? `Rahat (${days} gün var)`
-                                                : level === "warning"
-                                                    ? `Yaklaşıyor (${days} gün kaldı)`
-                                                    : level === "error"
-                                                        ? days === 0
-                                                            ? "Bugün"
-                                                            : `Geçmiş (${Math.abs(days)} gün)`
-                                                        : "Tarih yok"
-                                        }
-                                    />
-                                    <Typography variant="body2">{label}</Typography>
-                                </Stack>
+                                <Tooltip title={tooltipText} placement="left">
+                                    <Stack
+                                        direction="row"
+                                        alignItems="center"
+                                        spacing={1}
+                                        sx={{
+                                            width: "100%",
+                                            p: 0.5,
+                                            borderRadius: 1,
+                                            bgcolor: bgColorMap[level],
+                                            borderLeft: `3px solid ${colorMap[level]}`,
+                                            fontWeight: 600
+                                        }}
+                                    >
+                                        <Box
+                                            component={level === 'error' ? ErrorOutlineIcon : level === 'warning' ? WarningAmberIcon : CheckCircleOutlineIcon}
+                                            sx={{ fontSize: 14, color: colorMap[level] }}
+                                        />
+                                        <Typography variant="body2" color={level === 'none' ? 'text.secondary' : 'inherit'}>
+                                            {label}
+                                        </Typography>
+                                    </Stack>
+                                </Tooltip>
                             );
                         },
                     };
@@ -729,7 +792,7 @@ export default function AracDurumlari() {
                         flex: 1,
                         minWidth: 180,
                         type: "singleSelect",
-                        editable: canEdit, // izin kontrolü
+                        editable: canEdit,
                         valueOptions: options,
                         renderCell: (params) => {
                             const val = safeRowVal(params, a.key);
@@ -739,7 +802,14 @@ export default function AracDurumlari() {
                                     size="small"
                                     color={color === "default" ? undefined : color}
                                     label={val || "-"}
-                                    variant={color === "default" ? "outlined" : undefined}
+                                    variant={color === "default" ? "outlined" : "filled"}
+                                    sx={{
+                                        borderRadius: 1.5,
+                                        fontWeight: 600,
+                                        // Özel renk geçişleri
+                                        bgcolor: color === "default" ? undefined : alpha(theme.palette[color].main, 0.15),
+                                        color: color === "default" ? undefined : theme.palette[color].main,
+                                    }}
                                 />
                             );
                         },
@@ -752,7 +822,7 @@ export default function AracDurumlari() {
                     headerName: header,
                     flex: 1,
                     minWidth: 140,
-                    editable: canEdit, // izin kontrolü
+                    editable: canEdit,
                     renderCell: (params) => {
                         const val = safeRowVal(params, a.key);
                         return <Typography variant="body2">{val ?? "-"}</Typography>;
@@ -821,14 +891,20 @@ export default function AracDurumlari() {
                             size="small"
                             color={color === "default" ? undefined : color}
                             label={params.row.durum}
-                            variant={color === "default" ? "outlined" : undefined}
+                            variant={color === "default" ? "outlined" : "filled"}
+                            sx={{
+                                borderRadius: 1.5,
+                                fontWeight: 600,
+                                bgcolor: color === "default" ? undefined : alpha(theme.palette[color].main, 0.15),
+                                color: color === "default" ? undefined : theme.palette[color].main,
+                            }}
                         />
                     );
                 },
             },
             ...actionCol,
         ];
-    }, [alanlar, canEdit, canDelete]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [alanlar, canEdit, canDelete, theme.palette]);
 
     /* ===================== CRUD ===================== */
     const handleYeni = () => {
@@ -872,15 +948,23 @@ export default function AracDurumlari() {
                 openSnack("Düzenleme yetkiniz yok.", "warning");
                 return;
             }
-            result = await supabase.from("aracdurum").update(form).eq("id", duzenlemeId);
+            // Formu temizle ve Supabase'e uygun hale getir
+            const cleanForm = Object.fromEntries(
+                Object.entries(form).map(([k, v]) => [k, v === "" ? null : v])
+            );
+
+            result = await supabase.from("aracdurum").update(cleanForm).eq("id", duzenlemeId);
         } else {
             if (!canCreate) {
                 openSnack("Kayıt ekleme yetkiniz yok.", "warning");
                 return;
             }
-            result = await supabase.from("aracdurum").insert([form]);
+            const cleanForm = Object.fromEntries(
+                Object.entries(form).map(([k, v]) => [k, v === "" ? null : v])
+            );
+            result = await supabase.from("aracdurum").insert([cleanForm]);
         }
-        if (result.error) return openSnack("Kayıt sırasında hata oluştu.", "error");
+        if (result.error) return openSnack("Kayıt sırasında hata oluştu. " + result.error.message, "error");
         openSnack(duzenlemeId ? "Kayıt güncellendi." : "Kayıt eklendi.");
         setFormOpen(false);
         setDuzenlemeId(null);
@@ -893,53 +977,57 @@ export default function AracDurumlari() {
             <CssBaseline />
             <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <ScaleToFit>
-                    <Container maxWidth={false} disableGutters sx={{ width: 1920, height: 1080, mx: "auto", p: 2, boxSizing: "border-box" }}>
+                    <Container maxWidth={false} disableGutters sx={{ width: 1920, height: 1080, mx: "auto", p: 4, boxSizing: "border-box" }}>
                         <Helmet>
                             <title>ARAÇ DURUMLARI</title>
                         </Helmet>
 
-                        <Stack spacing={2} sx={{ height: "100%", minHeight: 0 }}>
+                        <Stack spacing={3} sx={{ height: "100%", minHeight: 0 }}>
                             {/* Header + Actions */}
                             <Stack
                                 direction={{ xs: "column", md: "row" }}
                                 alignItems={{ xs: "flex-start", md: "center" }}
                                 justifyContent="space-between"
-                                gap={2}
-                                sx={{ mb: 1.5 }}
+                                gap={3}
                             >
                                 <Stack>
                                     <Typography
-                                        variant="h4"
+                                        variant="h3" // Daha büyük ve etkileyici başlık
                                         fontWeight={800}
                                         sx={{
-                                            background: "linear-gradient(90deg,#E879F9,#22D3EE)",
+                                            background: "linear-gradient(90deg,#F59E0B,#A78BFA)", // Daha canlı gradyan
                                             WebkitBackgroundClip: "text",
                                             WebkitTextFillColor: "transparent",
                                         }}
                                     >
-                                        Araç Durumları
+                                        Araç Durumları Yönetimi
                                     </Typography>
-                                    <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                                        Filtreleyin, düzenleyin ve dışa aktarın.
+                                    <Typography variant="body1" sx={{ color: alpha("#E2E8F0", 0.7) }}>
+                                        Dinamik envanter takibi ve denetimi.
                                     </Typography>
                                 </Stack>
 
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                    <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
+                                <Stack direction="row" spacing={1.5} alignItems="center">
+                                    <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} size="large">
                                         Geri
                                     </Button>
-                                    <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
+                                    <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)} size="large">
                                         Anasayfa
-                                    </Button>
-                                    <Button variant="outlined" startIcon={<FilterListIcon />} onClick={() => setFiltreDrawer(true)}>
-                                        Filtreler
-                                    </Button>
-                                    <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportToExcel}>
-                                        Excel'e Aktar
                                     </Button>
                                     <Tooltip title={canCreate ? "Yeni kayıt oluştur" : "Yetkiniz yok"}>
                                         <span>
-                                            <Button variant="contained" startIcon={<AddIcon />} onClick={handleYeni} disabled={!canCreate || alanlar.length === 0}>
+                                            <Button
+                                                variant="contained"
+                                                startIcon={<AddIcon />}
+                                                onClick={handleYeni}
+                                                disabled={!canCreate || alanlar.length === 0}
+                                                size="large"
+                                                color="success"
+                                                sx={{
+                                                    boxShadow: '0 6px 15px rgba(34,197,94,0.4)',
+                                                    ":hover": { boxShadow: '0 8px 20px rgba(34,197,94,0.6)' }
+                                                }}
+                                            >
                                                 Yeni Kayıt
                                             </Button>
                                         </span>
@@ -947,66 +1035,34 @@ export default function AracDurumlari() {
                                 </Stack>
                             </Stack>
 
-                            {/* KPI Cards */}
-                            <Grid container spacing={2}>
-                                {[
-                                    { label: "Toplam Kayıt", value: toplamKayit, color: "primary" },
-                                    { label: "Aktif (tahmini)", value: aktifSayisi, color: "secondary" },
-                                ].map((kpi, idx) => (
-                                    <Grid item xs={12} sm={6} md={3} key={idx}>
-                                        <Card
-                                            sx={{
-                                                borderRadius: 3,
-                                                background: `linear-gradient(180deg, ${alpha("#ffffff", 0.04)} 0%, ${alpha("#ffffff", 0.02)} 100%)`,
-                                                border: "1px solid rgba(255,255,255,0.06)",
-                                                height: "100%",
-                                                minWidth: 220,
-                                            }}
-                                        >
-                                            <CardContent>
-                                                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                                    <Typography variant="subtitle2" color="text.secondary">
-                                                        {kpi.label}
-                                                    </Typography>
-                                                    <Badge color={kpi.color} variant="dot" overlap="circular" />
-                                                </Stack>
-                                                <Typography variant="h4" mt={0.5} fontWeight={800}>
-                                                    {kpi.value}
-                                                </Typography>
-                                                {(yukleniyor || kaydediyor) && <LinearProgress sx={{ mt: 2, height: 6, borderRadius: 3 }} color={kpi.color} />}
-                                                {!(yukleniyor || kaydediyor) && (
-                                                    <LinearProgress sx={{ mt: 2, height: 6, borderRadius: 3 }} color={kpi.color} variant="determinate" value={100} />
-                                                )}
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-                                ))}
-                            </Grid>
-
                             {/* Grid */}
-                            <Box sx={{ mt: 2 }}>
+                            <Box sx={{ flexGrow: 1, minHeight: 0 }}>
                                 <Paper
                                     sx={{
-                                        height: 710,
-                                        borderRadius: 3,
-                                        border: "1px solid rgba(255,255,255,0.06)",
+                                        height: '100%',
+                                        borderRadius: 4,
+                                        border: "1px solid rgba(255,255,255,0.1)",
+                                        overflow: "hidden",
+                                        boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
                                     }}
                                 >
-                                    {(yukleniyor || kaydediyor) && <LinearProgress />}
+                                    {(yukleniyor || kaydediyor) && <LinearProgress sx={{ height: 6 }} />}
 
-                                    <Box sx={{ height: "100%", overflow: "auto", pb: 1 }}>
+                                    <Box sx={{ height: 'calc(100% - 6px)', overflow: "auto" }}>
                                         <DataGrid
-                                            style={{ height: "100%" }}
                                             rows={filtrelenmis}
                                             columns={columns}
                                             getRowId={(r) => r.id}
                                             loading={yukleniyor}
                                             disableRowSelectionOnClick
-                                            pagination={false}
-                                            hideFooter
+                                            // Sayfalandırma ile tablo uzunluğu kontrol altında
+                                            initialState={{
+                                                pagination: { paginationModel: { pageSize: 50 } }, // Varsayılan 50 satır
+                                            }}
+                                            pageSizeOptions={[25, 50, 100]} // Sayfa boyutu seçenekleri
                                             density="compact"
-                                            rowHeight={44}
-                                            columnHeaderHeight={86}
+                                            rowHeight={48} // Ferah satırlar
+                                            columnHeaderHeight={64} // Daha kalın başlık alanı
                                             localeText={GRID_TR}
                                             editMode="row"
                                             processRowUpdate={processRowUpdate}
@@ -1019,23 +1075,25 @@ export default function AracDurumlari() {
                                             }}
                                             sx={{
                                                 border: "none",
-                                                pb: 0.5,
+                                                fontSize: 14,
                                                 "& .MuiDataGrid-columnHeaders": {
-                                                    background: "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
+                                                    // DataGrid başlık stili iyileştirme
+                                                    background: "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.85) 100%)",
                                                     color: "#C8D1E6",
-                                                    borderBottomColor: "rgba(255,255,255,0.08)",
+                                                    borderBottom: `2px solid ${theme.palette.secondary.main}`, // Açık mavi çizgi
                                                     fontWeight: 700,
-                                                    alignItems: "stretch",
+                                                    fontSize: 16,
+                                                    padding: '0 10px'
                                                 },
-                                                "& .MuiDataGrid-columnHeader": { py: 0.5 },
+                                                "& .MuiDataGrid-columnHeaderTitle": { whiteSpace: "normal", lineHeight: 1.2 },
                                                 "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": {
-                                                    backgroundColor: "rgba(255,255,255,0.02)",
+                                                    backgroundColor: "rgba(255,255,255,0.015)",
                                                 },
                                                 "& .MuiDataGrid-cell": {
-                                                    borderBottomColor: "rgba(255,255,255,0.06)",
+                                                    borderBottomColor: "rgba(255,255,255,0.08)",
                                                 },
                                                 "& .MuiDataGrid-row:hover .MuiDataGrid-cell": {
-                                                    backgroundColor: "rgba(139,92,246,0.10)",
+                                                    backgroundColor: alpha(theme.palette.primary.main, 0.15), // Mor vurgu
                                                 },
                                             }}
                                         />
@@ -1052,118 +1110,92 @@ export default function AracDurumlari() {
                             slotProps={{
                                 paper: {
                                     sx: {
-                                        width: 420,
+                                        width: 460, // Daha geniş filtre çekmecesi
                                         backgroundColor: "#0F172A",
                                         color: "text.primary",
-                                        p: 2,
-                                        borderLeft: "1px solid rgba(255,255,255,0.06)",
+                                        p: 3,
+                                        borderLeft: "1px solid rgba(255,255,255,0.1)",
+                                        boxShadow: '0 0 25px rgba(0,0,0,0.8)',
                                     },
                                 },
                             }}
                         >
-                            <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                <Typography variant="h6">Detaylı Filtreler</Typography>
-                                <IconButton onClick={() => setFiltreDrawer(false)}>
+                            <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                                <Typography variant="h5" fontWeight={700}>Detaylı Filtreler</Typography>
+                                <IconButton onClick={() => setFiltreDrawer(false)} color="primary">
                                     <CloseIcon />
                                 </IconButton>
                             </Stack>
+                            <Typography variant="body2" color="text.secondary" mb={2}>
+                                Metin alanları için arama yapın, seçmeli alanlar için değer seçin.
+                            </Typography>
                             <Divider sx={{ my: 2, borderColor: "rgba(255,255,255,0.12)" }} />
 
-                            <Stack spacing={2}>
+                            <Stack spacing={3}>
                                 {alanlar
                                     .filter((a) => a.key !== "id")
                                     .map((a) => {
                                         const label = a.key.replace(/_/g, " ").toUpperCase();
+                                        const isSelect = a.type === "genericSelect" || a.type === "yesnoSelect";
+                                        const options = isSelect ? (a.type === "genericSelect" ? SELECT_ALL_OPTS : YES_NO_OPTS) : [];
 
-                                        if (a.type === "year") {
-                                            return (
-                                                <TextField
-                                                    key={a.key}
+                                        // Filtre bileşeni
+                                        const FilterComponent = isSelect ? (
+                                            <FormControl key={a.key} fullWidth size="small">
+                                                <InputLabel>{label}</InputLabel>
+                                                <Select
                                                     label={label}
                                                     value={filtreler[a.key] || ""}
                                                     onChange={(e) => setFiltreler((p) => ({ ...p, [a.key]: e.target.value }))}
-                                                    fullWidth
-                                                />
-                                            );
-                                        }
-
-                                        if (a.type === "date" || isForcedDateKey(a.key)) {
-                                            return (
-                                                <TextField
-                                                    key={a.key}
-                                                    label={label}
-                                                    value={filtreler[a.key] || ""}
-                                                    onChange={(e) => setFiltreler((p) => ({ ...p, [a.key]: e.target.value }))}
-                                                    fullWidth
-                                                />
-                                            );
-                                        }
-
-                                        if (a.type === "genericSelect" || a.type === "yesnoSelect") {
-                                            const options = a.type === "genericSelect" ? SELECT_ALL_OPTS : YES_NO_OPTS;
-                                            return (
-                                                <FormControl key={a.key} fullWidth size="small">
-                                                    <InputLabel>{label}</InputLabel>
-                                                    <Select
-                                                        label={label}
-                                                        value={filtreler[a.key] || ""}
-                                                        onChange={(e) => setFiltreler((p) => ({ ...p, [a.key]: e.target.value }))}
-                                                        displayEmpty
-                                                    >
-                                                        <MenuItem value="">
-                                                            <em>Hepsi</em>
-                                                        </MenuItem>
-                                                        {options.map((opt) => (
-                                                            <MenuItem key={opt} value={opt}>
-                                                                {opt}
-                                                            </MenuItem>
-                                                        ))}
-                                                    </Select>
-                                                </FormControl>
-                                            );
-                                        }
-
-                                        return (
+                                                >
+                                                    <MenuItem value=""><em>Hepsi</em></MenuItem>
+                                                    {options.map((opt) => (<MenuItem key={opt} value={opt}>{opt}</MenuItem>))}
+                                                </Select>
+                                            </FormControl>
+                                        ) : (
                                             <TextField
                                                 key={a.key}
                                                 label={label}
                                                 value={filtreler[a.key] || ""}
                                                 onChange={(e) => setFiltreler((p) => ({ ...p, [a.key]: e.target.value }))}
                                                 fullWidth
+                                                size="small"
                                             />
                                         );
+
+                                        return FilterComponent;
                                     })}
 
-                                <Stack direction="row" spacing={1} sx={{ pt: 1 }}>
-                                    <Button fullWidth variant="outlined" color="error" onClick={() => setFiltreler({})}>
+                                <Stack direction="row" spacing={2} sx={{ pt: 2 }}>
+                                    <Button fullWidth variant="outlined" color="error" onClick={() => setFiltreler({})} size="large">
                                         Temizle
                                     </Button>
-                                    <Button fullWidth variant="contained" onClick={() => setFiltreDrawer(false)}>
+                                    <Button fullWidth variant="contained" onClick={() => setFiltreDrawer(false)} size="large">
                                         Uygula
                                     </Button>
                                 </Stack>
 
-                                <Divider sx={{ my: 1 }} />
+                                <Divider sx={{ my: 1, borderColor: "rgba(255,255,255,0.12)" }} />
                                 <FormControlLabel
-                                    control={<Switch checked={kolonlariTespitEt} onChange={(e) => setKolonlariTespitEt(e.target.checked)} />}
-                                    label="Kolonları otomatik tespit et"
+                                    control={<Switch checked={kolonlariTespitEt} onChange={(e) => setKolonlariTespitEt(e.target.checked)} color="secondary" />}
+                                    label={<Typography variant="body2" color="text.secondary">Kolonları otomatik tespit et (Yenileme gerekir)</Typography>}
                                 />
                             </Stack>
                         </Drawer>
 
                         {/* Form Dialog */}
-                        <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="lg" fullWidth>
-                            <DialogTitle sx={{ pb: 0 }}>
+                        <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="md" fullWidth>
+                            <DialogTitle sx={{ p: 3 }}>
                                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                                     <Stack>
-                                        <Typography variant="h6" fontWeight={800}>
-                                            {duzenlemeId ? "Kaydı Düzenle" : "Yeni Kayıt"}
+                                        <Typography variant="h5" fontWeight={700}>
+                                            {duzenlemeId ? "Kaydı Düzenle" : "Yeni Kayıt Oluştur"}
                                         </Typography>
                                         <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                                            Tarih alanlarını YYYY-MM-DD giriniz. Seçmeli alanlar listeden seçilir.
+                                            Lütfen tüm alanları doğru formatta doldurunuz.
                                         </Typography>
                                     </Stack>
-                                    <IconButton onClick={() => setFormOpen(false)}>
+                                    <IconButton onClick={() => setFormOpen(false)} color="primary">
                                         <CloseIcon />
                                     </IconButton>
                                 </Stack>
@@ -1172,11 +1204,10 @@ export default function AracDurumlari() {
                             <DialogContent
                                 dividers
                                 sx={{
-                                    mt: 2,
-                                    borderTop: "1px solid rgba(255,255,255,0.06)",
+                                    borderTop: "1px solid rgba(255,255,255,0.08)",
                                     display: "grid",
-                                    gap: 2,
-                                    gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
+                                    gap: 3,
+                                    gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" }, // Daha dinamik kolon sayısı
                                     p: 3,
                                 }}
                             >
@@ -1184,8 +1215,12 @@ export default function AracDurumlari() {
                                     .filter((a) => a.key !== "id")
                                     .map((a) => {
                                         const label = a.key.replace(/_/g, " ").toUpperCase();
+                                        const isYear = a.type === "year";
+                                        const isDate = a.type === "date" || isForcedDateKey(a.key);
+                                        const isSelect = a.type === "genericSelect" || a.type === "yesnoSelect";
+                                        const options = isSelect ? (a.type === "genericSelect" ? SELECT_ALL_OPTS : YES_NO_OPTS) : [];
 
-                                        if (a.type === "year") {
+                                        if (isYear) {
                                             const val = toYearString(form[a.key]);
                                             return (
                                                 <DatePicker
@@ -1205,7 +1240,7 @@ export default function AracDurumlari() {
                                             );
                                         }
 
-                                        if (a.type === "date" || isForcedDateKey(a.key)) {
+                                        if (isDate) {
                                             return (
                                                 <DatePicker
                                                     key={a.key}
@@ -1222,8 +1257,7 @@ export default function AracDurumlari() {
                                             );
                                         }
 
-                                        if (a.type === "genericSelect" || a.type === "yesnoSelect") {
-                                            const options = a.type === "genericSelect" ? SELECT_ALL_OPTS : YES_NO_OPTS;
+                                        if (isSelect) {
                                             return (
                                                 <FormControl key={a.key} fullWidth size="small">
                                                     <InputLabel>{label}</InputLabel>
@@ -1252,10 +1286,10 @@ export default function AracDurumlari() {
                             </DialogContent>
 
                             <DialogActions sx={{ p: 3 }}>
-                                <Button variant="contained" onClick={handleSubmit} size="large" sx={{ px: 4, py: 1.5 }}>
+                                <Button variant="contained" onClick={handleSubmit} size="large" sx={{ px: 5, py: 1.5 }} color={duzenlemeId ? "primary" : "success"}>
                                     {duzenlemeId ? "Güncelle" : "Kaydet"}
                                 </Button>
-                                <Button variant="text" onClick={() => setFormOpen(false)} size="large">
+                                <Button variant="outlined" onClick={() => setFormOpen(false)} size="large">
                                     Kapat
                                 </Button>
                             </DialogActions>
@@ -1263,11 +1297,11 @@ export default function AracDurumlari() {
 
                         <Snackbar
                             open={snack.open}
-                            autoHideDuration={2500}
+                            autoHideDuration={3000} // Süre biraz uzatıldı
                             onClose={() => setSnack((s) => ({ ...s, open: false }))}
-                            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                            anchorOrigin={{ vertical: "top", horizontal: "right" }} // Konum değiştirildi
                         >
-                            <Alert onClose={() => setSnack((s) => ({ ...s, open: false }))} severity={snack.severity} variant="filled" sx={{ width: "100%" }}>
+                            <Alert onClose={() => setSnack((s) => ({ ...s, open: false }))} severity={snack.severity} variant="filled" sx={{ width: "100%", borderRadius: 2 }}>
                                 {snack.msg}
                             </Alert>
                         </Snackbar>

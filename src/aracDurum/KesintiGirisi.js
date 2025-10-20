@@ -34,16 +34,23 @@ import {
     Tooltip,
     Autocomplete,
     Chip,
+    Snackbar,
+    Alert,
+    Divider, // <-- Kontrol edildi ve listenin sonunda bırakıldı
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import AddIcon from "@mui/icons-material/Add";
-import DownloadIcon from "@mui/icons-material/Download";
-import FilterListIcon from "@mui/icons-material/FilterList";
-import CloseIcon from "@mui/icons-material/Close";
-import DeleteIcon from "@mui/icons-material/Delete";
-import EditIcon from "@mui/icons-material/Edit";
-import ArrowBackIcon from "@mui/icons-material/ArrowBackIosNew";
+
+// MUI Icons
+import AddIcon from "@mui/icons-material/AddOutlined";
+import DownloadIcon from "@mui/icons-material/DownloadOutlined";
+import FilterListIcon from "@mui/icons-material/FilterListOutlined";
+import CloseIcon from "@mui/icons-material/CloseOutlined";
+import DeleteIcon from "@mui/icons-material/DeleteOutlined";
+import EditIcon from "@mui/icons-material/EditOutlined";
+import ArrowBackIcon from "@mui/icons-material/ArrowBackIosNewOutlined";
 import HomeIcon from "@mui/icons-material/HomeOutlined";
+import RefreshIcon from "@mui/icons-material/RefreshOutlined";
+import WarningIcon from "@mui/icons-material/WarningAmberOutlined";
 
 // DataGrid
 import {
@@ -54,15 +61,16 @@ import {
     GridToolbarDensitySelector,
 } from "@mui/x-data-grid";
 
-// Date
+// Date & Localization
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 dayjs.locale("tr");
 
-/* ===================== Yetkilendirme ===================== */
-/* Bu ekran: KESİNTİ YÖNETİMİ. role_permissions'ta screen_key=kesinti_yonetimi
-   user_permissions'ta ekran bazlı kolon yok; tek satır/ kullanıcı. */
-const SCREEN_KEY = "kesinti_yonetimi"; // role_permissions.screen_key
+/* ===================== Yetkilendirme ve Sabitler ===================== */
+const SCREEN_KEY = "kesinti_yonetimi";
 const USER_KEYS = { create: "kes_create", edit: "kes_edit", delete: "kes_delete" };
 
 /* ===================== Zoom’dan Bağımsız Ekrana Sığdırma ===================== */
@@ -105,10 +113,11 @@ function ScaleToFit({ children }) {
                 display: "grid",
                 justifyItems: "start",
                 alignItems: "start",
+                // Daha derin ve sofistike arka plan
                 background:
-                    "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.15), transparent 40%)," +
-                    "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.20), transparent 50%)," +
-                    "linear-gradient(180deg, #050816 0%, #0B1220 100%)",
+                    "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.25), transparent 60%)," +
+                    "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.30), transparent 70%)," +
+                    "linear-gradient(180deg, #0B1220 0%, #050816 100%)",
             }}
         >
             <Box
@@ -139,7 +148,7 @@ const GRID_TR = {
     toolbarDensityStandard: "Standart",
     toolbarDensityComfortable: "Rahat",
     toolbarExport: "Dışa aktar",
-    toolbarQuickFilterPlaceholder: "Ara…",
+    toolbarQuickFilterPlaceholder: "Hızlı Ara…",
     columnMenuLabel: "Menü",
     columnMenuShowColumns: "Sütunları göster",
     columnMenuFilter: "Filtrele",
@@ -152,48 +161,105 @@ const GRID_TR = {
     columnsPanelHideAllButton: "Hepsini gizle",
 };
 
-/* ===================== Tema ===================== */
+/* ===================== Tema (Modernleştirilmiş) ===================== */
 const theme = createTheme({
     palette: {
         mode: "dark",
-        primary: { main: "#8B5CF6" },
-        secondary: { main: "#22D3EE" },
-        background: { default: "#050816", paper: alpha("#0B1220", 0.9) },
-        success: { main: "#22C55E" },
-        error: { main: "#EF4444" },
+        primary: { main: "#8B5CF6" }, // Mor (Vibrant Purple)
+        secondary: { main: "#22D3EE" }, // Turkuaz (Cyan)
+        background: {
+            default: "#0B1220", // Koyu mavi/lacivert arka plan
+            paper: alpha("#1E293B", 0.95), // Hafif daha açık, kadifemsi bir paper rengi
+        },
+        success: { main: "#10B981" }, // Zümrüt Yeşili
+        error: { main: "#F43F5E" }, // Gül Kırmızısı
+        info: { main: "#3B82F6" },
+        warning: { main: "#F59E0B" },
     },
-    shape: { borderRadius: 16 },
+    shape: { borderRadius: 12 },
     typography: {
-        fontFamily:
-            'Inter, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-        button: { textTransform: "none", fontWeight: 700 },
+        fontFamily: 'Inter, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        button: { textTransform: "none", fontWeight: 600 },
+        h4: { fontWeight: 800 },
     },
     components: {
+        MuiCssBaseline: {
+            styleOverrides: {
+                "*::-webkit-scrollbar": { width: "8px", height: "8px" },
+                "*::-webkit-scrollbar-thumb": {
+                    backgroundColor: alpha("#8B5CF6", 0.5),
+                    borderRadius: "10px",
+                },
+                "*::-webkit-scrollbar-track": { backgroundColor: alpha("#1E293B", 0.7) },
+            }
+        },
         MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
-        MuiButton: {
+        MuiCard: {
             styleOverrides: {
                 root: {
-                    borderRadius: 12,
-                    boxShadow: "0 6px 20px rgba(139,92,246,0.25)",
-                    ":hover": { boxShadow: "0 8px 24px rgba(139,92,246,0.35)" },
+                    boxShadow: "0 10px 30px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.05) inset",
+                    backdropFilter: "blur(4px)",
+                    backgroundColor: alpha("#1E293B", 0.9),
+                }
+            }
+        },
+        MuiButton: {
+            defaultProps: { size: 'small' },
+            styleOverrides: {
+                root: {
+                    borderRadius: 10,
+                    boxShadow: "0 4px 15px rgba(139,92,246,0.2)",
+                    transition: "all 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms",
+                    ":hover": { boxShadow: "0 6px 20px rgba(139,92,246,0.3)" },
                 },
+                outlined: {
+                    border: "1px solid rgba(255,255,255,0.12)",
+                }
             },
         },
         MuiDialog: {
             styleOverrides: {
                 paper: {
-                    background:
-                        "linear-gradient(180deg, rgba(10,16,30,0.95) 0%, rgba(10,16,30,0.85) 100%)",
-                    boxShadow:
-                        "0 10px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)",
-                    backdropFilter: "blur(10px)",
-                    border: "1px solid rgba(255,255,255,0.06)",
+                    background: "linear-gradient(180deg, #1E293B 0%, #171E2D 100%)",
+                    boxShadow: "0 15px 45px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)",
+                    backdropFilter: "blur(12px)",
+                    border: "1px solid rgba(255,255,255,0.1)",
                 },
             },
         },
         MuiTextField: {
-            defaultProps: { variant: "outlined" },
-            styleOverrides: { root: { "& .MuiOutlinedInput-root": { borderRadius: 12 } } },
+            defaultProps: { variant: "outlined", size: 'small' },
+            styleOverrides: {
+                root: {
+                    "& .MuiOutlinedInput-root": {
+                        borderRadius: 10,
+                        backgroundColor: alpha("#1E293B", 0.7),
+                        "&:hover fieldset": { borderColor: `${alpha("#8B5CF6", 0.7)} !important` },
+                    },
+                    "& .MuiInputLabel-root.Mui-focused": { color: "#8B5CF6" },
+                }
+            },
+        },
+        MuiDataGrid: {
+            styleOverrides: {
+                root: {
+                    border: "none",
+                    borderRadius: 12,
+                    "& .MuiDataGrid-columnHeaders": {
+                        backgroundColor: "#171E2D",
+                        borderBottom: "1px solid rgba(255,255,255,0.12)",
+                    },
+                    "& .MuiDataGrid-cell": {
+                        borderBottom: "1px solid rgba(255,255,255,0.08)",
+                    },
+                    "& .MuiDataGrid-row:nth-of-type(odd)": {
+                        backgroundColor: alpha("#1E293B", 0.7),
+                    },
+                    "& .MuiDataGrid-row:hover": {
+                        backgroundColor: alpha("#8B5CF6", 0.15),
+                    },
+                },
+            }
         },
     },
 });
@@ -209,17 +275,20 @@ const BOS_FORM = {
     aciklama: "",
 };
 
+const KESINTI_TURLERI = [
+    "Bakım", "Servis", "Arıza", "Kaza", "Bölgede İş Yok", "İş Başı", "İş Sonu"
+];
+const KESINTI_NEDENLERI = ["Tedarikçi Kaynaklı", "Odak Kaynaklı"];
+
 const getMevcutKullanici = () =>
     localStorage.getItem("kullanici") || "Bilinmeyen Kullanıcı";
 
 const hesaplaGun = (start, end) => {
     if (!start || !end) return "";
-    const d1 = new Date(start);
-    const d2 = new Date(end);
-    d1.setHours(0, 0, 0, 0);
-    d2.setHours(0, 0, 0, 0);
-    const fark = (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24);
-    return fark >= 0 ? fark : 0;
+    const d1 = dayjs(start).startOf('day');
+    const d2 = dayjs(end).startOf('day');
+    const fark = d2.diff(d1, 'day');
+    return fark >= 0 ? fark + 1 : 0; // Başlangıç ve bitiş dahil
 };
 
 const safeDateValueGetter = (arg) => {
@@ -241,31 +310,30 @@ function CustomToolbar({ onFilters, onExport, onRefresh }) {
     return (
         <GridToolbarContainer
             sx={{
-                px: 1,
-                py: 0.5,
-                gap: 1,
+                px: 2,
+                py: 1,
+                gap: 1.5,
                 position: "sticky",
                 top: 0,
                 zIndex: 1,
-                background:
-                    "linear-gradient(180deg, rgba(15,23,42,0.9) 0%, rgba(15,23,42,0.6) 100%)",
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-                backdropFilter: "blur(6px)",
+                background: "linear-gradient(180deg, #171E2D 0%, #171E2D 100%)",
+                borderBottom: "1px solid rgba(255,255,255,0.12)",
+                backdropFilter: "blur(8px)",
             }}
         >
             <GridToolbarColumnsButton />
             <GridToolbarDensitySelector />
             <Box sx={{ flexGrow: 1 }} />
             <GridToolbarQuickFilter debounceMs={300} />
-            <Tooltip title="Filtreler">
-                <IconButton onClick={onFilters}>
+            <Tooltip title="Detaylı Filtreler">
+                <IconButton color="primary" onClick={onFilters}>
                     <FilterListIcon />
                 </IconButton>
             </Tooltip>
             <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExport}>
-                Excel
+                Excel'e Aktar
             </Button>
-            <Button variant="outlined" onClick={onRefresh}>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={onRefresh}>
                 Yenile
             </Button>
         </GridToolbarContainer>
@@ -281,6 +349,7 @@ export default function KesintiGirisi() {
     const [plakalar, setPlakalar] = useState([]);
     const [formOpen, setFormOpen] = useState(false);
     const [filtreDrawer, setFiltreDrawer] = useState(false);
+    const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
 
     // form modu ve düzenlenen id
     const [formMode, setFormMode] = useState("create"); // 'create' | 'edit'
@@ -298,41 +367,18 @@ export default function KesintiGirisi() {
         ay: "",
     });
 
-    // ==== YETKİ DURUMU ====
+    // Yetki Durumu
     const [permLoading, setPermLoading] = useState(true);
     const [perms, setPerms] = useState({
         canCreate: false,
         canEdit: false,
         canDelete: false,
     });
-
-    // KPI
-    const toplam = kesintiler.length;
-    const buAy = useMemo(() => {
-        const ym = dayjs().format("YYYY-MM");
-        return kesintiler.filter((k) => String(k.baslangic_tarihi || "").startsWith(ym)).length;
-    }, [kesintiler]);
-
-    const filtrelenmisKesintiler = useMemo(() => {
-        return kesintiler.filter((k) => {
-            const metinlerTamam = Object.entries(filtreler).every(([key, deger]) => {
-                if (!deger) return true;
-                if (key === "ay") return true;
-                return String(k[key] ?? "").toLowerCase().includes(String(deger).toLowerCase());
-            });
-            if (!metinlerTamam) return false;
-
-            if (filtreler.ay) {
-                const ym = String(k.baslangic_tarihi || "").slice(0, 7);
-                if (ym !== filtreler.ay) return false;
-            }
-
-            return true;
-        });
-    }, [kesintiler, filtreler]);
-
     const [loading, setLoading] = useState(false);
 
+    const openSnack = (msg, severity = "success") => setSnack({ open: true, msg, severity });
+
+    /* ===================== Veri & Yetki Yükleme ===================== */
     useEffect(() => {
         verileriGetir();
         plakalarGetir();
@@ -342,9 +388,7 @@ export default function KesintiGirisi() {
         });
     }, []);
 
-    /* ===================== Permissions Loader ===================== */
     function coalesceOverride(overrideVal, roleVal) {
-        // override true/false ise onu kullan; null/undefined ise rol değeri
         return (overrideVal === true || overrideVal === false) ? overrideVal : !!roleVal;
     }
 
@@ -356,7 +400,6 @@ export default function KesintiGirisi() {
         try {
             setPermLoading(true);
 
-            // 1) Kullanıcı
             const ad = getMevcutKullanici();
             const { data: userRow, error: eU } = await supabase
                 .from("login")
@@ -369,7 +412,6 @@ export default function KesintiGirisi() {
                 return;
             }
 
-            // 2) Rol ID
             let roleId = null;
             if (userRow.rol) {
                 if (looksLikeUUID(userRow.rol)) {
@@ -386,7 +428,6 @@ export default function KesintiGirisi() {
                 }
             }
 
-            // 3) Rol izinleri (screen_key = kesinti_yonetimi)
             let rolePerm = {};
             if (roleId) {
                 const { data: rp, error: eRP } = await supabase
@@ -399,7 +440,6 @@ export default function KesintiGirisi() {
                 rolePerm = rp || {};
             }
 
-            // 4) Kullanıcı override — user_permissions'ta screen_key YOK; user_id ile tek satır
             const { data: up, error: eUP } = await supabase
                 .from("user_permissions")
                 .select("*")
@@ -407,7 +447,6 @@ export default function KesintiGirisi() {
                 .maybeSingle();
             if (eUP) throw eUP;
 
-            // 5) Etkin izinler — kes_* alanları
             const canCreate = coalesceOverride(up?.[USER_KEYS.create], rolePerm?.[USER_KEYS.create]);
             const canEdit = coalesceOverride(up?.[USER_KEYS.edit], rolePerm?.[USER_KEYS.edit]);
             const canDelete = coalesceOverride(up?.[USER_KEYS.delete], rolePerm?.[USER_KEYS.delete]);
@@ -418,11 +457,15 @@ export default function KesintiGirisi() {
         }
     }
 
-    /* ===================== Data ===================== */
     const verileriGetir = async () => {
         setLoading(true);
-        const { data } = await supabase.from("kesintiler").select("*").order("id", { ascending: false });
-        setKesintiler(data || []);
+        const { data, error } = await supabase.from("kesintiler").select("*").order("id", { ascending: false });
+        if (error) {
+            openSnack("Veriler alınamadı.", "error");
+            console.error(error);
+        } else {
+            setKesintiler(data || []);
+        }
         setLoading(false);
     };
 
@@ -431,10 +474,14 @@ export default function KesintiGirisi() {
             .from("plakalar")
             .select("plaka, treyler")
             .or("statu.is.null,statu.neq.ÇIKARILDI");
-        if (!error && data) setPlakalar(data);
+        if (error) {
+            console.error("Plakalar alınamadı:", error);
+        } else {
+            setPlakalar(data || []);
+        }
     };
 
-    // Plaka seçenekleri
+    // Plaka Autocomplete seçenekleri
     const plakaOptions = useMemo(
         () =>
             (plakalar || [])
@@ -444,93 +491,118 @@ export default function KesintiGirisi() {
     );
     const plakaOptionsSet = useMemo(() => new Set(plakaOptions.map((o) => o.label)), [plakaOptions]);
 
+    /* ===================== KPI & Filtreleme ===================== */
+    const toplam = kesintiler.length;
+    const buAy = useMemo(() => {
+        const ym = dayjs().format("YYYY-MM");
+        return kesintiler.filter((k) => String(k.baslangic_tarihi || "").startsWith(ym)).length;
+    }, [kesintiler]);
+
+    const filtrelenmisKesintiler = useMemo(() => {
+        return kesintiler.filter((k) => {
+            const metinlerTamam = Object.entries(filtreler).every(([key, deger]) => {
+                if (!deger) return true;
+                if (key === "ay") return true;
+
+                if (key === "gun_sayisi") {
+                    return String(k[key] || "") === String(deger);
+                }
+
+                return String(k[key] ?? "").toLowerCase().includes(String(deger).toLowerCase());
+            });
+            if (!metinlerTamam) return false;
+
+            if (filtreler.ay) {
+                const ym = String(k.baslangic_tarihi || "").slice(0, 7);
+                if (ym !== filtreler.ay) return false;
+            }
+
+            return true;
+        });
+    }, [kesintiler, filtreler]);
+
+    /* ===================== Form & CRUD Handlers ===================== */
     const handleChange = (name, value) => {
         const next = { ...form, [name]: value };
         if (name === "baslangic_tarihi" || name === "bitis_tarihi") {
-            next.gun_sayisi = hesaplaGun(next.baslangic_tarihi, next.bitis_tarihi);
+            const gunSayisi = hesaplaGun(next.baslangic_tarihi, next.bitis_tarihi);
+            next.gun_sayisi = gunSayisi === "" ? "" : Number(gunSayisi);
         }
         setForm(next);
     };
 
-    /* ===================== CRUD Handlers (Yetki guard'lı) ===================== */
-    const handleSubmit = async (e) => {
+    const handleFormSubmit = async (e) => {
         e.preventDefault();
 
-        // create vs edit guard
+        // Yetki kontrolü
         if (formMode === "create" && !perms.canCreate) {
-            alert("Yeni kesinti ekleme yetkiniz yok.");
+            openSnack("Yeni kesinti ekleme yetkiniz yok.", "warning");
             return;
         }
         if (formMode === "edit" && !perms.canEdit) {
-            alert("Düzenleme yetkiniz yok.");
+            openSnack("Düzenleme yetkiniz yok.", "warning");
             return;
         }
 
-        const {
-            plaka_treyler,
-            baslangic_tarihi,
-            bitis_tarihi,
-            kesinti_turu,
-            neden,
-            gun_sayisi,
-            aciklama,
-        } = form;
+        const { plaka_treyler, baslangic_tarihi, bitis_tarihi, kesinti_turu, neden, gun_sayisi, aciklama } = form;
 
         if (!plaka_treyler || !baslangic_tarihi || !bitis_tarihi || !kesinti_turu || !neden) {
-            alert("Lütfen tüm gerekli alanları doldurun.");
+            openSnack("Lütfen tüm gerekli (*) alanları doldurun.", "error");
             return;
         }
 
         if (!plakaOptionsSet.has(plaka_treyler)) {
-            alert("Lütfen plaka/treyler değerini listeden seçin.");
+            openSnack("Plaka/treyler değeri listeden seçilmelidir.", "error");
+            return;
+        }
+
+        if (dayjs(baslangic_tarihi).isAfter(dayjs(bitis_tarihi))) {
+            openSnack("Başlangıç tarihi bitiş tarihinden sonra olamaz.", "error");
             return;
         }
 
         const kullanici = getMevcutKullanici();
-        const bugun = new Date().toISOString().split("T")[0];
+        const bugun = dayjs().format("YYYY-MM-DD");
 
         let error = null;
+
+        const payload = {
+            plaka_treyler,
+            kesinti_turu,
+            neden,
+            baslangic_tarihi,
+            bitis_tarihi,
+            gun_sayisi: Number(gun_sayisi),
+            aciklama,
+        };
 
         if (formMode === "create") {
             ({ error } = await supabase.from("kesintiler").insert([
                 {
-                    plaka_treyler,
-                    kesinti_turu,
-                    neden,
-                    baslangic_tarihi,
-                    bitis_tarihi,
-                    gun_sayisi,
-                    aciklama,
+                    ...payload,
                     ekleyen_kullanici: kullanici,
                     eklenme_tarihi: new Date().toISOString(),
                 },
             ]));
         } else {
-            ({ error } = await supabase
-                .from("kesintiler")
-                .update({
-                    plaka_treyler,
-                    kesinti_turu,
-                    neden,
-                    baslangic_tarihi,
-                    bitis_tarihi,
-                    gun_sayisi,
-                    aciklama,
-                })
-                .eq("id", editingId));
+            ({ error } = await supabase.from("kesintiler").update(payload).eq("id", editingId));
         }
 
         if (error) {
-            alert("İşlem gerçekleştirilemedi.");
+            openSnack(`İşlem gerçekleştirilemedi: ${error.message}`, "error");
             return;
         }
 
         // Plaka statüsünü güncelle
-        const [plaka, treyler] = plaka_treyler.split(" - ");
+        const [plaka, treyler] = (plaka_treyler || "-").split(" - ");
+
+        // Kesinti Bitiş Tarihi bugünden sonraysa statü KESİNTİDE olmalı.
+        const isCurrentOrFuture = dayjs(bitis_tarihi).isSameOrAfter(bugun, 'day');
+
         await supabase
             .from("plakalar")
             .update(
-                bitis_tarihi >= bugun
+                isCurrentOrFuture
                     ? {
                         statu: "KESİNTİDE",
                         kesinti_baslangic_tarihi: baslangic_tarihi,
@@ -545,6 +617,8 @@ export default function KesintiGirisi() {
             .eq("plaka", (plaka || "").trim())
             .eq("treyler", (treyler || "").trim());
 
+
+        openSnack(formMode === "edit" ? "Kayıt güncellendi." : "Yeni kayıt eklendi.", "success");
         setForm(BOS_FORM);
         setEditingId(null);
         setFormMode("create");
@@ -552,56 +626,82 @@ export default function KesintiGirisi() {
         verileriGetir();
     };
 
+    const handleDuzenle = (row) => {
+        if (!perms.canEdit) {
+            openSnack("Düzenleme yetkiniz yok.", "warning");
+            return;
+        }
+        setForm({
+            plaka_treyler: row.plaka_treyler || "",
+            kesinti_turu: row.kesinti_turu || "",
+            neden: row.neden || "",
+            baslangic_tarihi: (row.baslangic_tarihi || "").slice(0, 10),
+            bitis_tarihi: (row.bitis_tarihi || "").slice(0, 10),
+            gun_sayisi: row.gun_sayisi || hesaplaGun(row.baslangic_tarihi, row.bitis_tarihi),
+            aciklama: row.aciklama || "",
+        });
+        setEditingId(row.id);
+        setFormMode("edit");
+        setFormOpen(true);
+    };
+
     const handleSil = async (id) => {
         if (!perms.canDelete) {
-            alert("Silme yetkiniz yok.");
+            openSnack("Silme yetkiniz yok.", "warning");
             return;
         }
-        if (!window.confirm("Kesinti kaydı silinsin mi?")) return;
+        if (!window.confirm("Kesinti kaydı silinsin mi? Bu işlem geri alınamaz.")) return;
 
-        const { data: silinecek } = await supabase.from("kesintiler").select("*").eq("id", id).single();
+        const { data: silinecek } = await supabase.from("kesintiler").select("plaka_treyler").eq("id", id).maybeSingle();
         if (!silinecek) {
-            alert("Kayıt bulunamadı.");
+            openSnack("Kayıt bulunamadı.", "error");
             return;
         }
 
-        await supabase.from("kesintiler").delete().eq("id", id);
+        const { error } = await supabase.from("kesintiler").delete().eq("id", id);
+        if (error) {
+            openSnack("Silme sırasında hata oluştu: " + error.message, "error");
+            return;
+        }
 
-        const [plaka, treyler] = (silinecek.plaka_treyler || "").split(" - ");
+        // Plaka statüsünü sıfırla/güncelle
+        const [plaka, treyler] = (silinecek.plaka_treyler || "-").split(" - ");
         await supabase
             .from("plakalar")
             .update({
-                statu: "Aktif",
+                statu: "Aktif", // Basitçe Aktif'e döner
                 kesinti_baslangic_tarihi: null,
                 kesinti_bitis_tarihi: null,
             })
             .eq("plaka", (plaka || "").trim())
             .eq("treyler", (treyler || "").trim());
 
+        openSnack("Kayıt başarıyla silindi.", "info");
         verileriGetir();
     };
 
     const handleExportExcel = () => {
-        if (kesintiler.length === 0) {
-            alert("Aktarılacak kayıt bulunamadı.");
+        if (filtrelenmisKesintiler.length === 0) {
+            openSnack("Aktarılacak filtrelenmiş kayıt bulunamadı.", "warning");
             return;
         }
+
         const worksheet = XLSX.utils.json_to_sheet(
-            kesintiler.map((k) => ({
+            filtrelenmisKesintiler.map((k) => ({
                 Plaka: k.plaka_treyler,
                 Tür: k.kesinti_turu,
                 Neden: k.neden,
-                Başlangıç: k.baslangic_tarihi ? new Date(k.baslangic_tarihi).toLocaleDateString("tr-TR") : "",
-                Bitiş: k.bitis_tarihi ? new Date(k.bitis_tarihi).toLocaleDateString("tr-TR") : "",
+                Başlangıç: k.baslangic_tarihi ? dayjs(k.baslangic_tarihi).format("DD.MM.YYYY") : "-",
+                Bitiş: k.bitis_tarihi ? dayjs(k.bitis_tarihi).format("DD.MM.YYYY") : "-",
                 Gün: k.gun_sayisi,
                 Açıklama: k.aciklama,
                 Ekleyen: k.ekleyen_kullanici,
-                Eklenme_Tarihi: k.eklenme_tarihi ? new Date(k.eklenme_tarihi).toLocaleString("tr-TR") : "",
+                Eklenme_Tarihi: k.eklenme_tarihi ? dayjs(k.eklenme_tarihi).format("DD.MM.YYYY HH:mm") : "-",
             }))
         );
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Kesinti Kayıtları");
-        XLSX.writeFile(workbook, "kesinti_kayitlari.xlsx");
+        XLSX.writeFile(workbook, `kesinti_kayitlari_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
     };
 
     /* ===================== Columns ===================== */
@@ -627,41 +727,28 @@ export default function KesintiGirisi() {
             valueGetter: safeDateValueGetter,
             valueFormatter: safeDateValueFormatter,
         },
-        { field: "gun_sayisi", headerName: "GÜN", width: 90 },
+        { field: "gun_sayisi", headerName: "GÜN", width: 90, type: 'number' },
         { field: "aciklama", headerName: "AÇIKLAMA", flex: 1.2, minWidth: 220 },
         { field: "ekleyen_kullanici", headerName: "EKLEYEN", flex: 1, minWidth: 140 },
         {
             field: "actions",
             headerName: "İŞLEM",
-            width: 130,
+            width: 120,
             sortable: false,
             filterable: false,
+            align: 'center',
+            headerAlign: 'center',
             renderCell: (params) => (
-                <Stack direction="row" spacing={1}>
+                <Stack direction="row" spacing={0.5}>
                     <Tooltip title={perms.canEdit ? "Düzenle" : "Yetkiniz yok"}>
                         <span>
                             <IconButton
                                 size="small"
-                                onClick={() => {
-                                    if (!perms.canEdit) return;
-                                    setForm({
-                                        plaka_treyler: params.row.plaka_treyler || "",
-                                        kesinti_turu: params.row.kesinti_turu || "",
-                                        neden: params.row.neden || "",
-                                        baslangic_tarihi: (params.row.baslangic_tarihi || "").slice(0, 10),
-                                        bitis_tarihi: (params.row.bitis_tarihi || "").slice(0, 10),
-                                        gun_sayisi:
-                                            params.row.gun_sayisi ||
-                                            hesaplaGun(params.row.baslangic_tarihi, params.row.bitis_tarihi),
-                                        aciklama: params.row.aciklama || "",
-                                    });
-                                    setEditingId(params.row.id);
-                                    setFormMode("edit");
-                                    setFormOpen(true);
-                                }}
+                                color="primary"
+                                onClick={() => handleDuzenle(params.row)}
                                 disabled={!perms.canEdit}
                             >
-                                <EditIcon fontSize="inherit" />
+                                <EditIcon fontSize="small" />
                             </IconButton>
                         </span>
                     </Tooltip>
@@ -670,10 +757,10 @@ export default function KesintiGirisi() {
                             <IconButton
                                 size="small"
                                 color="error"
-                                onClick={() => perms.canDelete && handleSil(params.row.id)}
+                                onClick={() => handleSil(params.row.id)}
                                 disabled={!perms.canDelete}
                             >
-                                <DeleteIcon fontSize="inherit" />
+                                <DeleteIcon fontSize="small" />
                             </IconButton>
                         </span>
                     </Tooltip>
@@ -682,521 +769,480 @@ export default function KesintiGirisi() {
         },
     ];
 
+    /* ===================== Render ===================== */
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
-            <ScaleToFit>
-                <Container
-                    maxWidth={false}
-                    disableGutters
-                    sx={{ width: 1920, height: 1080, mx: "auto", p: 2, boxSizing: "border-box" }}
-                >
-                    <Helmet>
-                        <title>KESİNTİ GİRİŞLERİ</title>
-                    </Helmet>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <ScaleToFit>
+                    <Container
+                        maxWidth={false}
+                        disableGutters
+                        sx={{ width: 1920, height: 1080, mx: "auto", p: 3, boxSizing: "border-box" }}
+                    >
+                        <Helmet>
+                            <title>KESİNTİ GİRİŞLERİ | ODYSSEY</title>
+                        </Helmet>
 
-                    <Stack spacing={2} sx={{ height: "100%", minHeight: 0 }}>
-                        {/* Header + Actions */}
-                        <Stack
-                            direction={{ xs: "column", md: "row" }}
-                            alignItems={{ xs: "flex-start", md: "center" }}
-                            justifyContent="space-between"
-                            gap={2}
-                            sx={{ mb: 1.5 }}
-                        >
-                            <Stack direction="row" alignItems="center" spacing={1}>
-                                <Typography
-                                    variant="h4"
-                                    fontWeight={800}
-                                    sx={{
-                                        background: "linear-gradient(90deg,#E879F9,#22D3EE)",
-                                        WebkitBackgroundClip: "text",
-                                        WebkitTextFillColor: "transparent",
-                                    }}
-                                >
-                                    Kesinti Girişleri
-                                </Typography>
-                                {/* bilgi çipi: yetki özeti */}
-                                <Chip
-                                    size="small"
-                                    variant="outlined"
-                                    label={
-                                        permLoading
-                                            ? "Yetkiler yükleniyor…"
-                                            : `Yetkiler: ${perms.canCreate ? "E" : "H"}/${perms.canEdit ? "E" : "H"}/${perms.canDelete ? "E" : "H"}`
-                                    }
-                                />
-                            </Stack>
-
-                            <Stack direction="row" spacing={1}>
-                                <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
-                                    Geri
-                                </Button>
-                                <Button size="small" variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
-                                    Anasayfa
-                                </Button>
-
-                                <Button variant="outlined" startIcon={<FilterListIcon />} onClick={() => setFiltreDrawer(true)}>
-                                    Filtreler
-                                </Button>
-                                <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleExportExcel}>
-                                    Excel'e Aktar
-                                </Button>
-                                <Tooltip title={perms.canCreate ? "" : "Yetkiniz yok"}>
-                                    <span>
-                                        <Button
-                                            variant="contained"
-                                            startIcon={<AddIcon />}
-                                            onClick={() => {
-                                                if (!perms.canCreate) return;
-                                                setForm(BOS_FORM);
-                                                setFormMode("create");
-                                                setEditingId(null);
-                                                setFormOpen(true);
-                                            }}
-                                            disabled={!perms.canCreate || permLoading}
-                                        >
-                                            Yeni Kesinti
-                                        </Button>
-                                    </span>
-                                </Tooltip>
-                            </Stack>
-                        </Stack>
-
-                        {/* KPI Cards */}
-                        <Grid container spacing={2}>
-                            {[
-                                { label: "Toplam Kayıt", value: toplam, color: "primary" },
-                                { label: "Bu Ay", value: buAy, color: "secondary" },
-                            ].map((kpi, idx) => (
-                                <Grid item xs={12} sm={6} md={3} key={idx}>
-                                    <Card
+                        <Stack spacing={3} sx={{ height: "100%", minHeight: 0 }}>
+                            {/* Header + Actions */}
+                            <Stack
+                                direction={{ xs: "column", md: "row" }}
+                                alignItems={{ xs: "flex-start", md: "center" }}
+                                justifyContent="space-between"
+                                gap={2}
+                            >
+                                <Stack>
+                                    <Typography
+                                        variant="h4"
+                                        fontWeight={800}
                                         sx={{
-                                            borderRadius: 3,
-                                            background: `linear-gradient(180deg, ${alpha("#ffffff", 0.04)} 0%, ${alpha(
-                                                "#ffffff",
-                                                0.02
-                                            )} 100%)`,
-                                            border: "1px solid rgba(255,255,255,0.06)",
-                                            height: "100%",
-                                            minWidth: 220,
+                                            background: "linear-gradient(90deg,#E879F9,#22D3EE)",
+                                            WebkitBackgroundClip: "text",
+                                            WebkitTextFillColor: "transparent",
                                         }}
                                     >
-                                        <CardContent>
-                                            <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                                <Typography variant="subtitle2" color="text.secondary">
-                                                    {kpi.label}
-                                                </Typography>
-                                                <Badge color={kpi.color} variant="dot" overlap="circular" />
-                                            </Stack>
-                                            <Typography variant="h4" mt={0.5} fontWeight={800}>
-                                                {kpi.value}
-                                            </Typography>
-                                            <LinearProgress sx={{ mt: 2, height: 6, borderRadius: 3 }} color={kpi.color} variant="determinate" value={100} />
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                            ))}
-                        </Grid>
-
-                        {/* Grid */}
-                        <Box sx={{ mt: 2 }}>
-                            <Paper
-                                sx={{
-                                    height: 710,
-                                    borderRadius: 3,
-                                    border: "1px solid rgba(255,255,255,0.06)",
-                                }}
-                            >
-                                {(loading || permLoading) && <LinearProgress />}
-
-                                <Box sx={{ height: "100%", overflow: "auto", pb: 1 }}>
-                                    <DataGrid
-                                        style={{ height: "100%" }}
-                                        rows={filtrelenmisKesintiler}
-                                        columns={columns}
-                                        getRowId={(r) => r.id}
-                                        loading={loading || permLoading}
-                                        disableRowSelectionOnClick
-                                        pagination={false}
-                                        hideFooter
-                                        density="compact"
-                                        rowHeight={44}
-                                        columnHeaderHeight={86}
-                                        localeText={GRID_TR}
-                                        slots={{
-                                            toolbar: () => (
-                                                <CustomToolbar
-                                                    onFilters={() => setFiltreDrawer(true)}
-                                                    onExport={handleExportExcel}
-                                                    onRefresh={() => {
-                                                        verileriGetir();
-                                                        loadPermissions().catch(() => { });
-                                                    }}
-                                                />
-                                            ),
-                                        }}
-                                        sx={{
-                                            border: "none",
-                                            pb: 0.5,
-                                            "& .MuiDataGrid-columnHeaders": {
-                                                background:
-                                                    "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
-                                                color: "#C8D1E6",
-                                                borderBottomColor: "rgba(255,255,255,0.08)",
-                                                fontWeight: 700,
-                                                alignItems: "stretch",
-                                            },
-                                            "& .MuiDataGrid-columnHeader": { py: 0.5 },
-                                            "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": {
-                                                backgroundColor: "rgba(255,255,255,0.02)",
-                                            },
-                                            "& .MuiDataGrid-cell": {
-                                                borderBottomColor: "rgba(255,255,255,0.06)",
-                                            },
-                                            "& .MuiDataGrid-row:hover .MuiDataGrid-cell": {
-                                                backgroundColor: "rgba(139,92,246,0.10)",
-                                            },
-                                        }}
-                                    />
-                                </Box>
-                            </Paper>
-                        </Box>
-                    </Stack>
-
-                    {/* Filtre Drawer */}
-                    <Drawer
-                        anchor="right"
-                        open={filtreDrawer}
-                        onClose={() => setFiltreDrawer(false)}
-                        slotProps={{
-                            paper: {
-                                sx: {
-                                    width: 420,
-                                    backgroundColor: "#0F172A",
-                                    color: "text.primary",
-                                    p: 2,
-                                    borderLeft: "1px solid rgba(255,255,255,0.06)",
-                                },
-                            },
-                        }}
-                    >
-                        <Stack direction="row" alignItems="center" justifyContent="space-between">
-                            <Typography variant="h6">Detaylı Filtreler</Typography>
-                            <IconButton onClick={() => setFiltreDrawer(false)}>
-                                <CloseIcon />
-                            </IconButton>
-                        </Stack>
-
-                        <Box sx={{ mt: 2, display: "grid", gap: 2 }}>
-                            <Autocomplete
-                                options={plakaOptions}
-                                value={
-                                    filtreler.plaka_treyler && plakaOptionsSet.has(filtreler.plaka_treyler)
-                                        ? { label: filtreler.plaka_treyler }
-                                        : null
-                                }
-                                onChange={(_, val) =>
-                                    setFiltreler((p) => ({ ...p, plaka_treyler: val?.label || "" }))
-                                }
-                                renderInput={(params) => <TextField {...params} label="Plaka - Treyler" fullWidth />}
-                                clearOnEscape
-                                autoHighlight
-                                disableClearable={false}
-                                disablePortal
-                                ListboxProps={{ style: { maxHeight: 320 } }}
-                                isOptionEqualToValue={(o, v) => o.label === v.label}
-                            />
-
-                            <FormControl fullWidth>
-                                <InputLabel>Tür</InputLabel>
-                                <Select
-                                    label="Tür"
-                                    value={filtreler.kesinti_turu}
-                                    onChange={(e) =>
-                                        setFiltreler((p) => ({ ...p, kesinti_turu: e.target.value }))
-                                    }
-                                >
-                                    <MenuItem value="">(Hepsi)</MenuItem>
-                                    <MenuItem value="Bakım">Bakım</MenuItem>
-                                    <MenuItem value="Servis">Servis</MenuItem>
-                                    <MenuItem value="Arıza">Arıza</MenuItem>
-                                    <MenuItem value="Kaza">Kaza</MenuItem>
-                                    <MenuItem value="Bölgede İş Yok">Bölgede İş Yok</MenuItem>
-                                    <MenuItem value="İş Başı">İş Başı</MenuItem>
-                                    <MenuItem value="İş Sonu">İş Sonu</MenuItem>
-                                </Select>
-                            </FormControl>
-
-                            <FormControl fullWidth>
-                                <InputLabel>Neden</InputLabel>
-                                <Select
-                                    label="Neden"
-                                    value={filtreler.neden}
-                                    onChange={(e) => setFiltreler((p) => ({ ...p, neden: e.target.value }))}
-                                >
-                                    <MenuItem value="">(Hepsi)</MenuItem>
-                                    <MenuItem value="Tedarikçi Kaynaklı">Tedarikçi Kaynaklı</MenuItem>
-                                    <MenuItem value="Odak Kaynaklı">Odak Kaynaklı</MenuItem>
-                                </Select>
-                            </FormControl>
-
-                            <TextField
-                                label="Açıklama"
-                                value={filtreler.aciklama}
-                                onChange={(e) => setFiltreler((p) => ({ ...p, aciklama: e.target.value }))}
-                                fullWidth
-                            />
-
-                            <TextField
-                                label="Ekleyen"
-                                value={filtreler.ekleyen_kullanici}
-                                onChange={(e) =>
-                                    setFiltreler((p) => ({ ...p, ekleyen_kullanici: e.target.value }))
-                                }
-                                fullWidth
-                            />
-
-                            <TextField
-                                type="date"
-                                label="Başlangıç"
-                                InputLabelProps={{ shrink: true }}
-                                value={filtreler.baslangic_tarihi}
-                                onChange={(e) =>
-                                    setFiltreler((p) => ({ ...p, baslangic_tarihi: e.target.value }))
-                                }
-                                fullWidth
-                            />
-
-                            <TextField
-                                type="date"
-                                label="Bitiş"
-                                InputLabelProps={{ shrink: true }}
-                                value={filtreler.bitis_tarihi}
-                                onChange={(e) => setFiltreler((p) => ({ ...p, bitis_tarihi: e.target.value }))}
-                                fullWidth
-                            />
-                            <TextField
-                                type="month"
-                                label="Ay (Başlangıç)"
-                                InputLabelProps={{ shrink: true }}
-                                value={filtreler.ay}
-                                onChange={(e) => setFiltreler((p) => ({ ...p, ay: e.target.value }))}
-                                fullWidth
-                            />
-
-                            <Stack direction="row" spacing={1}>
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    onClick={() => setFiltreler((p) => ({ ...p, ay: dayjs().format("YYYY-MM") }))}
-                                >
-                                    Bu Ay
-                                </Button>
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    onClick={() =>
-                                        setFiltreler((p) => ({ ...p, ay: dayjs().subtract(1, "month").format("YYYY-MM") }))
-                                    }
-                                >
-                                    Geçen Ay
-                                </Button>
-                            </Stack>
-
-                            <TextField
-                                type="number"
-                                label="Gün"
-                                value={filtreler.gun_sayisi}
-                                onChange={(e) => setFiltreler((p) => ({ ...p, gun_sayisi: e.target.value }))}
-                                fullWidth
-                            />
-
-                            <Stack direction="row" spacing={1} sx={{ pt: 1 }}>
-                                <Button
-                                    fullWidth
-                                    variant="outlined"
-                                    color="error"
-                                    onClick={() =>
-                                        setFiltreler({
-                                            plaka_treyler: "",
-                                            kesinti_turu: "",
-                                            neden: "",
-                                            baslangic_tarihi: "",
-                                            bitis_tarihi: "",
-                                            gun_sayisi: "",
-                                            aciklama: "",
-                                            ekleyen_kullanici: "",
-                                            ay: "",
-                                        })
-                                    }
-                                >
-                                    Temizle
-                                </Button>
-                                <Button fullWidth variant="contained" onClick={() => setFiltreDrawer(false)}>
-                                    Uygula
-                                </Button>
-                            </Stack>
-                        </Box>
-                    </Drawer>
-
-                    {/* Form Dialog */}
-                    <Dialog
-                        open={formOpen}
-                        onClose={() => {
-                            setFormOpen(false);
-                            setFormMode("create");
-                            setEditingId(null);
-                        }}
-                        maxWidth="xl"
-                        fullWidth
-                    >
-                        <DialogTitle sx={{ pb: 0 }}>
-                            <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                <Stack>
-                                    <Typography variant="h6" fontWeight={800}>
-                                        {formMode === "edit" ? "Kesinti Düzenle" : "Yeni Kesinti"}
+                                        KESİNTİ KAYITLARI YÖNETİMİ
                                     </Typography>
-                                    <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                                        Lütfen zorunlu alanları doldurun. ( * )
+                                    <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.5 }}>
+                                        Araçların aktif çalışmadığı günleri (bakım, arıza, iş yok vb.) yönetin.
                                     </Typography>
                                 </Stack>
-                                <IconButton
+
+                                <Stack direction="row" spacing={1.5} alignItems="center">
+                                    <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
+                                        Geri
+                                    </Button>
+                                    <Button variant="text" startIcon={<HomeIcon />} onClick={() => navigate(HOME_PATH)}>
+                                        Anasayfa
+                                    </Button>
+
+                                    <Tooltip title={perms.canCreate ? "Yeni Kesinti Kaydı Ekle" : "Yetkiniz yok"}>
+                                        <span>
+                                            <Button
+                                                variant="contained"
+                                                startIcon={<AddIcon />}
+                                                onClick={() => {
+                                                    if (!perms.canCreate) {
+                                                        openSnack("Yeni kayıt ekleme yetkiniz yok.", "warning");
+                                                        return;
+                                                    }
+                                                    setForm(BOS_FORM);
+                                                    setFormMode("create");
+                                                    setEditingId(null);
+                                                    setFormOpen(true);
+                                                }}
+                                                disabled={!perms.canCreate || permLoading}
+                                                sx={{ height: 40, px: 2.5 }}
+                                            >
+                                                Yeni Kesinti
+                                            </Button>
+                                        </span>
+                                    </Tooltip>
+                                </Stack>
+                            </Stack>
+
+                            {/* KPI Cards */}
+                            <Grid container spacing={3}>
+                                {[
+                                    { label: "Toplam Kesinti Kaydı", value: toplam, color: "primary" },
+                                    { label: `Bu Ay Kesinti (Kayıt)`, value: buAy, color: "secondary" },
+                                    { label: "Gösterilen Kayıt", value: filtrelenmisKesintiler.length, color: "success" },
+                                    {
+                                        label: "Yetki Durumu",
+                                        value: permLoading ? "Yükleniyor..." : "Tamam",
+                                        color: permLoading ? "warning" : "info"
+                                    },
+                                ].map((kpi, idx) => (
+                                    <Grid item xs={12} sm={6} md={3} key={idx}>
+                                        <Card sx={{ borderRadius: 3, height: "100%", minWidth: 200 }}>
+                                            <CardContent>
+                                                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                                                    <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
+                                                        {kpi.label}
+                                                    </Typography>
+                                                    <Badge color={kpi.color} variant="dot" overlap="circular" sx={{ '& .MuiBadge-dot': { width: 10, height: 10, borderRadius: '50%' } }} />
+                                                </Stack>
+                                                <Typography variant="h4" mt={0.5} fontWeight={800} color={`${kpi.color}.main`}>
+                                                    {kpi.value}
+                                                </Typography>
+                                                <LinearProgress sx={{ mt: 2, height: 6, borderRadius: 3 }} color={kpi.color} variant="determinate" value={100} />
+                                            </CardContent>
+                                        </Card>
+                                    </Grid>
+                                ))}
+                            </Grid>
+
+                            {/* Grid */}
+                            <Box sx={{ flexGrow: 1, minHeight: 0 }}>
+                                <Paper
+                                    sx={{
+                                        height: 750,
+                                        borderRadius: 3,
+                                        border: "1px solid rgba(255,255,255,0.12)",
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    {(loading || permLoading) && <LinearProgress color="secondary" />}
+
+                                    <Box sx={{ height: "100%", width: "100%", minHeight: 0 }}>
+                                        <DataGrid
+                                            rows={filtrelenmisKesintiler}
+                                            columns={columns}
+                                            getRowId={(r) => r.id}
+                                            loading={loading || permLoading}
+                                            disableRowSelectionOnClick
+                                            pagination={false}
+                                            hideFooter
+                                            density="compact"
+                                            rowHeight={40}
+                                            columnHeaderHeight={48}
+                                            localeText={GRID_TR}
+                                            slots={{
+                                                toolbar: () => (
+                                                    <CustomToolbar
+                                                        onFilters={() => setFiltreDrawer(true)}
+                                                        onExport={handleExportExcel}
+                                                        onRefresh={() => {
+                                                            verileriGetir();
+                                                            loadPermissions().catch(() => { });
+                                                        }}
+                                                    />
+                                                ),
+                                            }}
+                                            sx={{
+                                                border: "none",
+                                                '& .MuiDataGrid-virtualScroller': {
+                                                    overflowX: 'auto',
+                                                },
+                                            }}
+                                        />
+                                    </Box>
+                                </Paper>
+                            </Box>
+                        </Stack>
+
+                        {/* Filtre Drawer */}
+                        <Drawer
+                            anchor="right"
+                            open={filtreDrawer}
+                            onClose={() => setFiltreDrawer(false)}
+                            slotProps={{
+                                paper: {
+                                    sx: {
+                                        width: 420,
+                                        backgroundColor: "#171E2D",
+                                        color: "text.primary",
+                                        p: 3,
+                                        borderLeft: "1px solid rgba(255,255,255,0.1)",
+                                    },
+                                },
+                            }}
+                        >
+                            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                                <Typography variant="h5" fontWeight={700} color="secondary.main">Detaylı Filtreler</Typography>
+                                <IconButton onClick={() => setFiltreDrawer(false)}>
+                                    <CloseIcon />
+                                </IconButton>
+                            </Stack>
+                            <Divider sx={{ mb: 3, borderColor: "rgba(255,255,255,0.12)" }} /> {/* Düzeltilen Satır */}
+
+                            <Stack spacing={2.5}>
+                                <Autocomplete
+                                    size="small"
+                                    options={plakaOptions}
+                                    value={
+                                        filtreler.plaka_treyler && plakaOptionsSet.has(filtreler.plaka_treyler)
+                                            ? { label: filtreler.plaka_treyler }
+                                            : null
+                                    }
+                                    onChange={(_, val) =>
+                                        setFiltreler((p) => ({ ...p, plaka_treyler: val?.label || "" }))
+                                    }
+                                    renderInput={(params) => <TextField {...params} label="Plaka - Treyler" fullWidth />}
+                                    autoHighlight
+                                    disablePortal
+                                    isOptionEqualToValue={(o, v) => o.label === v.label}
+                                />
+
+                                <FormControl fullWidth size="small">
+                                    <InputLabel>Tür</InputLabel>
+                                    <Select
+                                        label="Tür"
+                                        value={filtreler.kesinti_turu}
+                                        onChange={(e) =>
+                                            setFiltreler((p) => ({ ...p, kesinti_turu: e.target.value }))
+                                        }
+                                    >
+                                        <MenuItem value="">(Hepsi)</MenuItem>
+                                        {KESINTI_TURLERI.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+                                    </Select>
+                                </FormControl>
+
+                                <FormControl fullWidth size="small">
+                                    <InputLabel>Neden</InputLabel>
+                                    <Select
+                                        label="Neden"
+                                        value={filtreler.neden}
+                                        onChange={(e) => setFiltreler((p) => ({ ...p, neden: e.target.value }))}
+                                    >
+                                        <MenuItem value="">(Hepsi)</MenuItem>
+                                        {KESINTI_NEDENLERI.map(n => <MenuItem key={n} value={n}>{n}</MenuItem>)}
+                                    </Select>
+                                </FormControl>
+
+                                <TextField
+                                    label="Açıklama İçerik"
+                                    value={filtreler.aciklama}
+                                    onChange={(e) => setFiltreler((p) => ({ ...p, aciklama: e.target.value }))}
+                                    fullWidth
+                                />
+
+                                <TextField
+                                    label="Ekleyen Kullanıcı"
+                                    value={filtreler.ekleyen_kullanici}
+                                    onChange={(e) =>
+                                        setFiltreler((p) => ({ ...p, ekleyen_kullanici: e.target.value }))
+                                    }
+                                    fullWidth
+                                />
+
+                                <DatePicker
+                                    label="Başlangıç Tarihi"
+                                    value={filtreler.baslangic_tarihi ? dayjs(filtreler.baslangic_tarihi) : null}
+                                    onChange={(d) =>
+                                        setFiltreler((p) => ({ ...p, baslangic_tarihi: d ? d.format("YYYY-MM-DD") : "" }))
+                                    }
+                                    slotProps={{ textField: { fullWidth: true, size: "small" } }}
+                                />
+
+                                <DatePicker
+                                    label="Bitiş Tarihi"
+                                    value={filtreler.bitis_tarihi ? dayjs(filtreler.bitis_tarihi) : null}
+                                    onChange={(d) =>
+                                        setFiltreler((p) => ({ ...p, bitis_tarihi: d ? d.format("YYYY-MM-DD") : "" }))
+                                    }
+                                    slotProps={{ textField: { fullWidth: true, size: "small" } }}
+                                />
+
+                                <DatePicker
+                                    label="Ay (Başlangıç Ayı)"
+                                    views={['month', 'year']}
+                                    format="MM/YYYY"
+                                    value={filtreler.ay ? dayjs(filtreler.ay) : null}
+                                    onChange={(d) =>
+                                        setFiltreler((p) => ({ ...p, ay: d ? d.format("YYYY-MM") : "" }))
+                                    }
+                                    slotProps={{ textField: { fullWidth: true, size: "small", helperText: "Başlangıç tarihinin ayına göre filtreler" } }}
+                                />
+
+
+                                <TextField
+                                    type="number"
+                                    label="Gün Sayısı"
+                                    value={filtreler.gun_sayisi}
+                                    onChange={(e) => setFiltreler((p) => ({ ...p, gun_sayisi: e.target.value }))}
+                                    fullWidth
+                                />
+
+                                <Stack direction="row" spacing={1.5} sx={{ pt: 1 }}>
+                                    <Button
+                                        fullWidth
+                                        variant="outlined"
+                                        color="error"
+                                        size="large"
+                                        onClick={() =>
+                                            setFiltreler({ ...BOS_FORM, ekleyen_kullanici: "", ay: "" })
+                                        }
+                                    >
+                                        Temizle
+                                    </Button>
+                                    <Button fullWidth variant="contained" color="primary" size="large" onClick={() => setFiltreDrawer(false)}>
+                                        Uygula
+                                    </Button>
+                                </Stack>
+                            </Stack>
+                        </Drawer>
+
+                        {/* Form Dialog */}
+                        <Dialog
+                            open={formOpen}
+                            onClose={() => {
+                                setFormOpen(false);
+                                setFormMode("create");
+                                setEditingId(null);
+                            }}
+                            maxWidth="lg"
+                            fullWidth
+                        >
+                            <DialogTitle sx={{ pb: 0, pt: 3, px: 3 }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                                    <Stack>
+                                        <Typography variant="h5" fontWeight={800} color="primary.light">
+                                            {formMode === "edit" ? "Kesinti Kaydını Düzenle 📝" : "Yeni Kesinti Kaydı Girişi ➕"}
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.5 }}>
+                                            Lütfen zorunlu alanları (*) eksiksiz doldurun.
+                                        </Typography>
+                                    </Stack>
+                                    <IconButton
+                                        onClick={() => {
+                                            setFormOpen(false);
+                                            setFormMode("create");
+                                            setEditingId(null);
+                                        }}
+                                    >
+                                        <CloseIcon />
+                                    </IconButton>
+                                </Stack>
+                            </DialogTitle>
+
+                            <DialogContent
+                                dividers
+                                sx={{
+                                    mt: 2,
+                                    borderTop: "1px solid rgba(255,255,255,0.1)",
+                                    display: "grid",
+                                    gap: 3,
+                                    gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
+                                    p: 3,
+                                }}
+                            >
+                                {/* Plaka - Treyler */}
+                                <Autocomplete
+                                    options={plakaOptions}
+                                    value={form.plaka_treyler ? { label: form.plaka_treyler } : null}
+                                    onChange={(_, val) => handleChange("plaka_treyler", val?.label || "")}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Plaka - Treyler *"
+                                            placeholder="Örn: 34 ABC 123 - T123"
+                                            required
+                                            fullWidth
+                                        />
+                                    )}
+                                    autoHighlight
+                                    openOnFocus
+                                    disablePortal
+                                    isOptionEqualToValue={(o, v) => o.label === v.label}
+                                    sx={{ gridColumn: { xs: "1", md: "1 / span 2" } }}
+                                />
+
+                                {/* Kesinti Türü */}
+                                <FormControl required fullWidth>
+                                    <InputLabel>Kesinti Türü *</InputLabel>
+                                    <Select
+                                        label="Kesinti Türü *"
+                                        value={form.kesinti_turu}
+                                        onChange={(e) => handleChange("kesinti_turu", e.target.value)}
+                                        size="small"
+                                    >
+                                        {KESINTI_TURLERI.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+                                    </Select>
+                                </FormControl>
+
+                                {/* Kesinti Nedeni */}
+                                <FormControl required fullWidth>
+                                    <InputLabel>Kesinti Nedeni *</InputLabel>
+                                    <Select
+                                        label="Kesinti Nedeni *"
+                                        value={form.neden}
+                                        onChange={(e) => handleChange("neden", e.target.value)}
+                                        size="small"
+                                    >
+                                        {KESINTI_NEDENLERI.map(n => <MenuItem key={n} value={n}>{n}</MenuItem>)}
+                                    </Select>
+                                </FormControl>
+
+                                {/* Başlangıç Tarihi */}
+                                <TextField
+                                    type="date"
+                                    label="Başlangıç *"
+                                    InputLabelProps={{ shrink: true }}
+                                    value={form.baslangic_tarihi}
+                                    onChange={(e) => handleChange("baslangic_tarihi", e.target.value)}
+                                    fullWidth
+                                    required
+                                />
+
+                                {/* Bitiş Tarihi */}
+                                <TextField
+                                    type="date"
+                                    label="Bitiş *"
+                                    InputLabelProps={{ shrink: true }}
+                                    value={form.bitis_tarihi}
+                                    onChange={(e) => handleChange("bitis_tarihi", e.target.value)}
+                                    fullWidth
+                                    required
+                                />
+
+                                {/* Gün Sayısı (Disabled) */}
+                                <TextField label="Gün Sayısı" value={form.gun_sayisi || 0} fullWidth disabled />
+
+                                {/* Açıklama (Geniş alan) */}
+                                <TextField
+                                    label="Açıklama"
+                                    value={form.aciklama}
+                                    onChange={(e) => handleChange("aciklama", e.target.value)}
+                                    fullWidth
+                                    multiline
+                                    minRows={6}
+                                    placeholder="Gerekçe ve notlar..."
+                                    sx={{ gridColumn: { xs: "1", md: "1 / -1" } }}
+                                />
+                            </DialogContent>
+
+                            <DialogActions
+                                sx={{
+                                    p: 3,
+                                    justifyContent: 'flex-end',
+                                    borderTop: "1px solid rgba(255,255,255,0.1)",
+                                }}
+                            >
+                                <Button
+                                    variant="text"
                                     onClick={() => {
                                         setFormOpen(false);
                                         setFormMode("create");
                                         setEditingId(null);
                                     }}
+                                    size="large"
                                 >
-                                    <CloseIcon />
-                                </IconButton>
-                            </Stack>
-                        </DialogTitle>
+                                    Kapat
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    onClick={handleFormSubmit}
+                                    size="large"
+                                    color="primary"
+                                    sx={{ px: 4, py: 1.5 }}
+                                >
+                                    {formMode === "edit" ? "GÜNCELLE" : "KAYDET"}
+                                </Button>
+                            </DialogActions>
+                        </Dialog>
 
-                        <DialogContent
-                            dividers
-                            sx={{
-                                mt: 2,
-                                borderTop: "1px solid rgba(255,255,255,0.06)",
-                                display: "grid",
-                                gap: 3,
-                                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
-                                p: 3,
-                            }}
+                        {/* Snackbar for Notifications */}
+                        <Snackbar
+                            open={snack.open}
+                            autoHideDuration={3000}
+                            onClose={() => setSnack((s) => ({ ...s, open: false }))}
+                            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                         >
-                            <Autocomplete
-                                options={plakaOptions}
-                                value={form.plaka_treyler ? { label: form.plaka_treyler } : null}
-                                onChange={(_, val) => handleChange("plaka_treyler", val?.label || "")}
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params}
-                                        label="Plaka - Treyler *"
-                                        placeholder="Örn: 34 ABC 123 - T123"
-                                        required
-                                        fullWidth
-                                    />
-                                )}
-                                autoHighlight
-                                openOnFocus
-                                disableClearable={false}
-                                disablePortal
-                                ListboxProps={{ style: { maxHeight: 320 } }}
-                                isOptionEqualToValue={(o, v) => o.label === v.label}
-                                sx={{ gridColumn: { xs: "1", md: "1 / span 2" } }}
-                            />
-
-                            <FormControl required fullWidth>
-                                <InputLabel>Kesinti Türü *</InputLabel>
-                                <Select
-                                    label="Kesinti Türü *"
-                                    value={form.kesinti_turu}
-                                    onChange={(e) => handleChange("kesinti_turu", e.target.value)}
-                                >
-                                    <MenuItem value="Bakım">Bakım</MenuItem>
-                                    <MenuItem value="Servis">Servis</MenuItem>
-                                    <MenuItem value="Arıza">Arıza</MenuItem>
-                                    <MenuItem value="Kaza">Kaza</MenuItem>
-                                    <MenuItem value="Bölgede İş Yok">Bölgede İş Yok</MenuItem>
-                                    <MenuItem value="İş Başı">İş Başı</MenuItem>
-                                    <MenuItem value="İş Sonu">İş Sonu</MenuItem>
-                                </Select>
-                            </FormControl>
-
-                            <FormControl required fullWidth>
-                                <InputLabel>Kesinti Nedeni *</InputLabel>
-                                <Select
-                                    label="Kesinti Nedeni *"
-                                    value={form.neden}
-                                    onChange={(e) => handleChange("neden", e.target.value)}
-                                >
-                                    <MenuItem value="Tedarikçi Kaynaklı">Tedarikçi Kaynaklı</MenuItem>
-                                    <MenuItem value="Odak Kaynaklı">Odak Kaynaklı</MenuItem>
-                                </Select>
-                            </FormControl>
-
-                            <TextField
-                                type="date"
-                                label="Başlangıç *"
-                                InputLabelProps={{ shrink: true }}
-                                value={form.baslangic_tarihi}
-                                onChange={(e) => handleChange("baslangic_tarihi", e.target.value)}
-                                fullWidth
-                                required
-                            />
-
-                            <TextField
-                                type="date"
-                                label="Bitiş *"
-                                InputLabelProps={{ shrink: true }}
-                                value={form.bitis_tarihi}
-                                onChange={(e) => handleChange("bitis_tarihi", e.target.value)}
-                                fullWidth
-                                required
-                            />
-
-                            <TextField label="Gün Sayısı" value={form.gun_sayisi || ""} fullWidth disabled />
-
-                            <TextField
-                                label="Açıklama"
-                                value={form.aciklama}
-                                onChange={(e) => handleChange("aciklama", e.target.value)}
-                                fullWidth
-                                multiline
-                                minRows={6}
-                                placeholder="Gerekçe ve notlar..."
-                                sx={{ gridColumn: { xs: "1", md: "1 / -1" } }}
-                            />
-                        </DialogContent>
-
-                        <DialogActions
-                            sx={{
-                                p: 3,
-                                position: "sticky",
-                                bottom: 0,
-                                background:
-                                    "linear-gradient(180deg, rgba(10,16,30,0.9) 0%, rgba(10,16,30,0.95) 100%)",
-                                borderTop: "1px solid rgba(255,255,255,0.06)",
-                            }}
-                        >
-                            <Button variant="contained" onClick={handleSubmit} size="large" sx={{ px: 4, py: 1.5 }}>
-                                {formMode === "edit" ? "Güncelle" : "Kaydet"}
-                            </Button>
-                            <Button
-                                variant="text"
-                                onClick={() => {
-                                    setFormOpen(false);
-                                    setFormMode("create");
-                                    setEditingId(null);
-                                }}
-                                size="large"
+                            <Alert
+                                onClose={() => setSnack((s) => ({ ...s, open: false }))}
+                                severity={snack.severity}
+                                variant="filled"
+                                sx={{ width: "100%", borderRadius: 2 }}
                             >
-                                Kapat
-                            </Button>
-                        </DialogActions>
-                    </Dialog>
-                </Container>
-            </ScaleToFit>
+                                {snack.msg}
+                            </Alert>
+                        </Snackbar>
+
+                    </Container>
+                </ScaleToFit>
+            </LocalizationProvider>
         </ThemeProvider>
     );
 }

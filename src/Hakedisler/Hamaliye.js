@@ -4,7 +4,8 @@ import {
     Box, Card, CardContent, CardHeader, Typography, Button, TextField,
     Select, MenuItem, InputLabel, FormControl, Dialog, DialogTitle, DialogContent,
     DialogActions, Chip, Table, TableHead, TableRow, TableCell, TableBody,
-    Stack, IconButton, Pagination, Tooltip, CircularProgress, Alert
+    Stack, IconButton, Pagination, Tooltip, CircularProgress, Alert, Grid,
+    Container, Paper, TableContainer // <-- Eksik olan bileşenler eklendi
 } from "@mui/material";
 import Autocomplete from "@mui/material/Autocomplete";
 import FilterListIcon from "@mui/icons-material/FilterList";
@@ -22,24 +23,24 @@ import { supabase } from "../supabaseClient";
 const PLATE_FIELDS = "id, plaka, treyler, surucu_adi";
 
 const COLUMNS = [
-    { key: "created_at", label: "OLUŞTURULMA" },
-    { key: "gelir_gider", label: "PRİM/HAMALİYE" },
-    { key: "sefer_no", label: "SEFER NO" },
-    { key: "plaka", label: "PLAKA" },
-    { key: "treyler", label: "TREYLER" },
-    { key: "tarih", label: "TARİH" },
-    { key: "surucu", label: "SÜRÜCÜ" },
-    { key: "yukleme_musteri", label: "YÜKLEME MÜŞTERİ" },
-    { key: "fatura_musteri", label: "FATURA MÜŞTERİ" },
-    { key: "bolge_palet_sayisi", label: "BÖLGE PALET", numeric: true },
-    { key: "odenen_tutar", label: "ÖDENEN TUTAR", numeric: true },
-    { key: "palet_sayisi", label: "PALET SAYISI", numeric: true },
-    { key: "donem", label: "DÖNEM" },
-    { key: "kullanici_adi", label: "KULLANICI ADI" },
+    { key: "created_at", label: "OLUŞTURULMA TAR.", minWidth: 150 },
+    { key: "gelir_gider", label: "PRİM/HAMALİYE", minWidth: 120 },
+    { key: "sefer_no", label: "SEFER NO", minWidth: 100 },
+    { key: "plaka", label: "PLAKA", minWidth: 100 },
+    { key: "treyler", label: "TREYLER", minWidth: 100 },
+    { key: "tarih", label: "TARİH", minWidth: 100 },
+    { key: "surucu", label: "SÜRÜCÜ", minWidth: 120 },
+    { key: "yukleme_musteri", label: "YÜKLEME MÜŞTERİ", minWidth: 180 },
+    { key: "fatura_musteri", label: "FATURA MÜŞTERİ", minWidth: 180 },
+    { key: "bolge_palet_sayisi", label: "BÖLGE PALET", numeric: true, minWidth: 100 },
+    { key: "odenen_tutar", label: "ÖDENEN TUTAR", numeric: true, minWidth: 120 },
+    { key: "palet_sayisi", label: "PALET SAYISI", numeric: true, minWidth: 100 },
+    { key: "donem", label: "DÖNEM", minWidth: 100 },
+    { key: "kullanici_adi", label: "KULLANICI ADI", minWidth: 120 },
 ];
 
 function formatTRYInput(val) {
-    const digits = String(val ?? "").replace(/\D/g, "");
+    const digits = String(val ?? "").replace(/[^\d]/g, ""); // Sadece rakamları al
     const num = digits ? Number(digits) : 0;
     const text = digits
         ? new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(num)
@@ -70,6 +71,10 @@ function normalizePlates(raw) {
         };
     });
 }
+
+const getChipColor = (gelirGider) => {
+    return gelirGider === "Prim" ? { color: "success", variant: "filled" } : { color: "primary", variant: "filled" };
+};
 
 export default function Hamaliye() {
     // tablo state
@@ -105,7 +110,7 @@ export default function Hamaliye() {
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, "0");
 
-    const [form, setForm] = useState({
+    const initialFormState = {
         tarih: now.toISOString().slice(0, 10),
         gelir_gider: "Prim",
         kullanici_adi: "",
@@ -120,7 +125,8 @@ export default function Hamaliye() {
         fatura_musteri: "",
         bolge_palet_sayisi: 0,
         palet_sayisi: 0,
-    });
+    };
+    const [form, setForm] = useState(initialFormState);
     const [errors, setErrors] = useState({});
     const [actionErr, setActionErr] = useState(""); // insert/update/delete hataları
 
@@ -243,17 +249,26 @@ export default function Hamaliye() {
             "yukleme_musteri", "fatura_musteri", "odenen_tutar", "palet_sayisi",
             "donem", "kullanici_adi",
         ];
-        for (const k of required) if (values[k] === undefined || values[k] === "") e[k] = "Zorunlu alan";
+        for (const k of required) if (values[k] === undefined || values[k] === "" || values[k] === null) e[k] = "Zorunlu alan";
         if (values.odenen_tutar != null && Number(values.odenen_tutar) < 0) e.odenen_tutar = "+ olmalı";
         if (values.palet_sayisi != null && Number(values.palet_sayisi) < 0) e.palet_sayisi = "+ olmalı";
         return e;
     }
 
+    // Düzenle formunu hazırla
     function handleEditRow(r) {
         setFormMode("edit");
         setEditingId(r.id);
+        const formDate = r.tarih || new Date().toISOString().slice(0, 10);
+        const formDonem = r.donem || (() => {
+            const d = new Date(formDate);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            return `${y}-${m}`;
+        })();
+
         setForm({
-            tarih: r.tarih || new Date().toISOString().slice(0, 10),
+            tarih: formDate,
             gelir_gider: r.gelir_gider || "Prim",
             kullanici_adi: r.kullanici_adi || localUserName || "",
             plaka: r.plaka || "",
@@ -264,22 +279,30 @@ export default function Hamaliye() {
             fatura_musteri: r.fatura_musteri || "",
             bolge_palet_sayisi: r.bolge_palet_sayisi ?? 0,
             palet_sayisi: r.palet_sayisi ?? 0,
-            donem: r.donem || (() => {
-                const d = new Date();
-                const y = d.getFullYear();
-                const m = String(d.getMonth() + 1).padStart(2, "0");
-                return `${y}-${m}`;
-            })(),
+            donem: formDonem,
             odenen_tutar: r.odenen_tutar ?? 0,
-            odenen_tutar_str: r.odenen_tutar ? currencyTRY(r.odenen_tutar) : "",
+            odenen_tutar_str: r.odenen_tutar ? formatTRYInput(r.odenen_tutar).text : "",
         });
+        setDialogOpen(true);
+    }
+
+    // Yeni kayıt için formu sıfırla
+    function handleNewRecord() {
+        setFormMode("create");
+        setEditingId(null);
+        setErrors({});
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        setForm({ ...initialFormState, donem: `${y}-${m}`, kullanici_adi: localUserName, tarih: d.toISOString().slice(0, 10) });
+        setPlateSearch("");
         setDialogOpen(true);
     }
 
     async function handleDeleteRow(r) {
         setActionErr("");
         try {
-            if (!window.confirm("Bu kaydı silmek istediğinize emin misiniz?")) return;
+            if (!window.confirm(`${r.plaka} plakalı kaydı silmek istediğinize emin misiniz?`)) return;
             const { error } = await supabase.from("hamaliye").delete().eq("id", r.id);
             if (error) throw error;
             setRows((rs) => rs.filter((x) => x.id !== r.id));
@@ -312,53 +335,39 @@ export default function Hamaliye() {
         };
 
         try {
+            let data;
             if (formMode === "edit" && editingId) {
-                const { data, error } = await supabase
+                const { data: updatedData, error } = await supabase
                     .from("hamaliye")
                     .update(payload)
                     .eq("id", editingId)
                     .select()
                     .single();
                 if (error) throw error;
-
-                // state’i güncelle
+                data = updatedData;
                 setRows((rs) => rs.map((r) => (r.id === editingId ? { ...r, ...data } : r)));
             } else {
-                // insert → DB id ve created_at döndürsün
-                const { data, error } = await supabase
+                const { data: newRowData, error } = await supabase
                     .from("hamaliye")
                     .insert(payload)
                     .select()
                     .single();
                 if (error) throw error;
-
+                data = newRowData;
                 setRows((r) => [data, ...r]);
             }
 
-            // kapat & sıfırla
+            // Kapat & sıfırla (Formu temizle)
             setDialogOpen(false);
-            setFormMode("create");
-            setEditingId(null);
             const d = new Date();
             const y = d.getFullYear();
             const m = String(d.getMonth() + 1).padStart(2, "0");
-            setForm({
-                tarih: d.toISOString().slice(0, 10),
-                gelir_gider: "Prim",
-                kullanici_adi: localUserName,
-                plaka: "",
-                treyler: "",
-                surucu: "",
-                donem: `${y}-${m}`,
-                odenen_tutar: 0,
-                odenen_tutar_str: "",
-                sefer_no: "",
-                yukleme_musteri: "",
-                fatura_musteri: "",
-                bolge_palet_sayisi: 0,
-                palet_sayisi: 0,
-            });
+            setForm({ ...initialFormState, donem: `${y}-${m}`, kullanici_adi: localUserName, tarih: d.toISOString().slice(0, 10) });
             setPlateSearch("");
+            setEditingId(null);
+            setFormMode("create");
+            setErrors({});
+
         } catch (err) {
             console.error("Kaydet/Güncelle hatası:", err);
             setActionErr(`Kaydet/Güncelle hatası: ${String(err.message || err)}`);
@@ -369,13 +378,14 @@ export default function Hamaliye() {
         const header = COLUMNS.map((c) => c.label).join(",");
         const body = filtered.map((r) =>
             [
-                r.created_at, r.gelir_gider, r.sefer_no, r.plaka, r.treyler,
+                r.created_at ? new Date(r.created_at).toLocaleString("tr-TR") : "",
+                r.gelir_gider, r.sefer_no, (r.plaka || "").toUpperCase(), r.treyler,
                 r.tarih, r.surucu, r.yukleme_musteri, r.fatura_musteri,
                 r.bolge_palet_sayisi, r.odenen_tutar, r.palet_sayisi,
                 r.donem, r.kullanici_adi,
             ].map((x) => `"${String(x ?? "").replaceAll('"', '""')}"`).join(",")
         ).join("\n");
-        const csv = header + "\n" + body;
+        const csv = "\ufeff" + header + "\n" + body; // UTF-8 BOM eklenir
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -383,6 +393,7 @@ export default function Hamaliye() {
         a.click(); URL.revokeObjectURL(url);
     }
 
+    // Seçilen Plaka/Treyler nesnesi (Autocomplete için)
     const selectedPlateObj =
         plakalar.find(
             (p) =>
@@ -390,114 +401,171 @@ export default function Hamaliye() {
                 String(p.treyler || "") === String(form.treyler || "")
         ) || null;
 
+    // Ay seçimi için dönem listesi
+    const monthOptions = Array.from({ length: 12 }, (_, i) => {
+        const mo = String(i + 1).padStart(2, "0");
+        return { value: mo, label: mo };
+    });
+
+    const getMonthFromDonem = form.donem ? form.donem.slice(5, 7) : mm;
+
+
     return (
-        <Box sx={{ p: 3 }}>
-            {/* Üst */}
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-                <Box>
-                    <Typography variant="h5" fontWeight={700}>Hamaliye</Typography>
-                    <Typography variant="body2" color="text.secondary">Kayıtlarınızı yönetin, filtreleyin, yeni kayıt ekleyin.</Typography>
-                </Box>
-                <Stack direction="row" spacing={1}>
-                    <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportCSV}>CSV Dışa Aktar</Button>
-                    <Button
-                        variant="contained"
-                        startIcon={<AddIcon />}
-                        onClick={() => {
-                            setFormMode("create");
-                            setEditingId(null);
-                            setDialogOpen(true);
-                        }}
-                    >
-                        Yeni Kayıt
-                    </Button>
-                </Stack>
-            </Stack>
-
-            {rowsErr && <Alert severity="error" sx={{ mb: 2, whiteSpace: "pre-wrap" }}>{rowsErr}</Alert>}
-            {actionErr && <Alert severity="error" sx={{ mb: 2, whiteSpace: "pre-wrap" }}>{actionErr}</Alert>}
-
-            {/* Filtreler */}
-            <Card variant="outlined" sx={{ mb: 2 }}>
-                <CardHeader
-                    title={<Stack direction="row" alignItems="center" spacing={1}><FilterListIcon fontSize="small" /><Typography variant="subtitle1">Filtreler</Typography></Stack>}
-                    sx={{ pb: 0.5 }}
-                />
-                <CardContent>
-                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                        <Box sx={{ position: "relative", flex: 1 }}>
-                            <TextField
-                                fullWidth size="small" placeholder="Tabloda ara (tüm alanlar)"
-                                value={globalQuery}
-                                onChange={(e) => { setGlobalQuery(e.target.value); setPage(1); }}
-                                InputProps={{
-                                    startAdornment: <SearchIcon sx={{ mr: 1, opacity: 0.7 }} />,
-                                    endAdornment: globalQuery ? (
-                                        <Tooltip title="Temizle">
-                                            <IconButton size="small" onClick={() => setGlobalQuery("")}><CloseIcon fontSize="small" /></IconButton>
-                                        </Tooltip>
-                                    ) : null,
-                                }}
-                            />
-                        </Box>
-
-                        <TextField label="Başlangıç" type="date" size="small" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} InputLabelProps={{ shrink: true }} />
-                        <TextField label="Bitiş" type="date" size="small" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} InputLabelProps={{ shrink: true }} />
-
-                        <FormControl size="small" sx={{ minWidth: 160 }}>
-                            <InputLabel id="gg-label">Prim/Hamaliye</InputLabel>
-                            <Select labelId="gg-label" label="Prim/Hamaliye" value={gelirGider} onChange={(e) => { setGelirGider(e.target.value); setPage(1); }}>
-                                <MenuItem value="Hepsi">Hepsi</MenuItem>
-                                <MenuItem value="Prim">Prim</MenuItem>
-                                <MenuItem value="Hamaliye">Hamaliye</MenuItem>
-                            </Select>
-                        </FormControl>
-
-                        <TextField label="Dönem (YYYY-AA)" size="small" value={donem === "Hepsi" ? "" : donem} onChange={(e) => { setDonem(e.target.value || "Hepsi"); setPage(1); }} />
-
-                        <Button variant="text" onClick={resetFilters}>Sıfırla</Button>
+        <Box
+            sx={{
+                minHeight: "100dvh",
+                py: 4,
+                px: { xs: 1.5, md: 2.5 },
+                background: (t) =>
+                    t.palette.mode === "dark"
+                        ? `radial-gradient(1200px 600px at 10% -10%, rgba(120,119,198,0.18), transparent 60%),
+                           radial-gradient(900px 500px at 100% 0%, rgba(56,189,248,0.12), transparent 60%),
+                           ${t.palette.background.default}`
+                        : "linear-gradient(180deg, #f0f4f9 0%, #ffffff 60%)",
+            }}
+        >
+            <Container maxWidth="xl" disableGutters>
+                {/* Üst Başlık ve Aksiyonlar */}
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
+                    <Box>
+                        <Typography
+                            variant="h4"
+                            fontWeight={900}
+                            sx={{
+                                background: "linear-gradient(90deg, #6d28d9, #0ea5e9)",
+                                WebkitBackgroundClip: "text",
+                                WebkitTextFillColor: "transparent",
+                            }}
+                        >
+                            Hamaliye & Prim Yönetimi 💸
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            Kayıtları listele, filtrele ve yönet.
+                        </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1.5}>
+                        <Button
+                            variant="outlined"
+                            startIcon={<DownloadIcon />}
+                            onClick={exportCSV}
+                            sx={{ textTransform: 'none', fontWeight: 600 }}
+                        >
+                            CSV Dışa Aktar
+                        </Button>
+                        <Button
+                            variant="contained"
+                            color="secondary"
+                            startIcon={<AddIcon />}
+                            onClick={handleNewRecord}
+                            sx={{ textTransform: 'none', fontWeight: 600 }}
+                        >
+                            Yeni Kayıt
+                        </Button>
                     </Stack>
-                </CardContent>
-            </Card>
+                </Stack>
 
-            {/* Tablo */}
-            <Card>
-                <CardHeader
-                    title={
-                        <Stack direction="row" alignItems="center" justifyContent="space-between">
-                            <Typography variant="subtitle1">Kayıtlar</Typography>
-                            <Stack direction="row" spacing={2} alignItems="center">
-                                {rowsLoading && <CircularProgress size={18} />}
-                                <Chip label={`${total} kayıt`} size="small" />
+                {/* Hata Mesajları */}
+                {rowsErr && <Alert severity="error" sx={{ mb: 2, whiteSpace: "pre-wrap" }}>{rowsErr}</Alert>}
+                {actionErr && <Alert severity="error" sx={{ mb: 2, whiteSpace: "pre-wrap" }}>{actionErr}</Alert>}
+
+                <Paper elevation={16} sx={{ borderRadius: 4, overflow: "hidden" }}>
+
+                    {/* Filtreler Alanı */}
+                    <CardHeader
+                        title={<Stack direction="row" alignItems="center" spacing={1}><FilterListIcon color="primary" /><Typography variant="h6" fontWeight={700} color="primary.main">Veri Filtreleme</Typography></Stack>}
+                        sx={{ bgcolor: (t) => t.palette.mode === 'dark' ? 'primary.dark' : 'primary.lightest', p: 2, borderBottom: '1px solid', borderColor: 'divider' }}
+                    />
+                    <CardContent sx={{ p: 2 }}>
+                        <Grid container spacing={2} alignItems="center">
+                            <Grid item xs={12} md={4} lg={3}>
+                                <TextField
+                                    fullWidth size="small" placeholder="Genel Arama (Plaka, Sefer No, Müşteri...)"
+                                    value={globalQuery}
+                                    onChange={(e) => { setGlobalQuery(e.target.value); setPage(1); }}
+                                    InputProps={{
+                                        startAdornment: <SearchIcon sx={{ mr: 1, opacity: 0.7 }} />,
+                                        endAdornment: globalQuery ? (
+                                            <Tooltip title="Temizle"><IconButton size="small" onClick={() => setGlobalQuery("")}><CloseIcon fontSize="small" /></IconButton></Tooltip>
+                                        ) : null,
+                                    }}
+                                />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={2} lg={1}>
+                                <TextField label="Başlangıç" type="date" size="small" fullWidth value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} InputLabelProps={{ shrink: true }} />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={2} lg={1}>
+                                <TextField label="Bitiş" type="date" size="small" fullWidth value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} InputLabelProps={{ shrink: true }} />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={2} lg={2}>
+                                <FormControl size="small" fullWidth>
+                                    <InputLabel id="gg-label">Prim/Hamaliye</InputLabel>
+                                    <Select labelId="gg-label" label="Prim/Hamaliye" value={gelirGider} onChange={(e) => { setGelirGider(e.target.value); setPage(1); }}>
+                                        <MenuItem value="Hepsi">Hepsi</MenuItem>
+                                        <MenuItem value="Prim">Prim</MenuItem>
+                                        <MenuItem value="Hamaliye">Hamaliye</MenuItem>
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={2} lg={2}>
+                                <TextField label="Dönem (YYYY-AA)" size="small" fullWidth value={donem === "Hepsi" ? "" : donem} onChange={(e) => { setDonem(e.target.value || "Hepsi"); setPage(1); }} />
+                            </Grid>
+                            <Grid item xs={12} sm={4} md={2} lg={1}>
+                                <Button variant="outlined" onClick={resetFilters} startIcon={<CloseIcon />}>Sıfırla</Button>
+                            </Grid>
+                        </Grid>
+                    </CardContent>
+
+                    {/* Tablo Alanı */}
+                    <CardHeader
+                        title={
+                            <Stack direction="row" alignItems="center" justifyContent="space-between">
+                                <Typography variant="h6" fontWeight={700}>Kayıt Listesi</Typography>
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    {rowsLoading && <CircularProgress size={18} color="secondary" />}
+                                    <Chip label={`${total} Toplam Kayıt`} size="medium" color="secondary" variant="outlined" />
+                                </Stack>
                             </Stack>
-                        </Stack>}
-                    sx={{ pb: 0 }}
-                />
-                <CardContent>
-                    <Box sx={{ width: "100%", overflow: "auto", borderRadius: 2, border: "1px solid", borderColor: "divider" }}>
-                        <Table size="small" stickyHeader>
+                        }
+                        sx={{ bgcolor: (t) => t.palette.mode === 'dark' ? 'secondary.dark' : 'secondary.lightest', p: 2, borderTop: '1px solid', borderColor: 'divider' }}
+                    />
+
+                    <TableContainer sx={{ maxHeight: 600, borderTop: "1px solid", borderColor: "divider" }}>
+                        <Table size="small" stickyHeader sx={{ minWidth: 1400 }}>
                             <TableHead>
                                 <TableRow>
                                     {COLUMNS.map((c) => (
-                                        <TableCell key={c.key} align={c.numeric ? "right" : "left"}>
-                                            <Button size="small" variant="text" onClick={() => toggleSort(c.key)}
-                                                endIcon={sortKey === c.key ? (sortDir === "asc" ? <ArrowUpwardIcon fontSize="inherit" /> : <ArrowDownwardIcon fontSize="inherit" />) : null}>
+                                        <TableCell
+                                            key={c.key}
+                                            align={c.numeric ? "right" : "left"}
+                                            sx={{
+                                                bgcolor: 'background.paper',
+                                                fontWeight: 700,
+                                                fontSize: 12,
+                                                whiteSpace: 'nowrap',
+                                                cursor: 'pointer',
+                                            }}
+                                            onClick={() => toggleSort(c.key)}
+                                        >
+                                            <Stack direction="row" spacing={0.5} alignItems="center" justifyContent={c.numeric ? "flex-end" : "flex-start"}>
                                                 {c.label}
-                                            </Button>
+                                                {sortKey === c.key ? (sortDir === "asc" ? <ArrowUpwardIcon fontSize="inherit" /> : <ArrowDownwardIcon fontSize="inherit" />) : <ArrowUpwardIcon fontSize="inherit" sx={{ opacity: 0 }} />}
+                                            </Stack>
                                         </TableCell>
                                     ))}
-                                    <TableCell align="right">İşlemler</TableCell>
+                                    <TableCell align="right" sx={{ bgcolor: 'background.paper', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', width: 90 }}>
+                                        İşlemler
+                                    </TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {paged.length === 0 && (
                                     <TableRow><TableCell colSpan={COLUMNS.length + 1} align="center" sx={{ py: 6, color: "text.secondary" }}>
-                                        {rowsLoading ? "Yükleniyor…" : "Kayıt bulunamadı."}
+                                        {rowsLoading ? <CircularProgress size={24} /> : "Kayıt bulunamadı."}
                                     </TableCell></TableRow>
                                 )}
-                                {paged.map((r) => (
-                                    <TableRow key={r.id} hover>
-                                        <TableCell sx={{ color: "text.secondary" }}>
+                                {paged.map((r, i) => (
+                                    <TableRow key={r.id} hover sx={{ '&:nth-of-type(odd)': { backgroundColor: 'action.hover' } }}>
+                                        <TableCell sx={{ color: "text.secondary", fontSize: 11 }}>
                                             {r.created_at ? new Date(r.created_at).toLocaleString("tr-TR") : "-"}
                                         </TableCell>
 
@@ -505,249 +573,257 @@ export default function Hamaliye() {
                                             <Chip
                                                 label={r.gelir_gider}
                                                 size="small"
-                                                color={r.gelir_gider === "Prim" ? "success" : "primary"}
-                                                variant="filled"
+                                                {...getChipColor(r.gelir_gider)}
                                             />
                                         </TableCell>
 
-                                        <TableCell>{r.sefer_no}</TableCell>
-                                        <TableCell>{(r.plaka || "").toUpperCase()}</TableCell>
-                                        <TableCell>{r.treyler || ""}</TableCell>
-                                        <TableCell>{r.tarih}</TableCell>
-                                        <TableCell>{r.surucu}</TableCell>
-                                        <TableCell>{r.yukleme_musteri}</TableCell>
-                                        <TableCell>{r.fatura_musteri}</TableCell>
-                                        <TableCell align="right">{r.bolge_palet_sayisi}</TableCell>
-                                        <TableCell align="right">{currencyTRY(r.odenen_tutar)}</TableCell>
-                                        <TableCell align="right">{r.palet_sayisi}</TableCell>
-                                        <TableCell>{r.donem}</TableCell>
-                                        <TableCell>{r.kullanici_adi}</TableCell>
-                                        <TableCell align="right">
-                                            <Stack direction="row" spacing={1} justifyContent="flex-end">
-                                                <IconButton size="small" onClick={() => handleEditRow(r)}><EditIcon fontSize="small" /></IconButton>
-                                                <IconButton size="small" color="error" onClick={() => handleDeleteRow(r)}><DeleteIcon fontSize="small" /></IconButton>
+                                        <TableCell sx={{ fontSize: 12 }}>{r.sefer_no}</TableCell>
+                                        <TableCell sx={{ fontWeight: 600, fontSize: 12 }}>{(r.plaka || "").toUpperCase()}</TableCell>
+                                        <TableCell sx={{ fontSize: 12 }}>{r.treyler || "—"}</TableCell>
+                                        <TableCell sx={{ fontSize: 12, whiteSpace: 'nowrap' }}>{r.tarih}</TableCell>
+                                        <TableCell sx={{ fontSize: 12 }}>{r.surucu}</TableCell>
+                                        <TableCell sx={{ fontSize: 12 }}>{r.yukleme_musteri}</TableCell>
+                                        <TableCell sx={{ fontSize: 12 }}>{r.fatura_musteri}</TableCell>
+                                        <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>{r.bolge_palet_sayisi}</TableCell>
+                                        <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: 'error.main' }}>{currencyTRY(r.odenen_tutar)}</TableCell>
+                                        <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>{r.palet_sayisi}</TableCell>
+                                        <TableCell sx={{ fontSize: 12 }}>{r.donem}</TableCell>
+                                        <TableCell sx={{ fontSize: 12, color: "text.secondary" }}>{r.kullanici_adi}</TableCell>
+                                        <TableCell align="right" sx={{ width: 90 }}>
+                                            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                                                <Tooltip title="Düzenle">
+                                                    <IconButton size="small" color="primary" onClick={() => handleEditRow(r)}><EditIcon fontSize="small" /></IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Sil">
+                                                    <IconButton size="small" color="error" onClick={() => handleDeleteRow(r)}><DeleteIcon fontSize="small" /></IconButton>
+                                                </Tooltip>
                                             </Stack>
                                         </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
                         </Table>
-                    </Box>
+                    </TableContainer>
 
                     {/* Sayfalama */}
-                    <Stack direction={{ xs: "column", sm: "row" }} alignItems="center" justifyContent="space-between" sx={{ mt: 2 }} spacing={2}>
-                        <Typography variant="caption" color="text.secondary">Toplam <b>{total}</b> kayıttan {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, total)} arası gösteriliyor.</Typography>
-                        <Stack direction="row" spacing={2} alignItems="center">
-                            <FormControl size="small" sx={{ minWidth: 120 }}>
-                                <InputLabel id="psize">Sayfa Boyutu</InputLabel>
-                                <Select labelId="psize" label="Sayfa Boyutu" value={String(pageSize)} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}>
-                                    {[10, 25, 50, 100].map((n) => (<MenuItem key={n} value={String(n)}>{n} / sayfa</MenuItem>))}
-                                </Select>
-                            </FormControl>
-                            <Pagination count={totalPages} page={page} onChange={(_, v) => setPage(v)} shape="rounded" size="small" showFirstButton showLastButton />
-                        </Stack>
-                    </Stack>
-                </CardContent>
-            </Card>
-
-            {/* Yeni Kayıt / Düzenle Dialog */}
-            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-                <DialogTitle>{formMode === "edit" ? "Kaydı Düzenle" : "Yeni Hamaliye Kaydı"}</DialogTitle>
-                <DialogContent dividers>
-                    {plateErr && <Alert severity="error" sx={{ mb: 2, whiteSpace: "pre-wrap" }}>{plateErr}</Alert>}
-
-                    <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-                        <Button size="small" onClick={() => loadPlates("")}>Plaka listesini yenile</Button>
-                    </Stack>
-
-                    <Stack direction={{ xs: "column", md: "row" }} spacing={3} sx={{ mt: 1 }}>
-                        {/* Sol */}
-                        <Stack spacing={2} sx={{ flex: 1 }}>
-                            <TextField
-                                label="Sefer No"
-                                value={form.sefer_no || ""}
-                                onChange={(e) => setForm({ ...form, sefer_no: e.target.value })}
-                                error={!!errors.sefer_no}
-                                helperText={errors.sefer_no}
-                            />
-
-                            {/* Plaka - Treyler */}
-                            <Autocomplete
-                                options={plakalar}
-                                loading={plakalarLoading}
-                                openOnFocus
-                                filterOptions={(options, { inputValue }) => {
-                                    const v = (inputValue || "").toLowerCase().trim();
-                                    if (!v) return options;
-                                    return options.filter(o => {
-                                        const p = (o.plaka || "").toLowerCase();
-                                        const t = (o.treyler || "").toLowerCase();
-                                        const s = (o.surucu_adi || "").toLowerCase();
-                                        return p.includes(v) || t.includes(v) || s.includes(v);
-                                    });
-                                }}
-                                value={selectedPlateObj}
-                                onChange={(_, val) => {
-                                    if (val) {
-                                        setForm((f) => ({
-                                            ...f,
-                                            plaka: (val.plaka || "").toUpperCase(),
-                                            treyler: val.treyler || "",
-                                            surucu: val.surucu_adi || "",
-                                        }));
-                                    } else {
-                                        setForm((f) => ({ ...f, plaka: "", treyler: "", surucu: "" }));
-                                    }
-                                }}
-                                inputValue={plateSearch}
-                                onInputChange={(_, v) => setPlateSearch(v)}
-                                getOptionLabel={(opt) =>
-                                    opt ? `${(opt.plaka || "").toUpperCase()}${opt.treyler ? " - " + opt.treyler : ""}` : ""
-                                }
-                                isOptionEqualToValue={(o, v) =>
-                                    (o?.plaka || "").toUpperCase() === (v?.plaka || "").toUpperCase() &&
-                                    String(o?.treyler || "") === String(v?.treyler || "")
-                                }
-                                loadingText="Yükleniyor…"
-                                noOptionsText="Sonuç bulunamadı"
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params}
-                                        label="Plaka - Treyler"
-                                        placeholder="Örn: 34ABC123 veya TR-01"
-                                        error={!!errors.plaka || !!errors.treyler}
-                                        helperText={plateErr || errors.plaka || errors.treyler || "Seçince sürücü otomatik dolar"}
-                                        InputProps={{
-                                            ...params.InputProps,
-                                            endAdornment: (
-                                                <>
-                                                    {plakalarLoading ? <CircularProgress size={18} sx={{ mr: 1 }} /> : null}
-                                                    {params.InputProps.endAdornment}
-                                                </>
-                                            ),
-                                        }}
-                                    />
-                                )}
-                            />
-
-                            <TextField
-                                label="Tarih"
-                                type="date"
-                                value={form.tarih || ""}
-                                onChange={(e) => setForm({ ...form, tarih: e.target.value })}
-                                InputLabelProps={{ shrink: true }}
-                                error={!!errors.tarih}
-                                helperText={errors.tarih}
-                            />
-                            <FormControl>
-                                <InputLabel id="gg-dialog">Prim/Hamaliye</InputLabel>
-                                <Select
-                                    labelId="gg-dialog"
-                                    label="Prim/Hamaliye"
-                                    value={form.gelir_gider || "Prim"}
-                                    onChange={(e) => setForm({ ...form, gelir_gider: e.target.value })}
-                                >
-                                    <MenuItem value="Prim">Prim</MenuItem>
-                                    <MenuItem value="Hamaliye">Hamaliye</MenuItem>
-                                </Select>
-                            </FormControl>
-
-                            {/* Ödenen Tutar - canlı ₺ */}
-                            <TextField
-                                label="Ödenen Tutar"
-                                value={form.odenen_tutar_str ?? ""}
-                                onChange={(e) => {
-                                    const { num, text } = formatTRYInput(e.target.value);
-                                    setForm({ ...form, odenen_tutar: num, odenen_tutar_str: text });
-                                }}
-                                placeholder="₺0"
-                                error={!!errors.odenen_tutar}
-                                helperText={errors.odenen_tutar}
-                            />
-                        </Stack>
-
-                        {/* Sağ */}
-                        <Stack spacing={2} sx={{ flex: 1 }}>
-                            <TextField
-                                label="Sürücü"
-                                value={form.surucu || ""}
-                                onChange={(e) => setForm({ ...form, surucu: e.target.value })}
-                                error={!!errors.surucu}
-                                helperText={errors.surucu || "Plaka seçildiğinde otomatik doldurulur"}
-                            />
-                            <TextField
-                                label="Yükleme Müşteri"
-                                value={form.yukleme_musteri || ""}
-                                onChange={(e) => setForm({ ...form, yukleme_musteri: e.target.value })}
-                                error={!!errors.yukleme_musteri}
-                                helperText={errors.yukleme_musteri}
-                            />
-                            <TextField
-                                label="Fatura Müşteri"
-                                value={form.fatura_musteri || ""}
-                                onChange={(e) => setForm({ ...form, fatura_musteri: e.target.value })}
-                                error={!!errors.fatura_musteri}
-                                helperText={errors.fatura_musteri}
-                            />
-                            <Stack direction="row" spacing={2}>
-                                <TextField
-                                    label="Bölge Palet"
-                                    type="number"
-                                    value={form.bolge_palet_sayisi ?? ""}
-                                    onChange={(e) => setForm({ ...form, bolge_palet_sayisi: Number(e.target.value) })}
-                                    sx={{ flex: 1 }}
-                                />
-                                <TextField
-                                    label="Palet Sayısı"
-                                    type="number"
-                                    value={form.palet_sayisi ?? ""}
-                                    onChange={(e) => setForm({ ...form, palet_sayisi: Number(e.target.value) })}
-                                    error={!!errors.palet_sayisi}
-                                    helperText={errors.palet_sayisi}
-                                    sx={{ flex: 1 }}
-                                />
+                    <CardContent sx={{ pt: 2, pb: 2 }}>
+                        <Stack direction={{ xs: "column", sm: "row" }} alignItems="center" justifyContent="space-between" spacing={2}>
+                            <Typography variant="caption" color="text.secondary">
+                                Toplam **{total}** kayıttan **{((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, total)}** arası gösteriliyor.
+                            </Typography>
+                            <Stack direction="row" spacing={2} alignItems="center">
+                                <FormControl size="small" sx={{ minWidth: 120 }}>
+                                    <InputLabel id="psize">Sayfa Boyutu</InputLabel>
+                                    <Select labelId="psize" label="Sayfa Boyutu" value={String(pageSize)} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}>
+                                        {[10, 25, 50, 100].map((n) => (<MenuItem key={n} value={String(n)}>{n} / sayfa</MenuItem>))}
+                                    </Select>
+                                </FormControl>
+                                <Pagination count={totalPages} page={page} onChange={(_, v) => setPage(v)} shape="rounded" size="medium" showFirstButton showLastButton color="primary" />
                             </Stack>
-
-                            {/* Dönem: ay seç, yıl otomatik */}
-                            <FormControl>
-                                <InputLabel id="donem-label">Dönem (Ay)</InputLabel>
-                                <Select
-                                    labelId="donem-label"
-                                    label="Dönem (Ay)"
-                                    value={form.donem ? form.donem.slice(5, 7) : mm}
-                                    onChange={(e) => {
-                                        const month = String(e.target.value).padStart(2, "0");
-                                        const year = new Date().getFullYear();
-                                        setForm({ ...form, donem: `${year}-${month}` });
-                                    }}
-                                >
-                                    {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")).map(mo => (
-                                        <MenuItem key={mo} value={mo}>{mo}</MenuItem>
-                                    ))}
-                                </Select>
-                                <Typography variant="caption" sx={{ mt: 0.5 }}>
-                                    Seçilen: {form.donem || `${yyyy}-${mm}`}
-                                </Typography>
-                            </FormControl>
-
-                            <TextField
-                                label="Kullanıcı Adı"
-                                value={form.kullanici_adi || ""}
-                                onChange={(e) => setForm({ ...form, kullanici_adi: e.target.value })}
-                                InputProps={{ readOnly: !!localUserName }}
-                                error={!!errors.kullanici_adi}
-                                helperText={localUserName ? "Otomatik dolduruldu (localStorage)" : (errors.kullanici_adi || "")}
-                            />
                         </Stack>
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDialogOpen(false)}>Vazgeç</Button>
-                    <Button variant="contained" onClick={handleSave}>
-                        {formMode === "edit" ? "Güncelle" : "Kaydet"}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                    </CardContent>
+
+                </Paper>
+
+
+                {/* Yeni Kayıt / Düzenle Dialog */}
+                <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 4, p: 1 } }}>
+                    <DialogTitle sx={{ fontWeight: 800, color: 'primary.main', pb: 1.5 }}>
+                        {formMode === "edit" ? "Kaydı Düzenle 📝" : "Yeni Hamaliye Kaydı ➕"}
+                    </DialogTitle>
+                    <DialogContent dividers>
+                        {plateErr && <Alert severity="warning" sx={{ mb: 2, whiteSpace: "pre-wrap" }}>{plateErr}</Alert>}
+
+                        {/* Plaka Yenileme Aksiyonu */}
+                        <Box sx={{ mb: 2, textAlign: 'right' }}>
+                            <Button size="small" onClick={() => loadPlates("")} startIcon={<CircularProgress size={12} color="inherit" sx={{ visibility: plakalarLoading ? 'visible' : 'hidden' }} />}>
+                                Plaka listesini yenile
+                            </Button>
+                        </Box>
+
+                        <Grid container spacing={3}>
+                            {/* Sol Kolon */}
+                            <Grid item xs={12} md={6}>
+                                <Stack spacing={2}>
+                                    <TextField
+                                        label="Sefer No"
+                                        value={form.sefer_no || ""}
+                                        onChange={(e) => setForm({ ...form, sefer_no: e.target.value })}
+                                        error={!!errors.sefer_no}
+                                        helperText={errors.sefer_no}
+                                        fullWidth
+                                    />
+
+                                    {/* Plaka - Treyler - Sürücü (Autocomplete) */}
+                                    <Autocomplete
+                                        options={plakalar}
+                                        loading={plakalarLoading}
+                                        openOnFocus
+                                        value={selectedPlateObj}
+                                        onChange={(_, val) => {
+                                            if (val) {
+                                                setForm((f) => ({
+                                                    ...f, plaka: (val.plaka || "").toUpperCase(), treyler: val.treyler || "", surucu: val.surucu_adi || "",
+                                                }));
+                                            } else {
+                                                setForm((f) => ({ ...f, plaka: "", treyler: "", surucu: "" }));
+                                            }
+                                        }}
+                                        inputValue={plateSearch}
+                                        onInputChange={(_, v) => setPlateSearch(v)}
+                                        getOptionLabel={(opt) => opt ? `${(opt.plaka || "").toUpperCase()}${opt.treyler ? " - " + opt.treyler : ""}` : ""}
+                                        isOptionEqualToValue={(o, v) => (o?.plaka || "").toUpperCase() === (v?.plaka || "").toUpperCase() && String(o?.treyler || "") === String(v?.treyler || "")}
+                                        renderInput={(params) => (
+                                            <TextField
+                                                {...params}
+                                                label="Plaka - Treyler"
+                                                placeholder="Örn: 34ABC123"
+                                                error={!!errors.plaka || !!errors.treyler}
+                                                helperText={plateErr || errors.plaka || errors.treyler || "Seçince sürücü otomatik dolar"}
+                                            />
+                                        )}
+                                    />
+
+                                    <TextField
+                                        label="Tarih"
+                                        type="date"
+                                        value={form.tarih || ""}
+                                        onChange={(e) => setForm({ ...form, tarih: e.target.value })}
+                                        InputLabelProps={{ shrink: true }}
+                                        error={!!errors.tarih}
+                                        helperText={errors.tarih}
+                                    />
+
+                                    <FormControl error={!!errors.gelir_gider}>
+                                        <InputLabel id="gg-dialog">Prim/Hamaliye</InputLabel>
+                                        <Select
+                                            labelId="gg-dialog"
+                                            label="Prim/Hamaliye"
+                                            value={form.gelir_gider || "Prim"}
+                                            onChange={(e) => setForm({ ...form, gelir_gider: e.target.value })}
+                                        >
+                                            <MenuItem value="Prim">Prim</MenuItem>
+                                            <MenuItem value="Hamaliye">Hamaliye</MenuItem>
+                                        </Select>
+                                        {errors.gelir_gider && <Typography variant="caption" color="error">{errors.gelir_gider}</Typography>}
+                                    </FormControl>
+
+                                    {/* Ödenen Tutar - canlı ₺ */}
+                                    <TextField
+                                        label="Ödenen Tutar (₺)"
+                                        value={form.odenen_tutar_str ?? ""}
+                                        onChange={(e) => {
+                                            const { num, text } = formatTRYInput(e.target.value);
+                                            setForm({ ...form, odenen_tutar: num, odenen_tutar_str: text });
+                                        }}
+                                        placeholder="₺0"
+                                        error={!!errors.odenen_tutar}
+                                        helperText={errors.odenen_tutar}
+                                        inputMode="numeric"
+                                    />
+                                </Stack>
+                            </Grid>
+
+                            {/* Sağ Kolon */}
+                            <Grid item xs={12} md={6}>
+                                <Stack spacing={2}>
+                                    <TextField
+                                        label="Sürücü"
+                                        value={form.surucu || ""}
+                                        onChange={(e) => setForm({ ...form, surucu: e.target.value })}
+                                        error={!!errors.surucu}
+                                        helperText={errors.surucu || "Plaka seçildiğinde otomatik doldurulur"}
+                                        InputProps={{ readOnly: selectedPlateObj, endAdornment: selectedPlateObj ? <Chip label="Otomatik" size="small" /> : null }}
+                                    />
+                                    <TextField
+                                        label="Yükleme Müşteri"
+                                        value={form.yukleme_musteri || ""}
+                                        onChange={(e) => setForm({ ...form, yukleme_musteri: e.target.value })}
+                                        error={!!errors.yukleme_musteri}
+                                        helperText={errors.yukleme_musteri}
+                                    />
+                                    <TextField
+                                        label="Fatura Müşteri"
+                                        value={form.fatura_musteri || ""}
+                                        onChange={(e) => setForm({ ...form, fatura_musteri: e.target.value })}
+                                        error={!!errors.fatura_musteri}
+                                        helperText={errors.fatura_musteri}
+                                    />
+                                    <Stack direction="row" spacing={2}>
+                                        <TextField
+                                            label="Bölge Palet"
+                                            type="number"
+                                            value={form.bolge_palet_sayisi ?? ""}
+                                            onChange={(e) => setForm({ ...form, bolge_palet_sayisi: Number(e.target.value) })}
+                                            sx={{ flex: 1 }}
+                                            InputProps={{ inputProps: { min: 0 } }}
+                                        />
+                                        <TextField
+                                            label="Palet Sayısı"
+                                            type="number"
+                                            value={form.palet_sayisi ?? ""}
+                                            onChange={(e) => setForm({ ...form, palet_sayisi: Number(e.target.value) })}
+                                            error={!!errors.palet_sayisi}
+                                            helperText={errors.palet_sayisi}
+                                            sx={{ flex: 1 }}
+                                            InputProps={{ inputProps: { min: 0 } }}
+                                        />
+                                    </Stack>
+
+                                    {/* Dönem: ay seç, yıl otomatik */}
+                                    <Stack direction="row" spacing={2} alignItems="flex-start">
+                                        <FormControl sx={{ flex: 1 }} error={!!errors.donem}>
+                                            <InputLabel id="donem-label">Dönem (Ay)</InputLabel>
+                                            <Select
+                                                labelId="donem-label"
+                                                label="Dönem (Ay)"
+                                                value={getMonthFromDonem}
+                                                onChange={(e) => {
+                                                    const month = String(e.target.value).padStart(2, "0");
+                                                    const year = form.tarih ? new Date(form.tarih).getFullYear() : new Date().getFullYear();
+                                                    setForm({ ...form, donem: `${year}-${month}` });
+                                                }}
+                                            >
+                                                {monthOptions.map(mo => (
+                                                    <MenuItem key={mo.value} value={mo.value}>{mo.value}</MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                        <Box sx={{ flex: 1, pt: 1 }}>
+                                            <Typography variant="caption" display="block" color="text.secondary">
+                                                Seçilen Dönem:
+                                            </Typography>
+                                            <Chip
+                                                label={form.donem || `${yyyy}-${mm}`}
+                                                color="info"
+                                                variant="outlined"
+                                                size="small"
+                                                sx={{ fontWeight: 700 }}
+                                            />
+                                        </Box>
+                                    </Stack>
+
+
+                                    <TextField
+                                        label="Kullanıcı Adı"
+                                        value={form.kullanici_adi || ""}
+                                        onChange={(e) => setForm({ ...form, kullanici_adi: e.target.value })}
+                                        InputProps={{ readOnly: !!localUserName, endAdornment: !!localUserName ? <Chip label="Oto." size="small" /> : null }}
+                                        error={!!errors.kullanici_adi}
+                                        helperText={localUserName ? "LocalStorage'dan otomatik dolduruldu." : (errors.kullanici_adi || "")}
+                                    />
+                                </Stack>
+                            </Grid>
+                        </Grid>
+                    </DialogContent>
+                    <DialogActions sx={{ p: 2 }}>
+                        <Button variant="outlined" onClick={() => setDialogOpen(false)} startIcon={<CloseIcon />}>Vazgeç</Button>
+                        <Button variant="contained" color="success" onClick={handleSave} startIcon={formMode === "edit" ? <EditIcon /> : <AddIcon />}>
+                            {formMode === "edit" ? "Güncelle" : "Kaydet"}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+            </Container>
         </Box>
     );
 }

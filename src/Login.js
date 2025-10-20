@@ -18,7 +18,9 @@ import {
     Snackbar,
     Alert,
     Divider,
+    CircularProgress, // Loading için eklendi
 } from "@mui/material";
+import { alpha, styled } from "@mui/material/styles"; // Stil için alpha ve styled eklendi
 import {
     Person as PersonIcon,
     Lock as LockIcon,
@@ -26,6 +28,40 @@ import {
     VisibilityOff as VisibilityOffIcon,
     Login as LoginIcon,
 } from "@mui/icons-material";
+
+// Renk Sabitleri
+const PRIMARY_NEON = "#6dd5ed"; // Açık Mavi
+const SECONDARY_NEON = "#2193b0"; // Koyu Mavi
+
+/** Özel Stilli TextField (Modernizasyonun Anahtarı) */
+const StyledTextField = styled(TextField)(({ theme }) => ({
+    '& .MuiOutlinedInput-root': {
+        borderRadius: 12,
+        backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.02)',
+        transition: 'all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+
+        '& fieldset': {
+            borderColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)',
+            transition: 'border-color 0.3s',
+        },
+        '&:hover fieldset': {
+            borderColor: theme.palette.mode === 'dark' ? PRIMARY_NEON : SECONDARY_NEON,
+            boxShadow: `0 0 8px ${alpha(PRIMARY_NEON, 0.5)}`, // Hover'da neon gölge
+        },
+        '&.Mui-focused fieldset': {
+            borderColor: PRIMARY_NEON,
+            borderWidth: '2px !important', // Aktifken kalın çizgi
+            boxShadow: `0 0 10px ${alpha(PRIMARY_NEON, 0.8)}`, // Aktifken güçlü neon gölge
+        },
+    },
+    '& .MuiInputLabel-root': {
+        color: theme.palette.text.secondary,
+        '&.Mui-focused': {
+            color: PRIMARY_NEON, // Aktifken label rengi
+        },
+    },
+}));
+
 
 /** Lojistik SVG Sahnesi */
 function LogisticsScene() {
@@ -39,6 +75,8 @@ function LogisticsScene() {
                 overflow: "hidden",
                 pointerEvents: "none",
                 opacity: 0.9,
+                // Hafif Parıltılı Zemin
+                filter: 'brightness(1.1) contrast(1.1)',
             }}
         >
             <svg
@@ -49,17 +87,21 @@ function LogisticsScene() {
                 style={{ display: "block" }}
             >
                 <defs>
+                    {/* Grid Rengi Güncellendi (Daha koyu zemine uygun) */}
                     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                        <path d="M40 0H0V40" fill="none" stroke="rgba(255,255,255,0.12)" />
+                        <path d="M40 0H0V40" fill="none" stroke="rgba(255,255,255,0.07)" />
                     </pattern>
+                    {/* Arkaplan Gradyanı Güncellendi (Daha derin ve doygun) */}
                     <linearGradient id="grad" x1="0" x2="1" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#60A5FA" stopOpacity="0.20" />
-                        <stop offset="100%" stopColor="#34D399" stopOpacity="0.20" />
+                        <stop offset="0%" stopColor="#1E3A8A" stopOpacity="0.25" />
+                        <stop offset="100%" stopColor="#059669" stopOpacity="0.25" />
                     </linearGradient>
+                    {/* Rota Gradyanı Güncellendi */}
                     <linearGradient id="route" x1="0" x2="1" y1="0" y2="0">
-                        <stop offset="0%" stopColor="#22C55E" />
+                        <stop offset="0%" stopColor="#10B981" />
                         <stop offset="100%" stopColor="#3B82F6" />
                     </linearGradient>
+                    {/* Glow Efekti (Daha keskin) */}
                     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
                         <feGaussianBlur stdDeviation="4" result="coloredBlur" />
                         <feMerge>
@@ -72,25 +114,33 @@ function LogisticsScene() {
                 <rect x="0" y="0" width="1440" height="900" fill="url(#grad)" />
                 <rect x="0" y="0" width="1440" height="900" fill="url(#grid)" />
 
+                {/* Statik Kutular */}
                 {[[180, 180], [240, 540], [1080, 200], [1280, 520], [820, 740], [420, 720]].map(([x, y], i) => (
-                    <g key={i} transform={`translate(${x} ${y})`} opacity="0.7">
-                        <rect x="-16" y="-16" width="32" height="32" rx="6" fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.35)" />
-                        <rect x="-9" y="-9" width="18" height="18" rx="4" fill="rgba(255,255,255,0.2)" />
+                    <g key={i} transform={`translate(${x} ${y})`} opacity="0.5" filter="url(#glow)">
+                        <rect x="-16" y="-16" width="32" height="32" rx="6" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.25)" />
+                        <rect x="-9" y="-9" width="18" height="18" rx="4" fill="rgba(255,255,255,0.15)" />
                     </g>
                 ))}
 
+                {/* Dinamik Pinler */}
                 {[[220, 200], [1180, 540], [860, 760], [460, 740]].map(([x, y], i) => (
-                    <g key={i + "pin"} transform={`translate(${x} ${y})`} filter="url(#glow)">
-                        <circle r="8" fill="#34D399" />
-                        <circle r="18" fill="none" stroke="#34D399" strokeOpacity="0.5" />
-                    </g>
+                    <motion.g
+                        key={i + "pin"}
+                        transform={`translate(${x} ${y})`}
+                        filter="url(#glow)"
+                        initial={{ scale: 0.8 }}
+                        animate={{ scale: 1.1 }}
+                        transition={{ duration: 1.5, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut', delay: i * 0.3 }}
+                    >
+                        <circle r="8" fill="#10B981" />
+                        <circle r="18" fill="none" stroke="#10B981" strokeOpacity="0.5" strokeWidth="2" />
+                    </motion.g>
                 ))}
 
+                {/* Rota Yolu */}
                 <path
                     id="routePath"
-                    d="M 200 220
-             C 420 80, 860 160, 1180 560
-             S 920 820, 460 760"
+                    d="M 200 220 C 420 80, 860 160, 1180 560 S 920 820, 460 760"
                     fill="none"
                     stroke="url(#route)"
                     strokeWidth="3.5"
@@ -100,35 +150,34 @@ function LogisticsScene() {
                     opacity="0.9"
                 />
 
+                {/* Animasyonlu Işık İzi (Daha parlak) */}
                 <motion.path
-                    d="M 200 220
-             C 420 80, 860 160, 1180 560
-             S 920 820, 460 760"
+                    d="M 200 220 C 420 80, 860 160, 1180 560 S 920 820, 460 760"
                     fill="none"
                     stroke="white"
-                    strokeWidth="3.5"
+                    strokeWidth="4" // Daha kalın iz
                     strokeLinecap="round"
                     strokeDasharray={`${dash / 6} ${dash}`}
                     initial={{ strokeDashoffset: 0 }}
                     animate={{ strokeDashoffset: -dash }}
-                    transition={{ duration: 6, ease: "linear", repeat: Infinity }}
-                    style={{ filter: "drop-shadow(0 0 4px rgba(255,255,255,0.7))" }}
-                    opacity="0.65"
+                    transition={{ duration: 5, ease: "linear", repeat: Infinity }} // Daha hızlı animasyon
+                    style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.9))" }} // Daha güçlü gölge
+                    opacity="0.75"
                 />
 
+                {/* Kamyon/İçerik sembolü (opsiyonel) */}
                 <motion.g
                     transform="translate(0,0) scale(1)"
                     style={{
-                        offsetPath:
-                            "path('M 200 220 C 420 80, 860 160, 1180 560 S 920 820, 460 760')",
-                        offsetDistance: "var(--od)",   // DOM prop değil, style ile
+                        offsetPath: "path('M 200 220 C 420 80, 860 160, 1180 560 S 920 820, 460 760')",
+                        offsetDistance: "var(--od)",
                         willChange: "offset-distance",
                         "--od": "0%",
                     }}
                     animate={{ "--od": ["0%", "100%"] }}
                     transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
                 >
-                    {/* içerik */}
+                    <path d="M -10 10 L 10 10 L 10 -10 L -10 -10 Z" fill="#FFC107" filter="url(#glow)" />
                 </motion.g>
             </svg>
         </Box>
@@ -144,12 +193,9 @@ function Login() {
     const [showPass, setShowPass] = useState(false);
     const navigate = useNavigate();
 
-    // Rol normalizasyonu
+    // Rol normalizasyonu (Kısaltıldı)
     const normalizeRole = (s = "") =>
-        s
-            .normalize("NFKC")
-            .toLocaleUpperCase("tr-TR")
-            .replace(/\s+/g, "");
+        s.normalize("NFKC").toLocaleUpperCase("tr-TR").replace(/\s+/g, "");
 
     const aliasRole = (s = "") => {
         const k = normalizeRole(s);
@@ -185,21 +231,14 @@ function Login() {
                 return;
             }
 
-            // REEL alanlarını güvenli şekilde oku
-            const reelUserCol = (data.Reel_kullanici ?? data.reel_kullanici ?? "")
-                .toString()
-                .trim();
-            const reelPassCol = (data.Reel_sifre ?? data.reel_sifre ?? "")
-                .toString()
-                .trim();
+            // ... (Oturum ve LocalStorage Kayıt Mantığı Kısaltıldı) ...
 
-            // Boşsa giriş formundaki bilgileri kullan
+            const reelUserCol = (data.Reel_kullanici ?? data.reel_kullanici ?? "").toString().trim();
+            const reelPassCol = (data.Reel_sifre ?? data.reel_sifre ?? "").toString().trim();
             const reelUserToSave = reelUserCol || (kullaniciAdi || "").trim();
             const reelPassToUse = reelPassCol || sifre;
-
             const resolvedRole = aliasRole(data.rol || "");
 
-            // Oturum bilgileri
             localStorage.setItem("kullaniciAdi", data.kullaniciAdi || "");
             localStorage.setItem("kullanici", data.kullanici || "");
             localStorage.setItem("rol", resolvedRole);
@@ -207,8 +246,6 @@ function Login() {
             localStorage.setItem("kullaniciId", String(data.id ?? ""));
             localStorage.setItem("girisYapanKullanici", JSON.stringify(data));
             localStorage.setItem("profilFotograf", data.profil_fotograf || "");
-
-            // REEL bilgileri
             localStorage.setItem("Reel-kullanici", reelUserToSave);
             sessionStorage.setItem("Reel-sifre", reelPassToUse);
 
@@ -233,10 +270,11 @@ function Login() {
                 position: "relative",
                 display: "grid",
                 placeItems: "center",
+                // Arkaplan Gradyanı: Daha derin ve fütüristik
                 background: (t) =>
                     t.palette.mode === "dark"
-                        ? "linear-gradient(180deg,#0b1020,#0e1428)"
-                        : "linear-gradient(180deg,#F0F9FF,#F8FFFB)",
+                        ? "linear-gradient(180deg,#0a101d,#0e1526)" // Koyu Mavi/Gri Tonları
+                        : "linear-gradient(180deg,#E8F3FF,#F8F0FF)", // Hafif Pastel Tonları
             }}
         >
             {/* Animasyonlu lojistik sahnesi */}
@@ -248,43 +286,63 @@ function Login() {
             >
                 <Paper
                     component={motion.div}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45, ease: "easeOut" }}
-                    elevation={6}
+                    initial={{ opacity: 0, y: 30, scale: 0.95 }} // Daha belirgin giriş animasyonu
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.5, ease: "easeOut" }}
+                    elevation={12} // Daha derin gölge
                     sx={{
                         borderRadius: 4,
                         overflow: "hidden",
                         mx: "auto",
-                        backdropFilter: "saturate(140%) blur(10px)",
+                        // Müthiş Modern Glassmorphism
+                        backdropFilter: "saturate(180%) blur(15px)",
                         bgcolor: (t) =>
-                            t.palette.mode === "dark" ? "rgba(17,23,41,0.65)" : "rgba(255,255,255,0.85)",
+                            t.palette.mode === "dark" ? "rgba(10,15,30,0.8)" : "rgba(255,255,255,0.95)",
                         border: (t) =>
-                            `1px solid ${t.palette.mode === "dark" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.06)"}`,
+                            `1px solid ${t.palette.mode === "dark" ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)"}`,
+                        // Hafif Neon İç Parıltı (Koyu Temada)
+                        boxShadow: (t) => t.palette.mode === "dark"
+                            ? `0 0 40px ${alpha(PRIMARY_NEON, 0.25)}, 0 10px 30px ${alpha(t.palette.common.black, 0.6)}`
+                            : `0 10px 30px ${alpha(t.palette.common.black, 0.1)}`,
                     }}
                 >
-                    <Stack direction={{ xs: "column", md: "row" }} sx={{ minHeight: { xs: "auto", md: 480 } }}>
-                        {/* Sol: Başlık + kısa değer önermesi */}
+                    <Stack direction={{ xs: "column", md: "row" }} sx={{ minHeight: { xs: "auto", md: 520 } }}>
+                        {/* Sol: Başlık + kısa değer önermesi (Vurgulu) */}
                         <Stack
                             alignItems={{ xs: "center", md: "flex-start" }}
                             justifyContent="center"
-                            spacing={1}
+                            spacing={2}
                             sx={{
                                 flex: 1,
-                                p: { xs: 3, md: 5 },
-                                background: "linear-gradient(135deg, rgba(59,130,246,0.16), rgba(52,211,153,0.14))",
+                                p: { xs: 4, md: 6 },
+                                // Neon Gradyan Vurgusu
+                                background: `linear-gradient(145deg, ${alpha(PRIMARY_NEON, 0.2)}, ${alpha(SECONDARY_NEON, 0.1)})`,
+                                borderRight: (t) => t.palette.mode === 'dark' ? `1px solid ${alpha(PRIMARY_NEON, 0.4)}` : 'none',
                                 backdropFilter: "blur(2px)",
                             }}
                         >
-                            <Typography variant="h4" fontWeight={900} sx={{ letterSpacing: 0.3 }}>
+                            <Box sx={{ p: 1, borderRadius: '50%', background: `linear-gradient(135deg, ${PRIMARY_NEON}, ${SECONDARY_NEON})`, boxShadow: `0 0 15px ${alpha(PRIMARY_NEON, 0.8)}` }}>
+                                <LoginIcon sx={{ fontSize: 40, color: 'white' }} />
+                            </Box>
+
+                            <Typography variant="h3" fontWeight={900} sx={{ letterSpacing: 0.5, mt: 1 }}>
+                                FTS WEB
+                            </Typography>
+                            <Typography variant="h5" fontWeight={700} sx={{
+                                // Fütüristik Metin Vurgusu
+                                background: `linear-gradient(90deg, ${PRIMARY_NEON}, ${SECONDARY_NEON})`,
+                                WebkitBackgroundClip: "text",
+                                WebkitTextFillColor: "transparent",
+                                textShadow: `0 0 8px ${alpha(PRIMARY_NEON, 0.6)}`
+                            }}>
                                 Filo Takip Sistemi
                             </Typography>
-                            <Typography sx={{ opacity: 0.85 }}>
+                            <Typography sx={{ opacity: 0.85, fontSize: '1.1rem' }}>
                                 Görevler, masraflar ve operasyonların merkez üssü.
                             </Typography>
-                            <Divider flexItem sx={{ my: 2, opacity: 0.25 }} />
-                            <Typography variant="caption" sx={{ opacity: 0.65 }}>
-                                Güvenli giriş • Canlı bildirim • Modern arayüz
+                            <Divider flexItem sx={{ my: 3, width: { xs: '80%', md: '100%' }, opacity: 0.25 }} />
+                            <Typography variant="caption" sx={{ opacity: 0.65, fontWeight: 500 }}>
+                                Güvenli giriş • Canlı bildirim • Akıcı operasyonlar
                             </Typography>
                         </Stack>
 
@@ -294,18 +352,18 @@ function Login() {
                             onSubmit={handleSubmit}
                             sx={{
                                 flex: 1,
-                                p: { xs: 3, md: 5 },
+                                p: { xs: 4, md: 6 },
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
                             }}
                         >
-                            <Stack spacing={2.25} sx={{ width: "100%", maxWidth: 420 }}>
-                                <Typography variant="h6" fontWeight={800}>
-                                    Giriş Yap
+                            <Stack spacing={3} sx={{ width: "100%", maxWidth: 420 }}>
+                                <Typography variant="h5" fontWeight={800} sx={{ mb: 1 }}>
+                                    Oturum Aç
                                 </Typography>
 
-                                <TextField
+                                <StyledTextField // Özel TextField kullanılıyor
                                     label="Kullanıcı Adı"
                                     placeholder="kullanici.adiniz"
                                     value={kullaniciAdi}
@@ -316,13 +374,13 @@ function Login() {
                                     InputProps={{
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <PersonIcon />
+                                                <PersonIcon sx={{ color: PRIMARY_NEON }} />
                                             </InputAdornment>
                                         ),
                                     }}
                                 />
 
-                                <TextField
+                                <StyledTextField // Özel TextField kullanılıyor
                                     label="Şifre"
                                     type={showPass ? "text" : "password"}
                                     placeholder="••••••••"
@@ -334,7 +392,7 @@ function Login() {
                                     InputProps={{
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <LockIcon />
+                                                <LockIcon sx={{ color: PRIMARY_NEON }} />
                                             </InputAdornment>
                                         ),
                                         endAdornment: (
@@ -352,23 +410,35 @@ function Login() {
                                 />
 
                                 {hata && (
-                                    <Alert severity="error" variant="outlined">
+                                    <Alert severity="error" variant="outlined" sx={{ borderRadius: 2 }}>
                                         {hata}
                                     </Alert>
                                 )}
 
                                 <Button
+                                    component={motion.button} // Framer Motion ile animasyon
+                                    whileHover={{ scale: 1.02, boxShadow: `0 0 15px ${alpha(PRIMARY_NEON, 0.7)}` }}
+                                    whileTap={{ scale: 0.98 }}
                                     type="submit"
                                     variant="contained"
                                     size="large"
-                                    startIcon={<LoginIcon />}
+                                    startIcon={loading ? <CircularProgress size={24} color="inherit" /> : <LoginIcon />}
                                     disabled={loading}
-                                    sx={{ py: 1.25, fontWeight: 700, borderRadius: 2 }}
+                                    sx={{
+                                        py: 1.5,
+                                        fontWeight: 700,
+                                        borderRadius: 3, // Daha yuvarlak buton
+                                        // Butona Neon Gradyan
+                                        background: `linear-gradient(90deg, ${SECONDARY_NEON}, ${PRIMARY_NEON})`,
+                                        '&:hover': {
+                                            background: `linear-gradient(90deg, ${PRIMARY_NEON}, ${SECONDARY_NEON})`,
+                                        }
+                                    }}
                                 >
-                                    {loading ? "Giriş yapılıyor…" : "Giriş"}
+                                    {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
                                 </Button>
 
-                                <Typography variant="caption" sx={{ opacity: 0.65, textAlign: "center" }}>
+                                <Typography variant="caption" sx={{ opacity: 0.65, textAlign: "center", pt: 1 }}>
                                     Oturum bilgileriniz güvenle saklanır.
                                 </Typography>
                             </Stack>
@@ -377,7 +447,7 @@ function Login() {
                 </Paper>
             </Container>
 
-            {/* Snackbar */}
+            {/* Snackbar (Koyu temaya uyumlu) */}
             <Snackbar
                 open={snack.open}
                 autoHideDuration={3000}
@@ -388,7 +458,7 @@ function Login() {
                     onClose={() => setSnack((p) => ({ ...p, open: false }))}
                     severity={snack.type}
                     variant="filled"
-                    sx={{ width: "100%" }}
+                    sx={{ width: "100%", borderRadius: 2 }}
                 >
                     {snack.msg}
                 </Alert>

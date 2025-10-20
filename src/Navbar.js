@@ -30,6 +30,8 @@ function Navbar() {
     const [selectedFile, setSelectedFile] = useState(null);
     const [email, setEmail] = useState("");
     const [sifrePanelAcik, setSifrePanelAcik] = useState(false);
+    // Not: Kullanıcı adı sadece şifre değiştirme için kullanıldığından,
+    // input için local state tutulur, ancak güncel displayName dışarıdan alınır.
     const [kullaniciAdi, setKullaniciAdi] = useState("");
     const [yeniSifre, setYeniSifre] = useState("");
     const [okunmamisGorevSayisi, setOkunmamisGorevSayisi] = useState(0);
@@ -51,9 +53,10 @@ function Navbar() {
     useEffect(() => {
         if (profilModalAcik) {
             setEmail(localStorage.getItem("email") || "");
-            setKullaniciAdi(localStorage.getItem("kullaniciAdi") || "");
+            // Kullanıcı adı alanını doldurmak için
+            setKullaniciAdi(rawKullaniciAdi || rawKullanici || "");
         }
-    }, [profilModalAcik]);
+    }, [profilModalAcik, rawKullanici, rawKullaniciAdi]);
 
     // Okunmamış görevler
     const fetchOkunmamisGorevler = async () => {
@@ -187,9 +190,12 @@ function Navbar() {
 
             localStorage.setItem("profilFotograf", fotoUrl || "");
             localStorage.setItem("email", email);
+            // Not: Kullanıcı adı inputu değişse bile, sadece şifre paneli açıksa şifre ile birlikte güncellenecek.
+            // Burada kullanıcı adını local storage'a kaydetme mantığınız karmaşık, ama varsayılanı tutalım.
             localStorage.setItem("kullaniciAdi", kullaniciAdi);
 
             if (yeniSifre && kullaniciAdi === (rawKullanici || rawKullaniciAdi)) {
+                // Şifre güncelleme (Supabase Auth yerine login tablosu kullanıldığı varsayılıyor)
                 const { error: sifreGuncelleHatasi } = await supabase
                     .from("login")
                     .update({ sifre: yeniSifre })
@@ -206,6 +212,9 @@ function Navbar() {
             alert("Profil güncellendi.");
             setProfilModalAcik(false);
             setSelectedFile(null);
+            // Sayfayı yeniden yükleyerek displayName'in güncellenmesini sağlamak gerekebilir,
+            // veya displayName'i state'e alıp burada güncellemek daha temizdir.
+            window.location.reload();
         } catch (err) {
             console.error("handleProfilKaydet hata:", err);
             alert("Hata: " + err.message);
@@ -239,7 +248,10 @@ function Navbar() {
             {/* NAVBAR */}
             <header className="navbar" role="banner">
                 <div className="navbar-left">
-                    <div className="brand" />
+                    <div className="brand">
+                        <span className="brand-icon">🚀</span>
+                        <span>BRAND</span>
+                    </div>
                 </div>
 
                 <div className="navbar-right">
@@ -251,41 +263,29 @@ function Navbar() {
                         aria-label="Tema değiştir"
                     >
                         {tema === "dark" ? (
-                            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-                                <path
-                                    d="M12 4V2M12 22v-2M4.93 4.93 3.51 3.51M20.49 20.49l-1.42-1.42M4 12H2m20 0h-2M4.93 19.07l-1.42 1.42M20.49 3.51l-1.42 1.42M12 8a4 4 0 100 8 4 4 0 000-8z"
-                                    stroke="currentColor"
-                                    strokeWidth="1.5"
-                                    fill="none"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="5"></circle>
+                                <line x1="12" y1="1" x2="12" y2="3"></line>
+                                <line x1="12" y1="21" x2="12" y2="23"></line>
+                                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                                <line x1="1" y1="12" x2="3" y2="12"></line>
+                                <line x1="21" y1="12" x2="23" y2="12"></line>
+                                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
                             </svg>
                         ) : (
-                            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-                                <path
-                                    d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"
-                                    stroke="currentColor"
-                                    strokeWidth="1.5"
-                                    fill="none"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
                             </svg>
                         )}
                     </button>
 
                     {/* Bildirim */}
                     <div className="notif" aria-label="Bildirimler">
-                        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-                            <path
-                                d="M18 8a6 6 0 10-12 0c0 7-3 7-3 7h18s-3 0-3-7"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                fill="none"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            />
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                         </svg>
                         {okunmamisGorevSayisi > 0 && (
                             <span className="notif-badge" aria-label="Okunmamış görev sayısı">
@@ -296,18 +296,15 @@ function Navbar() {
 
                     {isAdmin && (
                         <button
-                            className="admin-btn modern-admin"
+                            className="admin-btn"
                             onClick={() => navigate("/admin")}
                             aria-label="Yönetim Paneli"
                         >
-                            <span className="admin-pulse" aria-hidden="true" />
-                            <svg className="admin-ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                                <path
-                                    d="M12 2l7 4v6c0 5-3.5 9-7 10-3.5-1-7-5-7-10V6l7-4zM9 12l2 2 4-4"
-                                    fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
-                                />
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 2L7 6v6c0 5 3.5 9 7 10 3.5-1 7-5 7-10V6l-5-4z"></path>
+                                <polyline points="9 12 12 15 15 12"></polyline>
                             </svg>
-                            <span className="admin-label">Yönetim</span>
+                            <span className="admin-label">YÖNETİM</span>
                         </button>
                     )}
 
@@ -319,12 +316,16 @@ function Navbar() {
                         aria-haspopup="dialog"
                         aria-expanded={profilModalAcik}
                     >
+                        {/* Hata durumunda fallback span görünür */}
                         <img
                             src={profilResim || "/profil.png"}
                             alt=""
-                            onError={(e) => (e.currentTarget.style.display = "none")}
+                            onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                                e.currentTarget.nextElementSibling.style.display = "flex";
+                            }}
                         />
-                        <span className="avatar-fallback" aria-hidden="true">
+                        <span className="avatar-fallback" aria-hidden="true" style={{ display: profilResim ? 'none' : 'flex' }}>
                             {avatarHarf}
                         </span>
                     </button>
@@ -340,20 +341,18 @@ function Navbar() {
 
                     {/* Çıkış */}
                     <button className="logout-btn" onClick={cikisYap}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-                            <path
-                                d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                fill="none"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            />
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
                         </svg>
                         <span>ÇIKIŞ</span>
                     </button>
                 </div>
             </header>
+
+            {/* İÇERİK KAYMASINI ENGELLEMEK İÇİN YER TUTUCU (Placeholder) */}
+            <div className="navbar-placeholder" aria-hidden="true" />
 
             {/* PROFİL MODALI */}
             {profilModalAcik && (
@@ -371,24 +370,23 @@ function Navbar() {
                     <div
                         className="modal-panel"
                         role="document"
-                        style={{ width: "min(92vw, 720px)" }}
                     >
                         <div className="modal-head">
-                            <h2>👤 Profil</h2>
+                            <h2>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="feather feather-user">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                                Profil
+                            </h2>
                             <button
                                 className="icon-btn"
                                 aria-label="Kapat"
                                 onClick={() => setProfilModalAcik(false)}
                             >
-                                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-                                    <path
-                                        d="M18 6L6 18M6 6l12 12"
-                                        stroke="currentColor"
-                                        strokeWidth="1.5"
-                                        fill="none"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    />
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
                                 </svg>
                             </button>
                         </div>
@@ -396,21 +394,17 @@ function Navbar() {
                         <div className="profil-avatar-container">
                             <label htmlFor="profilResmiInput" className="avatar-label">
                                 <div className="avatar-circle">
+                                    {/* Profil Resmi önizlemesi */}
                                     {profilResim ? (
                                         <img src={profilResim} alt="Profil önizleme" />
                                     ) : (
                                         <span className="avatar-initial">{avatarHarf}</span>
                                     )}
+                                    {/* Kamera ikonu */}
                                     <span className="avatar-camera" title="Fotoğraf yükle">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path
-                                                d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l2-3h8l2 3h3a2 2 0 0 1 2 2v11zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"
-                                                stroke="currentColor"
-                                                strokeWidth="1.5"
-                                                fill="none"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                            />
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l2-3h8l2 3h3a2 2 0 0 1 2 2z"></path>
+                                            <circle cx="12" cy="13" r="4"></circle>
                                         </svg>
                                     </span>
                                 </div>
@@ -439,34 +433,49 @@ function Navbar() {
                             onClick={() => setSifrePanelAcik((prev) => !prev)}
                             aria-expanded={sifrePanelAcik}
                         >
-                            {sifrePanelAcik ? "Şifre Panelini Gizle" : "🔐 Şifre Değiştir"}
+                            {sifrePanelAcik ? (
+                                <>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="feather feather-eye-off">
+                                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.06 18.06 0 0 1 4.38-5.32"></path>
+                                        <path d="M1 1l22 22"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                    Şifre Panelini Gizle
+                                </>
+                            ) : (
+                                <>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="feather feather-lock">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                    </svg>
+                                    Şifre Değiştir
+                                </>
+                            )}
                         </button>
 
-                        {sifrePanelAcik && (
-                            <div className="password-panel">
-                                <div className="form-row">
-                                    <label>Kullanıcı Adı</label>
-                                    <input
-                                        type="text"
-                                        value={kullaniciAdi}
-                                        onChange={(e) => setKullaniciAdi(e.target.value)}
-                                        placeholder="Kullanıcı adınızı girin"
-                                    />
-                                </div>
-                                <div className="form-row">
-                                    <label>Yeni Şifre</label>
-                                    <input
-                                        type="password"
-                                        value={yeniSifre}
-                                        onChange={(e) => setYeniSifre(e.target.value)}
-                                        placeholder="Yeni şifre"
-                                    />
-                                </div>
+                        <div className="password-panel">
+                            <div className="form-row">
+                                <label>Kullanıcı Adı</label>
+                                <input
+                                    type="text"
+                                    value={kullaniciAdi}
+                                    onChange={(e) => setKullaniciAdi(e.target.value)}
+                                    placeholder="Kullanıcı adınızı girin"
+                                />
                             </div>
-                        )}
+                            <div className="form-row">
+                                <label>Yeni Şifre</label>
+                                <input
+                                    type="password"
+                                    value={yeniSifre}
+                                    onChange={(e) => setYeniSifre(e.target.value)}
+                                    placeholder="Yeni şifre"
+                                />
+                            </div>
+                        </div>
 
                         <div className="modal-buttons">
-                            <button onClick={() => setProfilModalAcik(false)} className="kapat-btn">
+                            <button onClick={() => setProfilModalAcik(false)} className="kapat-btn" disabled={kaydediliyor}>
                                 Kapat
                             </button>
                             <button

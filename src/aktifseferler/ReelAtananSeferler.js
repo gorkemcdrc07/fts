@@ -82,7 +82,6 @@ import {
     fetchMesafe,
 } from "./services";
 
-import Dashboard from "./dashboard";
 import usePermissions from "../auth/usePermissions";
 
 /* Diyaloglar */
@@ -1420,26 +1419,7 @@ export default function ReelAtananSeferler() {
                 surucu={surucu} setSurucu={setSurucu}
             />
 
-            {/* Özet Dashboard */}
-            <Paper
-                sx={{
-                    borderRadius: 3,
-                    border: `1px solid ${COLORS.border}`,
-                    background: COLORS.surface,
-                    p: 1.25,
-                }}
-            >
-                {/* DÜZELTİLDİ: Dashboard yerine direkt Raporu render ediyoruz */}
-                <Box sx={{ pt: 1.25 }}>
-                    <Dashboard
-                        rows={rows} // Artık rows'un tamamını gönderiyoruz, Dashboard kendi içinde filtreler/hesaplamalar yapacak.
-                        reasonNos={reasonNos}
-                        bump={viewBump}
-                        // openETA ve onAskReason artık dashboard'un içinde geçersiz, onOpenRow kullanılıyor
-                        onOpenRow={(r) => openEditor(r)}
-                    />
-                </Box>
-            </Paper>
+            {/* Özet Dashboard — İSTEK ÜZERİNE KALDIRILDI */}
 
             {/* Liste */}
             <Paper

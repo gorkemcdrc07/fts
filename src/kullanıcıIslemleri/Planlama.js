@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback, Suspense, lazy } from "react";
-// import * as XLSX from "xlsx"; // XLSX kütüphanesi aktif değilse bu yorumda kalmalı
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { supabase } from "../supabaseClient";
@@ -8,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
-import customParseFormat from "dayjs/plugin/customParseFormat"; // Dayjs eklentisi
+import customParseFormat from "dayjs/plugin/customParseFormat";
 
 // MUI
 import {
@@ -37,7 +36,7 @@ import {
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { DataGrid } from "@mui/x-data-grid";
-import AddIcon from "@mui/icons-material/Add"; // Daha basit + ikonu
+import AddIcon from "@mui/icons-material/Add";
 import SaveIcon from "@mui/icons-material/Save";
 import TuneIcon from "@mui/icons-material/Tune";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -48,17 +47,16 @@ import CleaningServicesIcon from "@mui/icons-material/CleaningServices";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import EditNoteIcon from '@mui/icons-material/EditNote'; // Hızlı düzenleme için yeni ikon
-import UploadFileIcon from '@mui/icons-material/UploadFile'; // Dosya yükleme ikonu
+import EditNoteIcon from "@mui/icons-material/EditNote";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 
 import usePermissions from "../auth/usePermissions";
-
 
 /* ---------------- Sefer Detay Panel (lazy) ---------------- */
 const SeferDetayPanel = lazy(() => import("./planlamaDetay/SeferDetayPanel"));
 const SiparisAnaliz = lazy(() => import("./planlamaDetay/SiparisAnaliz"));
 
-// Dayjs eklentisi burada çağrılmalı
+// Dayjs eklentisi
 dayjs.extend(customParseFormat);
 
 /* ---------------- helpers ---------------- */
@@ -66,37 +64,38 @@ dayjs.extend(customParseFormat);
 // TR uppercase
 const toUpperTr = (s) => (s || "").toLocaleUpperCase("tr-TR").trim();
 const getTodayISO = () => new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
-// "YYYY-MM-DD" → "GG.AA.YYYY" çevirir
+
+// "YYYY-MM-DD" → "GG.AA.YYYY"
 const formatDateTR = (val) => {
     if (!val) return "";
     try {
         const d = new Date(val);
         if (isNaN(d)) return String(val);
-        return d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" });
+        return d.toLocaleDateString("tr-TR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+        });
     } catch {
         return String(val);
     }
 };
 
-// 🟢 YENİ HELPER: Excel'e UTC olarak göndermek için yerel zamanı manipüle eder (Tarih/Zaman Dilimi kaymasını önler)
+// Excel’e yazarken timezone kaymasını önlemek için
 const createExcelDate = (isoString) => {
     if (!isoString) return null;
     const d = new Date(isoString);
     if (Number.isNaN(d.getTime())) return null;
-
     const year = d.getFullYear();
     const month = d.getMonth();
     const day = d.getDate();
     const hours = d.getHours();
     const minutes = d.getMinutes();
     const seconds = d.getSeconds();
-
-    // new Date(Date.UTC(y, m, d, h, mi)) kullanarak, yerel saati UTC saati olarak kabul ederiz.
     return new Date(Date.UTC(year, month, day, hours, minutes, seconds));
 };
 
-
-// Plaka normalize (görsel)
+// Plaka normalize
 const normPlaka = (s) => toUpperTr(String(s || "").trim().replace(/\s+/g, " "));
 const primaryPlaka = (s) => normPlaka(String(s || "")).split("-")[0].trim();
 
@@ -138,46 +137,124 @@ const normalizeSonNoktaAndRegion = (raw) => {
 };
 
 const ilToBolgeMap = {
-    ADANA: "Doğu Bölgesi", ADIYAMAN: "Doğu Bölgesi", AFYON: "İç Anadolu Bölgesi",
-    AĞRI: "Doğu Bölgesi", AMASYA: "Karadeniz Bölgesi", ANKARA: "İç Anadolu Bölgesi",
-    ANTALYA: "Ege Bölgesi", ARTVİN: "Karadeniz Bölgesi", AYDIN: "Ege Bölgesi",
-    BALIKESİR: "Ege Bölgesi", BARTIN: "Karadeniz Bölgesi", BATMAN: "Doğu Bölgesi",
-    BAYBURT: "Karadeniz Bölgesi", BİLECİK: "İç Anadolu Bölgesi", BİNGÖL: "Doğu Bölgesi",
-    BİTLİS: "Doğu Bölgesi", BOLU: "Karadeniz Bölgesi", BURDUR: "Ege Bölgesi",
-    BURSA: "Ege Bölgesi", ÇANAKKALE: "Trakya Bölgesi", ÇANKIRI: "İç Anadolu Bölgesi",
-    ÇORUM: "İç Anadolu Bölgesi", DENİZLİ: "Ege Bölgesi", DİYARBAKIR: "Doğu Bölgesi",
-    DÜZCE: "Karadeniz Bölgesi", EDİRNE: "Trakya Bölgesi", ELAZIĞ: "Doğu Bölgesi",
-    ERZİNCAN: "Doğu Bölgesi", ERZURUM: "Doğu Bölgesi", ESKİŞEHİR: "İç Anadolu Bölgesi",
-    GAZİANTEP: "Doğu Bölgesi", GİRESUN: "Karadeniz Bölgesi", GÜMÜŞHANE: "Karadeniz Bölgesi",
-    HAKKARİ: "Doğu Bölgesi", HATAY: "Doğu Bölgesi", ISPARTA: "Ege Bölgesi",
-    MERSİN: "Doğu Bölgesi", İSTANBUL: "Marmara Bölgesi", İZMİR: "Ege Bölgesi",
-    KAHRAMANMARAŞ: "Doğu Bölgesi", KARABÜK: "Karadeniz Bölgesi", KARAMAN: "İç Anadolu Bölgesi",
-    KARS: "Doğu Bölgesi", KASTAMONU: "Karadeniz Bölgesi", KAYSERİ: "İç Anadolu Bölgesi",
-    KİLİS: "Doğu Bölgesi", KIRIKKALE: "İç Anadolu Bölgesi", KIRKLARELİ: "Trakya Bölgesi",
-    KIRŞEHİR: "İç Anadolu Bölgesi", KOCAELİ: "Kocaeli Bölgesi", KONYA: "İç Anadolu Bölgesi",
-    KÜTAHYA: "İç Anadolu Bölgesi", MALATYA: "Doğu Bölgesi", MANİSA: "Ege Bölgesi",
-    MARDİN: "Doğu Bölgesi", MUĞLA: "Ege Bölgesi", MUŞ: "Doğu Bölgesi",
-    NEVŞEHİR: "İç Anadolu Bölgesi", NİĞDE: "İç Anadolu Bölgesi", ORDU: "Karadeniz Bölgesi",
-    OSMANİYE: "Doğu Bölgesi", RİZE: "Karadeniz Bölgesi", SAKARYA: "Kocaeli Bölgesi",
-    SAMSUN: "Karadeniz Bölgesi", SİİRT: "Doğu Bölgesi", SİNOP: "Karadeniz Bölgesi",
-    SİVAS: "İç Anadolu Bölgesi", ŞANLIURFA: "Doğu Bölgesi", ŞIRNAK: "Doğu Bölgesi",
-    TEKİRDAĞ: "Trakya Bölgesi", TOKAT: "Karadeniz Bölgesi", TRABZON: "Karadeniz Bölgesi",
-    TUNCELİ: "Doğu Bölgesi", UŞAK: "Ege Bölgesi", VAN: "Doğu Bölgesi",
-    YALOVA: "Ege Bölgesi", YOZGAT: "İç Anadolu Bölgesi", ZONGULDAK: "Karadeniz Bölgesi",
-    ADALAR: "Kocaeli Bölgesi", ATAŞEHİR: "Kocaeli Bölgesi", BEYKOZ: "Kocaeli Bölgesi",
-    ÖMERLİ: "Kocaeli Bölgesi", KADIKÖY: "Kocaeli Bölgesi", KARTAL: "Kocaeli Bölgesi",
-    MALTEPE: "Kocaeli Bölgesi", PENDİK: "Kocaeli Bölgesi", SANCAKTEPE: "Kocaeli Bölgesi",
-    SULTANBEYLİ: "Kocaeli Bölgesi", ŞİLE: "Kocaeli Bölgesi", TUZLA: "Kocaeli Bölgesi",
-    ÜMRANİYE: "Kocaeli Bölgesi", ÜSKÜDAR: "Kocaeli Bölgesi",
-    ARNAVUTKÖY: "Marmara Bölgesi", AVCILAR: "Marmara Bölgesi", BAĞCILAR: "Marmara Bölgesi",
-    BAHÇELİEVLER: "Marmara Bölgesi", BAKIRKÖY: "Marmara Bölgesi", BAŞAKŞEHİR: "Marmara Bölgesi",
-    BAYRAMPAŞA: "Marmara Bölgesi", BEŞİKTAŞ: "Marmara Bölgesi", BEYLİKDÜZÜ: "Marmara Bölgesi",
-    BEYOĞLU: "Marmara Bölgesi", BÜYÜKÇEKMECE: "Marmara Bölgesi", ÇATALCA: "Marmara Bölgesi",
-    ESENLER: "Marmara Bölgesi", ESENYURT: "Marmara Bölgesi", EYÜP: "Marmara Bölgesi",
-    FATİH: "Marmara Bölgesi", GAZİOSMANPAŞA: "Marmara Bölgesi", GÜNGÖREN: "Marmara Bölgesi",
-    KAĞITHANE: "Marmara Bölgesi", KÜÇÜKÇEKMECE: "Marmara Bölgesi", SARIYER: "Marmara Bölgesi",
-    SİLİVRİ: "Marmara Bölgesi", SULTANGAZİ: "Marmara Bölgesi", ŞİŞLİ: "Marmara Bölgesi",
-    ZEYTİNBURNU: "Marmara Bölgesi", AKSARAY: "İç Anadolu Bölgesi"
+    ADANA: "Doğu Bölgesi",
+    ADIYAMAN: "Doğu Bölgesi",
+    AFYON: "İç Anadolu Bölgesi",
+    AĞRI: "Doğu Bölgesi",
+    AMASYA: "Karadeniz Bölgesi",
+    ANKARA: "İç Anadolu Bölgesi",
+    ANTALYA: "Ege Bölgesi",
+    ARTVİN: "Karadeniz Bölgesi",
+    AYDIN: "Ege Bölgesi",
+    BALIKESİR: "Ege Bölgesi",
+    BARTIN: "Karadeniz Bölgesi",
+    BATMAN: "Doğu Bölgesi",
+    BAYBURT: "Karadeniz Bölgesi",
+    BİLECİK: "İç Anadolu Bölgesi",
+    BİNGÖL: "Doğu Bölgesi",
+    BİTLİS: "Doğu Bölgesi",
+    BOLU: "Karadeniz Bölgesi",
+    BURDUR: "Ege Bölgesi",
+    BURSA: "Ege Bölgesi",
+    ÇANAKKALE: "Trakya Bölgesi",
+    ÇANKIRI: "İç Anadolu Bölgesi",
+    ÇORUM: "İç Anadolu Bölgesi",
+    DENİZLİ: "Ege Bölgesi",
+    DİYARBAKIR: "Doğu Bölgesi",
+    DÜZCE: "Karadeniz Bölgesi",
+    EDİRNE: "Trakya Bölgesi",
+    ELAZIĞ: "Doğu Bölgesi",
+    ERZİNCAN: "Doğu Bölgesi",
+    ERZURUM: "Doğu Bölgesi",
+    ESKİŞEHİR: "İç Anadolu Bölgesi",
+    GAZİANTEP: "Doğu Bölgesi",
+    GİRESUN: "Karadeniz Bölgesi",
+    GÜMÜŞHANE: "Karadeniz Bölgesi",
+    HAKKARİ: "Doğu Bölgesi",
+    HATAY: "Doğu Bölgesi",
+    ISPARTA: "Ege Bölgesi",
+    MERSİN: "Doğu Bölgesi",
+    İSTANBUL: "Marmara Bölgesi",
+    İZMİR: "Ege Bölgesi",
+    KAHRAMANMARAŞ: "Doğu Bölgesi",
+    KARABÜK: "Karadeniz Bölgesi",
+    KARAMAN: "İç Anadolu Bölgesi",
+    KARS: "Doğu Bölgesi",
+    KASTAMONU: "Karadeniz Bölgesi",
+    KAYSERİ: "İç Anadolu Bölgesi",
+    KİLİS: "Doğu Bölgesi",
+    KIRIKKALE: "İç Anadolu Bölgesi",
+    KIRKLARELİ: "Trakya Bölgesi",
+    KIRŞEHİR: "İç Anadolu Bölgesi",
+    KOCAELİ: "Kocaeli Bölgesi",
+    KONYA: "İç Anadolu Bölgesi",
+    KÜTAHYA: "İç Anadolu Bölgesi",
+    MALATYA: "Doğu Bölgesi",
+    MANİSA: "Ege Bölgesi",
+    MARDİN: "Doğu Bölgesi",
+    MUĞLA: "Ege Bölgesi",
+    MUŞ: "Doğu Bölgesi",
+    NEVŞEHİR: "İç Anadolu Bölgesi",
+    NİĞDE: "İç Anadolu Bölgesi",
+    ORDU: "Karadeniz Bölgesi",
+    OSMANİYE: "Doğu Bölgesi",
+    RİZE: "Karadeniz Bölgesi",
+    SAKARYA: "Kocaeli Bölgesi",
+    SAMSUN: "Karadeniz Bölgesi",
+    SİİRT: "Doğu Bölgesi",
+    SİNOP: "Karadeniz Bölgesi",
+    SİVAS: "İç Anadolu Bölgesi",
+    ŞANLIURFA: "Doğu Bölgesi",
+    ŞIRNAK: "Doğu Bölgesi",
+    TEKİRDAĞ: "Trakya Bölgesi",
+    TOKAT: "Karadeniz Bölgesi",
+    TRABZON: "Karadeniz Bölgesi",
+    TUNCELİ: "Doğu Bölgesi",
+    UŞAK: "Ege Bölgesi",
+    VAN: "Doğu Bölgesi",
+    YALOVA: "Ege Bölgesi",
+    YOZGAT: "İç Anadolu Bölgesi",
+    ZONGULDAK: "Karadeniz Bölgesi",
+    ADALAR: "Kocaeli Bölgesi",
+    ATAŞEHİR: "Kocaeli Bölgesi",
+    BEYKOZ: "Kocaeli Bölgesi",
+    ÖMERLİ: "Kocaeli Bölgesi",
+    KADIKÖY: "Kocaeli Bölgesi",
+    KARTAL: "Kocaeli Bölgesi",
+    MALTEPE: "Kocaeli Bölgesi",
+    PENDİK: "Kocaeli Bölgesi",
+    SANCAKTEPE: "Kocaeli Bölgesi",
+    SULTANBEYLİ: "Kocaeli Bölgesi",
+    ŞİLE: "Kocaeli Bölgesi",
+    TUZLA: "Kocaeli Bölgesi",
+    ÜMRANİYE: "Kocaeli Bölgesi",
+    ÜSKÜDAR: "Kocaeli Bölgesi",
+    ARNAVUTKÖY: "Marmara Bölgesi",
+    AVCILAR: "Marmara Bölgesi",
+    BAĞCILAR: "Marmara Bölgesi",
+    BAHÇELİEVLER: "Marmara Bölgesi",
+    BAKIRKÖY: "Marmara Bölgesi",
+    BAŞAKŞEHİR: "Marmara Bölgesi",
+    BAYRAMPAŞA: "Marmara Bölgesi",
+    BEŞİKTAŞ: "Marmara Bölgesi",
+    BEYLİKDÜZÜ: "Marmara Bölgesi",
+    BEYOĞLU: "Marmara Bölgesi",
+    BÜYÜKÇEKMECE: "Marmara Bölgesi",
+    ÇATALCA: "Marmara Bölgesi",
+    ESENLER: "Marmara Bölgesi",
+    ESENYURT: "Marmara Bölgesi",
+    EYÜP: "Marmara Bölgesi",
+    FATİH: "Marmara Bölgesi",
+    GAZİOSMANPAŞA: "Marmara Bölgesi",
+    GÜNGÖREN: "Marmara Bölgesi",
+    KAĞITHANE: "Marmara Bölgesi",
+    KÜÇÜKÇEKMECE: "Marmara Bölgesi",
+    SARIYER: "Marmara Bölgesi",
+    SİLİVRİ: "Marmara Bölgesi",
+    SULTANGAZİ: "Marmara Bölgesi",
+    ŞİŞLİ: "Marmara Bölgesi",
+    ZEYTİNBURNU: "Marmara Bölgesi",
+    AKSARAY: "İç Anadolu Bölgesi",
 };
 
 // Bölge renklendirme
@@ -197,7 +274,9 @@ const bolgeChip = (bolge) => {
 function NoRowsOverlay() {
     return (
         <Stack height="100%" alignItems="center" justifyContent="center" spacing={1.25}>
-            <Typography variant="h6" sx={{ opacity: 0.8 }}>Henüz kayıt yok</Typography>
+            <Typography variant="h6" sx={{ opacity: 0.8 }}>
+                Henüz kayıt yok
+            </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
                 Filtreleri temizleyin veya sağ alttaki ✚ ile ilk satırı ekleyin.
             </Typography>
@@ -216,10 +295,22 @@ function BusyOverlay() {
 
 // Grid alanları
 const alanlar = [
-    "sefer_no", "sevk_no", "tarih", "plaka", "ad_soyad", "telefon", "tc",
-    "varis_tarihi", "son_nokta", "fatura_musterisi",
-    "yukleme_noktasi", "tahliye_noktasi", "tahliye_il",
-    "tonaj", "bir_onceki_is", "bolge",
+    "sefer_no",
+    "sevk_no",
+    "tarih",
+    "plaka",
+    "ad_soyad",
+    "telefon",
+    "tc",
+    "varis_tarihi",
+    "son_nokta",
+    "fatura_musterisi",
+    "yukleme_noktasi",
+    "tahliye_noktasi",
+    "tahliye_il",
+    "tonaj",
+    "bir_onceki_is",
+    "bolge",
 ];
 
 export default function PlanlamaDeluxe() {
@@ -231,8 +322,8 @@ export default function PlanlamaDeluxe() {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    // permissions (planlama) — usePermissions flags
-    const { loading: permsLoading, flags = {} } = usePermissions('planlama');
+    // permissions (planlama)
+    const { loading: permsLoading, flags = {} } = usePermissions("planlama");
     const {
         pln_update = false,
         pln_save = false,
@@ -240,14 +331,16 @@ export default function PlanlamaDeluxe() {
         pln_import_excel = false,
     } = flags;
 
-    // Sayfa içinde mevcut "perms.xxx" kullanımlarını bozmamak için aynı yapıyı memo’layalım
-    const perms = useMemo(() => ({
-        loaded: !permsLoading,
-        pln_update,
-        pln_save,
-        pln_export_excel,
-        pln_import_excel,
-    }), [permsLoading, pln_update, pln_save, pln_export_excel, pln_import_excel]);
+    const perms = useMemo(
+        () => ({
+            loaded: !permsLoading,
+            pln_update,
+            pln_save,
+            pln_export_excel,
+            pln_import_excel,
+        }),
+        [permsLoading, pln_update, pln_save, pln_export_excel, pln_import_excel]
+    );
 
     // görünüm (kolon sırası)
     const [columnOrder, setColumnOrder] = useState([...alanlar]);
@@ -274,16 +367,19 @@ export default function PlanlamaDeluxe() {
     const [analizOpen, setAnalizOpen] = useState(false);
     const [analizContext, setAnalizContext] = useState(null);
 
-    // değişiklik takibi (sticky kaydet barı)
+    // değişiklik takibi
     const lastSavedSnapshot = useRef("[]");
     const isDirty = useMemo(() => lastSavedSnapshot.current !== JSON.stringify(rows), [rows]);
 
     // drag & drop
     const [dragActive, setDragActive] = useState(false);
     const fileInputRef = useRef(null);
-    const acceptedExts = [".xlsx", ".xls", ".csv"];
 
-    const normalizeHeader = (s = "") => toUpperTr(String(s)).replace(/\s+/g, " ").replace(/\./g, "").trim();
+    // 🔴 XLS yerine XLSX ve CSV
+    const acceptedExts = [".xlsx", ".csv"];
+
+    const normalizeHeader = (s = "") =>
+        toUpperTr(String(s)).replace(/\s+/g, " ").replace(/\./g, "").trim();
 
     // filtreler
     const [plakalar, setPlakalar] = useState([]);
@@ -305,6 +401,10 @@ export default function PlanlamaDeluxe() {
         "SEFER NO": "sefer_no",
         "SEVK NO": "sevk_no",
         "TARİH": "tarih",
+        "VARİŞ TARİHİ": "varis_tarihi",
+        "VARIS TARIHI": "varis_tarihi",
+        "VARİŞ TARİH": "varis_tarihi",
+        "TARİH_2": "varis_tarihi",
         "PLAKA": "plaka",
         "SÜRÜCÜ": "ad_soyad",
         "TELEFON": "telefon",
@@ -340,7 +440,6 @@ export default function PlanlamaDeluxe() {
         const n = parseFloat(String(v).replace(",", "."));
         return isNaN(n) ? null : n;
     };
-
 
     /* ---------- data fetch ---------- */
     const fetchData = useCallback(async () => {
@@ -385,6 +484,9 @@ export default function PlanlamaDeluxe() {
     const loadView = useCallback(async () => {
         const kullaniciId = parseInt(localStorage.getItem("kullaniciId"));
         if (!kullaniciId) return;
+
+        // "aktifseferler.view.bump" mantığı bu sayfada uygulanmadığı için
+        // doğrudan veritabanından çekilen gorunum tercihini kullanıyoruz.
         const { data } = await supabase
             .from("kullanici_planlama_gorunumleri")
             .select("gorunum")
@@ -396,26 +498,26 @@ export default function PlanlamaDeluxe() {
             const valid = data.gorunum.filter((c) => alanlar.includes(c));
             if (valid.length) setColumnOrder(valid);
         }
-    }, []);
+    }, []); // loadView'in bağımlılıkları boş bırakıldı (sadece useEffect'te çağrıldığı için)
 
-    // Yeni Plaka Diyaloğu açma (kısayolda kullanılıyor)
+    // Yeni Plaka Diyaloğu açma
     const openPlakaDialog = useCallback(() => {
         setYeniPlaka({ plaka: "", ad_soyad: "", telefon: "", tc: "" });
         setPlakaDialogOpen(true);
     }, []);
 
-    // 🟢 DÜZELTME: openDrawer tanımı yukarı taşındı
     const openDrawer = useCallback((row) => {
         setActiveEditRow(row);
         setDrawerOpen(true);
     }, []);
 
-
     /* ---------- keyboard shortcuts ---------- */
     useEffect(() => {
         const onKey = (e) => {
             const isMac = navigator.platform.toUpperCase().includes("MAC");
-            const metaK = (isMac && e.metaKey && e.key.toLowerCase() === "k") || (!isMac && e.ctrlKey && e.key.toLowerCase() === "k");
+            const metaK =
+                (isMac && e.metaKey && e.key.toLowerCase() === "k") ||
+                (!isMac && e.ctrlKey && e.key.toLowerCase() === "k");
             if (metaK) {
                 e.preventDefault();
                 const el = document.getElementById("global-search-input");
@@ -432,9 +534,7 @@ export default function PlanlamaDeluxe() {
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-        // fetchData ve openPlakaDialog artık erişilebilirdir.
     }, [fetchData, openPlakaDialog, perms.pln_update]);
-
 
     useEffect(() => {
         fetchData();
@@ -467,9 +567,7 @@ export default function PlanlamaDeluxe() {
         if (bolgeFilter?.length) r = r.filter((x) => bolgeFilter.includes(x.bolge || ""));
         if (debouncedSearch) {
             const s = debouncedSearch.toLowerCase();
-            r = r.filter((x) =>
-                Object.values(x || {}).some((v) => String(v ?? "").toLowerCase().includes(s))
-            );
+            r = r.filter((x) => Object.values(x || {}).some((v) => String(v ?? "").toLowerCase().includes(s)));
         }
         setFilteredRows(r);
     }, [rows, plakaFilter, bolgeFilter, debouncedSearch]);
@@ -481,16 +579,21 @@ export default function PlanlamaDeluxe() {
             setSnack({ open: true, msg: "Kullanıcı bulunamadı.", severity: "warning" });
             return;
         }
-        const { error } = await supabase
-            .from("kullanici_planlama_gorunumleri")
-            .upsert(
-                { kullanici_id: kullaniciId, sayfa: "planlama", gorunum: columnOrder },
-                { onConflict: ["kullanici_id", "sayfa"] }
-            );
-        if (error) {
-            setSnack({ open: true, msg: "Görünüm kaydedilemedi.", severity: "error" });
-        } else {
-            setSnack({ open: true, msg: "Görünüm kaydedildi.", severity: "success" });
+        setSaving(true);
+        try {
+            const { error } = await supabase
+                .from("kullanici_planlama_gorunumleri")
+                .upsert({ kullanici_id: kullaniciId, sayfa: "planlama", gorunum: columnOrder }, { onConflict: ["kullanici_id", "sayfa"] });
+            if (error) {
+                setSnack({ open: true, msg: "Görünüm kaydedilemedi.", severity: "error" });
+            } else {
+                setSnack({ open: true, msg: "Görünüm kaydedildi.", severity: "success" });
+            }
+        } catch (e) {
+            console.error(e);
+            setSnack({ open: true, msg: "Kaydetme sırasında hata oluştu.", severity: "error" });
+        } finally {
+            setSaving(false);
         }
     }, [columnOrder]);
 
@@ -505,16 +608,9 @@ export default function PlanlamaDeluxe() {
                 obj["TARİH_2"]
             ) || null;
 
-        const yukleme_noktasi_parts = [
-            obj.yukleyen_musteri__tmp,
-            obj.yukleme_il__tmp,
-            obj.yukleme_ilce__tmp,
-        ].filter(Boolean);
+        const yukleme_noktasi_parts = [obj.yukleyen_musteri__tmp, obj.yukleme_il__tmp, obj.yukleme_ilce__tmp].filter(Boolean);
 
-        const tahliye_noktasi_parts = [
-            obj.tahliye_musteri__tmp,
-            obj.tahliye_ilce__tmp,
-        ].filter(Boolean);
+        const tahliye_noktasi_parts = [obj.tahliye_musteri__tmp, obj.tahliye_ilce__tmp].filter(Boolean);
 
         const rawSon = obj.tahliye_il || obj.son_nokta || "";
         const { son_nokta, bolge } = normalizeSonNoktaAndRegion(rawSon);
@@ -546,7 +642,139 @@ export default function PlanlamaDeluxe() {
         };
     };
 
-    /* ---------- dosya içe aktar ---------- */
+    /* ----------------------------- EXCEL/CSV İÇE AKTARMA YARDIMCILARI ----------------------------- */
+
+    // Excel serial -> Date
+    const excelSerialToDate = (serial, date1904 = false) => {
+        if (serial == null || Number.isNaN(serial)) return null;
+        let s = Number(serial);
+        if (date1904) s += 1462; // 1904 düzeltmesi
+        const ms = s * 24 * 60 * 60 * 1000;
+        return new Date(Date.UTC(1899, 11, 30) + ms);
+    };
+
+    // ExcelJS hücre değerini okunabilir hale getir
+    const readCell = (cell, wb) => {
+        const v = cell?.value;
+        if (v == null) return "";
+
+        if (v instanceof Date) return v;
+        if (cell.type === 3 /* Date */) return v;
+
+        // formül sonucu
+        if (typeof v === "object" && v && "result" in v) {
+            const r = v.result;
+            if (r instanceof Date) return r;
+            if (typeof r === "number" && /[dmysh]/i.test(cell.numFmt || "")) {
+                return excelSerialToDate(r, wb?.properties?.date1904);
+            }
+            return r ?? "";
+        }
+
+        // RichText/hyperlink
+        if (typeof v === "object" && v) {
+            if (Array.isArray(v.richText)) return v.richText.map((p) => p.text || "").join("");
+            if ("text" in v && v.text) return v.text;
+            if ("hyperlink" in v) return v.text || v.hyperlink || "";
+        }
+
+        if (typeof v === "number" && /[dmysh]/i.test(cell.numFmt || "")) {
+            return excelSerialToDate(v, wb?.properties?.date1904);
+        }
+
+        return v;
+    };
+
+    // İlk sayfayı headerMap ile objelere çevir
+    const sheetToObjects = (workbook, headerMap, normalizeHeader) => {
+        const ws = workbook.worksheets?.[0];
+        if (!ws) return [];
+
+        // 1. satır başlık
+        const headerRow = ws.getRow(1);
+        const headers = [];
+        for (let c = 1; c <= headerRow.cellCount; c++) {
+            const raw = String(headerRow.getCell(c).value ?? "").trim();
+            const norm = normalizeHeader(raw);
+            const field = headerMap[norm] || headerMap[raw.toUpperCase()] || null;
+            headers.push({ raw, norm, field, c });
+        }
+
+        const out = [];
+        for (let r = 2; r <= ws.rowCount; r++) {
+            const row = ws.getRow(r);
+            const anyVal = row.values?.some?.((x) => !!x);
+            if (!anyVal) continue;
+
+            const obj = {};
+            for (const h of headers) {
+                if (!h.field) continue;
+                const cell = row.getCell(h.c);
+                const val = readCell(cell, workbook);
+                if (val instanceof Date && !Number.isNaN(val.getTime())) {
+                    obj[h.field] = val.toISOString().slice(0, 10);
+                } else {
+                    obj[h.field] = (val ?? "").toString().trim();
+                }
+            }
+            if (Object.values(obj).every((v) => v == null || v === "")) continue;
+            out.push(obj);
+        }
+        return out;
+    };
+
+    // Basit CSV parser
+    const parseCSVText = (text) => {
+        const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.trim().length);
+        if (!lines.length) return { headers: [], rows: [] };
+        const delimiter = lines[0].includes(";") ? ";" : ",";
+        const parseLine = (line) => {
+            const res = [];
+            let cur = "";
+            let inQ = false;
+            for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (ch === '"') {
+                    if (inQ && line[i + 1] === '"') {
+                        cur += '"';
+                        i++;
+                    } else {
+                        inQ = !inQ;
+                    }
+                } else if (ch === delimiter && !inQ) {
+                    res.push(cur);
+                    cur = "";
+                } else {
+                    cur += ch;
+                }
+            }
+            res.push(cur);
+            return res.map((s) => s.trim());
+        };
+        const header = parseLine(lines[0]);
+        const rows = lines.slice(1).map(parseLine);
+        return { headers: header, rows };
+    };
+
+    const csvToObjects = (text, headerMap, normalizeHeader) => {
+        const { headers, rows } = parseCSVText(text);
+        const fields = headers.map((h) => headerMap[normalizeHeader(h)] || null);
+
+        const out = [];
+        for (const cols of rows) {
+            const obj = {};
+            cols.forEach((v, i) => {
+                const f = fields[i];
+                if (!f) return;
+                obj[f] = v;
+            });
+            if (Object.values(obj).every((v) => !v)) continue;
+            out.push(obj);
+        }
+        return out;
+    };
+
+    /* ---------- dosya içe aktar (ExcelJS) ---------- */
     const handleFiles = async (files) => {
         if (!perms.pln_import_excel) {
             setSnack({ open: true, msg: "Dosya içe aktarma yetkiniz yok.", severity: "warning" });
@@ -558,35 +786,70 @@ export default function PlanlamaDeluxe() {
 
         const ext = "." + file.name.split(".").pop().toLowerCase();
         if (!acceptedExts.includes(ext)) {
-            setSnack({ open: true, msg: "Desteklenmeyen dosya türü.", severity: "warning" });
+            setSnack({
+                open: true,
+                msg: ext === ".xls" ? "XLS (eski) desteklenmiyor. Lütfen XLSX'e çevirin." : "Desteklenmeyen dosya türü.",
+                severity: "warning",
+            });
             return;
         }
 
+        setLoading(true);
         try {
-            // 🛑 Burada XLSX.read fonksiyonu kullanılıyorsa, XLSX kütüphanesinin kurulu ve import edilmiş olması gerekir.
-            // Eğer ExcelJS ile içe aktarma yapılacaksa, bu kısım tamamen farklı yazılmalıdır.
-            setSnack({
-                open: true,
-                msg: "Dosya içe aktarma (XLSX) şu an pasif. Geliştirici bu özelliği ExcelJS'e uyarlamalıdır.",
-                severity: "warning",
-                action: (
-                    <Button color="inherit" size="small" onClick={() => window.open("https://docs.sheetjs.com/docs/demos/html/read/")}>
-                        Daha Fazla Bilgi
-                    </Button>
-                )
-            });
+            let rawObjects = [];
 
+            if (ext === ".xlsx") {
+                const buf = await file.arrayBuffer();
+                const wb = new ExcelJS.Workbook();
+                await wb.xlsx.load(buf);
+                rawObjects = sheetToObjects(wb, headerMap, normalizeHeader);
+            } else {
+                const text = await file.text();
+                rawObjects = csvToObjects(text, headerMap, normalizeHeader);
+            }
+
+            if (!rawObjects.length) {
+                setSnack({ open: true, msg: "Dosyada okunabilir veri bulunamadı.", severity: "info" });
+                return;
+            }
+
+            const built = rawObjects.map((o) => buildRowFromExcel(o));
+
+            setRows(built);
+            setFilteredRows(built);
+            lastSavedSnapshot.current = JSON.stringify(built);
+
+            const plakalarFromRows = Array.from(
+                new Map(
+                    built
+                        .filter((r) => r?.plaka)
+                        .map((r) => [plakaKey(r.plaka), r.plaka])
+                ).values()
+            );
+            setPlakalar(plakalarFromRows);
+            setBolgeler([...new Set(built.map((r) => r.bolge).filter(Boolean))]);
+
+            setSnack({ open: true, msg: `${built.length} satır içe aktarıldı.`, severity: "success" });
         } catch (e) {
             console.error(e);
             setSnack({ open: true, msg: "İçe aktarma sırasında hata oluştu.", severity: "error" });
         } finally {
+            setLoading(false);
             setDragActive(false);
             if (fileInputRef.current) fileInputRef.current.value = "";
         }
     };
 
-    const onDragOver = (e) => { e.preventDefault(); e.stopPropagation(); if (!dragActive) setDragActive(true); };
-    const onDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); };
+    const onDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!dragActive) setDragActive(true);
+    };
+    const onDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(false);
+    };
     const onDrop = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -603,10 +866,7 @@ export default function PlanlamaDeluxe() {
         }
         setSaving(true);
 
-        const { error: delErr } = await supabase
-            .from("planlama")
-            .delete()
-            .not("id", "is", null);
+        const { error: delErr } = await supabase.from("planlama").delete().not("id", "is", null);
         if (delErr) {
             console.error(delErr);
             setSaving(false);
@@ -650,9 +910,7 @@ export default function PlanlamaDeluxe() {
         try {
             for (let i = 0; i < payloads.length; i += chunkSize) {
                 const slice = payloads.slice(i, i + chunkSize);
-                const { error: upErr } = await supabase
-                    .from("planlama")
-                    .upsert(slice, { onConflict: "plaka,tarih" });
+                const { error: upErr } = await supabase.from("planlama").upsert(slice, { onConflict: "plaka,tarih" });
                 if (upErr) throw upErr;
             }
         } catch (e) {
@@ -666,10 +924,7 @@ export default function PlanlamaDeluxe() {
         setSaving(false);
         setSnack({
             open: true,
-            msg:
-                dropped > 0
-                    ? `Tablo ekrandakiyle değiştirildi. ${dropped} yinelenen (plaka,tarih) atlandı.`
-                    : "Tablo ekrandakiyle değiştirildi.",
+            msg: dropped > 0 ? `Tablo ekrandakiyle değiştirildi. ${dropped} yinelenen (plaka,tarih) atlandı.` : "Tablo ekrandakiyle değiştirildi.",
             severity: "success",
         });
     };
@@ -688,13 +943,11 @@ export default function PlanlamaDeluxe() {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet("Planlama");
 
-        // Sütun Başlıkları
         const columns = [
             { header: "SEFER NO", key: "sefer_no", width: 15 },
             { header: "SEVK NO", key: "sevk_no", width: 15 },
-            // 🛑 DÜZELTME: Saat dilimi kaymasını önlemek için numFmt değiştirildi.
-            { header: "TARİH", key: "tarih", width: 15, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
-            { header: "VARIŞ TARİHİ", key: "varis_tarihi", width: 15, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
+            { header: "TARİH", key: "tarih", width: 15, style: { numFmt: "dd.mm.yyyy hh:mm" } },
+            { header: "VARIŞ TARİHİ", key: "varis_tarihi", width: 15, style: { numFmt: "dd.mm.yyyy hh:mm" } },
             { header: "PLAKA", key: "plaka", width: 12 },
             { header: "AD SOYAD", key: "ad_soyad", width: 20 },
             { header: "TELEFON", key: "telefon", width: 15 },
@@ -711,32 +964,31 @@ export default function PlanlamaDeluxe() {
 
         worksheet.columns = columns;
 
-        // Veri Satırları
         const exportRows = filteredRows.map((r) => ({
-            "sefer_no": r.sefer_no,
-            "sevk_no": r.sevk_no,
-            // 🛑 DÜZELTME: createExcelDate ile zaman dilimi kayması önlendi
-            "tarih": r.tarih ? createExcelDate(r.tarih) : null,
-            "varis_tarihi": r.varis_tarihi ? createExcelDate(r.varis_tarihi) : null,
-            "plaka": r.plaka,
-            "ad_soyad": r.ad_soyad,
-            "telefon": r.telefon,
-            "tc": r.tc,
-            "son_nokta": r.son_nokta,
-            "fatura_musterisi": r.fatura_musterisi,
-            "yukleme_noktasi": r.yukleme_noktasi,
-            "tahliye_noktasi": r.tahliye_noktasi,
-            "tahliye_il": r.tahliye_il,
-            "tonaj": Number(r.tonaj),
-            "bir_onceki_is": r.bir_onceki_is,
-            "bolge": r.bolge,
+            sefer_no: r.sefer_no,
+            sevk_no: r.sevk_no,
+            tarih: r.tarih ? createExcelDate(r.tarih) : null,
+            varis_tarihi: r.varis_tarihi ? createExcelDate(r.varis_tarihi) : null,
+            plaka: r.plaka,
+            ad_soyad: r.ad_soyad,
+            telefon: r.telefon,
+            tc: r.tc,
+            son_nokta: r.son_nokta,
+            fatura_musterisi: r.fatura_musterisi,
+            yukleme_noktasi: r.yukleme_noktasi,
+            tahliye_noktasi: r.tahliye_noktasi,
+            tahliye_il: r.tahliye_il,
+            tonaj: Number(r.tonaj),
+            bir_onceki_is: r.bir_onceki_is,
+            bolge: r.bolge,
         }));
 
         worksheet.addRows(exportRows);
 
-        // Dosyayı oluştur ve indir
         const buffer = await workbook.xlsx.writeBuffer();
-        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        const blob = new Blob([buffer], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
         saveAs(blob, `planlama_${getTodayISO()}.xlsx`);
     };
 
@@ -829,14 +1081,22 @@ export default function PlanlamaDeluxe() {
     /* ---------- tamamlama yüzdesi ---------- */
     const completenessOf = (row) => {
         const keys = [
-            "sefer_no", "tarih", "plaka", "ad_soyad", "telefon", "tc",
-            "varis_tarihi", "son_nokta", "tahliye_il", "tonaj",
+            "sefer_no",
+            "tarih",
+            "plaka",
+            "ad_soyad",
+            "telefon",
+            "tc",
+            "varis_tarihi",
+            "son_nokta",
+            "tahliye_il",
+            "tonaj",
         ];
         const filled = keys.filter((k) => !!(row?.[k] ?? "")).length;
         return Math.round((filled / keys.length) * 100);
     };
 
-    /* ---------- DataGrid kolonları ---------- */
+    /* ---------- DataGrid kolonları (buildColumns mantığı bu dosyaya taşındı) ---------- */
     const columns = useMemo(() => {
         const textCol = (field, headerName, width = 160, editable = true, extra = {}) => ({
             field,
@@ -846,15 +1106,15 @@ export default function PlanlamaDeluxe() {
             ...extra,
         });
 
-        return [
+        const allCols = [
             {
                 field: "actions",
                 headerName: "İşlem",
-                width: 130, // Daha kompakt
+                width: 130,
                 sortable: false,
                 filterable: false,
                 renderCell: (params) => (
-                    <Stack direction="row" spacing={0.5}>
+                    <Stack direction="row" spacing={0.5} alignItems="center">
                         <Tooltip title="Hızlı Düzenle">
                             <IconButton size="small" onClick={() => openDrawer(params.row)}>
                                 <EditNoteIcon fontSize="small" />
@@ -904,7 +1164,9 @@ export default function PlanlamaDeluxe() {
                     params.value ? (
                         <Chip size="small" label={params.value} color={bolgeChip(params.value)} variant="filled" />
                     ) : (
-                        <Typography variant="body2" sx={{ color: "text.secondary" }}>—</Typography>
+                        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                            —
+                        </Typography>
                     ),
             },
             {
@@ -922,15 +1184,23 @@ export default function PlanlamaDeluxe() {
                 ),
             },
         ];
+        return allCols;
     }, [openSiparisAnaliz, handleSil, perms.pln_update, openDrawer]);
 
-    // Kolon sırası
+    // Kolon sırası (loadView'den gelen tercihi uygular)
     const orderedColumns = useMemo(() => {
+        // columns'ı oluşturan useMemo'dan gelen tüm sütunlar
         const map = Object.fromEntries(columns.map((c) => [c.field, c]));
+
+        // Kaydedilen sıraya göre sütunları düzenle
         const ordered = ["actions", ...columnOrder].map((f) => map[f]).filter(Boolean);
-        const rest = columns.filter((c) => !ordered.includes(c));
+
+        // Diğer sütunları (varsayılan veya eklenenleri) sona ekle
+        const orderedFields = new Set(ordered.map(c => c.field));
+        const rest = columns.filter((c) => !orderedFields.has(c.field));
+
         return [...ordered, ...rest];
-    }, [columns, columnOrder]);
+    }, [columns, columnOrder, loadView]); // loadView'i buraya ekleyerek güncellemeyi garanti ederiz.
 
     /* ---------- DataGrid edit akışı ---------- */
     const processRowUpdate = useCallback((incomingNewRow, oldRow) => {
@@ -950,7 +1220,6 @@ export default function PlanlamaDeluxe() {
             }
         });
 
-        // rows controlled olduğu için burada state'i güncelle
         setRows((prev) => prev.map((r) => (r._rowId === newRow._rowId ? newRow : r)));
         return newRow;
     }, []);
@@ -960,6 +1229,7 @@ export default function PlanlamaDeluxe() {
     }, []);
 
     const onColumnOrderChange = useCallback((params) => {
+        // DataGrid'in sürükle-bırak işlemi tamamlandığında bu fonksiyon çalışır.
         setColumnOrder((prev) => {
             const f = params.column?.field;
             if (!f || !alanlar.includes(f)) return prev;
@@ -967,6 +1237,7 @@ export default function PlanlamaDeluxe() {
             arr.splice(params.targetIndex, 0, f);
             return arr;
         });
+        // NOT: Bu değişiklik kaydedilmediği sürece kalıcı olmaz.
     }, []);
 
     // Filtreleri temizle
@@ -993,18 +1264,18 @@ export default function PlanlamaDeluxe() {
             onDrop={perms.pln_import_excel ? onDrop : undefined}
             sx={{
                 height: "100dvh",
+                overflow: "hidden",
                 display: "grid",
-                gridTemplateRows: "auto auto auto 1fr auto", // Biraz daha sıkı grid satırları
-                gap: 1, // Daha az boşluk
-                p: 1.5, // Daha az padding
-                background:
-                    "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.08), transparent 40%)," +
-                    "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.10), transparent 50%)," +
-                    "linear-gradient(180deg, #050816 0%, #0B1220 100%)",
+                gridTemplateRows: "auto auto auto 1fr auto",
+                gap: 1.5, // Gap 1.5'e çıkarıldı
+                p: 2, // Padding 2'ye çıkarıldı
+                background: "linear-gradient(180deg, #0A0A16 0%, #161C33 100%)", // Modern koyu gradyan
+                color: "#E8EAF9",
             }}
         >
             <Helmet>
                 <title>PLANLAMA</title>
+                <style>{`html, body, #root { height: 100%; overflow: hidden; }`}</style>
             </Helmet>
 
             {/* Başlık + Aksiyonlar */}
@@ -1052,13 +1323,7 @@ export default function PlanlamaDeluxe() {
                 <Stack direction="row" spacing={1} flexWrap="wrap">
                     <Tooltip title={perms.pln_save ? "Kaydet" : "Yetkiniz yok"}>
                         <span>
-                            <Button
-                                variant="contained"
-                                startIcon={<SaveIcon />}
-                                onClick={handleKaydet}
-                                disabled={!perms.pln_save}
-                                size="small" // Daha küçük butonlar
-                            >
+                            <Button variant="contained" startIcon={<SaveIcon />} onClick={handleKaydet} disabled={!perms.pln_save} size="small">
                                 Kaydet
                             </Button>
                         </span>
@@ -1071,7 +1336,7 @@ export default function PlanlamaDeluxe() {
                                 startIcon={<TuneIcon />}
                                 onClick={() => (perms.pln_update ? setGuncelleDialogOpen(true) : null)}
                                 disabled={!perms.pln_update}
-                                size="small" // Daha küçük butonlar
+                                size="small"
                             >
                                 Güncelle
                             </Button>
@@ -1080,13 +1345,7 @@ export default function PlanlamaDeluxe() {
 
                     <Tooltip title={perms.pln_export_excel ? "Excel Aktar" : "Yetkiniz yok"}>
                         <span>
-                            <Button
-                                variant="outlined"
-                                startIcon={<CheckCircleIcon />}
-                                onClick={handleExportExcel}
-                                disabled={!perms.pln_export_excel}
-                                size="small" // Daha küçük butonlar
-                            >
+                            <Button variant="outlined" startIcon={<CheckCircleIcon />} onClick={handleExportExcel} disabled={!perms.pln_export_excel} size="small">
                                 Excel Aktar
                             </Button>
                         </span>
@@ -1094,8 +1353,8 @@ export default function PlanlamaDeluxe() {
                 </Stack>
             </Stack>
 
-            {/* Bölge panelleri (Daha kompakt hale getirildi) */}
-            <Box sx={{ overflowX: "auto", pb: 0.5, pr: 0.5 }}> {/* Daha az padding */}
+            {/* Bölge panelleri (Daha modern ve kaydırılabilir) */}
+            <Box sx={{ overflowX: "auto", pb: 0.5, pr: 0.5 }}>
                 <Stack direction="row" spacing={1}>
                     {Object.entries(bolgeCounts)
                         .sort((a, b) => b[1] - a[1])
@@ -1111,15 +1370,15 @@ export default function PlanlamaDeluxe() {
                                     }
                                 }}
                                 sx={{
-                                    p: 1, // Daha az padding
-                                    minWidth: 180, // Daha küçük genişlik
+                                    p: 1,
+                                    minWidth: 180,
                                     borderRadius: 2,
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "space-between",
                                     gap: 1,
                                     cursor: "pointer",
-                                    backgroundColor: alpha("#fff", 0.03), // Daha hafif arka plan
+                                    backgroundColor: alpha("#fff", 0.03),
                                     border: "1px solid rgba(255,255,255,0.06)",
                                     boxShadow: `inset 0 1px 0 ${alpha("#fff", 0.04)}`,
                                     transition: "transform .12s ease, background-color .12s ease",
@@ -1130,28 +1389,16 @@ export default function PlanlamaDeluxe() {
                                     <Typography variant="overline" sx={{ opacity: 0.6, lineHeight: 1 }}>
                                         Bölge
                                     </Typography>
-                                    <Typography
-                                        variant="subtitle2" // Daha küçük başlık
-                                        fontWeight={700}
-                                        noWrap
-                                        title={b}
-                                        sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-                                    >
+                                    <Typography variant="subtitle2" fontWeight={700} noWrap title={b} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                                         {b}
-                                        <Chip
-                                            size="extraSmall" // Chip boyutu
-                                            label="filtrele"
-                                            color={bolgeChip(b)}
-                                            variant="outlined"
-                                            sx={{ ml: 0.5, height: 18 }} // Yükseklik ayarı
-                                        />
+                                        <Chip size="extraSmall" label="filtrele" color={bolgeChip(b)} variant="outlined" sx={{ ml: 0.5, height: 18 }} />
                                     </Typography>
                                 </Stack>
                                 <Stack alignItems="flex-end">
                                     <Typography variant="overline" sx={{ opacity: 0.6, lineHeight: 1 }}>
                                         Adet
                                     </Typography>
-                                    <Typography variant="h6" fontWeight={800}> {/* Daha küçük sayı */}
+                                    <Typography variant="h6" fontWeight={800}>
                                         {count}
                                     </Typography>
                                 </Stack>
@@ -1169,8 +1416,8 @@ export default function PlanlamaDeluxe() {
                     alignItems: "center",
                     gap: 1,
                     flexWrap: "wrap",
-                    backgroundColor: alpha("#fff", 0.04), // Daha hafif arka plan
-                    border: "1px solid rgba(255,255,255,0.06)",
+                    backgroundColor: alpha("#1A1A30", 0.8),
+                    border: "1px solid #334466",
                 }}
             >
                 <Autocomplete
@@ -1186,9 +1433,7 @@ export default function PlanlamaDeluxe() {
                         return plakaKey(opt) === plakaKey(val);
                     }}
                     size="small"
-                    renderInput={(params) => (
-                        <TextField {...params} label="Plaka" placeholder="Seçin" sx={{ minWidth: 200 }} />
-                    )}
+                    renderInput={(params) => <TextField {...params} label="Plaka" placeholder="Seçin" sx={{ minWidth: 200 }} />}
                 />
 
                 <Autocomplete
@@ -1201,9 +1446,7 @@ export default function PlanlamaDeluxe() {
                     getOptionLabel={(opt) => String(opt ?? "")}
                     isOptionEqualToValue={(opt, val) => opt === val}
                     size="small"
-                    renderInput={(params) => (
-                        <TextField {...params} label="Bölge" placeholder="Seçin" sx={{ minWidth: 200 }} />
-                    )}
+                    renderInput={(params) => <TextField {...params} label="Bölge" placeholder="Seçin" sx={{ minWidth: 200 }} />}
                 />
 
                 <Chip label={`${filteredRows.length} kayıt`} color="default" variant="outlined" sx={{ ml: 0.5 }} />
@@ -1211,14 +1454,15 @@ export default function PlanlamaDeluxe() {
                 <Box sx={{ flex: 1 }} />
 
                 <TextField
+                    id="global-search-input"
                     inputRef={searchRef}
                     size="small"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Ara… (Kısayol: F)"
+                    placeholder="Ara… (Kısayol: Ctrl/Cmd+K)"
                     sx={{ minWidth: 240 }}
                     InputProps={{
-                        startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                        startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
                         endAdornment: search ? (
                             <IconButton size="small" onClick={() => setSearch("")} edge="end">
                                 <CloseIcon fontSize="small" />
@@ -1229,13 +1473,7 @@ export default function PlanlamaDeluxe() {
 
                 <Tooltip title="Filtreleri temizle">
                     <span>
-                        <Button
-                            onClick={clearFilters}
-                            variant="outlined"
-                            startIcon={<CleaningServicesIcon />}
-                            disabled={!plakaFilter.length && !bolgeFilter.length && !search}
-                            size="small"
-                        >
+                        <Button onClick={clearFilters} variant="outlined" startIcon={<CleaningServicesIcon />} disabled={!plakaFilter.length && !bolgeFilter.length && !search} size="small">
                             Temizle
                         </Button>
                     </span>
@@ -1244,7 +1482,7 @@ export default function PlanlamaDeluxe() {
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".xlsx,.xls,.csv"
+                    accept=".xlsx,.csv"
                     hidden
                     onChange={(e) => handleFiles(e.target.files)}
                     disabled={!perms.pln_import_excel}
@@ -1254,7 +1492,7 @@ export default function PlanlamaDeluxe() {
                         <Button
                             variant="outlined"
                             startIcon={<UploadFileIcon />}
-                            onClick={() => perms.pln_import_excel ? fileInputRef.current?.click() : null}
+                            onClick={() => (perms.pln_import_excel ? fileInputRef.current?.click() : null)}
                             disabled={!perms.pln_import_excel}
                             size="small"
                         >
@@ -1264,19 +1502,20 @@ export default function PlanlamaDeluxe() {
                 </Tooltip>
             </Paper>
 
-            {/* DataGrid */}
+            {/* DataGrid Kapsayıcısı (Yükseklik Düzeltmesi Burada!) */}
             <Paper
+                elevation={4}
                 sx={{
+                    flexGrow: 1,
+                    minHeight: 0,
+                    height: "calc(100% - 60px)",
                     borderRadius: 3,
                     border: "1px solid rgba(255,255,255,0.06)",
                     overflow: "hidden",
-                    minHeight: 0,
                     display: "grid",
                     position: "relative",
-                    flexGrow: 1,
-                    // Modern cam efekti için backdrop-filter
                     backdropFilter: "blur(4px)",
-                    backgroundColor: alpha("#0B1220", 0.6), // Hafif şeffaf arka plan
+                    backgroundColor: alpha("#0B1220", 0.6),
                 }}
             >
                 {loading && <LinearProgress sx={{ position: "absolute", top: 0, left: 0, right: 0 }} />}
@@ -1297,24 +1536,29 @@ export default function PlanlamaDeluxe() {
                         setSnack({ open: true, msg: "Satır güncellenemedi.", severity: "error" });
                     }}
                     onRowUpdateCommit={handleRowUpdateCommit}
-                    onRowClick={(p) => openDrawer(p.row)} // Tek tıklamayla drawer aç
+                    onRowClick={(p) => openDrawer(p.row)}
                     disableColumnMenu={false}
                     disableColumnReorder={false}
                     onColumnOrderChange={onColumnOrderChange}
+                    slots={{
+                        noRowsOverlay: NoRowsOverlay,
+                        loadingOverlay: BusyOverlay,
+                    }}
                     sx={{
                         border: "none",
-                        height: "100%",
+                        height: "100%", // CRITICAL: Paper'ın tam yüksekliğini almasını sağlar
+                        color: "#E8EAF9",
                         "& .MuiDataGrid-virtualScroller": { overflowX: "auto" },
                         "& .MuiDataGrid-columnHeaders": {
                             background: "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
                             color: "#C8D1E6",
-                            borderBottomColor: "rgba(255,255,255,0.08)",
+                            borderBottomColor: "rgba(255,255,255,0.06)",
                             fontWeight: 700,
                         },
-                        "& .MuiDataGrid-row:nth-of-type(2n)": { // Zebra deseni için arka plan
+                        "& .MuiDataGrid-row:nth-of-type(2n)": {
                             backgroundColor: alpha("#fff", 0.01),
                         },
-                        "& .MuiDataGrid-row:hover": { // Hover efekti
+                        "& .MuiDataGrid-row:hover": {
                             backgroundColor: alpha("#22D3EE", 0.08),
                         },
                         "& .MuiDataGrid-cell": {
@@ -1329,8 +1573,6 @@ export default function PlanlamaDeluxe() {
                 <Paper
                     elevation={0}
                     sx={{
-                        position: "sticky",
-                        bottom: 0,
                         p: 1,
                         borderRadius: 2,
                         border: "1px solid rgba(255,255,255,0.08)",
@@ -1340,14 +1582,21 @@ export default function PlanlamaDeluxe() {
                         justifyContent: "space-between",
                         gap: 1,
                         boxShadow: `0 -2px 10px ${alpha("#000", 0.3)}`,
+                        gridColumn: "1 / -1", // Grid yapısında en alta yerleştirir
+                        zIndex: 10,
+                        mt: 1,
                     }}
                 >
                     <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography fontWeight={700} variant="body2">Kaydedilmemiş değişiklikler var</Typography>
+                        <Typography fontWeight={700} variant="body2">
+                            Kaydedilmemiş değişiklikler var
+                        </Typography>
                         <Chip size="small" label={`${rows.length} satır`} />
                     </Stack>
                     <Stack direction="row" spacing={1}>
-                        <Button onClick={revertRows} size="small">Geri Al</Button>
+                        <Button onClick={revertRows} size="small">
+                            Geri Al
+                        </Button>
                         <Tooltip title={perms.pln_save ? "Kaydet" : "Yetkiniz yok"}>
                             <span>
                                 <Button variant="contained" startIcon={<SaveIcon />} onClick={handleKaydet} disabled={!perms.pln_save} size="small">
@@ -1360,12 +1609,7 @@ export default function PlanlamaDeluxe() {
             )}
 
             {/* Sağ alt hızlı ekleme (FAB) */}
-            <Fab
-                color="primary"
-                onClick={openPlakaDialog}
-                sx={{ position: "fixed", right: 20, bottom: 20, boxShadow: 6 }}
-                aria-label="yeni satır"
-            >
+            <Fab color="primary" onClick={openPlakaDialog} sx={{ position: "fixed", right: 20, bottom: 20, boxShadow: 6, zIndex: 1200 }} aria-label="yeni satır">
                 <AddIcon />
             </Fab>
 
@@ -1409,7 +1653,9 @@ export default function PlanlamaDeluxe() {
                     </Stack>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setPlakaDialogOpen(false)} size="small">İptal</Button>
+                    <Button onClick={() => setPlakaDialogOpen(false)} size="small">
+                        İptal
+                    </Button>
                     <Button variant="contained" onClick={saveYeniPlaka} size="small">
                         Kaydet
                     </Button>
@@ -1423,7 +1669,9 @@ export default function PlanlamaDeluxe() {
                     <Typography>Tüm kayıtlar güncellenecek. Devam etmek istiyor musunuz?</Typography>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setGuncelleDialogOpen(false)} size="small">İptal</Button>
+                    <Button onClick={() => setGuncelleDialogOpen(false)} size="small">
+                        İptal
+                    </Button>
                     <Button
                         variant="contained"
                         onClick={() => {
@@ -1461,12 +1709,14 @@ export default function PlanlamaDeluxe() {
             </Dialog>
 
             {/* Hızlı Düzenleme Çekmecesi */}
-            <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}
-                PaperProps={{ sx: { width: 380, p: 2, gap: 1 } }} // Daha ince çekmece
-            >
+            <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)} PaperProps={{ sx: { width: 380, p: 2, gap: 1 } }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Typography variant="h6" fontWeight={800}>Hızlı Düzenle</Typography>
-                    <IconButton onClick={() => setDrawerOpen(false)}><CloseIcon /></IconButton>
+                    <Typography variant="h6" fontWeight={800}>
+                        Hızlı Düzenle
+                    </Typography>
+                    <IconButton onClick={() => setDrawerOpen(false)}>
+                        <CloseIcon />
+                    </IconButton>
                 </Stack>
                 <Divider sx={{ my: 1 }} />
                 {activeEditRow ? (
@@ -1509,14 +1759,20 @@ export default function PlanlamaDeluxe() {
                         ))}
 
                         <Stack direction="row" spacing={1} alignItems="center">
-                            <Typography variant="body2" sx={{ color: "text.secondary" }}>Doluluk:</Typography>
+                            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                Doluluk:
+                            </Typography>
                             <CircularProgress variant="determinate" value={completenessOf(activeEditRow)} size={22} />
                             <Typography variant="caption">%{completenessOf(activeEditRow)}</Typography>
                         </Stack>
 
                         <Stack direction="row" spacing={1} pt={1}>
-                            <Button onClick={() => setDrawerOpen(false)} size="small">Kapat</Button>
-                            <Button variant="contained" onClick={applyDrawerChanges} size="small">Uygula</Button>
+                            <Button onClick={() => setDrawerOpen(false)} size="small">
+                                Kapat
+                            </Button>
+                            <Button variant="contained" onClick={applyDrawerChanges} size="small">
+                                Uygula
+                            </Button>
                         </Stack>
                     </Stack>
                 ) : (
@@ -1538,7 +1794,7 @@ export default function PlanlamaDeluxe() {
                 )}
             </Suspense>
 
-            {/* Sipariş Analiz — Merkezde Modern Modal */}
+            {/* Sipariş Analiz — Modal */}
             <Dialog
                 open={analizOpen}
                 onClose={() => setAnalizOpen(false)}
@@ -1549,8 +1805,7 @@ export default function PlanlamaDeluxe() {
                         borderRadius: 3,
                         overflow: "hidden",
                         backdropFilter: "blur(8px)",
-                        background:
-                            "linear-gradient(180deg, rgba(15,23,42,0.96) 0%, rgba(2,6,23,0.96) 100%)",
+                        background: "linear-gradient(180deg, rgba(15,23,42,0.96) 0%, rgba(2,6,23,0.96) 100%)",
                         boxShadow: `0 24px 64px ${alpha("#000", 0.55)}`,
                         border: "1px solid rgba(255,255,255,0.06)",
                     }),
@@ -1564,8 +1819,7 @@ export default function PlanlamaDeluxe() {
                         px: 2,
                         py: 1.25,
                         borderBottom: "1px solid rgba(255,255,255,0.08)",
-                        background:
-                            "linear-gradient(180deg, rgba(34,211,238,0.08) 0%, rgba(34,211,238,0.02) 100%)",
+                        background: "linear-gradient(180deg, rgba(34,211,238,0.08) 0%, rgba(34,211,238,0.02) 100%)",
                     }}
                 >
                     <Typography variant="h6" fontWeight={800}>
@@ -1617,9 +1871,11 @@ export default function PlanlamaDeluxe() {
                     onDrop={onDrop}
                 >
                     <Stack spacing={1} alignItems="center">
-                        <Typography variant="h6" fontWeight={800}>Dosyayı buraya bırak</Typography>
+                        <Typography variant="h6" fontWeight={800}>
+                            Dosyayı buraya bırak
+                        </Typography>
                         <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                            .xlsx, .xls veya .csv desteklenir
+                            .xlsx veya .csv desteklenir
                         </Typography>
                     </Stack>
                 </Box>

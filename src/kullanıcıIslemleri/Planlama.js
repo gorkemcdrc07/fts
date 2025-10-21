@@ -66,33 +66,42 @@ const toUpperTr = (s) => (s || "").toLocaleUpperCase("tr-TR").trim();
 const getTodayISO = () => new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
 
 // "YYYY-MM-DD" → "GG.AA.YYYY"
+// "YYYY-MM-DD" → "GG.AA.YYYY" (UTC/local farkına takılmaz)
 const formatDateTR = (val) => {
     if (!val) return "";
+    // ISO string ise direkt parçala
+    if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}/.test(val)) {
+        const [y, m, d] = val.split("T")[0].split("-");
+        return `${d}.${m}.${y}`;
+    }
     try {
         const d = new Date(val);
-        if (isNaN(d)) return String(val);
-        return d.toLocaleDateString("tr-TR", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-        });
+        if (Number.isNaN(d.getTime())) return String(val);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const g = String(d.getDate()).padStart(2, "0");
+        return `${g}.${m}.${y}`;
     } catch {
         return String(val);
     }
 };
 
-// Excel’e yazarken timezone kaymasını önlemek için
-const createExcelDate = (isoString) => {
-    if (!isoString) return null;
-    const d = new Date(isoString);
-    if (Number.isNaN(d.getTime())) return null;
-    const year = d.getFullYear();
-    const month = d.getMonth();
-    const day = d.getDate();
-    const hours = d.getHours();
-    const minutes = d.getMinutes();
-    const seconds = d.getSeconds();
-    return new Date(Date.UTC(year, month, day, hours, minutes, seconds));
+// "YYYY-MM-DD" → [y,m,d]
+const splitYMD = (iso) => String(iso).split("T")[0].split("-").map(Number);
+
+// Excel seri gün (1899-12-30 taban). Timezone’dan bağımsızdır.
+const toExcelSerial = (y, m, d) => {
+    const epoch = Date.UTC(1899, 11, 30);
+    const ms = Date.UTC(y, m - 1, d) - epoch;
+    return Math.round(ms / 86400000); // tam gün
+};
+
+// ISO ("YYYY-MM-DD[...]" ) → Excel seri gün
+const excelSerialFromISO = (iso) => {
+    if (!iso) return null;
+    const [y, m, d] = splitYMD(iso);
+    if (!y || !m || !d) return null;
+    return toExcelSerial(y, m, d);
 };
 
 // Plaka normalize
@@ -690,14 +699,27 @@ export default function PlanlamaDeluxe() {
         const ws = workbook.worksheets?.[0];
         if (!ws) return [];
 
-        // 1. satır başlık
+        // 1) Başlıkları oku + tekrarları ayırt et
         const headerRow = ws.getRow(1);
+        const seenByNorm = new Map(); // norm → kaçıncı kez görüldü
         const headers = [];
+
         for (let c = 1; c <= headerRow.cellCount; c++) {
             const raw = String(headerRow.getCell(c).value ?? "").trim();
             const norm = normalizeHeader(raw);
-            const field = headerMap[norm] || headerMap[raw.toUpperCase()] || null;
-            headers.push({ raw, norm, field, c });
+            const count = (seenByNorm.get(norm) || 0) + 1;
+            seenByNorm.set(norm, count);
+
+            let field = headerMap[norm] || headerMap[raw.toUpperCase()] || null;
+
+            // 🔧 Özel kural: Aynı satırda ikinci "TARİH" kolonunu varis_tarihi olarak ata
+            if (!field && norm === "TARİH" && count === 2) {
+                field = "varis_tarihi";
+            } else if (field === "tarih" && norm === "TARİH" && count === 2) {
+                field = "varis_tarihi";
+            }
+
+            headers.push({ raw, norm, field, c, count });
         }
 
         const out = [];
@@ -712,7 +734,7 @@ export default function PlanlamaDeluxe() {
                 const cell = row.getCell(h.c);
                 const val = readCell(cell, workbook);
                 if (val instanceof Date && !Number.isNaN(val.getTime())) {
-                    obj[h.field] = val.toISOString().slice(0, 10);
+                    obj[h.field] = val.toISOString().slice(0, 10); // "YYYY-MM-DD"
                 } else {
                     obj[h.field] = (val ?? "").toString().trim();
                 }
@@ -758,7 +780,21 @@ export default function PlanlamaDeluxe() {
 
     const csvToObjects = (text, headerMap, normalizeHeader) => {
         const { headers, rows } = parseCSVText(text);
-        const fields = headers.map((h) => headerMap[normalizeHeader(h)] || null);
+
+        const seenByNorm = new Map();
+        const fields = headers.map((h) => {
+            const norm = normalizeHeader(h);
+            const count = (seenByNorm.get(norm) || 0) + 1;
+            seenByNorm.set(norm, count);
+
+            let f = headerMap[norm] || null;
+
+            // 🔧 CSV için de aynı kural: ikinci "TARİH" → varis_tarihi
+            if (!f && norm === "TARİH" && count === 2) f = "varis_tarihi";
+            if (f === "tarih" && norm === "TARİH" && count === 2) f = "varis_tarihi";
+
+            return f;
+        });
 
         const out = [];
         for (const cols of rows) {
@@ -766,7 +802,7 @@ export default function PlanlamaDeluxe() {
             cols.forEach((v, i) => {
                 const f = fields[i];
                 if (!f) return;
-                obj[f] = v;
+                obj[f] = (v ?? "").toString().trim();
             });
             if (Object.values(obj).every((v) => !v)) continue;
             out.push(obj);
@@ -946,8 +982,8 @@ export default function PlanlamaDeluxe() {
         const columns = [
             { header: "SEFER NO", key: "sefer_no", width: 15 },
             { header: "SEVK NO", key: "sevk_no", width: 15 },
-            { header: "TARİH", key: "tarih", width: 15, style: { numFmt: "dd.mm.yyyy hh:mm" } },
-            { header: "VARIŞ TARİHİ", key: "varis_tarihi", width: 15, style: { numFmt: "dd.mm.yyyy hh:mm" } },
+            { header: "TARİH", key: "tarih", width: 15, style: { numFmt: "dd.mm.yyyy" } },
+            { header: "VARIŞ TARİHİ", key: "varis_tarihi", width: 15, style: { numFmt: "dd.mm.yyyy" } },
             { header: "PLAKA", key: "plaka", width: 12 },
             { header: "AD SOYAD", key: "ad_soyad", width: 20 },
             { header: "TELEFON", key: "telefon", width: 15 },
@@ -967,8 +1003,9 @@ export default function PlanlamaDeluxe() {
         const exportRows = filteredRows.map((r) => ({
             sefer_no: r.sefer_no,
             sevk_no: r.sevk_no,
-            tarih: r.tarih ? createExcelDate(r.tarih) : null,
-            varis_tarihi: r.varis_tarihi ? createExcelDate(r.varis_tarihi) : null,
+            // exportRows içinde
+            tarih: r.tarih ? excelSerialFromISO(r.tarih) : null,
+            varis_tarihi: r.varis_tarihi ? excelSerialFromISO(r.varis_tarihi) : null,
             plaka: r.plaka,
             ad_soyad: r.ad_soyad,
             telefon: r.telefon,

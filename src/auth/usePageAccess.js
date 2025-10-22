@@ -1,14 +1,17 @@
 // src/auth/usePageAccess.js
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "../supabaseClient";
+import { APP_PAGES } from "../routes/pages";
 
 // .env: REACT_APP_ADMIN_USERS=admin,administrator
 const ADMIN_USERS = new Set(
     String(process.env.REACT_APP_ADMIN_USERS || "admin")
-        .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
 );
 
-// ---- helpers -------------------------------------------------
+/* ===================== Helpers ===================== */
 function getLocalUsername() {
     try {
         const a = (localStorage.getItem("kullaniciAdi") || "").trim();
@@ -16,14 +19,17 @@ function getLocalUsername() {
         const c = JSON.parse(localStorage.getItem("girisYapanKullanici") || "{}")?.kullaniciAdi || "";
         const pick = (a || b || c || "").toLowerCase();
         return pick.includes("@") ? pick.split("@")[0] : pick;
-    } catch { return ""; }
+    } catch {
+        return "";
+    }
 }
 
 function getLocalLoginId() {
-    // Oturum açarken id’yi localStorage’a yazıyorsan buradan yakala
-    // Projende farklı anahtarlar varsa ekle:
     const candidates = [
-        "loginId", "user_id", "userid", "kullaniciId",
+        "loginId",
+        "user_id",
+        "userid",
+        "kullaniciId",
         "girisYapanKullanici", // {id: ...}
     ];
     for (const key of candidates) {
@@ -58,8 +64,18 @@ function pathToColumn(path) {
     return "p_" + (core || "anasayfa");
 }
 
-// --------------------------------------------------------------
+/* ============ Alias ve APP_PAGES tabanlı map ============ */
+// Geriye dönük; yanlış/eskimiş path'leri doğru path'e çevir
+const PATH_ALIASES = {
+    "/raporlar/eta-uyumsuz": "/raporlar/eta-uyumsuzlugu",
+};
 
+// APP_PAGES'ten normalize edilmiş path -> kolon adı map'i
+const PAGE_MAP = new Map(
+    APP_PAGES.map((p) => [normalizePath(p.path), pathToColumn(p.path)])
+);
+
+/* ===================== Hook ===================== */
 export default function usePageAccess() {
     const [row, setRow] = useState(null); // user_page_access tek satır
     const [loading, setLoading] = useState(true);
@@ -78,20 +94,23 @@ export default function usePageAccess() {
                     return;
                 }
 
-                // 1) user_id’yi localStorage’dan yakalamayı dene
+                // 1) user_id localStorage'tan
                 let userId = getLocalLoginId();
                 let loginRow = null;
 
-                // 2) yoksa login tablosundan ara (kullaniciAdi / kullanici, case-insensitive)
+                // 2) yoksa login tablosunda ara (case-insensitive)
                 if (!userId) {
                     const raw = getLocalUsername();
-                    if (!raw) { if (mounted) setRow(null); return; }
+                    if (!raw) {
+                        if (mounted) setRow(null);
+                        return;
+                    }
 
-                    const like = raw.replace(/[%_]/g, ""); // joker kaçır
+                    const like = raw.replace(/[%_]/g, "");
                     const { data, error } = await supabase
                         .from("login")
                         .select("id, kullaniciAdi, kullanici")
-                        .or(`kullaniciAdi.ilike.${like},kullanici.ilike.${like}`) // tam eşleşme istiyorsan: `.or(\`kullaniciAdi.eq.${raw},kullanici.eq.${raw}\`)`
+                        .or(`kullaniciAdi.ilike.${like},kullanici.ilike.${like}`)
                         .maybeSingle();
 
                     if (error) throw error;
@@ -118,29 +137,44 @@ export default function usePageAccess() {
                 if (mounted) setRow(upa || null);
             } catch (e) {
                 console.error("usePageAccess error:", {
-                    message: e?.message, code: e?.code, details: e?.details, hint: e?.hint, error: e
+                    message: e?.message,
+                    code: e?.code,
+                    details: e?.details,
+                    hint: e?.hint,
+                    error: e,
                 });
                 if (mounted) setRow(null);
             } finally {
                 if (mounted) setLoading(false);
             }
         })();
-        return () => { mounted = false; };
+        return () => {
+            mounted = false;
+        };
     }, [isAdmin, me]);
 
+    // Serbest geçiş (ör. herkes erişebilsin)
     const whitelist = useMemo(() => new Set(["/", "/anasayfa"]), []);
 
-    const hasAccess = useCallback((path) => {
-        const p = normalizePath(path);
-        if (isAdmin) return true;
-        if (whitelist.has(p)) return true;
-        if (!row) return false;
-        const col = pathToColumn(p);
-        const ok = row[col] === true;
-        // debug
-        if (!ok) console.log("[access] BLOCK:", { path: p, col, row });
-        return ok;
-    }, [row, whitelist, isAdmin]);
+    const hasAccess = useCallback(
+        (path) => {
+            // normalize + alias
+            let p = normalizePath(path);
+            if (PATH_ALIASES[p]) p = PATH_ALIASES[p];
+
+            if (isAdmin) return true;
+            if (whitelist.has(p)) return true;
+            if (!row) return false;
+
+            // APP_PAGES öncelikli kolon çözümü (fallback: dinamik üret)
+            const col = PAGE_MAP.get(p) || pathToColumn(p);
+            const ok = row[col] === true;
+
+            if (!ok) console.log("[access] BLOCK:", { path: p, col, row });
+            return ok;
+        },
+        [row, whitelist, isAdmin]
+    );
 
     return { loading, hasAccess };
 }

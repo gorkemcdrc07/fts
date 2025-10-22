@@ -16,7 +16,6 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { supabase } from "../supabaseClient";
 
-
 /* =========================================================== */
 /* ==================== KOYU TEMA SABİTLERİ ================== */
 /* =========================================================== */
@@ -75,14 +74,12 @@ const getTodayDateString = () => {
     return `${year}-${month}-${day}`;
 };
 
-// 🟢 YENİ HELPER: Zaman dilimi kaymasını önlemek için tarihleri UTC olarak kaydeder
+// Zaman dilimi kaymasını önlemek için tarihleri UTC olarak kaydeder
 const createExcelDate = (isoString) => {
     if (!isoString) return null;
     const d = new Date(isoString);
     if (Number.isNaN(d.getTime())) return null;
 
-    // Yerel saati alıp, bunu UTC saati olarak kabul eden bir Date objesi oluşturur.
-    // Bu, Excel'in zaman dilimi dönüşümlerini yapmasını engeller.
     const year = d.getFullYear();
     const month = d.getMonth();
     const day = d.getDate();
@@ -125,7 +122,7 @@ async function fetchPerformanceData(startDate, endDate) {
     const rangeMin = `${startDate || ""}T00:00:00`;
     const rangeMax = `${endDate || ""}T23:59:59`;
 
-    // Sorgu formatı düzeltildi ve teslim_varis kullanıldı
+    // Sorgu formatı ve teslim_varis
     const activeSeferSelectQuery = `id,sefer_no,sefer_tarihi,plaka,surucu_ad_soyad,eta_varis,eta_note,sefer_detaylari(teslim_varis,nokta_sirasi,yukleme_ili,yukleme_ilcesi,teslim_ili,teslim_ilcesi,yukleme_noktasi,teslim_noktasi)`;
 
     const { data: activeData, error: activeError } = await supabase
@@ -144,7 +141,7 @@ async function fetchPerformanceData(startDate, endDate) {
         const firstDeliveryDetail = (sefer.sefer_detaylari || [])
             .sort((a, b) => (a.nokta_sirasi || 0) - (b.nokta_sirasi || 0))[0];
 
-        // Veritabanı şemasına göre 'teslim_varis' kullanılıyor.
+        // Fiili teslimat zamanı
         const firstDeliveryTimeISO = firstDeliveryDetail?.teslim_varis || null;
         const deliveryTime = firstDeliveryTimeISO ? new Date(firstDeliveryTimeISO) : null;
 
@@ -152,7 +149,6 @@ async function fetchPerformanceData(startDate, endDate) {
         let fark_dk_signed = null;
         let fark_dk = null;
 
-        // Teslim var & ETA var → farkı hesapla
         if (deliveryTime && eta) {
             fark_dk_signed = Math.round((deliveryTime.getTime() - eta.getTime()) / 60000); // +gecikme, -erken
             fark_dk = Math.abs(fark_dk_signed);
@@ -173,13 +169,12 @@ async function fetchPerformanceData(startDate, endDate) {
             surucu: sefer.surucu_ad_soyad,
             sefer_tarihi: sefer.sefer_tarihi,
             eta_gosterim: eta_display,
-            // Fiili teslimat zamanı olarak teslim_varis kullanılır
             ilk_teslim_varis: firstDeliveryTimeISO,
             fark_dk_signed,
             fark_dk,
             durum,
             sefer_tipi: 'Aktif',
-            // Mesafe diyalogu için:
+            // Mesafe diyalogu için
             yukleme_ili: firstDeliveryDetail?.yukleme_ili || null,
             yukleme_ilcesi: firstDeliveryDetail?.yukleme_ilcesi || null,
             teslim_ili: firstDeliveryDetail?.teslim_ili || null,
@@ -290,7 +285,7 @@ function DistanceInputDialog({ open, onClose, seferData, onSaved }) {
             const eta = calcETAFromDistance({
                 distanceKm: Number(distance),
                 startIso: seferData?.sefer_tarihi,
-                avgKmh: 65, // istersen ayarlanabilir yaparız
+                avgKmh: 65,
             });
             if (eta) {
                 const { error: updErr } = await supabase
@@ -314,8 +309,7 @@ function DistanceInputDialog({ open, onClose, seferData, onSaved }) {
 
         setLoading(false);
         setStatus('Mesafe ve ETA güncellendi.');
-        // 3) Parent'a haber ver → tabloyu yenile
-        onSaved?.(Number(distance));
+        onSaved?.(Number(distance)); // tabloyu yenile
     };
 
     if (!seferData) return null;
@@ -393,7 +387,12 @@ function DistanceInputDialog({ open, onClose, seferData, onSaved }) {
 /* =================== MAIN DASHBOARD ======================== */
 /* =========================================================== */
 
-export default function Dashboard({ onOpenRow }) {
+export default function Dashboard({
+    onOpenRow,
+    forceOnlyLate = false,
+    title = "Sefer ETA Performans Raporu",
+    excelFilePrefix = "eta_rapor",
+}) {
     const theme = useTheme();
     const statusPalette = getStatusPalette(theme);
 
@@ -458,22 +457,19 @@ export default function Dashboard({ onOpenRow }) {
         }
     };
 
-    // Mesafe/ETA kaydedildikten sonra modal kapat & tabloyu yenile
     const handleDistanceSaved = () => {
         setIsDistanceModalOpen(false);
         loadData();
     };
 
-    // 🛑 EXCEL EXPORT FONKSİYONU DÜZELTİLDİ
+    // Excel export
     const handleExportExcel = React.useCallback(async () => {
         const rows = filteredReport.map(r => ({
             Tip: r.sefer_tipi,
             "Sefer No": r.sefer_no,
             Plaka: r.plaka,
-            // 🛑 DÜZELTME: createExcelDate kullanıldı
             "Tarih": createExcelDate(r.sefer_tarihi),
             "ETA / Not": r.eta_gosterim,
-            // 🛑 DÜZELTME: createExcelDate kullanıldı
             "Teslim Varış": createExcelDate(r.ilk_teslim_varis),
             "Fark": r.fark_dk !== null ?
                 `${(r.fark_dk_signed ?? 0) > 0 ? 'Gecikti ' : 'Erken '}${minToHM(r.fark_dk)}` : '-',
@@ -487,10 +483,8 @@ export default function Dashboard({ onOpenRow }) {
             { header: "Tip", key: "Tip", width: 10 },
             { header: "Sefer No", key: "Sefer No", width: 14 },
             { header: "Plaka", key: "Plaka", width: 12 },
-            // 🛑 DÜZELTME: Tarih formatına saat eklendi
             { header: "Tarih", key: "Tarih", width: 18, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
             { header: "ETA / Not", key: "ETA / Not", width: 30 },
-            // 🛑 DÜZELTME: Teslim Varış formatına saat eklendi
             { header: "Teslim Varış", key: "Teslim Varış", width: 18, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
             { header: "Fark", key: "Fark", width: 18 },
             { header: "Durum", key: "Durum", width: 18 },
@@ -498,13 +492,12 @@ export default function Dashboard({ onOpenRow }) {
 
         worksheet.addRows(rows);
 
-        // Dosyayı oluştur ve indir
-        const fileName = `eta_rapor_${getTodayDateString()}.xlsx`;
+        const fileName = `${excelFilePrefix}_${getTodayDateString()}.xlsx`;
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
         saveAs(blob, fileName);
 
-    }, [filteredReport, startDate, endDate]);
+    }, [filteredReport, excelFilePrefix]);
 
     return (
         <Container maxWidth="lg" disableGutters sx={{ color: DARK_COLORS.text }}>
@@ -555,16 +548,19 @@ export default function Dashboard({ onOpenRow }) {
                         </Button>
 
                         <Divider orientation="vertical" flexItem sx={{ bgcolor: DARK_COLORS.border }} />
+
                         <FormControlLabel
                             control={
                                 <Switch
                                     checked={onlyLate}
-                                    onChange={(e) => setOnlyLate(e.target.checked)}
+                                    onChange={(e) => !forceOnlyLate && setOnlyLate(e.target.checked)}
+                                    disabled={forceOnlyLate}
                                     sx={{ '& .MuiSwitch-track': { bgcolor: DARK_COLORS.border }, '& .Mui-checked .MuiSwitch-thumb': { bgcolor: DARK_COLORS.primary } }}
                                 />
                             }
                             label={<Typography color={DARK_COLORS.textMuted}>Sadece Uyumsuzluklar</Typography>}
                         />
+
                         <TextField
                             select size="small" value={sortKey}
                             onChange={(e) => setSortKey(e.target.value)}
@@ -582,7 +578,7 @@ export default function Dashboard({ onOpenRow }) {
                     <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 2, py: 1.5 }}>
                         <Stack direction="row" spacing={1.5} alignItems="center">
                             <TimelineIcon sx={{ color: DARK_COLORS.primary }} />
-                            <Typography variant="subtitle1" fontWeight={700} color={DARK_COLORS.text}>Sefer ETA Performans Raporu</Typography>
+                            <Typography variant="subtitle1" fontWeight={700} color={DARK_COLORS.text}>{title}</Typography>
                             <Chip size="small" label={`${filteredReport.length} Sefer`} sx={{ bgcolor: DARK_COLORS.primary, color: DARK_COLORS.text, fontWeight: 700 }} />
                         </Stack>
                         <IconButton onClick={() => setIsExpanded(v => !v)} sx={{ color: DARK_COLORS.textMuted, '&:hover': { color: DARK_COLORS.primary, bgcolor: alpha(DARK_COLORS.primary, 0.1) } }}>

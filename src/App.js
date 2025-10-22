@@ -50,11 +50,11 @@ const AdminPanel = lazy(() => import("./adminPanel/adminPanel"));
 const GorunumDuzenle = lazy(() => import("./aktifseferler/GorunumDuzenle"));
 const PagePermissionsPage = lazy(() => import("./adminPanel/PagePermissionsPage"));
 const PivotTool = lazy(() => import("./raporlar/PivotTool"));
-// YENİ EKLENTİ: ETA Uyumsuzluğu Sayfası
+// ETA Uyumsuzluğu
 const ETAUyumsuzlugu = lazy(() => import("./raporlar/ETAUyumsuzlugu"));
-
-
-// TEST VERİSİ (Component'e prop olarak gönderilecek)
+// ✅ Frigo Yakıt Hakediş (Hakedişler menüsü altında)
+const FrigoYakitHakedis = lazy(() => import("./Hakedisler/FrigoYakitHakedis"));
+// TEST VERİSİ
 const TEST_VERILERI = {
     "Sefer Performansı": [
         { Yıl: 2024, Ay: "Ocak", Bölge: "A", Tutar: 1500, KM: 500 },
@@ -67,9 +67,8 @@ const TEST_VERILERI = {
         { Personel: "Ahmet", Yıl: 2024, Satış: 12000 },
         { Personel: "Ayşe", Yıl: 2024, Satış: 15000 },
         { Personel: "Ahmet", Yıl: 2023, Satış: 9000 },
-    ]
+    ],
 };
-
 
 function App() {
     return (
@@ -139,13 +138,22 @@ function App() {
                                 <Route path="hakedis/arac-cari-ve-fiyat" element={<AracCariVeFiyat />} />
                                 <Route path="hakedis/hakedis-seferleri" element={<HakedisSeferleri />} />
                                 <Route path="hakedis/hamaliye" element={<Hamaliye />} />
+                                {/* ✅ Frigo Yakıt Hakediş */}
+                                <Route
+                                    path="hakedis/frigo-yakit-hakedis"
+                                    element={
+                                        <Suspense fallback={<div style={{ padding: 24 }}>Frigo Yakıt Hakediş yükleniyor...</div>}>
+                                            <FrigoYakitHakedis />
+                                        </Suspense>
+                                    }
+                                />
 
                                 {/* KPI & Raporlar */}
                                 <Route path="raporlar/kpi-olcumu" element={<KpiOlcumu />} />
                                 <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
                                 <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
 
-                                {/* YENİ ROTA: ETA Uyumsuzluğu */}
+                                {/* ETA Uyumsuzluğu */}
                                 <Route
                                     path="raporlar/eta-uyumsuz"
                                     element={
@@ -155,15 +163,12 @@ function App() {
                                     }
                                 />
 
-                                {/* PIVOT ARACI: Sorunlu satır düzeltildi ve PivotTool eklendi */}
+                                {/* Pivot Tool */}
                                 <Route
                                     path="raporlar/tools"
                                     element={
                                         <Suspense fallback={<div style={{ padding: 24 }}>Pivot Rapor Yükleniyor...</div>}>
-                                            <PivotTool
-                                                datasets={TEST_VERILERI}
-                                                defaultDataset="Sefer Performansı"
-                                            />
+                                            <PivotTool datasets={TEST_VERILERI} defaultDataset="Sefer Performansı" />
                                         </Suspense>
                                     }
                                 />

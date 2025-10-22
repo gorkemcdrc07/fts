@@ -37,7 +37,7 @@ import BusinessCenterIcon from "@mui/icons-material/BusinessCenter";
 import CreditCardIcon from "@mui/icons-material/CreditCard";
 import PaidIcon from "@mui/icons-material/Paid";
 import MapIcon from "@mui/icons-material/Map";
-import ScheduleIcon from "@mui/icons-material/Schedule"; // ETA Uyumsuzluğu için kullanılacak
+import ScheduleIcon from "@mui/icons-material/Schedule"; // ETA Uyumsuzluğu
 import AvTimerIcon from "@mui/icons-material/AvTimer";
 import QueryStatsIcon from "@mui/icons-material/QueryStats";
 import AirportShuttleIcon from "@mui/icons-material/AirportShuttle";
@@ -48,25 +48,22 @@ import AssignmentIcon from "@mui/icons-material/Assignment";
 import DirectionsBusFilledIcon from "@mui/icons-material/DirectionsBusFilled";
 import AirportShuttleOutlinedIcon from "@mui/icons-material/AirportShuttleOutlined";
 import PivotTableChartIcon from "@mui/icons-material/PivotTableChart";
+import LocalGasStationIcon from "@mui/icons-material/LocalGasStation"; // ✅ Frigo Yakıt Hakediş
 
 export const DRAWER_WIDTH_OPEN = 280;
 export const DRAWER_WIDTH_CLOSED = 72;
 
-// --- STİL SABİTLERİ (Fütüristik Neon Palet) ---
-const NEON_COLOR_1 = "#20B2AA"; // Açık Deniz Yeşili (Vurgu 1)
-const NEON_COLOR_2 = "#8A2BE2"; // Mor (Vurgu 2)
+// --- STİL SABİTLERİ ---
+const NEON_COLOR_1 = "#20B2AA";
+const NEON_COLOR_2 = "#8A2BE2";
 const HOVER_BG_ALPHA = 0.1;
 
-// Modern NavItem bileşeni için Styled Component
 const StyledNavItem = styled(ListItemButton)(({ theme, active, open }) => ({
-    // Genel Stil
     margin: theme.spacing(0.75, 1.2),
     borderRadius: "12px",
     minHeight: 48,
     padding: open ? theme.spacing(1.2, 2.5) : theme.spacing(1.25),
     color: theme.palette.text.primary,
-
-    // Default Hover
     "&:hover": {
         backgroundColor: alpha(NEON_COLOR_1, HOVER_BG_ALPHA),
         transform: open ? 'translateX(5px) scale(1.02)' : 'scale(1.1)',
@@ -74,8 +71,6 @@ const StyledNavItem = styled(ListItemButton)(({ theme, active, open }) => ({
         transition: 'all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
         color: NEON_COLOR_1,
     },
-
-    // Aktif (Selected) Stil
     ...(active && {
         background: `linear-gradient(90deg, ${alpha(NEON_COLOR_2, 0.3)}, ${alpha(NEON_COLOR_1, 0.15)})`,
         color: theme.palette.common.white,
@@ -83,7 +78,6 @@ const StyledNavItem = styled(ListItemButton)(({ theme, active, open }) => ({
         boxShadow: `0 0 15px ${alpha(NEON_COLOR_2, 0.6)}, inset 0 0 8px ${alpha(NEON_COLOR_1, 0.3)}`,
         transform: 'translateY(-1px)',
         border: `1px solid ${alpha(NEON_COLOR_1, 0.5)}`,
-
         "&:hover": {
             backgroundColor: 'transparent',
             boxShadow: `0 0 20px ${alpha(NEON_COLOR_2, 0.8)}, inset 0 0 10px ${alpha(NEON_COLOR_1, 0.5)}`,
@@ -92,7 +86,6 @@ const StyledNavItem = styled(ListItemButton)(({ theme, active, open }) => ({
     }),
 }));
 
-// Modern Category bileşeni için Styled Component
 const StyledCategory = styled(ListItemButton)(({ theme, open }) => ({
     margin: theme.spacing(1.5, 1),
     borderRadius: "8px",
@@ -105,7 +98,6 @@ const StyledCategory = styled(ListItemButton)(({ theme, open }) => ({
         duration: theme.transitions.duration.short,
     }),
     border: `1px solid ${alpha(NEON_COLOR_2, 0.2)}`,
-
     "&:hover": {
         backgroundColor: alpha(NEON_COLOR_2, 0.2),
         transform: 'translateY(-3px)',
@@ -113,10 +105,8 @@ const StyledCategory = styled(ListItemButton)(({ theme, open }) => ({
     },
 }));
 
-
 export default function Sidebar(props) {
     const theme = useTheme();
-    // theme'in dark mod'da olduğu varsayımıyla (ya da koyu tema renkleriyle) çalışır.
     theme.palette.text.primary = theme.palette.text.primary || '#E0E0E0';
     theme.palette.common.white = theme.palette.common.white || '#FFFFFF';
 
@@ -147,21 +137,14 @@ export default function Sidebar(props) {
     const [afyonMenuAcik, setAfyonMenuAcik] = useState(false);
     const [hakedisMenuAcik, setHakedisMenuAcik] = useState(false);
 
-    // DİNAMİK BİLDİRİM SAYACLARI
+    // Bildirim sayacı örnekleri
     const [okunmamisGorevSayisi, setOkunmamisGorevSayisi] = useState(3);
     const [gorevBildirimSayisi, setGorevBildirimSayisi] = useState(5);
     const [bildirimSayisi, setBildirimSayisi] = useState(1);
 
-    // OKUNDU İŞLEVLERİ (RESET FONKSİYONLARI)
-    const readMyTasks = () => {
-        setOkunmamisGorevSayisi(0);
-    };
-    const readAllTasks = () => {
-        setGorevBildirimSayisi(0);
-    };
-    const readHakedis = () => {
-        setBildirimSayisi(0);
-    };
+    const readMyTasks = () => setOkunmamisGorevSayisi(0);
+    const readAllTasks = () => setGorevBildirimSayisi(0);
+    const readHakedis = () => setBildirimSayisi(0);
 
     const kullaniciRol = localStorage.getItem("rol") || "YÖNETİCİ";
 
@@ -169,7 +152,6 @@ export default function Sidebar(props) {
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "info" });
     const handleCloseSnack = () => setSnack((s) => ({ ...s, open: false }));
     const showPopup = (msg, severity = "info") => setSnack({ open: true, msg, severity });
-
 
     // Aktif route’a göre ilgili kategoriyi otomatik aç
     useEffect(() => {
@@ -179,7 +161,7 @@ export default function Sidebar(props) {
         setKullaniciMenuAcik(anyStartsWith(["/planlama", "/plaka-onerisi", "/seferler", "/tamamlanan-seferler"]));
         setAracMenuAcik(anyStartsWith(["/arac/yonetim", "/arac/izin-girisi", "/arac/kesinti-girisi", "/arac/durumlari"]));
 
-        // RAPORLAR GÜNCELLEMESİ: Yeni yolu ekleyin
+        // RAPORLAR (Frigo burada DEĞİL)
         setRaporMenuAcik(anyStartsWith([
             "/raporlar/kpi-olcumu",
             "/raporlar/lokasyon-rapor",
@@ -190,18 +172,23 @@ export default function Sidebar(props) {
             "/raporlar/sefer-sureleri",
             "/raporlar/plaka-bazli",
             "/raporlar/tools",
-            "/raporlar/eta-uyumsuz" // YENİ YOL
+            "/raporlar/eta-uyumsuz",
         ]));
 
-        setHakedisMenuAcik(anyStartsWith(["/hakedis/tedarikci-masraf", "/hakedis/arac-cari-ve-fiyat", "/hakedis/hakedis-seferleri", "/hakedis/hamaliye"]));
+        // HAKEDİŞLER: Frigo burada ✅
+        setHakedisMenuAcik(anyStartsWith([
+            "/hakedis/tedarikci-masraf",
+            "/hakedis/arac-cari-ve-fiyat",
+            "/hakedis/hakedis-seferleri",
+            "/hakedis/hamaliye",
+            "/hakedis/frigo-yakit-hakedis", // ✅ yeni yol
+        ]));
+
         setAfyonMenuAcik(anyStartsWith(["/afyon/seferler", "/afyon/araclar"]));
         setGorevMenuAcik(anyStartsWith(["/gorevler/tum", "/gorevler/ata", "/gorevler/benim"]));
     }, [location.pathname]);
 
-    // ************************************************************
-    // EKSİK OLAN VE GERİ EKLENEN MENÜ TANIMLARI
-    // ************************************************************
-
+    // Menü tanımları
     const kullaniciAltMenuler = useMemo(() => [
         { ad: "Planlama", yol: "/planlama", ikon: <CalendarMonthIcon /> },
         { ad: "Plaka Önerisi", yol: "/plaka-onerisi", ikon: <AssignmentIcon /> },
@@ -216,12 +203,12 @@ export default function Sidebar(props) {
         { ad: "Kesinti Girişi", yol: "/arac/kesinti-girisi", ikon: <ContentCutIcon /> },
     ], []);
 
-    // RAPORLAR GÜNCELLEMESİ: ETA Uyumsuzluğu eklendi
     const raporAltMenuler = useMemo(() => [
         { ad: "Analiz Araçları", yol: "/raporlar/tools", ikon: <PivotTableChartIcon /> },
         { ad: "KPI Ölçümü", yol: "/raporlar/kpi-olcumu", ikon: <AssessmentIcon /> },
         { ad: "Lokasyon Raporları", yol: "/raporlar/lokasyon-rapor", ikon: <MapIcon /> },
-        { ad: "ETA Uyumsuzluğu", yol: "/raporlar/eta-uyumsuz", ikon: <ScheduleIcon /> }, // YENİ ÖĞE
+        { ad: "ETA Uyumsuzluğu", yol: "/raporlar/eta-uyumsuz", ikon: <ScheduleIcon /> },
+        // ❌ Frigo Yakıt Hakediş buradan kaldırıldı
         { ad: "Yüklemede Bekleme", yol: "/raporlar/yuklemede-bekleme", ikon: <ScheduleIcon /> },
         { ad: "Teslimde Bekleme", yol: "/raporlar/teslimde-bekleme", ikon: <AvTimerIcon /> },
         { ad: "Yüklemede Gecikme", yol: "/raporlar/yuklemede-gecikme", ikon: <QueryStatsIcon /> },
@@ -230,7 +217,9 @@ export default function Sidebar(props) {
         { ad: "Plaka Bazlı", yol: "/raporlar/plaka-bazli", ikon: <AirportShuttleOutlinedIcon /> },
     ], []);
 
+    // ✅ Frigo Yakıt Hakediş HAKEDİŞLER altında
     const hakedisAltMenuler = useMemo(() => [
+        { ad: "Frigo Yakıt Hakediş", yol: "/hakedis/frigo-yakit-hakedis", ikon: <LocalGasStationIcon /> }, // ✅ yeni
         { ad: "Tedarikçi Masraf", yol: "/hakedis/tedarikci-masraf", ikon: <PaidIcon /> },
         { ad: "Araç Cari & Fiyat", yol: "/hakedis/arac-cari-ve-fiyat", ikon: <CreditCardIcon /> },
         { ad: "Hakediş Seferleri", yol: "/hakedis/hakedis-seferleri", ikon: <ReceiptLongIcon /> },
@@ -243,39 +232,19 @@ export default function Sidebar(props) {
         { ad: "Benim Görevlerim", yol: "/gorevler/benim", ikon: <PushPinIcon />, badge: okunmamisGorevSayisi, onRead: readMyTasks },
     ], [okunmamisGorevSayisi, gorevBildirimSayisi]);
 
-    // aktiflik kontrolü
     const isActivePath = (path) => location.pathname === path || location.pathname.startsWith(path + "/");
 
-    // NavItem (StyledNavItem kullanır)
     const NavItem = ({ label, to, icon, onClick, badge, onRead }) => {
         const active = isActivePath(to);
-
         const handleClick = () => {
             onClick(to);
-            if (badge > 0 && onRead) {
-                onRead();
-            }
+            if (badge > 0 && onRead) onRead();
         };
-
         return (
             <Tooltip title={!open ? label : null} placement="right" arrow>
-                <StyledNavItem
-                    onClick={handleClick}
-                    active={active ? 1 : 0}
-                    open={open ? 1 : 0}
-                >
-                    <ListItemIcon sx={{
-                        minWidth: 36,
-                        color: active ? theme.palette.common.white : alpha(theme.palette.common.white, 0.6),
-                        transition: 'color 0.25s',
-                    }}>
-                        {badge > 0 ? (
-                            <Badge color="error" badgeContent={badge} max={99}>
-                                {icon}
-                            </Badge>
-                        ) : (
-                            icon
-                        )}
+                <StyledNavItem onClick={handleClick} active={active ? 1 : 0} open={open ? 1 : 0}>
+                    <ListItemIcon sx={{ minWidth: 36, color: active ? theme.palette.common.white : alpha(theme.palette.common.white, 0.6), transition: 'color 0.25s' }}>
+                        {badge > 0 ? (<Badge color="error" badgeContent={badge} max={99}>{icon}</Badge>) : (icon)}
                     </ListItemIcon>
                     {open && (
                         <ListItemText
@@ -295,13 +264,11 @@ export default function Sidebar(props) {
         );
     };
 
-    // Category (StyledCategory kullanır)
     const Category = ({ icon, label, openState, setOpenState, endAdornment }) => (
         <Tooltip title={!open ? label : null} placement="right" arrow>
             <StyledCategory
                 onClick={() => {
                     setOpenState((p) => !p);
-                    // HAKEDİŞLER bildirimi sıfırlama mantığı
                     if (!openState && label === "HAKEDİŞLER" && bildirimSayisi > 0) {
                         readHakedis();
                     }
@@ -319,13 +286,7 @@ export default function Sidebar(props) {
                                 </Box>
                             }
                         />
-                        <Typography sx={{
-                            transform: openState ? "rotate(90deg)" : "rotate(0deg)",
-                            transition: 'transform 0.25s',
-                            fontSize: '20px',
-                            fontWeight: 300,
-                            color: alpha(theme.palette.common.white, 0.7)
-                        }}>
+                        <Typography sx={{ transform: openState ? "rotate(90deg)" : "rotate(0deg)", transition: 'transform 0.25s', fontSize: '20px', fontWeight: 300, color: alpha(theme.palette.common.white, 0.7) }}>
                             ›
                         </Typography>
                     </>
@@ -352,8 +313,7 @@ export default function Sidebar(props) {
                         width: open ? DRAWER_WIDTH_OPEN : DRAWER_WIDTH_CLOSED,
                         boxSizing: "border-box",
                         borderRight: "1px solid rgba(255,255,255,0.08)",
-                        background:
-                            "linear-gradient(180deg, rgba(15, 20, 26, 0.98) 0%, rgba(25, 30, 40, 0.95) 100%)",
+                        background: "linear-gradient(180deg, rgba(15, 20, 26, 0.98) 0%, rgba(25, 30, 40, 0.95) 100%)",
                         backdropFilter: "blur(16px)",
                         boxShadow: `8px 0 30px ${alpha(theme.palette.common.black, 0.8)}`,
                         transition: (theme) => theme.transitions.create("width", {
@@ -365,17 +325,7 @@ export default function Sidebar(props) {
                 }}
             >
                 {/* Header */}
-                <Box
-                    sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: open ? "space-between" : "center",
-                        px: 1,
-                        py: 1,
-                        minHeight: 60,
-                        borderBottom: '1px solid rgba(255,255,255,0.08)'
-                    }}
-                >
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: open ? "space-between" : "center", px: 1, py: 1, minHeight: 60, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                     {open ? (
                         <Typography
                             variant="h6"
@@ -392,28 +342,24 @@ export default function Sidebar(props) {
                             FTSWeb
                         </Typography>
                     ) : (
-                        <Box
-                            sx={{
-                                width: 14,
-                                height: 14,
-                                borderRadius: "50%",
-                                background: `linear-gradient(90deg, ${NEON_COLOR_2}, ${NEON_COLOR_1})`,
-                                boxShadow: `0 0 8px ${alpha(NEON_COLOR_1, 0.8)}`,
-                            }}
-                        />
+                        <Box sx={{ width: 14, height: 14, borderRadius: "50%", background: `linear-gradient(90deg, ${NEON_COLOR_2}, ${NEON_COLOR_1})`, boxShadow: `0 0 8px ${alpha(NEON_COLOR_1, 0.8)}` }} />
                     )}
 
                     <Tooltip title={open ? "Daralt" : "Genişlet"}>
-                        <IconButton onClick={toggle} size="small" sx={{
-                            color: NEON_COLOR_1,
-                            '&:hover': {
-                                bgcolor: alpha(NEON_COLOR_1, 0.1),
-                                transform: 'scale(1.1) rotate(180deg)',
-                                boxShadow: `0 0 5px ${alpha(NEON_COLOR_1, 0.8)}`,
-                            },
-                            transition: 'all 0.3s',
-                            transform: open ? 'none' : 'rotate(180deg)',
-                        }}>
+                        <IconButton
+                            onClick={toggle}
+                            size="small"
+                            sx={{
+                                color: NEON_COLOR_1,
+                                '&:hover': {
+                                    bgcolor: alpha(NEON_COLOR_1, 0.1),
+                                    transform: 'scale(1.1) rotate(180deg)',
+                                    boxShadow: `0 0 5px ${alpha(NEON_COLOR_1, 0.8)}`,
+                                },
+                                transition: 'all 0.3s',
+                                transform: open ? 'none' : 'rotate(180deg)',
+                            }}
+                        >
                             {open ? <MenuOpenIcon /> : <MenuIcon />}
                         </IconButton>
                     </Tooltip>
@@ -425,12 +371,7 @@ export default function Sidebar(props) {
                 <List sx={{ pt: 1, pb: 2, overflowY: 'auto', flexGrow: 1 }}>
 
                     {/* KULLANICI İŞLEMLERİ */}
-                    <Category
-                        icon={<PeopleAltIcon />}
-                        label="KULLANICI İŞLEMLERİ"
-                        openState={kullaniciMenuAcik}
-                        setOpenState={setKullaniciMenuAcik}
-                    />
+                    <Category icon={<PeopleAltIcon />} label="KULLANICI İŞLEMLERİ" openState={kullaniciMenuAcik} setOpenState={setKullaniciMenuAcik} />
                     <Collapse in={kullaniciMenuAcik} timeout="auto" unmountOnExit>
                         {kullaniciAltMenuler.map((m) => (
                             <NavItem key={m.yol} label={m.ad} icon={m.ikon} to={m.yol} onClick={go} />
@@ -438,12 +379,7 @@ export default function Sidebar(props) {
                     </Collapse>
 
                     {/* ARAÇ YÖNETİM */}
-                    <Category
-                        icon={<DirectionsCarIcon />}
-                        label="ARAÇ YÖNETİM"
-                        openState={aracMenuAcik}
-                        setOpenState={setAracMenuAcik}
-                    />
+                    <Category icon={<DirectionsCarIcon />} label="ARAÇ YÖNETİM" openState={aracMenuAcik} setOpenState={setAracMenuAcik} />
                     <Collapse in={aracMenuAcik} timeout="auto" unmountOnExit>
                         {aracAltMenuler.map((m) => (
                             <NavItem key={m.yol} label={m.ad} icon={m.ikon} to={m.yol} onClick={go} />
@@ -451,12 +387,7 @@ export default function Sidebar(props) {
                     </Collapse>
 
                     {/* RAPORLAR */}
-                    <Category
-                        icon={<AssessmentIcon />}
-                        label="RAPORLAR"
-                        openState={raporMenuAcik}
-                        setOpenState={setRaporMenuAcik}
-                    />
+                    <Category icon={<AssessmentIcon />} label="RAPORLAR" openState={raporMenuAcik} setOpenState={setRaporMenuAcik} />
                     <Collapse in={raporMenuAcik} timeout="auto" unmountOnExit>
                         {raporAltMenuler.map((m) => (
                             <NavItem key={m.yol} label={m.ad} icon={m.ikon} to={m.yol} onClick={go} />
@@ -471,12 +402,7 @@ export default function Sidebar(props) {
                         setOpenState={setHakedisMenuAcik}
                         endAdornment={
                             bildirimSayisi > 0 ? (
-                                <Chip
-                                    size="small"
-                                    color="error"
-                                    label={bildirimSayisi}
-                                    sx={{ height: 20, fontWeight: 700 }}
-                                />
+                                <Chip size="small" color="error" label={bildirimSayisi} sx={{ height: 20, fontWeight: 700 }} />
                             ) : null
                         }
                     />
@@ -487,12 +413,7 @@ export default function Sidebar(props) {
                     </Collapse>
 
                     {/* AFYON */}
-                    <Category
-                        icon={<MapIcon />}
-                        label="AFYON"
-                        openState={afyonMenuAcik}
-                        setOpenState={setAfyonMenuAcik}
-                    />
+                    <Category icon={<MapIcon />} label="AFYON" openState={afyonMenuAcik} setOpenState={setAfyonMenuAcik} />
                     <Collapse in={afyonMenuAcik} timeout="auto" unmountOnExit>
                         {[
                             { ad: "Seferler", yol: "/afyon/seferler", ikon: <DirectionsBusFilledIcon /> },
@@ -510,12 +431,7 @@ export default function Sidebar(props) {
                         setOpenState={setGorevMenuAcik}
                         endAdornment={
                             okunmamisGorevSayisi > 0 ? (
-                                <Chip
-                                    size="small"
-                                    color="error"
-                                    label={okunmamisGorevSayisi}
-                                    sx={{ height: 20, fontWeight: 700 }}
-                                />
+                                <Chip size="small" color="error" label={okunmamisGorevSayisi} sx={{ height: 20, fontWeight: 700 }} />
                             ) : null
                         }
                     />
@@ -523,15 +439,7 @@ export default function Sidebar(props) {
                         {gorevAltMenuler
                             .filter((m) => !m.sadeceRol || m.sadeceRol === kullaniciRol)
                             .map((m) => (
-                                <NavItem
-                                    key={m.yol}
-                                    label={m.ad}
-                                    icon={m.ikon}
-                                    to={m.yol}
-                                    onClick={go}
-                                    badge={m.badge}
-                                    onRead={m.onRead}
-                                />
+                                <NavItem key={m.yol} label={m.ad} icon={m.ikon} to={m.yol} onClick={go} badge={m.badge} onRead={m.onRead} />
                             ))}
                     </Collapse>
                 </List>
@@ -542,24 +450,9 @@ export default function Sidebar(props) {
                 </Box>
             </Drawer>
 
-            {/* Snackbar Popup */}
-            <Snackbar
-                open={snack.open}
-                autoHideDuration={4000}
-                onClose={handleCloseSnack}
-                anchorOrigin={{ vertical: "top", horizontal: "center" }}
-            >
-                <Alert
-                    onClose={handleCloseSnack}
-                    severity={snack.severity}
-                    variant="filled"
-                    sx={{
-                        width: "100%",
-                        borderRadius: '10px',
-                        boxShadow: `0 4px 15px ${alpha(NEON_COLOR_2, 0.5)}`,
-                        fontWeight: 600
-                    }}
-                >
+            {/* Snackbar */}
+            <Snackbar open={snack.open} autoHideDuration={4000} onClose={handleCloseSnack} anchorOrigin={{ vertical: "top", horizontal: "center" }}>
+                <Alert onClose={handleCloseSnack} severity={snack.severity} variant="filled" sx={{ width: "100%", borderRadius: '10px', boxShadow: `0 4px 15px ${alpha(NEON_COLOR_2, 0.5)}`, fontWeight: 600 }}>
                     {snack.msg}
                 </Alert>
             </Snackbar>

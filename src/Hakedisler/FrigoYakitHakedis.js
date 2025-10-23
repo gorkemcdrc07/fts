@@ -787,12 +787,13 @@ const downloadSeferHakedisleri = async (kmMap, seferRows, setSnackbar) => {
             { header: 'SEFER NO', key: 'sefer_no', width: 15 },
             { header: 'TMS DESPATCH ID', key: 'tms_despatch_id', width: 18 },
             { header: 'PLAKA', key: 'plaka', width: 12 },
-            { header: 'TOPLAM KM', key: 'toplam_km', width: 15, style: { numFmt: '0.0000' } },
+            { header: 'TOPLAM KM', key: 'toplam_km', width: 15, style: { numFmt: '0' } },
             { header: 'SEFER HAKEDİŞİ (TL)', key: 'sefer_hakedisi_tl', width: 25, style: { numFmt: '₺#,##0.0000;[Red]-₺#,##0.0000' } },
         ];
 
         // Veri satırlarını ekle
         worksheet.addRows(dataForExcel);
+
 
         // İndirme işlemi
         const buffer = await workbook.xlsx.writeBuffer();
@@ -822,61 +823,130 @@ const downloadOzetData = async (kmMap, yakitRows, setSnackbar) => {
     try {
         setSnackbar({ open: true, message: "Özet Data Excel'i hazırlanıyor...", severity: "info" });
 
-        // 1. Plaka bazlı cari bilgilerini yakitRows'tan al (İlk kaydı baz al)
+        // 1) plaka bazında cari + FİYATLARIN ORTALAMASI (frigo_yakit_tmp eşleniği: yakitRows)
         const yakitOzetMap = yakitRows.reduce((acc, row) => {
             const plaka = row.plaka?.toUpperCase();
             if (!plaka) return acc;
 
             if (!acc[plaka]) {
                 acc[plaka] = {
-                    cari_id: row.cari_id,
-                    cari_adi: row.cari_adi,
+                    cari_id: row.cari_id ?? null,
+                    cari_adi: row.cari_adi ?? null,
+                    // fiyat ortalamaları için birikim
+                    _sum_birim: 0,
+                    _sum_iskontosuz: 0,
+                    _cnt: 0,
                 };
             }
+            const birim = Number(row.birim_fiyat) || 0;
+            const isk = Number(row.iskontosuz_birim_fiyat) || 0;
+
+            acc[plaka]._sum_birim += birim;
+            acc[plaka]._sum_iskontosuz += isk;
+            acc[plaka]._cnt += 1;
+
             return acc;
         }, {});
 
-        // 2. Nihai veriyi oluştur
+        // 2) Ortalama fiyatları finalize et
+        Object.keys(yakitOzetMap).forEach(plaka => {
+            const o = yakitOzetMap[plaka];
+            const cnt = o._cnt || 0;
+            o.birim_fiyat = cnt > 0 ? o._sum_birim / cnt : 0;
+            o.iskontosuz_birim_fiyat = cnt > 0 ? o._sum_iskontosuz / cnt : 0;
+            // clean temp
+            delete o._sum_birim; delete o._sum_iskontosuz; delete o._cnt;
+        });
+
+        // 3) Nihai veriyi oluştur (yeni sütunlar: birim_fiyat, iskontosuz_birim_fiyat, hakedis_tutar)
         const dataForExcel = Object.entries(kmMap).map(([plaka, kmData]) => {
             const yakitOzet = yakitOzetMap[plaka] || {};
+            const tahminiTuketimLitre = kmData.TOPLAM_TUKETIM || 0;
+            const gercekYakitLitre = kmData.TOPLAM_YAKIT_LITRESI || 0;
+            const yakitFarkLitre = kmData.TOPLAM_KM_VE_LITRE_FARKI || 0;
 
-            // Verileri al
-            const tahminiTuketimLitre = kmData.TOPLAM_TUKETIM || 0; // HAKEDİŞ LİTRESİ (Tahmini Tüketim Litre)
-            const gercekYakitLitre = kmData.TOPLAM_YAKIT_LITRESI || 0; // YAKIT ALIM LİTRESİ (Gerçek Yakıt Litre)
-            const yakitFarkLitre = kmData.TOPLAM_KM_VE_LITRE_FARKI || 0; // YAKIT FARK LİTRE (Tah. Tük. - Yakıt)
+            const birimFiyat = Number(yakitOzet.birim_fiyat) || 0;
+            const iskontosuzBirimFiyat = Number(yakitOzet.iskontosuz_birim_fiyat) || 0;
+
+            // HAKEDİŞ TUTAR mantığı:
+            // fark < 0 => abs(fark) * iskontosuz_birim_fiyat
+            // fark > 0 => fark * birim_fiyat
+            let hakedisTutar = 0;
+            if (yakitFarkLitre < 0) {
+                hakedisTutar = Math.abs(yakitFarkLitre) * iskontosuzBirimFiyat;
+            } else if (yakitFarkLitre > 0) {
+                hakedisTutar = yakitFarkLitre * birimFiyat;
+            }
 
             return {
                 plaka: plaka,
-                cari_id: yakitOzet.cari_id || null,
-                cari_adi: yakitOzet.cari_adi || 'BİLİNMİYOR',
+                cari_id: yakitOzet.cari_id ?? null,
+                cari_adi: yakitOzet.cari_adi ?? 'BİLİNMİYOR',
                 hakedis_litresi: tahminiTuketimLitre,
                 yakit_alim_litresi: gercekYakitLitre,
                 yakit_fark_litre: yakitFarkLitre,
+                // YENİ SÜTUNLAR
+                birim_fiyat: birimFiyat,
+                iskontosuz_birim_fiyat: iskontosuzBirimFiyat,
+                hakedis_tutar: hakedisTutar,
             };
-        }).filter(data => data.hakedis_litresi !== 0 || data.yakit_alim_litresi !== 0);
-
+        }).filter(d =>
+            d.hakedis_litresi !== 0 ||
+            d.yakit_alim_litresi !== 0 ||
+            d.yakit_fark_litre !== 0 ||
+            d.hakedis_tutar !== 0
+        );
 
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Özet Plaka Analiz');
 
-        // Başlıkları ayarla 
+        // 4) Başlıklar (3 yeni sütun eklendi)
+        // ... (downloadOzetData içinde üst kısım aynı)
+
         worksheet.columns = [
             { header: 'PLAKA', key: 'plaka', width: 12 },
             { header: 'CARİ İD', key: 'cari_id', width: 10 },
             { header: 'CARİ ADI', key: 'cari_adi', width: 30 },
             { header: 'HAKEDİŞ LİTRESİ', key: 'hakedis_litresi', width: 20, style: { numFmt: '0.0000' } },
             { header: 'YAKIT ALIM LİTRESİ', key: 'yakit_alim_litresi', width: 20, style: { numFmt: '0.0000' } },
-            // Yakıt farkı, pozitif/negatif gösterimi ile.
             { header: 'YAKIT FARK LİTRE', key: 'yakit_fark_litre', width: 20, style: { numFmt: '0.0000;[Red]-0.0000' } },
+            { header: 'BİRİM FİYAT', key: 'birim_fiyat', width: 16, style: { numFmt: '₺#,##0.0000' } },
+            { header: 'İSKONTOSUZ BİRİM FİYAT', key: 'iskontosuz_birim_fiyat', width: 24, style: { numFmt: '₺#,##0.0000' } },
+            { header: 'HAKEDİŞ TUTAR (TL)', key: 'hakedis_tutar', width: 22, style: { numFmt: '₺#,##0.0000;[Red]-₺#,##0.0000' } },
         ];
 
-        // Veri satırlarını ekle
         worksheet.addRows(dataForExcel);
 
-        // İndirme işlemi
+        /* === YENİ EKLENEN BLOK: fark negatifse HAKEDİŞ TUTAR hücresini kırmızı boya === */
+        {
+            const farkColIndex = worksheet.getColumn('yakit_fark_litre').number; // key: yakit_fark_litre
+            const tutarColIndex = worksheet.getColumn('hakedis_tutar').number;    // key: hakedis_tutar
+
+            worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+                if (rowNumber === 1) return; // başlık satırını atla
+
+                const farkCell = row.getCell(farkColIndex);
+                const tutarCell = row.getCell(tutarColIndex);
+
+                // Formül olasılığına karşı güvenli okuma
+                const raw = farkCell.value;
+                const farkValue =
+                    (raw && typeof raw === 'object' && raw.result != null)
+                        ? Number(raw.result)
+                        : Number(raw);
+
+                if (Number.isFinite(farkValue) && farkValue < 0) {
+                    // fark kırmızı ise HAKEDİŞ TUTAR'ı da kırmızı yap
+                    tutarCell.font = { ...(tutarCell.font || {}), color: { argb: 'FFFF0000' } };
+                    // (opsiyonel) hafif kırmızı arka plan
+                    // tutarCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE5E5' } };
+                }
+            });
+        }
+        /* === EK BLOK SONU === */
+
         const buffer = await workbook.xlsx.writeBuffer();
         saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'ozet_plaka_analiz.xlsx');
-
         setSnackbar({ open: true, message: "Özet Plaka Analiz Excel dosyası başarıyla indirildi.", severity: "success" });
 
     } catch (error) {
@@ -884,7 +954,6 @@ const downloadOzetData = async (kmMap, yakitRows, setSnackbar) => {
         setSnackbar({ open: true, message: error.message || "Özet Data Excel dosyası oluşturulurken hata oluştu.", severity: "error" });
     }
 };
-
 
 /* ------------------------ ANA HESAPLAMA BİLEŞENİ --------------------- */
 /**

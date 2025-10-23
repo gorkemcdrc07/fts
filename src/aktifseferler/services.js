@@ -17,17 +17,38 @@ function isNumericId(v) {
 
 /* ---------------- Seferler ---------------- */
 
+/**
+ * Ana sefer listesini çekerken, Data Grid'deki "Nokta Kayıt Bilgisi" sütunu için 
+ * gerekli olan teslim giriş/çıkış (varış/çıkış) bilgilerini de seferler objesi içine çeker.
+ */
 export async function fetchSeferler(rangeMin, rangeMax) {
     const { data, error } = await supabase
         .from("seferler")
-        .select("*")
+        .select(`
+            *,
+            noktalar:sefer_detaylari(
+                nokta_sirasi, 
+                yukleme_varis,   
+                yukleme_cikis,   
+                teslim_varis,    
+                teslim_cikis     
+            )
+        `)
         .gte("sefer_tarihi", rangeMin)
         .lte("sefer_tarihi", rangeMax)
         .ilike("sefer_no", "SFR%")
         .order("sefer_tarihi", { ascending: false });
 
-    if (error) throw error;
-    return data || [];
+    if (error) {
+        console.error("fetchSeferler Error (400 Hatası Muhtemelen İlişkili Sorgu):", error);
+        throw error;
+    }
+
+    // Çekilen noktaları (noktalar array'ini) nokta sırasına göre sırala
+    return (data || []).map(sefer => ({
+        ...sefer,
+        noktalar: (sefer.noktalar || []).sort((a, b) => a.nokta_sirasi - b.nokta_sirasi),
+    }));
 }
 
 export async function fetchTamamlananNos(rangeMin, rangeMax) {

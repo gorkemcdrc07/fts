@@ -271,7 +271,7 @@ const PlakaKmList = ({ kmMap, showCalculation = 1 }) => {
     );
 };
 
-/* ------------------------ Plaka Bazlı Düzeltme Maliyeti Listesi ------------------- */
+/* ------------------------ Plaka Bazlı Düzeltme Maliyeti Listesi Bileşeni ------------------- */
 const PlakaHakedisList = ({ kmMap }) => {
     if (!kmMap || Object.keys(kmMap).length === 0) return null;
 
@@ -401,7 +401,7 @@ const SeferHakedisList = ({ kmMap, seferRows }) => {
             }}
         >
             <Typography variant="body2" fontWeight={700} color={DARK.text} mb={1}>
-                Plaka Bazlı KM Analizi (TL/KM):
+                Plaka Bazlı Maliyet Dağılımı Oranı (TL/KM):
             </Typography>
             <Grid container spacing={1} sx={{ bgcolor: DARK.surface2, p: 1, borderRadius: 1 }}>
                 <Grid item xs={3}>
@@ -587,7 +587,7 @@ const toStrOrNull = (v) => {
 };
 
 /* ------------------------ Gerçek Excel Okuma (ExcelJS Kullanarak) ------------------------------- */
-async function readXlsxFile(file) {
+const readXlsxFile = async (file) => {
     if (!ExcelJS) throw new Error("ExcelJS kütüphanesi yüklenmemiş.");
 
     const workbook = new ExcelJS.Workbook();
@@ -596,15 +596,18 @@ async function readXlsxFile(file) {
 
     const worksheet = workbook.worksheets[0];
     const rows = [];
-    let headers = [];
+    let rawHeaders = [];
 
     // 1. Başlıkları Oku (İlk Satır)
     const headerRow = worksheet.getRow(1);
     if (!headerRow) throw new Error("Dosya boş veya başlık satırı okunamadı.");
 
     headerRow.eachCell((cell) => {
-        headers.push(String(cell.value ?? "").trim().toLowerCase());
+        rawHeaders.push(String(cell.value ?? "").trim());
     });
+
+    // İşleme için kullanılan küçük harfli, alt çizgi ile ayrılmış anahtarları oluştur
+    const processedHeaders = rawHeaders.map(h => h.toLowerCase().replace(/[^a-z0-9_ğüşöçıİ]/g, '_'));
 
     // 2. Veri Satırlarını Oku (2. Satırdan Başlayarak)
     for (let i = 2; i <= worksheet.rowCount; i++) {
@@ -612,8 +615,8 @@ async function readXlsxFile(file) {
         const rowData = {};
         let isRowEmpty = true;
 
-        headers.forEach((header, index) => {
-            if (!header) return;
+        rawHeaders.forEach((rawHeader, index) => {
+            if (!rawHeader) return;
 
             const cell = row.getCell(index + 1);
             let value = cell.value;
@@ -628,7 +631,10 @@ async function readXlsxFile(file) {
                 }
             }
 
-            rowData[header] = value;
+            const processedKey = processedHeaders[index];
+
+            rowData[processedKey] = value;
+
             if (value !== null && value !== undefined && String(value).trim() !== "") {
                 isRowEmpty = false;
             }
@@ -639,12 +645,12 @@ async function readXlsxFile(file) {
         }
     }
 
-    return { headers, rows };
-}
+    return { headers: processedHeaders, rows };
+};
 
 
 /* ------------------------ Gerçek Supabase Batch Insert ------------------- */
-async function insertBatched(table, rows, batchSize = 500) {
+const insertBatched = async (table, rows, batchSize = 500) => {
     let errorCount = 0;
 
     for (let i = 0; i < rows.length; i += batchSize) {
@@ -663,45 +669,59 @@ async function insertBatched(table, rows, batchSize = 500) {
     if (errorCount > 0) {
         throw new Error(`${errorCount} batch'te kayıt hatası oluştu. Konsolu ve Sunucu loglarını kontrol edin.`);
     }
-}
+};
 
 
 /* ------------------------ Şablon İndiriciler ------------------------ */
-async function downloadXlsxTemplate(fileName, sheetName, headers, sampleRows) {
+const downloadXlsxTemplate = async (fileName, sheetName, headers, sampleRows) => {
     if (!ExcelJS || !saveAs) return console.error("ExcelJS veya file-saver kütüphanesi yüklenmemiş.");
     console.log(`Downloading template: ${fileName}`);
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(sheetName);
 
-    worksheet.columns = headers.map(h => ({ header: h.toUpperCase().replace('_', ' '), key: h, width: 22 }));
+    // DEĞİŞTİ: Başlıkları dosyaya küçük harf olarak yaz (TR duyarlı)
+    worksheet.columns = headers.map(h => {
+        const headerLower = String(h).toLocaleLowerCase('tr-TR');            // <-- küçük harfe zorlama
+        return {
+            header: headerLower,                                             // <-- dosyaya yazılan başlık
+            key: headerLower.replace(/[^a-z0-9_ğüşöçıö]/gi, '_'),            // <-- key de uyumlu
+            width: 22
+        };
+    });
 
     sampleRows.forEach(r => worksheet.addRow(r));
 
     const buffer = await workbook.xlsx.writeBuffer();
     saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
-}
+};
 
-async function downloadYakitTemplate() {
+// =========================================================================================
+// YAKIT ŞABLONU İNDİR (İstenen sıra ve Büyük Harf ile güncellendi)
+// =========================================================================================
+const downloadYakitTemplate = async () => {
     await downloadXlsxTemplate(
         "frigo_yakit_sablon.xlsx",
         "Yakıt Şablonu",
         [
             "plaka",
-            "cari_adi",
             "cari_id",
-            "yakit_litresi",
-            "birim_fiyat",
+            "cari_adi",
             "iskontosuz_birim_fiyat",
+            "birim_fiyat",
+            "yakit_litresi",
         ],
         [
-            ["34ABC34", "Örnek Cari", 123456, 250.5555, 44.9123, 45.0000],
-            ["41XYZ41", "Başka Cari", 222222, 180.0000, 43.5678, 44.0000],
+            ["34ABC34", 123456, "Örnek Cari", 45.0000, 44.9123, 250.5555],
+            ["41XYZ41", 222222, "Başka Cari", 44.0000, 43.5678, 180.0000],
         ]
     );
-}
+};
 
-async function downloadSeferTemplate() {
+// =========================================================================================
+// SEFER ŞABLONU İNDİR (İstenen sıra ve Büyük Harf ile güncellendi)
+// =========================================================================================
+const downloadSeferTemplate = async () => {
     await downloadXlsxTemplate(
         "frigo_sefer_sablon.xlsx",
         "Sefer Şablonu",
@@ -712,12 +732,12 @@ async function downloadSeferTemplate() {
             ["BOS1003", 987654323, "34ABC34", 50.0000],
         ]
     );
-}
+};
 
 // =========================================================================================
-// MEVCUT EXCEL İNDİRME FONKSİYONU: SEFER HAKEDİŞ DETAYLARI (GÜNCELLENDİ)
+// MEVCUT EXCEL İNDİRME FONKSİYONU: SEFER HAKEDİŞ DETAYLARI
 // =========================================================================================
-async function downloadSeferHakedisleri(kmMap, seferRows, setSnackbar) {
+const downloadSeferHakedisleri = async (kmMap, seferRows, setSnackbar) => {
     if (!ExcelJS || !saveAs) {
         setSnackbar({ open: true, message: "ExcelJS veya file-saver kütüphanesi yüklenmemiş.", severity: "error" });
         return;
@@ -762,13 +782,12 @@ async function downloadSeferHakedisleri(kmMap, seferRows, setSnackbar) {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Sefer Hakediş Detayları');
 
-        // Başlıkları ayarla (İstenen yeni sıra ve başlıklar)
+        // Başlıkları ayarla 
         worksheet.columns = [
             { header: 'SEFER NO', key: 'sefer_no', width: 15 },
             { header: 'TMS DESPATCH ID', key: 'tms_despatch_id', width: 18 },
             { header: 'PLAKA', key: 'plaka', width: 12 },
             { header: 'TOPLAM KM', key: 'toplam_km', width: 15, style: { numFmt: '0.0000' } },
-            // PLAKA BAZLI MALİYET/KM (TL/KM) sütunu kaldırıldı
             { header: 'SEFER HAKEDİŞİ (TL)', key: 'sefer_hakedisi_tl', width: 25, style: { numFmt: '₺#,##0.0000;[Red]-₺#,##0.0000' } },
         ];
 
@@ -785,12 +804,12 @@ async function downloadSeferHakedisleri(kmMap, seferRows, setSnackbar) {
         console.error("Excel indirme hatası:", error);
         setSnackbar({ open: true, message: error.message || "Excel dosyası oluşturulurken hata oluştu.", severity: "error" });
     }
-}
+};
 
 // =========================================================================================
 // YENİ EXCEL İNDİRME FONKSİYONU: ÖZET DATA
 // =========================================================================================
-async function downloadOzetData(kmMap, yakitRows, setSnackbar) {
+const downloadOzetData = async (kmMap, yakitRows, setSnackbar) => {
     if (!ExcelJS || !saveAs) {
         setSnackbar({ open: true, message: "ExcelJS veya file-saver kütüphanesi yüklenmemiş.", severity: "error" });
         return;
@@ -840,7 +859,7 @@ async function downloadOzetData(kmMap, yakitRows, setSnackbar) {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Özet Plaka Analiz');
 
-        // Başlıkları ayarla (İstenen sıra ve isimler)
+        // Başlıkları ayarla 
         worksheet.columns = [
             { header: 'PLAKA', key: 'plaka', width: 12 },
             { header: 'CARİ İD', key: 'cari_id', width: 10 },
@@ -864,7 +883,7 @@ async function downloadOzetData(kmMap, yakitRows, setSnackbar) {
         console.error("Özet Data indirme hatası:", error);
         setSnackbar({ open: true, message: error.message || "Özet Data Excel dosyası oluşturulurken hata oluştu.", severity: "error" });
     }
-}
+};
 
 
 /* ------------------------ ANA HESAPLAMA BİLEŞENİ --------------------- */
@@ -1208,7 +1227,7 @@ export function FrigoHesaplama({ yakitInfo, seferInfo, setSnackbar, startTrigger
                     sx={{ p: 2, borderRadius: 2, bgcolor: DARK.surface, borderColor: DARK.primary, mt: 3 }}
                 >
                     <Typography variant="h6" fontWeight={700} color={DARK.text} mb={2}>
-                        Sefer Hakedişleri (Maliyet / KM) 📈
+                        Plaka Bazlı Maliyet Dağılımı Oranı (TL/KM) 📈
                     </Typography>
                     <SeferHakedisList kmMap={kmData.kmMap} seferRows={seferInfo.allRows} />
                 </Paper>
@@ -1321,22 +1340,21 @@ export default function FrigoYakitHakedis() {
 
             const { headers, rows } = await readXlsxFile(file);
 
-            const map = {};
-            headers.forEach((h) => (map[h.trim().toLowerCase()] = h));
-
-            const required = [
+            const expectedKeys = [
                 "plaka",
-                "cari_adi",
                 "cari_id",
-                "yakit_litresi",
-                "birim_fiyat",
+                "cari_adi",
                 "iskontosuz_birim_fiyat",
+                "birim_fiyat",
+                "yakit_litresi",
             ];
-            const missing = required.filter((k) => !map[k]);
+
+            const missing = expectedKeys.filter(key => !headers.includes(key));
 
             if (missing.length) {
+                const userFriendlyMissing = missing.map(m => m.toUpperCase().replace(/_/g, ' '));
                 throw new Error(
-                    "Şablon hatası: Eksik başlık(lar) var: " + missing.join(", ")
+                    "Şablon hatası: Eksik başlık(lar) var. Lütfen tam olarak: " + userFriendlyMissing.join(", ") + " başlıklarını kullanın."
                 );
             }
 
@@ -1404,15 +1422,14 @@ export default function FrigoYakitHakedis() {
 
             const { headers, rows } = await readXlsxFile(file);
 
-            const map = {};
-            headers.forEach((h) => (map[h.trim().toLowerCase()] = h));
-
-            const required = ["sefer_no", "tms_despatch_id", "plaka", "toplam_km"];
-            const missing = required.filter((k) => !map[k]);
+            // Beklenen küçük harf anahtarlar
+            const expectedKeys = ["sefer_no", "tms_despatch_id", "plaka", "toplam_km"];
+            const missing = expectedKeys.filter(key => !headers.includes(key));
 
             if (missing.length) {
+                const userFriendlyMissing = missing.map(m => m.toUpperCase().replace(/_/g, ' '));
                 throw new Error(
-                    "Şablon hatası: Eksik başlık(lar) var: " + missing.join(", ")
+                    "Şablon hatası: Eksik başlık(lar) var. Lütfen tam olarak: " + userFriendlyMissing.join(", ") + " başlıklarını kullanın."
                 );
             }
 
@@ -1754,12 +1771,12 @@ export default function FrigoYakitHakedis() {
                                 >
                                     {[
                                         "#",
-                                        "plaka",
-                                        "cari_adi",
-                                        "cari_id",
-                                        "yakit_litresi",
-                                        "birim_fiyat",
-                                        "iskontosuz_birim_fiyat",
+                                        "PLAKA",
+                                        "CARİ_ID",
+                                        "CARİ_ADI",
+                                        "İSKONTOSUZ BİRİM FİYAT", // Başlıklar büyük harf ve boşluklu gösteriliyor
+                                        "BİRİM FİYAT",
+                                        "YAKIT LİTRESİ",
                                     ].map((h) => (
                                         <TableCell key={h}>{h}</TableCell>
                                     ))}
@@ -1776,11 +1793,11 @@ export default function FrigoYakitHakedis() {
                                     >
                                         <TableCell>{idx + 1}</TableCell>
                                         <TableCell>{it.plaka}</TableCell>
-                                        <TableCell>{it.cari_adi}</TableCell>
                                         <TableCell>{it.cari_id}</TableCell>
-                                        <TableCell>{formatNumber(it.yakit_litresi)}</TableCell>
-                                        <TableCell>{formatNumber(it.birim_fiyat)}</TableCell>
+                                        <TableCell>{it.cari_adi}</TableCell>
                                         <TableCell>{formatNumber(it.iskontosuz_birim_fiyat)}</TableCell>
+                                        <TableCell>{formatNumber(it.birim_fiyat)}</TableCell>
+                                        <TableCell>{formatNumber(it.yakit_litresi)}</TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>

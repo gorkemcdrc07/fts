@@ -16,8 +16,10 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         canEdit = false,
     } = perms || {};
 
+    // Standart metin sütunu tanımı yardımcı fonksiyonu
     const txt = (f, t, w = 170) => ({ field: f, headerName: t, width: w, sortable: true });
 
+    // ETA Sütunu
     const etaCol = {
         field: "eta_varis",
         headerName: "ETA",
@@ -26,6 +28,7 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         sortComparator: (a, b) => new Date(a) - new Date(b),
     };
 
+    // Kalan Süre Sütunu
     const kalanCol = {
         field: "kalan_surus_dk",
         headerName: "Kalan (dk)",
@@ -34,6 +37,7 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         headerAlign: "center",
     };
 
+    // İşlem (Actions) Sütunu
     const actionsCol = {
         field: "actions",
         headerName: "İşlem",
@@ -70,6 +74,67 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         ),
     };
 
+    // YENİ EKLENEN SÜTUN: Nokta Kayıt Bilgisi
+    const noktaKayitBilgisiCol = {
+        field: "nokta_kayit_bilgisi",
+        headerName: "Nokta Kayıt Bilgisi",
+        width: 350, // Yeterli genişlik
+        sortable: false,
+        filterable: false,
+        renderCell: (p) => {
+            // DİKKAT: Burada p.row.noktalar alanının, görseldeki gibi tüm nokta detaylarını
+            // (teslim_giris, teslim_cikis) içeren bir dizi olduğu varsayılmıştır.
+            const noktalar = p.row.noktalar || [];
+
+            if (noktalar.length === 0) {
+                return <Chip label="Nokta bilgisi yok" size="small" color="default" />;
+            }
+
+            return (
+                <Stack direction="row" spacing={0.5} sx={{ overflowX: 'auto', paddingY: 0.5 }}>
+                    {noktalar.map((nokta, index) => {
+                        // Not: Alan adları görseldeki 'Teslim Giriş/Çıkış' alanlarına karşılık gelmelidir.
+                        const girisDolu = !!nokta.teslim_giris;
+                        const cikisDolu = !!nokta.teslim_cikis;
+                        
+                        let label = `${index + 1}.N: `;
+                        let color = "success";
+                        let title = "";
+
+                        if (girisDolu && cikisDolu) {
+                            label += "Tamamlandı";
+                            title = `Nokta ${index + 1}: Giriş ve Çıkış tamamlandı.`;
+                        } else if (girisDolu && !cikisDolu) {
+                            label += "Çıkış Eksik";
+                            color = "warning";
+                            title = `Nokta ${index + 1}: Giriş var, Çıkış eksik.`;
+                        } else if (!girisDolu && cikisDolu) {
+                            label += "Giriş Eksik"; // Mantıksal olarak beklenmez ama
+                            color = "error";
+                            title = `Nokta ${index + 1}: Çıkış var, Giriş eksik.`;
+                        } else {
+                            label += "Kayıt Yok";
+                            color = "error";
+                            title = `Nokta ${index + 1}: Giriş ve Çıkış eksik.`;
+                        }
+
+                        return (
+                            <Tooltip key={index} title={title}>
+                                <Chip 
+                                    label={label} 
+                                    size="small" 
+                                    color={color} 
+                                    variant={color === "success" ? "filled" : "outlined"}
+                                    sx={{ fontWeight: 700, minWidth: '90px' }}
+                                />
+                            </Tooltip>
+                        );
+                    })}
+                </Stack>
+            );
+        },
+    };
+
     let cols = [
         {
             field: "reel_durum",
@@ -82,6 +147,9 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
             },
         },
         { field: "nokta_sayisi", headerName: "NOKTA", width: 100, align: "center", headerAlign: "center" },
+        // Yeni sütunu buraya ekledik.
+        noktaKayitBilgisiCol, 
+        
         txt("sefer_no", "Sefer No", 160),
         txt("statu", "Statü", 160),
         txt("plaka", "Plaka", 130),

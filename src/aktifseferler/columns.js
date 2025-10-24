@@ -1,13 +1,27 @@
-// src/aktifseferler/columns.js
-import { Chip, Stack, Button, Tooltip, IconButton } from "@mui/material";
+import {
+    Chip,
+    Stack,
+    Button,
+    Tooltip,
+    IconButton,
+    Box,
+    Typography,
+} from "@mui/material";
 import EditIcon from "@mui/icons-material/EditNote";
 import { fromISOToCombined } from "./utils/datetime";
 
 /**
- * buildColumns({ openETA, openEditor, COLORS, perms })
+ * buildColumns({ openETA, openEditor, COLORS, perms, userOrder, hasUserOrder })
  * perms: { loading, mayOpenETA, canETA, mayOpenEdit, canEdit }
  */
-export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
+export default function buildColumns({
+    openETA,
+    openEditor,
+    COLORS,
+    perms,
+    userOrder = [],
+    hasUserOrder = false,
+}) {
     const {
         loading = false,
         mayOpenETA = false,
@@ -16,10 +30,10 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         canEdit = false,
     } = perms || {};
 
-    // Standart metin sütunu tanımı yardımcı fonksiyonu
+    // Basit metin kolonu helper
     const txt = (f, t, w = 170) => ({ field: f, headerName: t, width: w, sortable: true });
 
-    // ETA Sütunu
+    // ETA
     const etaCol = {
         field: "eta_varis",
         headerName: "ETA",
@@ -28,7 +42,7 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         sortComparator: (a, b) => new Date(a) - new Date(b),
     };
 
-    // Kalan Süre Sütunu
+    // Kalan sürüş
     const kalanCol = {
         field: "kalan_surus_dk",
         headerName: "Kalan (dk)",
@@ -37,11 +51,11 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         headerAlign: "center",
     };
 
-    // İşlem (Actions) Sütunu
+    // İşlem
     const actionsCol = {
         field: "actions",
         headerName: "İşlem",
-        width: 190,
+        width: 160,
         sortable: false,
         filterable: false,
         renderCell: (p) => (
@@ -58,7 +72,7 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
                 )}
 
                 {(loading || mayOpenEdit) && (
-                    <Tooltip title={loading ? "Yükleniyor..." : (canEdit ? "Detayları Düzenle" : "Düzenleme yetkiniz yok")}>
+                    <Tooltip title={loading ? "Yükleniyor..." : canEdit ? "Detayları Düzenle" : "Düzenleme yetkiniz yok"}>
                         <span>
                             <IconButton
                                 size="small"
@@ -74,68 +88,98 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         ),
     };
 
-    // YENİ EKLENEN SÜTUN: Nokta Kayıt Bilgisi
+    // Durum hesaplama
+    const calcStatus = (enter, exit) => {
+        if (enter && exit) return { borderColor: "success.main", hint: "Giriş & Çıkış hazır" };
+        if (enter && !exit) return { borderColor: "warning.main", hint: "Çıkış eksik" };
+        if (!enter && exit) return { borderColor: "error.main", hint: "Giriş eksik" };
+        return { borderColor: "error.main", hint: "Kayıt yok" };
+    };
+
+    // Daha anlaşılır: 1 G✓ Ç– biçiminde kapsüller
     const noktaKayitBilgisiCol = {
         field: "nokta_kayit_bilgisi",
         headerName: "Nokta Kayıt Bilgisi",
-        width: 350, // Yeterli genişlik
+        width: 460,
         sortable: false,
         filterable: false,
         renderCell: (p) => {
-            // DİKKAT: Burada p.row.noktalar alanının, görseldeki gibi tüm nokta detaylarını
-            // (teslim_giris, teslim_cikis) içeren bir dizi olduğu varsayılmıştır.
             const noktalar = p.row.noktalar || [];
+            const ozet = p.row.nokta_ozet || { total: noktalar.length, completed: 0 };
 
             if (noktalar.length === 0) {
                 return <Chip label="Nokta bilgisi yok" size="small" color="default" />;
             }
 
             return (
-                <Stack direction="row" spacing={0.5} sx={{ overflowX: 'auto', paddingY: 0.5 }}>
-                    {noktalar.map((nokta, index) => {
-                        // Not: Alan adları görseldeki 'Teslim Giriş/Çıkış' alanlarına karşılık gelmelidir.
-                        const girisDolu = !!nokta.teslim_giris;
-                        const cikisDolu = !!nokta.teslim_cikis;
-                        
-                        let label = `${index + 1}.N: `;
-                        let color = "success";
-                        let title = "";
+                <Box
+                    sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.75,
+                        minWidth: 0,
+                        width: "100%",
+                    }}
+                >
+                    {/* sayaç */}
+                    <Typography variant="caption" sx={{ fontWeight: 800, flex: "0 0 auto" }}>
+                        {ozet.completed}/{ozet.total}
+                    </Typography>
 
-                        if (girisDolu && cikisDolu) {
-                            label += "Tamamlandı";
-                            title = `Nokta ${index + 1}: Giriş ve Çıkış tamamlandı.`;
-                        } else if (girisDolu && !cikisDolu) {
-                            label += "Çıkış Eksik";
-                            color = "warning";
-                            title = `Nokta ${index + 1}: Giriş var, Çıkış eksik.`;
-                        } else if (!girisDolu && cikisDolu) {
-                            label += "Giriş Eksik"; // Mantıksal olarak beklenmez ama
-                            color = "error";
-                            title = `Nokta ${index + 1}: Çıkış var, Giriş eksik.`;
-                        } else {
-                            label += "Kayıt Yok";
-                            color = "error";
-                            title = `Nokta ${index + 1}: Giriş ve Çıkış eksik.`;
-                        }
+                    {/* kapsüller: tek satır ve yatay kaydırılabilir */}
+                    <Box
+                        sx={{
+                            display: "flex",
+                            gap: 0.5,
+                            overflowX: "auto",
+                            overflowY: "hidden",
+                            flex: "1 1 auto",
+                        }}
+                    >
+                        {noktalar.map((n, i) => {
+                            const enter = Boolean(n.teslim_varis);
+                            const exit = Boolean(n.teslim_cikis);
+                            const { borderColor, hint } = calcStatus(enter, exit);
 
-                        return (
-                            <Tooltip key={index} title={title}>
-                                <Chip 
-                                    label={label} 
-                                    size="small" 
-                                    color={color} 
-                                    variant={color === "success" ? "filled" : "outlined"}
-                                    sx={{ fontWeight: 700, minWidth: '90px' }}
-                                />
-                            </Tooltip>
-                        );
-                    })}
-                </Stack>
+                            const title = [
+                                `Nokta ${i + 1} • ${hint}`,
+                                `Giriş: ${enter ? fromISOToCombined(n.teslim_varis) : "—"}`,
+                                `Çıkış: ${exit ? fromISOToCombined(n.teslim_cikis) : "—"}`,
+                            ].join(" • ");
+
+                            return (
+                                <Tooltip key={i} title={title}>
+                                    <Box
+                                        sx={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 0.75,
+                                            border: "1px solid",
+                                            borderColor,
+                                            borderRadius: 1.25,
+                                            px: 0.75,
+                                            py: 0.25,
+                                            bgcolor: "transparent",
+                                            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                                        }}
+                                    >
+                                        <Typography sx={{ fontSize: 11, fontWeight: 800 }}>{i + 1}</Typography>
+                                        <Stack direction="row" spacing={1}>
+                                            <Typography sx={{ fontSize: 11 }}>G{enter ? "✓" : "–"}</Typography>
+                                            <Typography sx={{ fontSize: 11 }}>Ç{exit ? "✓" : "–"}</Typography>
+                                        </Stack>
+                                    </Box>
+                                </Tooltip>
+                            );
+                        })}
+                    </Box>
+                </Box>
             );
         },
     };
 
-    let cols = [
+    // Çekirdek kolonlar
+    let baseCols = [
         {
             field: "reel_durum",
             headerName: "REEL DURUM",
@@ -147,9 +191,10 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
             },
         },
         { field: "nokta_sayisi", headerName: "NOKTA", width: 100, align: "center", headerAlign: "center" },
-        // Yeni sütunu buraya ekledik.
-        noktaKayitBilgisiCol, 
-        
+
+        // Yeni görünüm
+        noktaKayitBilgisiCol,
+
         txt("sefer_no", "Sefer No", 160),
         txt("statu", "Statü", 160),
         txt("plaka", "Plaka", 130),
@@ -177,6 +222,23 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         txt("yukleme_noktasi", "Yükleme Noktası", 280),
         txt("teslim_noktasi", "Teslim Noktası", 280),
         txt("irsaliye_no", "İrsaliye No", 170),
+
+        // (Varsa) kayıt zamanları
+        {
+            field: "yukleme_kayit_zamani",
+            headerName: "Yükleme Kayıt Zm.",
+            width: 190,
+            renderCell: (p) => fromISOToCombined(p.row.yukleme_kayit_zamani || ""),
+            sortComparator: (a, b) => new Date(a) - new Date(b),
+        },
+        {
+            field: "teslim_kayit_zamani",
+            headerName: "Teslim Kayıt Zm.",
+            width: 190,
+            renderCell: (p) => fromISOToCombined(p.row.teslim_kayit_zamani || ""),
+            sortComparator: (a, b) => new Date(a) - new Date(b),
+        },
+
         {
             field: "kayit_zamani",
             headerName: "Kayıt Zamanı",
@@ -193,8 +255,22 @@ export default function buildColumns({ openETA, openEditor, COLORS, perms }) {
         },
     ];
 
-    // İşlem başa, ETA/Kalan sona
-    cols = [actionsCol, ...cols, etaCol, kalanCol];
+    // Tüm kolonlar
+    let all = [actionsCol, ...baseCols, etaCol, kalanCol];
 
-    return cols;
+    // Kullanıcı sırası varsa uygula
+    if (hasUserOrder && Array.isArray(userOrder) && userOrder.length) {
+        const byId = new Map(all.map((c) => [c.field, c]));
+        const picked = [];
+        userOrder.forEach((id) => {
+            const col = byId.get(id);
+            if (col) {
+                picked.push(col);
+                byId.delete(id);
+            }
+        });
+        all = [...picked, ...Array.from(byId.values())];
+    }
+
+    return all;
 }

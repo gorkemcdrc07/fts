@@ -132,11 +132,15 @@ export default function ReelAtananSeferler() {
             }
         };
         const onFocus = () => setViewBump(String(Date.now()));
+        const onCustom = () => setViewBump(String(Date.now())); // yeni
+
         window.addEventListener("storage", onStorage);
         window.addEventListener("focus", onFocus);
+        window.addEventListener("aktifseferler:view:changed", onCustom); // yeni
         return () => {
             window.removeEventListener("storage", onStorage);
             window.removeEventListener("focus", onFocus);
+            window.removeEventListener("aktifseferler:view:changed", onCustom); // yeni
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);

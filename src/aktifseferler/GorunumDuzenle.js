@@ -52,6 +52,7 @@ const ALL_COLUMNS = [
     { id: "yukleme_noktasi", label: "Yükleme Noktası" },
     // Yeni eklenen sütunlar burada
     { id: "yukleme_kayit_zamani", label: "Yükleme Kayıt Zm." }, // Yeni
+    { id: "nokta_kayit_bilgisi", label: "Nokta Kayıt Bilgisi" }, // <-- EKLENDİ
     { id: "teslim_noktasi", label: "Teslim Noktası" },
     { id: "teslim_kayit_zamani", label: "Teslim Kayıt Zm." },   // Yeni
     //
@@ -67,7 +68,7 @@ const PRESET_MIN = [
     "sefer_tarihi", "eta_varis", "kalan_surus_dk", "_note"
 ];
 const PRESET_PLAN = [
-    "actions", "reel_durum", "nokta_sayisi", "sefer_no", "statu", "plaka", "musteri_adi",
+    "actions", "reel_durum", "nokta_sayisi", "sefer_no", "statu", "plaka", "musteri_adi", "nokta_kayit_bilgisi",
     "proje_adi", "yukleme_ili", "teslim_ili", "sefer_tarihi", "eta_varis", "kalan_surus_dk", "_note"
 ];
 const PRESET_FULL = ALL_COLUMNS.map(c => c.id);
@@ -152,6 +153,9 @@ export default function GorunumDuzenle() {
             localStorage.setItem(ORDER_KEY, JSON.stringify(order));
             localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hidden]));
             localStorage.setItem("aktifseferler.view.bump", String(Date.now()));
+            // aynı sekmede storage event tetiklenmediği için manuel event yayınla
+            window.dispatchEvent(new Event("aktifseferler:view:changed"));
+
             setSnack({ open: true, severity: "success", msg: "Görünüm kaydedildi." });
         } catch (e) {
             setSnack({ open: true, severity: "error", msg: "Kaydedilemedi." });

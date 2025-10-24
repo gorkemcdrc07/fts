@@ -50,7 +50,11 @@ const ALL_COLUMNS = [
     { id: "musteri_siparis_no", label: "Sipariş No" },
     { id: "hizmet_adi", label: "Hizmet" },
     { id: "yukleme_noktasi", label: "Yükleme Noktası" },
+    // Yeni eklenen sütunlar burada
+    { id: "yukleme_kayit_zamani", label: "Yükleme Kayıt Zm." }, // Yeni
     { id: "teslim_noktasi", label: "Teslim Noktası" },
+    { id: "teslim_kayit_zamani", label: "Teslim Kayıt Zm." },   // Yeni
+    //
     { id: "irsaliye_no", label: "İrsaliye No" },
     { id: "kayit_zamani", label: "Kayıt Zamanı" },
     { id: "atama_tarihi", label: "Atama Tarihi" },
@@ -58,7 +62,6 @@ const ALL_COLUMNS = [
     { id: "kalan_surus_dk", label: "Kalan (dk)" },
     { id: "_note", label: "Açıklama Rozeti", lock: true },
 ];
-
 const PRESET_MIN = [
     "actions", "reel_durum", "sefer_no", "plaka", "musteri_adi", "proje_adi",
     "sefer_tarihi", "eta_varis", "kalan_surus_dk", "_note"

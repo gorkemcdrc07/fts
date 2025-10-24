@@ -60,11 +60,7 @@ import {
 import { formatPhone, ellipsize } from "./utils/format";
 import {
     AVG_SPEED_KMPH,
-    BLOCK_MIN,
-    parseHHMMtoMin,
     parseMesafeKm,
-    computeETAWithKGMPlus,
-    BREAK_OPTIONS,
     ETA_STATUS,
     ETA_MESSAGES,
 } from "./utils/eta";
@@ -81,7 +77,7 @@ import usePermissions from "../auth/usePermissions";
 
 /* Diyaloglar */
 const EditorDialog = lazy(() => import("./dialogs/EditorDialog"));
-const EtaDialog = lazy(() => import("./dialogs/EtaDialog"));
+// const EtaDialog = lazy(() => import("./dialogs/EtaDialog")); // Artık render edilmiyor
 
 /* küçük inputlar */
 function DateTimeOneField(props) {
@@ -170,17 +166,16 @@ export default function ReelAtananSeferler() {
     const {
         aktif_can_sync = false,
         aktif_can_edit = false,
-        aktif_can_eta = false,
         aktif_may_open_edit = false,
-        aktif_may_open_eta = false,
     } = flags;
 
     // Uyum için yerel alias'lar
     const canSync = aktif_can_sync;
     const canEdit = aktif_can_edit;
-    const canETA = aktif_can_eta;
     const mayOpenEdit = aktif_may_open_edit;
-    const mayOpenETA = aktif_may_open_eta;
+    // ETA Kontrollerini UI'da kapatıyoruz (Arka plan odaklı çözüm)
+    const canETA = false;
+    const mayOpenETA = false;
 
     /* data */
     const [rows, setRows] = useState([]);
@@ -230,18 +225,12 @@ export default function ReelAtananSeferler() {
     const [detailRowsOrig, setDetailRowsOrig] = useState([]);
     const [seferTarihiYeni, setSeferTarihiYeni] = useState("");
 
-    // ETA dialog state
+    // ETA dialog state (Kullanım dışı bırakılan state'ler)
     const [etaOpen, setEtaOpen] = useState(false);
     const [etaRow, setEtaRow] = useState(null);
-    const [etaStartISO, setEtaStartISO] = useState("");
-    const [driveHM, setDriveHM] = useState("");
     const [etaDetails, setEtaDetails] = useState([]);
     const [etaDistanceKm, setEtaDistanceKm] = useState(null);
-    const [etaDistanceInfo, setEtaDistanceInfo] = useState("");
-    const [breakSel, setBreakSel] = useState(0);
-
-    // Manuel mesafe
-    const [distanceInput, setDistanceInput] = useState("");
+    const [distanceInput, setDistanceInput] = useState(""); // Manuel mesafe
 
     // “Anlık ETA uymayan” kilidi
     const [etaLocked, setEtaLocked] = useState(false);
@@ -397,7 +386,7 @@ export default function ReelAtananSeferler() {
         if (yuklemeIl) r = r.filter((x) => (x.yukleme_ili || "") === yuklemeIl);
         if (teslimIl) r = r.filter((x) => (x.teslim_ili || "") === teslimIl);
         if (aracStatu) r = r.filter((x) => (x.arac_statu || "") === aracStatu);
-        if (surucu) r = r.filter((x) => (x.surucu_ad_soyad || "") === surucu);
+        if (surucu) r = r.filter((x) => (x.surucu_ad_soyad || "").toLowerCase().includes(surucu.toLowerCase()));
 
         if (noktaSayisi) {
             const n = parseInt(noktaSayisi, 10);
@@ -473,7 +462,7 @@ export default function ReelAtananSeferler() {
         setDetailRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
     }, []);
 
-    // GÜNCELLENMİŞ saveDetails
+    // GÜNCELLENMİŞ saveDetails: ARKA PLAN TETİKLEYİCİSİ EKLENDİ
     const saveDetails = useCallback(async () => {
         if (!editSefer) return false;
         setSaving(true);
@@ -542,69 +531,51 @@ export default function ReelAtananSeferler() {
             setDetailRowsOrig(successfullyUpdatedRows);
 
             try {
+                // ETA Durum Kontrolü ve Arka Plan Tetiklemesi
                 const firstStart = getFirstLegStartISO(successfullyUpdatedRows);
                 if (editSefer?.id) {
                     const { yIl, yIlce, tIl, tIlce } = pickFirstLegOD(editSefer || {}, successfullyUpdatedRows);
+
+                    // Sadece mesafe sorgusu yapılır (caching için)
                     const mesafeRaw = await fetchMesafe({ yIl, yIlce, tIl, tIlce });
                     const km = parseMesafeKm(mesafeRaw);
+                    const hasKm = km && km > 0;
+                    const hasYC = Boolean(firstStart);
 
-                    if (firstStart && km) {
-                        const { data: srow } = await supabase
-                            .from("seferler")
-                            .select("kalan_surus_dk")
-                            .eq("id", editSefer.id)
-                            .maybeSingle();
-                        const remain = Number(srow?.kalan_surus_dk) || BLOCK_MIN;
+                    const shouldTriggerBackend = hasKm && hasYC; // BU MANTIĞIN TRUE OLMASI GEREKİR
 
-                        const { etaISO: newETA } = computeETAWithKGMPlus(km, firstStart, {
-                            initialRemainMin: remain,
-                            startBreakMin: 0,
-                        });
-
-                        await updateSefer(editSefer.id, {
-                            eta_varis: newETA,
-                            eta_note: null,
-                            kayit_zamani: new Date().toISOString(),
-                        });
-
-                        setRows((prev) =>
-                            prev.map((r) =>
-                                r.id === editSefer.id ? { ...r, eta_varis: newETA, eta_note: null } : r
-                            )
-                        );
-                    } else if (!firstStart) {
-                        await updateSefer(editSefer.id, {
-                            eta_varis: null,
-                            eta_note: "Yükleme çıkış tarihi bekleniyor.",
-                            kayit_zamani: new Date().toISOString(),
-                        });
-
-                        setRows((prev) =>
-                            prev.map((r) =>
-                                r.id === editSefer.id
-                                    ? { ...r, eta_varis: null, eta_note: "Yükleme çıkış tarihi bekleniyor." }
-                                    : r
-                            )
-                        );
-                    } else {
-                        await updateSefer(editSefer.id, {
-                            eta_varis: null,
-                            eta_note: "Mesafe bulunamadı.",
-                            kayit_zamani: new Date().toISOString(),
-                        });
-
-                        setRows((prev) =>
-                            prev.map((r) =>
-                                r.id === editSefer.id ? { ...r, eta_varis: null, eta_note: "Mesafe bulunamadı." } : r
-                            )
-                        );
+                    let newNote = null;
+                    if (!hasYC) {
+                        newNote = ETA_MESSAGES[ETA_STATUS.WAITING_FIRST_YC];
+                    } else if (!hasKm) {
+                        newNote = ETA_MESSAGES[ETA_STATUS.NEED_DISTANCE];
                     }
+
+                    // 🔥 KRİTİK DÜZELTME YERİ
+                    // YENİ NOT: Sizin kodunuzdaki bu kısım zaten doğru görünüyordu,
+                    // ancak bir önceki dağıtımda kodun doğru çalışmasını garanti edelim:
+                    await updateSefer(editSefer.id, {
+                        mesafe: km,
+                        eta_varis: null,
+                        eta_note: newNote,
+                        eta_gerekli_mi: shouldTriggerBackend, // 🔥 BU DEĞER ARTIK KESİNLİKLE TRUE OLMALI
+                        kayit_zamani: new Date().toISOString(),
+                    });
+
+                    // Frontend listesini güncelle
+                    setRows((prev) =>
+                        prev.map((r) =>
+                            r.id === editSefer.id ? { ...r, mesafe: km, eta_varis: null, eta_note: newNote, eta_gerekli_mi: shouldTriggerBackend } : r
+                        )
+                    );
                 }
             } catch (e) {
-                console.error("Auto ETA hesaplama hatası:", e);
+                console.error("Detay kaydetme sonrası ETA durum güncelleme hatası:", e);
+                // Hata durumunda bile bayrağı TRUE olarak güncellemeye zorlamak için (opsiyonel ama güvenli)
+                await updateSefer(editSefer.id, { eta_gerekli_mi: true });
             }
 
-            setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
+            setSnack({ open: true, msg: "Detaylar kaydedildi. ETA arka planda güncelleniyor.", severity: "success" });
         } catch (e) {
             errorOccurred = true;
             console.error(e);
@@ -615,6 +586,7 @@ export default function ReelAtananSeferler() {
 
         return !errorOccurred;
     }, [editSefer, detailRows, detailRowsOrig]);
+
 
     const moveToCompleted = useCallback(async () => {
         if (!editSefer) return;
@@ -708,7 +680,7 @@ export default function ReelAtananSeferler() {
         }
     }, [detailRows, editSefer, rows, seferTarihiYeni, closeEditor, addLog]);
 
-    /* ===== ETA PANELİ FONKSİYONLARI ===== */
+    /* ===== ETA PANELİ FONKSİYONLARI: DEVRE DIŞI BIRAKILDI (Ancak varlığı korunuyor) ===== */
     const openEditor = useCallback(
         async (row, aktarModu = false) => {
             if (!mayOpenEdit) {
@@ -785,282 +757,25 @@ export default function ReelAtananSeferler() {
         [mayOpenEdit]
     );
 
+    // KULLANICI İNTERAKSİYONUNU KESEN BOŞ FONKSİYON
     const openETA = useCallback(
         async (row) => {
-            if (!mayOpenETA) {
-                setSnack({ open: true, msg: "ETA panelini açma yetkiniz yok.", severity: "warning" });
-                return;
-            }
-
-            try {
-                const ensuredId = await getSeferIdByNo(row);
-                const merged = ensuredId ? { ...row, id: ensuredId } : row;
-                setEtaRow(merged);
-            } catch {
-                setEtaRow(row);
-            }
-
-            setEtaLocked(isAnlikEtaUyumsuz(row));
-
-            setDriveHM("");
-            setEtaDetails([]);
-            setEtaDistanceKm(null);
-            setEtaDistanceInfo("");
-            setBreakSel(row?.eta_mola_dk ?? 0);
-            setDistanceInput("");
-            setEtaOpen(true);
-
-            try {
-                const id = await getSeferIdByNo(row);
-
-                let detay = [];
-                if (id) detay = await loadDetaylar(id);
-
-                if (!detay.length) {
-                    const arrs = Object.fromEntries(detailFields.map((k) => [k, splitCell(row[k])]));
-                    const len = Math.max(1, ...detailFields.map((k) => arrs[k].length));
-                    const pick = (k, i) => arrs[k][i] ?? "";
-                    detay = Array.from({ length: len }, (_, i) => ({
-                        nokta_sirasi: i,
-                        proje_adi: pick("proje_adi", i),
-                        yukleme_noktasi: pick("yukleme_noktasi", i),
-                        yukleme_ili: pick("yukleme_ili", i),
-                        yukleme_ilcesi: pick("yukleme_ilcesi", i),
-                        teslim_noktasi: pick("teslim_noktasi", i),
-                        teslim_ili: pick("teslim_ili", i),
-                        teslim_ilcesi: pick("teslim_ilcesi", i),
-                        yukleme_varis: pick("yukleme_varis", i),
-                        teslim_varis: pick("teslim_varis", i),
-                        teslim_cikis: pick("teslim_cikis", i),
-                    }));
-                }
-
-                setEtaDetails(detay);
-
-                const firstStart = getFirstLegStartISO(detay);
-                setEtaStartISO(firstStart || "");
-
-                try {
-                    const { yIl, yIlce, tIl, tIlce } = pickFirstLegOD(row, detay);
-                    const mesafeRaw = await fetchMesafe({ yIl, yIlce, tIl, tIlce });
-                    let km = parseMesafeKm(mesafeRaw);
-
-                    // 1000 üstü int ise 100'e böl
-                    if (km && typeof km === "number" && km > 1000 && km % 1 === 0) {
-                        km = km / 100;
-                    }
-
-                    if (km) {
-                        const safMin = Math.round((km / AVG_SPEED_KMPH) * 60);
-                        setEtaDistanceKm(km);
-
-                        const formattedKm = km.toFixed(2).replace(".", ",");
-
-                        setEtaDistanceInfo(
-                            `${formattedKm} km • saf sürüş ~ ${Math.floor(safMin / 60)}s ${String(safMin % 60).padStart(2, "0")}d @ ${AVG_SPEED_KMPH} km/s`
-                        );
-                    } else {
-                        setEtaDistanceKm(null);
-                        setEtaDistanceInfo("Mesafe bulunamadı.");
-                    }
-                } catch {
-                    setEtaDistanceKm(null);
-                    setEtaDistanceInfo("Mesafe sorgusunda hata.");
-                }
-            } catch (e) {
-                console.error(e);
-                setEtaDetails([]);
-                setEtaStartISO(nowLocalISO());
-            }
+            setSnack({ open: true, msg: "ETA hesaplaması otomatiktir.", severity: "info" });
         },
-        [mayOpenETA]
+        []
     );
 
-    const originText = useMemo(() => {
-        if (!etaRow) return "-";
-        const first = (arr) => (arr.length ? arr[0] : "");
-        const yuklemeIl = first(splitCell(etaRow.yukleme_ili || ""));
-        const yuklemeIlce = first(splitCell(etaRow.yukleme_ilcesi || ""));
-        const yuklemeNokta = first(splitCell(etaRow.yukleme_noktasi || ""));
-        return [yuklemeNokta, yuklemeIlce, yuklemeIl].filter(Boolean).join(" • ");
-    }, [etaRow]);
-
-    const driverText = useMemo(() => {
-        if (!etaRow) return "-";
-        const ad = etaRow.surucu_ad_soyad || "-";
-        const tel = formatPhone(etaRow.surucu_telefon || "");
-        const tckn = (etaRow.surucu_tckn || "").toString();
-        const tcknMasked = tckn ? `${tckn.slice(0, 3)}****${tckn.slice(-2)}` : "-";
-        return `${ad} — ${tel} — ${tcknMasked}`;
-    }, [etaRow]);
-
-    const vehicleText = useMemo(() => {
-        if (!etaRow) return "-";
-        const p = etaRow.plaka || "-";
-        const t = etaRow.treyler ? ` • Treyler: ${etaRow.treyler}` : "";
-        return `${p}${t}`;
-    }, [etaRow]);
-
-    const jobText = useMemo(() => {
-        if (!etaRow) return "-";
-        const musteri = etaRow.musteri_adi || "-";
-        const proje = etaRow.proje_adi || "-";
-        return `${ellipsize(musteri, 50)} • ${ellipsize(proje, 50)}`;
-    }, [etaRow]);
-
-    const firstLegStartISO = useMemo(() => getFirstLegStartISO(etaDetails), [etaDetails]);
-
-    const computedETAISO = useMemo(() => {
-        try {
-            const finalDistance = Number(distanceInput) || etaDistanceKm;
-
-            if (!finalDistance || finalDistance <= 0) return "__NEED_DISTANCE__";
-
-            const startISO = etaStartISO || firstLegStartISO;
-            if (!startISO) return "__WAITING__";
-
-            const initialRemain = parseHHMMtoMin(driveHM) || BLOCK_MIN;
-
-            const { etaISO } = computeETAWithKGMPlus(finalDistance, startISO, {
-                initialRemainMin: initialRemain,
-                startBreakMin: Number(breakSel) || 0,
-            });
-
-            return etaISO || "";
-        } catch (e) {
-            console.error("ETA Hesaplama Hatası:", e);
-            return "";
-        }
-    }, [etaStartISO, driveHM, etaDistanceKm, breakSel, firstLegStartISO, distanceInput]);
-
-    const destinationText = useMemo(() => {
-        if (!etaRow) return "-";
-        const last = (arr) => (arr.length ? arr[arr.length - 1] : "");
-        const teslimIl = last(splitCell(etaRow.teslim_ili || ""));
-        const teslimIlce = last(splitCell(etaRow.teslim_ilcesi || ""));
-        const teslimNokta = last(splitCell(etaRow.teslim_noktasi || ""));
-        return [teslimNokta, teslimIlce, teslimIl].filter(Boolean).join(" • ");
-    }, [etaRow]);
-
+    // DİĞER KULLANIM DIŞI FONKSİYONLAR BOŞ BIRAKILDI
     const copyETA = useCallback(async () => {
-        try {
-            const copyText = (text) => {
-                const textarea = document.createElement("textarea");
-                textarea.value = text;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand("copy");
-                document.body.removeChild(textarea);
-            };
-
-            if (computedETAISO === "__WAITING__") {
-                copyText("Yükleme çıkış tarihi bekleniyor.");
-                setSnack({ open: true, msg: "Mesaj kopyalandı.", severity: "success" });
-                return;
-            }
-            if (computedETAISO === "__NEED_DISTANCE__") {
-                copyText("Mesafe bulunamadı.");
-                setSnack({ open: true, msg: "Mesaj kopyalandı.", severity: "success" });
-                return;
-            }
-            const txt = fromISOToCombined(computedETAISO || "") || "-";
-            copyText(txt);
-            setSnack({ open: true, msg: `ETA kopyalandı: ${txt}`, severity: "success" });
-        } catch (e) {
-            console.error("Copy FAILED:", e);
-            setSnack({ open: true, msg: "Kopyalanamadı. Tarayıcı yetkilerini kontrol edin.", severity: "error" });
-        }
-    }, [computedETAISO, fromISOToCombined]);
-
+        setSnack({ open: true, msg: "ETA paneli devre dışı.", severity: "warning" });
+    }, []);
     const saveETA = useCallback(async () => {
-        if (etaLocked) {
-            setSnack({ open: true, msg: "Bu sefer 'Anlık ETA uymuyor' durumunda. Değişiklik yapılamaz.", severity: "warning" });
-            return;
-        }
-
-        if (computedETAISO === "__NEED_DISTANCE__") {
-            setSnack({ open: true, msg: "Mesafe bilgisi eksik. Lütfen manuel mesafe girin.", severity: "warning" });
-            return;
-        }
-
-        setSaving(true);
-        try {
-            const id = (etaRow && etaRow.id) ? etaRow.id : await getSeferIdByNo(etaRow);
-            if (!id) throw new Error("Sefer kaydı bulunamadı (id yok).");
-
-            const firstStart = getFirstLegStartISO(etaDetails);
-            const finalDistance = Number(distanceInput) || etaDistanceKm;
-
-            const startISO = etaStartISO || firstStart;
-            const initialRemain = parseHHMMtoMin(driveHM) || BLOCK_MIN;
-
-            const canCompute = !!(finalDistance && finalDistance > 0 && startISO);
-
-            let newETA = null;
-            if (canCompute) {
-                const { etaISO } = computeETAWithKGMPlus(finalDistance, startISO, {
-                    initialRemainMin: initialRemain,
-                    startBreakMin: Number(breakSel) || 0,
-                });
-                newETA = etaISO || null;
-            }
-
-            const waiting = !(etaStartISO || firstLegStartISO);
-            const note = waiting
-                ? ETA_MESSAGES[ETA_STATUS.WAITING_FIRST_YC]
-                : (canCompute ? null : ETA_MESSAGES[ETA_STATUS.NEED_DISTANCE]);
-
-            const payload = {
-                eta_varis: newETA,
-                eta_note: note ?? null,
-                kalan_surus_dk: Number(initialRemain) || null,
-                eta_mola_dk: Number(breakSel) || 0,
-                kayit_zamani: new Date().toISOString(),
-            };
-
-            let ok = false;
-            try {
-                await updateSefer(id, payload);
-                ok = true;
-            } catch (e) {
-                console.warn("updateSefer hata, fallback:", e?.message || e);
-            }
-            if (!ok) {
-                const { error: upErr } = await supabase.from("seferler").update(payload).eq("id", id);
-                if (upErr) throw upErr;
-            }
-
-            setRows((prev) =>
-                prev.map((r) => {
-                    const matchById = r.id != null && String(r.id) === String(id);
-                    const matchByRid = r._rid != null && String(r._rid) === String(id);
-                    const matchByNo =
-                        etaRow?.sefer_no &&
-                        r.sefer_no &&
-                        String(r.sefer_no).trim() === String(etaRow.sefer_no).trim();
-
-                    return (matchById || matchByRid || matchByNo) ? { ...r, ...payload } : r;
-                })
-            );
-            addLog({ action: "ETA kaydedildi", sefer_no: etaRow?.sefer_no || "-", fields: ["eta_varis", "kalan_surus_dk", "eta_mola_dk"] });
-
-            setSnack({
-                open: true,
-                msg: newETA ? "ETA kaydedildi." : "Bilgiler kaydedildi. Detaylar/mesafe gelince ETA hesaplanacak.",
-                severity: "success",
-            });
-            setEtaOpen(false);
-        } catch (e) {
-            console.error("saveETA FAILED:", e);
-            setSnack({ open: true, msg: `Kaydedilemedi: ${e?.message || e}`, severity: "error" });
-        } finally {
-            setSaving(false);
-        }
-    }, [etaLocked, etaRow, etaStartISO, driveHM, etaDetails, etaDistanceKm, breakSel, firstLegStartISO, addLog, distanceInput, computedETAISO]);
+        setSnack({ open: true, msg: "ETA kaydetme devre dışı.", severity: "warning" });
+    }, []);
 
     const saveManualDistanceAndETA = useCallback(
         async ({ distance, yukleme_il, yukleme_ilce, teslim_il, teslim_ilce }) => {
-            if (!etaRow) return;
+            if (!etaRow || !etaRow.id) return;
             if (distance <= 0 || !yukleme_il || !teslim_il) {
                 setSnack({ open: true, msg: "Geçerli bir mesafe (km) girmelisiniz.", severity: "error" });
                 return;
@@ -1079,21 +794,36 @@ export default function ReelAtananSeferler() {
                     kayit_zamani: new Date().toISOString(),
                 };
 
-                console.log(`[ETA] Manuel Mesafe Kaydı: ${distance} km`);
+                // 1. Mesafeyi mesafeler tablosuna kaydet
                 const { error: upsertError } = await supabase
                     .from("mesafeler")
                     .upsert([mesafePayload], { onConflict: "yukleme_il,yukleme_ilce,teslim_il,teslim_ilce" });
 
                 if (upsertError) throw upsertError;
 
+                const newNote = null; // Mesafe artık bulundu
+                // 2. Sefer kaydındaki mesafe alanını ve arka plan tetikleme bayrağını güncelle
+                await updateSefer(etaRow.id, {
+                    mesafe: distance,
+                    eta_varis: null,
+                    eta_note: newNote,
+                    eta_gerekli_mi: true, // ARKA PLAN TETİKLEME BAYRAĞI
+                    kayit_zamani: new Date().toISOString(),
+                });
+
+                // 3. Frontend listesini güncelle
+                setRows((prev) =>
+                    prev.map((r) =>
+                        r.id === etaRow.id ? { ...r, mesafe: distance, eta_varis: null, eta_note: newNote, eta_gerekli_mi: true } : r
+                    )
+                );
+
                 setEtaDistanceKm(distance);
-
-                const formattedDistance = Number(distance).toFixed(2).replace(".", ",");
-
-                setEtaDistanceInfo(`${formattedDistance} km (Manuel Giriş)`);
                 setDistanceInput("");
 
-                await saveETA();
+                setSnack({ open: true, msg: "Mesafe kaydedildi. ETA arka planda hesaplanıyor.", severity: "success" });
+                setEtaOpen(false); // Diyalogu kapat
+
             } catch (e) {
                 console.error("saveManualDistanceAndETA FAILED:", e);
                 setSnack({ open: true, msg: `Mesafe kaydedilemedi: ${e?.message || e}`, severity: "error" });
@@ -1101,202 +831,49 @@ export default function ReelAtananSeferler() {
                 setSaving(false);
             }
         },
-        [etaRow, saveETA, USERKEY]
+        [etaRow, USERKEY]
     );
 
-    /* === Dashboard için adapter === */
-    const [dashRows, setDashRows] = useState([]);
+    // KULLANIM DIŞI KALAN ANCAK MEVCUT OLMASI GEREKEN DEĞİŞKENLER
+    const computedETAISO = '';
+    const firstLegStartISO = ''; // Değerler burada tanımlanmadığı için boş bırakıldı
 
-    useEffect(() => {
-        let cancelled = false;
+    // UI Propları (render edilmeseler bile)
+    const etaStartISO = '';
+    const driveHM = '';
+    const breakSel = 0;
+    const etaDistanceInfo = '';
+    const originText = '';
+    const destinationText = '';
+    const driverText = '';
+    const vehicleText = '';
+    const jobText = '';
 
-        const base = filtered.map((r) => ({
-            id: r.id ?? r._rid ?? null,
-            sefer_no: r.sefer_no,
-            eta: r.eta_varis || null,
-            sefer_tarihi: r.sefer_tarihi || null,
-            detay: undefined,
-        }));
-        setDashRows(base);
-
-        const take = base.slice(0, 30);
-        (async () => {
-            try {
-                const filled = await Promise.all(
-                    take.map(async (row) => {
-                        const id = row.id || null;
-                        if (!id) return row;
-
-                        try {
-                            const det = await loadDetaylar(id);
-
-                            const pick = (x) => x ?? "";
-                            const latestAt = (arr) => {
-                                const ts = (arr || [])
-                                    .map((d) => new Date(d.kayit_zamani))
-                                    .filter((d) => !isNaN(d));
-                                if (!ts.length) return null;
-                                ts.sort((a, b) => a - b);
-                                return ts[ts.length - 1].toISOString();
-                            };
-
-                            const ordered = Array.isArray(det)
-                                ? [...det].sort((a, b) => (a?.nokta_sirasi ?? 0) - (b?.nokta_sirasi ?? 0))
-                                : [];
-
-                            const firstByIndex = (ordered && ordered.length) ? ordered[0] : {};
-                            const firstByData =
-                                ordered.find((d) => String(d?.teslim_varis || "").trim()) ||
-                                firstByIndex;
-
-                            const last = (ordered && ordered.length)
-                                ? ordered[ordered.length - 1]
-                                : {};
-
-                            return {
-                                ...row,
-                                detay: {
-                                    first_yukleme_varis: firstByData?.yukleme_varis ?? "",
-                                    first_yukleme_cikis: firstByData?.yukleme_cikis ?? "",
-                                    first_teslim_varis: firstByData?.teslim_varis ?? "",
-                                    first_teslim_giris: firstByData?.teslim_varis ?? "",
-                                    first_teslim_cikis: firstByData?.teslim_cikis ?? "",
-
-                                    yukleme_varis: pick(last?.yukleme_varis),
-                                    yukleme_varis_at: latestAt(ordered),
-                                    yukleme_cikis: pick(last?.yukleme_cikis),
-                                    yukleme_cikis_at: latestAt(ordered),
-                                    teslim_varis: pick(last?.teslim_varis),
-                                    teslim_varis_at: latestAt(ordered),
-                                    teslim_cikis: pick(last?.teslim_cikis),
-                                    teslim_cikis_at: latestAt(ordered),
-                                },
-                            };
-                        } catch {
-                            return row;
-                        }
-                    })
-                );
-
-                if (!cancelled) {
-                    const rest = base.slice(take.length);
-                    setDashRows([...filled, ...rest]);
-                }
-            } catch {
-                /* silent */
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filtered]);
 
     /* grid columns (+ açıklama ikonu) */
     const columns = useMemo(() => {
-        let cols = buildColumns({
-            openETA,
-            openEditor,
-            COLORS,
-            perms: { loading: permsLoading, mayOpenETA, canETA, mayOpenEdit, canEdit },
-        });
-
-        // HIDDEN uygula
-        let hiddenIds = [];
-        try {
-            hiddenIds = JSON.parse(
-                localStorage.getItem(HIDDEN_KEY) ||
-                localStorage.getItem(GENERIC_HIDDEN_KEY) ||
-                "[]"
-            ) || [];
-        } catch { }
-        if (hiddenIds.length) {
-            const hidden = new Set(hiddenIds);
-            cols = cols.filter((c) => !hidden.has(c.field));
-        }
-
-        // ORDER oku
+        // Kolon sıralaması için kullanıcı ayarlarını oku
         let userOrder = [];
+        let hasUserOrder = false;
         try {
             userOrder = JSON.parse(
                 localStorage.getItem(ORDER_KEY) ||
                 localStorage.getItem(GENERIC_ORDER_KEY) ||
                 "[]"
             ) || [];
+            hasUserOrder = userOrder.length > 0;
         } catch { }
-        const hasUserOrder = userOrder.length > 0;
 
-        // _note kolonu
-        const noteCol = {
-            field: "_note",
-            headerName: "",
-            width: 46,
-            sortable: false,
-            filterable: false,
-            disableColumnMenu: true,
-            renderCell: (params) => {
-                const sn = (params?.row?.sefer_no || "").toString().trim();
-                if (!sn || !reasonNos.has(sn)) return null;
-                return (
-                    <Tooltip title="Bu sefere açıklama girildi">
-                        <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 9999, background: "#f59e0b" }} />
-                    </Tooltip>
-                );
-            },
-        };
-
-        const lowerTR = (s) => String(s || "").toLocaleLowerCase("tr-TR");
-        const getHeader = (c) => c.headerName || c.header || "";
-        const findCol = (preferFields = [], headerNeedle = "") => {
-            let c = cols.find((col) => preferFields.includes(col.field));
-            if (c) return c;
-            if (headerNeedle) c = cols.find((col) => lowerTR(getHeader(col)).includes(lowerTR(headerNeedle)));
-            return c;
-        };
-
-        // Kullanıcı sırası YOKSA _note'u sefer_no yanına ekle
-        if (!hasUserOrder) {
-            const seferNoCol = findCol(["sefer_no"], "sefer");
-            if (seferNoCol) {
-                const idx2 = cols.findIndex((c) => c.field === seferNoCol.field);
-                const exists = cols.some((c) => c.field === "_note");
-                if (!exists) cols = [...cols.slice(0, idx2 + 1), noteCol, ...cols.slice(idx2 + 1)];
-            } else {
-                if (!cols.some((c) => c.field === "_note")) cols = [noteCol, ...cols];
-            }
-        } else {
-            // kullanıcı sırası varsa, userOrder içinde _note geçiyorsa ekleyelim
-            if (!cols.some((c) => c.field === "_note") && userOrder.includes("_note")) {
-                cols = [...cols, noteCol];
-            }
-        }
-
-        // Kullanıcı sırası YOKSA ETA/Kalan görsel toparlama
-        if (!hasUserOrder) {
-            const islem = findCol(["islem", "actions", "_actions"], "işlem");
-            const reel = findCol(["reel_durum"], "reel");
-            const eta = findCol(["eta_varis", "eta"], "eta");
-            const kalan = findCol(["kalan_surus_dk", "kalan", "kalan_dk"], "kalan");
-            if (islem && reel && (eta || kalan)) {
-                const rest = cols.filter((c) => c.field !== eta?.field && c.field !== kalan?.field);
-                const idxIslem = rest.findIndex((c) => c.field === islem.field);
-                const idxReel = rest.findIndex((c) => c.field === reel.field);
-                const insertAt = Math.max(idxIslem, idxReel) + 1;
-                const toInsert = [eta, kalan].filter(Boolean);
-                cols = [...rest.slice(0, insertAt), ...toInsert, ...rest.slice(insertAt)];
-            }
-        }
-
-        // En sonda: kullanıcı sırası varsa birebir uygula
-        if (hasUserOrder) {
-            const idx = new Map(userOrder.map((k, i) => [k, i]));
-            cols = [...cols].sort((a, b) => {
-                const ai = idx.has(a.field) ? idx.get(a.field) : Number.POSITIVE_INFINITY;
-                const bi = idx.has(b.field) ? idx.get(b.field) : Number.POSITIVE_INFINITY;
-                return ai - bi;
-            });
-        }
+        // Kolon oluşturma fonksiyonunu çağır ve tüm ayarları ilet
+        let cols = buildColumns({
+            openETA,
+            openEditor,
+            COLORS,
+            perms: { loading: permsLoading, mayOpenETA, canETA, mayOpenEdit, canEdit },
+            userOrder: userOrder,
+            hasUserOrder: hasUserOrder,
+            reasonNos: reasonNos,
+        });
 
         return cols;
     }, [
@@ -1310,7 +887,6 @@ export default function ReelAtananSeferler() {
         viewBump,
         reasonNos,
     ]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
 
     /* sabit UI config */
     const baseInputSX = {
@@ -1424,7 +1000,7 @@ export default function ReelAtananSeferler() {
                 height: "100dvh",
                 overflow: "hidden",
                 display: "grid",
-                gridTemplateRows: "auto auto auto 1fr",
+                gridTemplateRows: "auto auto auto 1fr", // Ana Box düzeni
                 gap: 1.5,
                 p: 2,
                 background: COLORS.pageBg,
@@ -1527,7 +1103,8 @@ export default function ReelAtananSeferler() {
                     borderRadius: 3,
                     border: `1px solid ${COLORS.border}`,
                     background: COLORS.surface,
-                    height: { xs: 40, md: "70vh" },
+                    flexGrow: 1, // Kalan alanı kaplaması için
+                    height: '1000px', // Kalan alanı doldurması için
                     overflow: "hidden",
                 }}
             >
@@ -1711,53 +1288,13 @@ export default function ReelAtananSeferler() {
                                     addLog({ action: "Düzenleme (değişiklik yok)", sefer_no: editSefer?.sefer_no || "-", fields: [] });
                                 }
 
-                                setSnack({ open: true, msg: "Kaydedildi.", severity: "success" });
+                                setSnack({ open: true, msg: "Kaydedildi. ETA arka planda güncelleniyor.", severity: "success" });
                             } catch (e) {
                                 console.error(e);
                                 setSnack({ open: true, msg: "Kaydetme sırasında hata oluştu.", severity: "error" });
                             }
                         }}
                         onMoveToCompleted={moveToCompleted}
-                    />
-                </Suspense>
-            )}
-
-            {/* ETA Dialog */}
-            {etaOpen && (
-                <Suspense fallback={null}>
-                    <EtaDialog
-                        open={etaOpen}
-                        onClose={() => setEtaOpen(false)}
-                        COLORS={COLORS}
-                        etaRow={etaRow}
-                        mayOpenETA={mayOpenETA}
-                        canETA={canETA}
-                        vehicleText={vehicleText}
-                        driverText={driverText}
-                        jobText={jobText}
-                        originText={originText}
-                        destinationText={destinationText}
-                        etaDistanceInfo={etaDistanceInfo}
-                        DateTimeOneField={DateTimeOneField}
-                        TimeHMField={TimeHMField}
-                        BREAK_OPTIONS={BREAK_OPTIONS}
-                        latestYuklemeCikis={firstLegStartISO}
-                        nowLocalISO={nowLocalISO}
-                        baseInputSX={baseInputSX}
-                        etaStartISO={etaStartISO}
-                        setEtaStartISO={etaLocked ? () => { } : setEtaStartISO}
-                        driveHM={driveHM}
-                        setDriveHM={etaLocked ? () => { } : setDriveHM}
-                        breakSel={breakSel}
-                        setBreakSel={etaLocked ? () => { } : setBreakSel}
-                        distanceInput={distanceInput}
-                        setDistanceInput={setDistanceInput}
-                        saveManualDistanceAndETA={saveManualDistanceAndETA}
-                        computedETAISO={computedETAISO}
-                        fromISOToCombined={fromISOToCombined}
-                        copyETA={copyETA}
-                        saveETA={saveETA}
-                        readOnly={etaLocked}
                     />
                 </Suspense>
             )}

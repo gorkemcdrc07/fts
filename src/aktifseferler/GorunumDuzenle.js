@@ -1,7 +1,7 @@
 // src/aktifseferler/GorunumDuzenle.jsx
 import React, { useMemo, useRef, useState } from "react";
 import {
-    Box, Stack, Paper, Typography, TextField, IconButton, Button,
+    Box, Stack, Paper, Typography, TextField, Button,
     Chip, Switch, FormControlLabel, Tooltip, Divider, Snackbar, Alert
 } from "@mui/material";
 import { Helmet } from "react-helmet-async";
@@ -31,6 +31,8 @@ const ALL_COLUMNS = [
     { id: "actions", label: "İşlem", lock: true },
     { id: "reel_durum", label: "Reel Durum" },
     { id: "nokta_sayisi", label: "Nokta" },
+    { id: "nokta_kayit_bilgisi", label: "Nokta Kayıt Bilgisi" },
+    { id: "ilk_nokta_km", label: "İlk Noktanın KM" },            // <-- EKLENDİ
     { id: "sefer_no", label: "Sefer No" },
     { id: "statu", label: "Statü" },
     { id: "plaka", label: "Plaka" },
@@ -50,12 +52,9 @@ const ALL_COLUMNS = [
     { id: "musteri_siparis_no", label: "Sipariş No" },
     { id: "hizmet_adi", label: "Hizmet" },
     { id: "yukleme_noktasi", label: "Yükleme Noktası" },
-    // Yeni eklenen sütunlar burada
-    { id: "yukleme_kayit_zamani", label: "Yükleme Kayıt Zm." }, // Yeni
-    { id: "nokta_kayit_bilgisi", label: "Nokta Kayıt Bilgisi" }, // <-- EKLENDİ
     { id: "teslim_noktasi", label: "Teslim Noktası" },
-    { id: "teslim_kayit_zamani", label: "Teslim Kayıt Zm." },   // Yeni
-    //
+    { id: "yukleme_kayit_zamani", label: "Yükleme Kayıt Zm." },
+    { id: "teslim_kayit_zamani", label: "Teslim Kayıt Zm." },
     { id: "irsaliye_no", label: "İrsaliye No" },
     { id: "kayit_zamani", label: "Kayıt Zamanı" },
     { id: "atama_tarihi", label: "Atama Tarihi" },
@@ -63,14 +62,20 @@ const ALL_COLUMNS = [
     { id: "kalan_surus_dk", label: "Kalan (dk)" },
     { id: "_note", label: "Açıklama Rozeti", lock: true },
 ];
+
 const PRESET_MIN = [
     "actions", "reel_durum", "sefer_no", "plaka", "musteri_adi", "proje_adi",
     "sefer_tarihi", "eta_varis", "kalan_surus_dk", "_note"
 ];
+
+// Planlama presetine yeni KM ve Nokta Kayıt Bilgisi dahil
 const PRESET_PLAN = [
-    "actions", "reel_durum", "nokta_sayisi", "sefer_no", "statu", "plaka", "musteri_adi", "nokta_kayit_bilgisi",
-    "proje_adi", "yukleme_ili", "teslim_ili", "sefer_tarihi", "eta_varis", "kalan_surus_dk", "_note"
+    "actions", "reel_durum", "nokta_sayisi", "nokta_kayit_bilgisi", "ilk_nokta_km",
+    "sefer_no", "statu", "plaka", "musteri_adi",
+    "proje_adi", "yukleme_ili", "teslim_ili", "sefer_tarihi",
+    "eta_varis", "kalan_surus_dk", "_note"
 ];
+
 const PRESET_FULL = ALL_COLUMNS.map(c => c.id);
 
 export default function GorunumDuzenle() {
@@ -155,7 +160,6 @@ export default function GorunumDuzenle() {
             localStorage.setItem("aktifseferler.view.bump", String(Date.now()));
             // aynı sekmede storage event tetiklenmediği için manuel event yayınla
             window.dispatchEvent(new Event("aktifseferler:view:changed"));
-
             setSnack({ open: true, severity: "success", msg: "Görünüm kaydedildi." });
         } catch (e) {
             setSnack({ open: true, severity: "error", msg: "Kaydedilemedi." });
@@ -173,11 +177,9 @@ export default function GorunumDuzenle() {
         if (from === null || to === null || from === to) return;
 
         setOrder((prev) => {
-            // filtreli listeden kimlerden bahsettiğimizi tespit et
             const idFrom = list[from].id;
             const idTo = list[to].id;
 
-            // kilitli kolonlar yer değiştirmesin
             const lock = new Set(ALL_COLUMNS.filter(x => x.lock).map(x => x.id));
             if (lock.has(idFrom) || lock.has(idTo)) return prev;
 
@@ -213,7 +215,7 @@ export default function GorunumDuzenle() {
                         Görünümü Düzenle
                     </Typography>
                     <Typography variant="caption" sx={{ color: COLORS.textMuted }}>
-                        Sürükleyip bırakın. Numaralara bakarak **ekrandaki gerçek sıralamayı** görün.
+                        Sürükleyip bırakın. Numaralara bakarak <strong>ekrandaki gerçek sıralamayı</strong> görün.
                     </Typography>
                 </Stack>
 
@@ -275,7 +277,7 @@ export default function GorunumDuzenle() {
                 </Stack>
             </Paper>
 
-            {/* CANLI ÖNİZLEME: Görünen sütunlar sırasıyla */}
+            {/* CANLI ÖNİZLEME */}
             <Paper sx={{ p: 1, mb: 1.25, borderRadius: 3, border: `1px solid ${COLORS.border}`, background: COLORS.surface }}>
                 <Typography variant="caption" sx={{ color: COLORS.textMuted, display: "block", mb: 0.5 }}>
                     Canlı Önizleme (Ekrandaki görünür sütun sırası):
@@ -298,7 +300,7 @@ export default function GorunumDuzenle() {
                 </Stack>
             </Paper>
 
-            {/* LİSTE: Numara + isim + toggle */}
+            {/* LİSTE */}
             <Paper sx={{
                 borderRadius: 3, border: `1px solid ${COLORS.border}`, background: COLORS.surface,
                 p: 1, height: "calc(100dvh - 270px)", overflow: "auto"
@@ -314,15 +316,15 @@ export default function GorunumDuzenle() {
                 >
                     {list.map((col, idx) => {
                         const isHidden = hidden.has(col.id);
-                        const pos = indexOfInOrder(col.id);  // görünür sırası (-1 ise gizli)
+                        const pos = indexOfInOrder(col.id);
                         const posBadge = pos >= 0 ? (pos + 1) : "—";
                         return (
                             <Box
                                 key={col.id}
                                 component="li"
                                 draggable={!col.lock}
-                                onDragStart={onDragStart(idx)}
-                                onDragEnter={onDragEnter(idx)}
+                                onDragStart={() => (dragItem.current = idx)}
+                                onDragEnter={() => (dragOverItem.current = idx)}
                                 onDragEnd={onDragEnd}
                                 onDragOver={(e) => e.preventDefault()}
                                 sx={{
@@ -337,7 +339,7 @@ export default function GorunumDuzenle() {
                                 }}
                             >
                                 <Stack direction="row" spacing={1} alignItems="center">
-                                    {/* sıra numarası rozeti */}
+                                    {/* sıra numarası */}
                                     <Box
                                         sx={{
                                             width: 26, height: 26, borderRadius: "9999px",

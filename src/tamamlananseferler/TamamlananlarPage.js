@@ -11,7 +11,8 @@ import {
     Table, TableHead, TableRow, TableCell, TableBody,
     CircularProgress, TextField, Tooltip, useMediaQuery, useTheme,
     Select, MenuItem, InputLabel, FormControl,
-    Grid
+    Grid,
+    Dialog, DialogTitle, DialogContent, DialogActions
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
@@ -23,6 +24,8 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import DirectionsRunIcon from '@mui/icons-material/DirectionsRun';
 import ScheduleIcon from '@mui/icons-material/Schedule';
+import EditIcon from "@mui/icons-material/Edit";
+import SaveIcon from "@mui/icons-material/Save";
 
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
@@ -33,44 +36,48 @@ import { DataGrid, GridToolbarContainer, GridToolbarQuickFilter, GridToolbarColu
 // 2. DATE TIME HELPERS
 // =================================================================
 
+// datetime-local input için (offset'i sıfırlayarak) yardımcı
 const fmtDate = (d) => {
     if (!d) return null;
     return new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
-}
+};
 
-// Fixed UTC+3 display helpers (Zorunlu UTC+3 gösterimi için)
-const fmtDateTimeFixed = (isoString) => {
+// ---- Sabit Europe/Istanbul gösterimi ----
+const TR_TZ = "Europe/Istanbul";
+
+const fmtDateTimeTR = (isoString) => {
     if (!isoString) return "-";
     const d = new Date(isoString);
     if (Number.isNaN(d.getTime())) return "-";
-
-    const utcTime = d.getTime() + (d.getTimezoneOffset() * 60000);
-    const offsetTime = utcTime + (3 * 60 * 60 * 1000); // UTC+3
-    const fixedDate = new Date(offsetTime);
-
-    const y = fixedDate.getUTCFullYear();
-    const mo = fixedDate.getUTCMonth() + 1;
-    const dd = fixedDate.getUTCDate();
-    const hh = fixedDate.getUTCHours();
-    const mi = fixedDate.getUTCMinutes();
-
-    const pad = (n) => String(n).padStart(2, "0");
-
-    return `${pad(dd)}.${pad(mo)}.${y} ${pad(hh)}:${pad(mi)}`;
+    const date = new Intl.DateTimeFormat("tr-TR", {
+        timeZone: TR_TZ,
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+    }).format(d);
+    const time = new Intl.DateTimeFormat("tr-TR", {
+        timeZone: TR_TZ,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    }).format(d);
+    return `${date} ${time}`;
 };
 
-const fmtDateFixed = (isoString) => {
+const fmtDateTR = (isoString) => {
     if (!isoString) return "-";
     const d = new Date(isoString);
     if (Number.isNaN(d.getTime())) return "-";
-
-    const y = d.getUTCFullYear();
-    const mo = d.getUTCMonth() + 1;
-    const dd = d.getUTCDate();
-
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${pad(dd)}.${pad(mo)}.${y}`;
+    return new Intl.DateTimeFormat("tr-TR", {
+        timeZone: TR_TZ,
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+    }).format(d);
 };
+
+// Tarihi ISO stringine çevirir veya null döndürür
+const toISO = (d) => d instanceof Date && !isNaN(d) ? d.toISOString() : null;
 
 
 // =================================================================
@@ -100,14 +107,12 @@ function ToolbarLite(props) {
 
                 {/* Right Controls and Stats */}
                 <Stack direction="row" spacing={1.5} alignItems="center">
-                    {/* Stat Text */}
                     <Box sx={{ minWidth: 150, textAlign: 'right' }}>
                         <Typography variant="body2" color="text.secondary" fontWeight={600}>
                             {statText}
                         </Typography>
                     </Box>
 
-                    {/* Export Buttons */}
                     <Tooltip title="Ana Veriyi Excel'e Aktar">
                         <Button
                             variant="outlined"
@@ -136,7 +141,6 @@ function ToolbarLite(props) {
                         </Button>
                     </Tooltip>
 
-                    {/* Page Size Selection */}
                     <FormControl size="small" variant="outlined" sx={{ minWidth: 100 }}>
                         <InputLabel id="page-size-label" sx={{ fontSize: 14, color: theme.palette.text.secondary }}>Satır</InputLabel>
                         <Select
@@ -304,11 +308,11 @@ function DashboardPanel({ dateRangeText, totalCount, summary, lateBuckets, onFil
 }
 
 // =================================================================
-// 5. YENİ YARDIMCI BİLEŞEN: DetailTooltip (Güncelleyen bilgisini gösterir)
+// 5. YENİ YARDIMCI BİLEŞEN: DetailTooltip
 // =================================================================
 
 function DetailTooltip({ dateISO, updater, updateDateISO, fmtDateTimeFixed }) {
-    const mainText = fmtDateTimeFixed(dateISO);
+    const mainText = fmtDateTimeFixed(dateISO); // dışarıdan fmtDateTimeTR gönderiyoruz
     const theme = useTheme();
 
     const tooltipTitle = useMemo(() => {
@@ -354,7 +358,6 @@ function DetailTooltip({ dateISO, updater, updateDateISO, fmtDateTimeFixed }) {
     );
 }
 
-
 // =================================================================
 // 6. ANA BİLEŞEN: TamamlananlarPage
 // =================================================================
@@ -386,6 +389,11 @@ export default function TamamlananlarPage() {
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailRows, setDetailRows] = useState([]);
     const [selected, setSelected] = useState(null);
+
+    // Düzenleme
+    const [editModalOpen, setEditModalOpen] = useState(false);
+    const [editingSefer, setEditingSefer] = useState(null);
+    const [editingDetails, setEditingDetails] = useState([]);
 
     const [analysis, setAnalysis] = useState({
         bySefer: {},
@@ -448,9 +456,7 @@ export default function TamamlananlarPage() {
         const from = paginationModel.page * paginationModel.pageSize;
         const to = from + paginationModel.pageSize - 1;
 
-        // --- GERÇEK VERİ ÇEKİMİ BAŞLANGIÇ ---
         const { data, count, error } = await query.range(from, to);
-        // --- GERÇEK VERİ ÇEKİMİ SONU ---
 
         if (!error) {
             const currentRows = data || [];
@@ -462,14 +468,6 @@ export default function TamamlananlarPage() {
 
             if (seferNos.length) {
                 // Sorgu 2: ETA analizi için 'tamamlanan_detaylar' tablosundan son teslimat verisini çek
-                // ******************************************************************************
-                // DİKKAT: Yeni 8 sütunun çekilmesi için select("*") kullanıldığından emin olun.
-                // Kodda zaten select("*") var, yani yeni sütunlar çekiliyor:
-                // .select("sefer_no, teslim_varis") yerine .select("sefer_no, teslim_varis, teslim_cikis") kullanılması daha doğru olur.
-                // Ancak bu alanda sadece ETA analizi yapıldığından `teslim_varis` yeterli olabilir.
-                // openDetails fonksiyonunda tüm detaylar çekiliyor.
-                // ******************************************************************************
-
                 const { data: detailsData, error: detailsError } = await supabase
                     .from("tamamlanan_detaylar")
                     .select("sefer_no, teslim_varis, teslim_cikis")
@@ -479,7 +477,6 @@ export default function TamamlananlarPage() {
                     console.error("Error fetching detail data for ETA analysis:", detailsError);
                 } else {
                     (detailsData || []).forEach(d => {
-                        // Max Teslimat Zamanı olarak en son teslim varış veya teslim çıkış zamanını al
                         let currentTeslim = null;
                         if (d.teslim_varis && !Number.isNaN(new Date(d.teslim_varis).getTime())) {
                             currentTeslim = new Date(d.teslim_varis);
@@ -522,7 +519,7 @@ export default function TamamlananlarPage() {
 
                     if (tETA && tReal) {
                         diffMin = Math.round((tReal - tETA) / 60000);
-                        if (diffMin > 5) { // 5 dakikadan fazla gecikme
+                        if (diffMin > 5) {
                             status = "LATE"; late++;
                             delayAcc += diffMin; delayCnt++;
                             const abs = diffMin;
@@ -532,14 +529,14 @@ export default function TamamlananlarPage() {
                             else if (abs <= 240) lateBuckets[3].value++;
                             else if (abs <= 480) lateBuckets[4].value++;
                             else lateBuckets[5].value++;
-                        } else if (diffMin < -5) { // 5 dakikadan fazla erken
+                        } else if (diffMin < -5) {
                             status = "EARLY"; early++;
                             earlyAcc += Math.abs(diffMin); earlyCnt++;
                         } else {
                             status = "ONTIME"; ontime++;
                         }
                     } else {
-                        status = "ONTIME"; ontime++; // ETA veya Reel Varış yoksa şimdilik zamanında kabul et
+                        status = "ONTIME"; ontime++;
                     }
 
                     bySefer[r.sefer_no] = {
@@ -607,8 +604,6 @@ export default function TamamlananlarPage() {
         setDetailOpen(true);
         setDetailLoading(true);
 
-        // Sorgu: 'tamamlanan_detaylar' tablosundan seçilen seferin tüm detaylarını çek
-        // select("*") kullanıldığı için eklenen 8 sütun da (guncelleyen/tarih) otomatik olarak çekilecektir.
         const { data, error } = await supabase
             .from("tamamlanan_detaylar")
             .select("*")
@@ -618,6 +613,85 @@ export default function TamamlananlarPage() {
         if (!error) setDetailRows(data || []);
         setDetailLoading(false);
     }, []);
+
+    // Düzenleme modalını açar ve veriyi hazırlar
+    const openEditModal = useCallback(async (seferRow) => {
+        setEditingSefer(seferRow);
+        setDetailOpen(false);
+        setEditModalOpen(true);
+
+        const { data, error } = await supabase
+            .from("tamamlanan_detaylar")
+            .select("*")
+            .eq("sefer_no", seferRow.sefer_no)
+            .order("nokta_sirasi", { ascending: true });
+
+        if (!error) {
+            const parsedDetails = (data || []).map(d => ({
+                ...d,
+                _pk: `${d.sefer_no}#${d.nokta_sirasi}`, // UI benzersiz anahtar
+                yukleme_varis: d.yukleme_varis ? new Date(d.yukleme_varis) : null,
+                yukleme_cikis: d.yukleme_cikis ? new Date(d.yukleme_cikis) : null,
+                teslim_varis: d.teslim_varis ? new Date(d.teslim_varis) : null,
+                teslim_cikis: d.teslim_cikis ? new Date(d.teslim_cikis) : null,
+            }));
+            setEditingDetails(parsedDetails);
+        } else {
+            console.error("Detaylar çekilemedi:", error);
+        }
+    }, []);
+
+    // Değişiklikleri Supabase'e kaydeder
+    const handleSaveEdit = useCallback(async (updatedSefer, updatedDetails) => {
+        const { data: userData } = await supabase.auth.getUser();
+        const guncelleyen = userData?.user?.email || "Unknown User";
+        const nowISO = new Date().toISOString();
+        let hasError = false;
+
+        for (const detail of updatedDetails) {
+            if (!detail?.sefer_no || typeof detail?.nokta_sirasi === "undefined") {
+                console.error("Eksik PK bilgisi:", detail);
+                hasError = true;
+                continue;
+            }
+
+            const { error } = await supabase
+                .from("tamamlanan_detaylar")
+                .update({
+                    yukleme_varis: toISO(detail.yukleme_varis),
+                    yukleme_cikis: toISO(detail.yukleme_cikis),
+                    teslim_varis: toISO(detail.teslim_varis),
+                    teslim_cikis: toISO(detail.teslim_cikis),
+                    // Manuel müdahale logları
+                    yukleme_varis_guncelleyen: guncelleyen,
+                    yukleme_varis_guncelleme_tarihi: nowISO,
+                    yukleme_cikis_guncelleyen: guncelleyen,
+                    yukleme_cikis_guncelleme_tarihi: nowISO,
+                    teslim_varis_guncelleyen: guncelleyen,
+                    teslim_varis_guncelleme_tarihi: nowISO,
+                    teslim_cikis_guncelleyen: guncelleyen,
+                    teslim_cikis_guncelleme_tarihi: nowISO,
+                })
+                .match({
+                    sefer_no: detail.sefer_no,
+                    nokta_sirasi: detail.nokta_sirasi,
+                });
+
+            if (error) {
+                console.error("Detay güncelleme hatası:", error);
+                hasError = true;
+            }
+        }
+
+        if (hasError) {
+            alert("Hata: Bazı veriler güncellenemedi.");
+        } else {
+            alert("Güncelleme başarılı!");
+            setEditModalOpen(false);
+            fetchPage();
+        }
+    }, [fetchPage]);
+
 
     const columns = useMemo(
         () => [
@@ -670,10 +744,10 @@ export default function TamamlananlarPage() {
                 field: "sefer_tarihi",
                 headerName: "Sefer Tarihi",
                 width: 140,
-                valueGetter: (v, row) => (row?.sefer_tarihi ? fmtDateFixed(row.sefer_tarihi) : "-"),
+                // Europe/Istanbul'a sabit tarih
+                valueGetter: (v, row) => (row?.sefer_tarihi ? fmtDateTR(row.sefer_tarihi) : "-"),
             },
 
-            // Yeni Durum Sütunu (Analiz sonucunu gösteren)
             {
                 field: "status_display",
                 headerName: "ETA Durum",
@@ -682,7 +756,6 @@ export default function TamamlananlarPage() {
                 filterable: false,
                 renderCell: (params) => {
                     const statusData = analysis.bySefer[params.row.sefer_no];
-                    // eta_varis boşsa durumu gösteremeyiz.
                     if (!statusData || !params.row.eta_varis || !statusData.maxTeslimISO) return <Typography variant="caption" color="text.secondary">-</Typography>;
 
                     const status = statusData.status;
@@ -702,7 +775,7 @@ export default function TamamlananlarPage() {
                     }
 
                     return (
-                        <Tooltip title={`ETA: ${fmtDateTimeFixed(params.row.eta_varis)} | Reel: ${fmtDateTimeFixed(statusData.maxTeslimISO)}`}>
+                        <Tooltip title={`ETA: ${fmtDateTimeTR(params.row.eta_varis)} | Reel: ${fmtDateTimeTR(statusData.maxTeslimISO)}`}>
                             <Box sx={{
                                 backgroundColor: alpha(color, 0.1),
                                 color: color,
@@ -723,10 +796,9 @@ export default function TamamlananlarPage() {
                 field: "eta_varis",
                 headerName: "ETA Varış",
                 width: 180,
-                valueGetter: (v, row) => (row?.eta_varis ? fmtDateTimeFixed(row.eta_varis) : "-"),
+                valueGetter: (v, row) => (row?.eta_varis ? fmtDateTimeTR(row.eta_varis) : "-"),
             },
 
-            // Diğer daha az önemli sütunlar
             { field: "surucu_tckn", headerName: "TCKN", width: 120, hide: downMd },
             { field: "surucu_telefon", headerName: "Telefon", width: 140, hide: downMd },
             { field: "atama_yapan_kullanici", headerName: "Atayan", width: 160 },
@@ -734,7 +806,7 @@ export default function TamamlananlarPage() {
                 field: "kayit_zamani",
                 headerName: "Kayıt Zamanı",
                 width: 180,
-                valueGetter: (v, row) => (row?.kayit_zamani ? fmtDateTimeFixed(row.kayit_zamani) : "-"),
+                valueGetter: (v, row) => (row?.kayit_zamani ? fmtDateTimeTR(row.kayit_zamani) : "-"),
             },
         ],
         [openDetails, analysis, theme, downMd]
@@ -810,7 +882,7 @@ export default function TamamlananlarPage() {
         const pageStart = paginationModel.page * paginationModel.pageSize + 1;
         const pageEnd = Math.min(rowCount, pageStart + paginationModel.pageSize - 1);
         return loading
-            ? `Yükleniyor...`
+            ? "Yükleniyor..."
             : rowCount === 0
                 ? "Kayıt bulunamadı"
                 : `${pageStart} — ${pageEnd} / ${rowCount} Kayıt`;
@@ -838,7 +910,7 @@ export default function TamamlananlarPage() {
         >
             <Helmet><title>OPERASYON ANALİZİ</title></Helmet>
 
-            {/* Header (Title and Navigation) */}
+            {/* Header */}
             <Stack
                 direction={{ xs: "column", md: "row" }}
                 alignItems={{ xs: "flex-start", md: "center" }}
@@ -863,7 +935,6 @@ export default function TamamlananlarPage() {
                     </Typography>
                 </Stack>
 
-                {/* Right Navigation Buttons */}
                 <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
                     <Button
                         size="medium"
@@ -931,8 +1002,7 @@ export default function TamamlananlarPage() {
             {/* Dashboard Panel */}
             <DashboardPanel
                 dateRangeText={
-                    `${(dateStart && new Date(dateStart).toLocaleDateString("tr-TR")) || "-"}  —  ` +
-                    `${(dateEnd && new Date(dateEnd).toLocaleDateString("tr-TR")) || "-"}`
+                    `${(dateStart && new Date(dateStart).toLocaleDateString("tr-TR")) || "-"}  —  ${(dateEnd && new Date(dateEnd).toLocaleDateString("tr-TR")) || "-"}`
                 }
                 totalCount={rowCount}
                 summary={analysis.summary}
@@ -1038,6 +1108,23 @@ export default function TamamlananlarPage() {
             >
                 <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
                     <Typography variant="h5" sx={{ color: theme.palette.info.light }}>Detaylar — {selected?.sefer_no ?? "-"}</Typography>
+
+                    {selected && (
+                        <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<EditIcon sx={{ fontSize: 16 }} />}
+                            onClick={() => openEditModal(selected)}
+                            sx={{
+                                borderRadius: 2,
+                                background: theme.palette.warning.main,
+                                '&:hover': { background: theme.palette.warning.dark }
+                            }}
+                        >
+                            Düzenle
+                        </Button>
+                    )}
+
                     <IconButton onClick={() => setDetailOpen(false)} color="primary"><CloseIcon /></IconButton>
                 </Stack>
                 <Divider sx={{ mb: 3, borderColor: "rgba(255,255,255,0.1)" }} />
@@ -1065,7 +1152,6 @@ export default function TamamlananlarPage() {
                                         <TableCell>#</TableCell>
                                         <TableCell>Proje</TableCell>
                                         <TableCell>Yükleme Noktası</TableCell>
-                                        {/* GÜNCELLENEN BAŞLIKLAR: Tooltip ekledik */}
                                         <Tooltip title="Bu saate manuel müdahale yapıldıysa kimin yaptığını gösterir." arrow>
                                             <TableCell>Yükleme Varış</TableCell>
                                         </Tooltip>
@@ -1089,9 +1175,9 @@ export default function TamamlananlarPage() {
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        detailRows.map((d, i) => (
+                                        detailRows.map((d) => (
                                             <TableRow
-                                                key={`${selected?.sefer_no}-${i}`}
+                                                key={`${d.sefer_no}#${d.nokta_sirasi}`}
                                                 hover
                                                 sx={{ "&:hover": { backgroundColor: alpha("#22D3EE", 0.05) } }}
                                             >
@@ -1099,45 +1185,45 @@ export default function TamamlananlarPage() {
                                                 <TableCell>{d.proje_adi}</TableCell>
                                                 <TableCell>{d.yukleme_noktasi}</TableCell>
 
-                                                {/* Yükleme Varış - TOOLTIP EKLENDİ */}
+                                                {/* Yükleme Varış */}
                                                 <TableCell>
                                                     <DetailTooltip
                                                         dateISO={d.yukleme_varis}
                                                         updater={d.yukleme_varis_guncelleyen}
                                                         updateDateISO={d.yukleme_varis_guncelleme_tarihi}
-                                                        fmtDateTimeFixed={fmtDateTimeFixed}
+                                                        fmtDateTimeFixed={fmtDateTimeTR}
                                                     />
                                                 </TableCell>
 
-                                                {/* Yükleme Çıkış - TOOLTIP EKLENDİ */}
+                                                {/* Yükleme Çıkış */}
                                                 <TableCell>
                                                     <DetailTooltip
                                                         dateISO={d.yukleme_cikis}
                                                         updater={d.yukleme_cikis_guncelleyen}
                                                         updateDateISO={d.yukleme_cikis_guncelleme_tarihi}
-                                                        fmtDateTimeFixed={fmtDateTimeFixed}
+                                                        fmtDateTimeFixed={fmtDateTimeTR}
                                                     />
                                                 </TableCell>
 
                                                 <TableCell>{d.teslim_noktasi}</TableCell>
 
-                                                {/* Teslim Varış - TOOLTIP EKLENDİ */}
+                                                {/* Teslim Varış */}
                                                 <TableCell>
                                                     <DetailTooltip
                                                         dateISO={d.teslim_varis}
                                                         updater={d.teslim_varis_guncelleyen}
                                                         updateDateISO={d.teslim_varis_guncelleme_tarihi}
-                                                        fmtDateTimeFixed={fmtDateTimeFixed}
+                                                        fmtDateTimeFixed={fmtDateTimeTR}
                                                     />
                                                 </TableCell>
 
-                                                {/* Teslim Çıkış - TOOLTIP EKLENDİ */}
+                                                {/* Teslim Çıkış */}
                                                 <TableCell>
                                                     <DetailTooltip
                                                         dateISO={d.teslim_cikis}
                                                         updater={d.teslim_cikis_guncelleyen}
                                                         updateDateISO={d.teslim_cikis_guncelleme_tarihi}
-                                                        fmtDateTimeFixed={fmtDateTimeFixed}
+                                                        fmtDateTimeFixed={fmtDateTimeTR}
                                                     />
                                                 </TableCell>
 
@@ -1150,6 +1236,164 @@ export default function TamamlananlarPage() {
                     </Paper>
                 )}
             </Drawer>
+
+            {/* Edit Modal */}
+            <EditModal
+                open={editModalOpen}
+                onClose={() => setEditModalOpen(false)}
+                sefer={editingSefer}
+                details={editingDetails}
+                onSave={handleSaveEdit}
+            />
         </Box>
+    );
+}
+
+// =================================================================
+// 7. YENİ BİLEŞEN: EditModal
+// =================================================================
+
+function EditModal({ open, onClose, sefer, details, onSave }) {
+    const theme = useTheme();
+    // Local state'i Date objeleri olarak tutuyoruz.
+    const [localSefer, setLocalSefer] = useState(sefer);
+    const [localDetails, setLocalDetails] = useState(details);
+    const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        setLocalSefer(sefer);
+        if (details) setLocalDetails(details);
+    }, [sefer, details]);
+
+    if (!localSefer) return null;
+
+    // Tarih/saat alanlarının değişimini yöneten fonksiyon
+    const handleDetailChange = (pk, field, value) => {
+        setLocalDetails(prev => prev.map(d =>
+            d._pk === pk ? { ...d, [field]: value ? new Date(value) : null } : d
+        ));
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        await onSave(localSefer, localDetails);
+        setIsSaving(false);
+    };
+
+    return (
+        <Dialog
+            open={open}
+            onClose={onClose}
+            maxWidth="md"
+            fullWidth
+            PaperProps={{
+                sx: {
+                    borderRadius: 3,
+                    backgroundColor: alpha(theme.palette.background.paper, 0.95),
+                    border: '1px solid rgba(255,255,255,0.1)',
+                }
+            }}
+        >
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <EditIcon />
+                Sefer Düzenleme: <Box component="span" sx={{ color: theme.palette.warning.light }}>{localSefer.sefer_no}</Box>
+            </DialogTitle>
+            <Divider />
+            <DialogContent sx={{ pt: 2, pb: 0, maxHeight: '80vh' }}>
+                <Typography variant="h6" gutterBottom color="text.secondary">Detay Noktaları (Tarih/Saat Düzenleme)</Typography>
+                <Box sx={{ overflowY: 'auto', pr: 1, pb: 1 }}>
+                    {localDetails.map(detail => (
+                        <Box key={detail._pk} sx={{ mb: 3, p: 2, border: '1px solid #334155', borderRadius: 2 }}>
+                            <Typography variant="subtitle1" fontWeight={600} mb={1} sx={{ color: theme.palette.info.light }}>
+                                {detail.nokta_sirasi}. Durak: {detail.yukleme_noktasi || detail.teslim_noktasi}
+                            </Typography>
+
+                            <Grid container spacing={2}>
+                                {/* Yükleme Varış */}
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Yükleme Varış (Tarih ve Saat)"
+                                        type="datetime-local"
+                                        size="small"
+                                        value={
+                                            detail.yukleme_varis
+                                                ? fmtDate(detail.yukleme_varis).toISOString().slice(0, 16)
+                                                : ""
+                                        }
+                                        onChange={(e) => handleDetailChange(detail._pk, 'yukleme_varis', e.target.value)}
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ input: { color: 'white' } }}
+                                    />
+                                </Grid>
+                                {/* Yükleme Çıkış */}
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Yükleme Çıkış (Tarih ve Saat)"
+                                        type="datetime-local"
+                                        size="small"
+                                        value={
+                                            detail.yukleme_cikis
+                                                ? fmtDate(detail.yukleme_cikis).toISOString().slice(0, 16)
+                                                : ""
+                                        }
+                                        onChange={(e) => handleDetailChange(detail._pk, 'yukleme_cikis', e.target.value)}
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ input: { color: 'white' } }}
+                                    />
+                                </Grid>
+                                {/* Teslim Varış */}
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Teslim Varış (Tarih ve Saat)"
+                                        type="datetime-local"
+                                        size="small"
+                                        value={
+                                            detail.teslim_varis
+                                                ? fmtDate(detail.teslim_varis).toISOString().slice(0, 16)
+                                                : ""
+                                        }
+                                        onChange={(e) => handleDetailChange(detail._pk, 'teslim_varis', e.target.value)}
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ input: { color: 'white' } }}
+                                    />
+                                </Grid>
+                                {/* Teslim Çıkış */}
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Teslim Çıkış (Tarih ve Saat)"
+                                        type="datetime-local"
+                                        size="small"
+                                        value={
+                                            detail.teslim_cikis
+                                                ? fmtDate(detail.teslim_cikis).toISOString().slice(0, 16)
+                                                : ""
+                                        }
+                                        onChange={(e) => handleDetailChange(detail._pk, 'teslim_cikis', e.target.value)}
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ input: { color: 'white' } }}
+                                    />
+                                </Grid>
+                            </Grid>
+                        </Box>
+                    ))}
+                </Box>
+            </DialogContent>
+            <DialogActions sx={{ p: 2 }}>
+                <Button onClick={onClose} disabled={isSaving}>İptal</Button>
+                <Button
+                    onClick={handleSave}
+                    variant="contained"
+                    color="warning"
+                    startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                    disabled={isSaving}
+                >
+                    Kaydet
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 }

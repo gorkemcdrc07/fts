@@ -1,4 +1,3 @@
-// src/raporlar/yuklemedeBekleme.js
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 
@@ -15,22 +14,17 @@ import { saveAs } from "file-saver";
 import {
     Box,
     Button,
-    Card,
-    CardContent,
     Chip,
     Container,
-    Grid,
     IconButton,
-    InputAdornment,
     Paper,
     Stack,
-    Tab,
-    Tabs,
     TextField,
     Tooltip,
     Typography,
     Alert,
     CircularProgress,
+    LinearProgress, // Yeni: Yükleme çubuğu
 } from "@mui/material";
 
 // DataGrid
@@ -40,13 +34,12 @@ import {
     GridToolbarQuickFilter,
 } from "@mui/x-data-grid";
 
-// ICONS IMPORT
+// ICONS
 import {
     Refresh as RefreshIcon,
     InfoOutlined as InfoOutlinedIcon,
-    CalendarToday as CalendarTodayIcon,
-    HourglassEmpty as HourglassEmptyIcon,
     Download as DownloadIcon,
+    HourglassTop as HourglassTopIcon, // Yeni: Bekleme ikonu
 } from "@mui/icons-material";
 
 // Modal Component
@@ -56,7 +49,7 @@ import { TripDetailModal } from "./TripDetailModal";
 dayjs.extend(duration);
 dayjs.locale("tr");
 
-/* ===================== Sabitler / Şemalar ===================== */
+/* ===================== Sabitler / Şemalar (Değişmedi) ===================== */
 const DETAIL_TABLE = "tamamlanan_detaylar";
 const SUMMARY_TABLE = "tamamlanan_seferler";
 const TARGET_WAIT_MINUTES = 240;
@@ -81,9 +74,8 @@ const SUMMARY_COLS = [
     "proje_adi",
 ].join(",");
 
-// ✅ DÜZELTME: sefer_id yerine sefer_no kullanılıyor
 const DETAIL_COLS = [
-    "sefer_no", // <-- Anahtar
+    "sefer_no",
     "nokta_sirasi",
     "yukleme_noktasi",
     "teslim_noktasi",
@@ -101,16 +93,8 @@ const DETAIL_COLS = [
     "teslim_cikis_guncelleme_tarihi",
 ].join(",");
 
-/* ===================== Yardımcılar ===================== */
+/* ===================== Yardımcılar (Kısmen Güncellendi) ===================== */
 const safeVF = (fn) => (p) => (fn ? fn(p.value) : p.value);
-
-const firstOf = (obj, keys) => {
-    for (const k of keys) {
-        const v = obj?.[k];
-        if (v !== undefined && v !== null && v !== "") return v;
-    }
-    return null;
-};
 
 const parseDT = (v) => {
     if (!v && v !== 0) return null;
@@ -137,7 +121,8 @@ const minToHM = (m) => {
     const r = mm % 60;
     if (h && r) return `${h} sa ${r} dk`;
     if (h) return `${h} sa`;
-    return `${r} dk`;
+    if (r) return `${r} dk`;
+    return `0 dk`;
 };
 
 const fmtMinutes = (min) => {
@@ -146,54 +131,71 @@ const fmtMinutes = (min) => {
     return minToHM(n);
 };
 
-function calcETAFromDistance() {
-    return null;
-}
-
-/* ===================== Küçük UI Bileşenleri ===================== */
+// Yenilenmiş WaitChip
 const WaitChip = ({ minutes }) => {
-    let color = "default";
-    if (minutes >= 240) color = "error";
-    else if (minutes >= 180) color = "warning";
-    else if (minutes >= 120) color = "info";
+    if (minutes === null) return <Chip label="—" size="small" variant="outlined" />;
+
+    let color = "success";
+    let label = fmtMinutes(minutes);
+
+    if (minutes >= TARGET_WAIT_MINUTES) {
+        color = "error";
+    } else if (minutes >= TARGET_WAIT_MINUTES * 0.75) { // Örn: 180 dk
+        color = "warning";
+    } else if (minutes >= TARGET_WAIT_MINUTES * 0.5) { // Örn: 120 dk
+        color = "info";
+    }
+
+    // Yüksek bekleme sürelerini daha belirgin yap
+    const isHigh = minutes >= TARGET_WAIT_MINUTES * 0.75;
+
     return (
-        <Chip
-            color={color}
-            label={fmtMinutes(minutes)}
-            variant="outlined"
-            size="small"
-        />
+        <Tooltip title={`${minutes} dakika bekleme`}>
+            <Chip
+                color={color}
+                label={label}
+                variant={isHigh ? "filled" : "outlined"}
+                size="small"
+                sx={{
+                    fontWeight: isHigh ? 700 : 500,
+                }}
+            />
+        </Tooltip>
     );
 };
 
+/* ==== Excel Toolbar (Güncellendi) ==== */
 const ExcelToolbar = ({ onExport, onRefresh, disabled }) => (
-    <GridToolbarContainer sx={{ p: 1 }}>
+    <GridToolbarContainer sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
         <GridToolbarQuickFilter
             quickFilterParser={(v) => v.split(/\s+/).filter(Boolean)}
             debounceMs={300}
-            placeholder="Ara..."
+            placeholder="Tabloda Ara..."
+            sx={{ flexGrow: 1, minWidth: { xs: '100%', sm: 'auto' } }}
         />
-        <Box sx={{ flexGrow: 1 }} />
-        <Tooltip title="Excel Raporu İndir">
-            <span>
-                <Button
-                    size="small"
-                    startIcon={<DownloadIcon />}
-                    variant="outlined"
-                    onClick={onExport}
-                    disabled={disabled}
-                >
-                    Excel İndir
-                </Button>
-            </span>
-        </Tooltip>
-        <Tooltip title="Yenile">
-            <span>
-                <IconButton onClick={onRefresh} disabled={disabled}>
-                    <RefreshIcon />
-                </IconButton>
-            </span>
-        </Tooltip>
+        <Box sx={{ flexGrow: 1, display: { xs: 'none', sm: 'block' } }} />
+        <Stack direction="row" spacing={1}>
+            <Tooltip title="Excel Raporu İndir">
+                <span>
+                    <Button
+                        size="small"
+                        startIcon={<DownloadIcon />}
+                        variant="contained"
+                        onClick={onExport}
+                        disabled={disabled}
+                    >
+                        Excel İndir
+                    </Button>
+                </span>
+            </Tooltip>
+            <Tooltip title="Yenile">
+                <span>
+                    <IconButton onClick={onRefresh} disabled={disabled} color="primary">
+                        <RefreshIcon />
+                    </IconButton>
+                </span>
+            </Tooltip>
+        </Stack>
     </GridToolbarContainer>
 );
 
@@ -214,8 +216,10 @@ export default function YuklemedeBekleme() {
     };
     const closeDetail = () => {
         setDetailModalOpen(false);
+        setSelectedRow(null);
     };
 
+    // Veri çekme ve hesaplama mantığı (Değişmedi)
     const fetchAll = useCallback(async () => {
         setLoading(true);
         setFetchError(null);
@@ -260,23 +264,19 @@ export default function YuklemedeBekleme() {
         const detailResult = detailData || [];
         const byNo = new Map();
 
-        // 3) Verileri eşleştir
-        summaryResult.forEach((s) => {
+        // 3) Verileri eşleştir ve bekleme hesapla
+        const computed = summaryResult.map((r, i) => {
+            const sefer_no = r.sefer_no || `NO-${r.id ?? i}`;
+
             const detailsForSefer = detailResult
-                .filter((d) => d.sefer_no === s.sefer_no)
+                .filter((d) => d.sefer_no === r.sefer_no)
                 .sort(
                     (a, b) => (a.nokta_sirasi ?? 999) - (b.nokta_sirasi ?? 999)
                 );
-            byNo.set(s.sefer_no, detailsForSefer);
-        });
-
-        // 4) Bekleme dakikasını yalnızca varış & çıkış dolu olan ilk yükleme kaydından hesapla
-        const all = summaryResult.map((r, i) => {
-            const sefer_no = firstOf(r, ["sefer_no"]) || `NO-${r.id ?? i}`;
-            const detList = byNo.get(sefer_no) || [];
+            byNo.set(sefer_no, detailsForSefer);
 
             const firstValidLoad =
-                detList.find((d) => d.yukleme_varis && d.yukleme_cikis) || null;
+                detailsForSefer.find((d) => d.yukleme_varis && d.yukleme_cikis) || null;
 
             const yukleme_varis = firstValidLoad ? firstValidLoad.yukleme_varis : null;
             const yukleme_cikis = firstValidLoad ? firstValidLoad.yukleme_cikis : null;
@@ -292,10 +292,8 @@ export default function YuklemedeBekleme() {
             };
         });
 
-        // 5) Sadece geçerli bekleme süresi olanları tut
-        const cleaned = all.filter((x) => x.bekleme_dk !== null);
-
-        // (Opsiyonel) Aynı sefer_no gelirse, beklemesi büyük olanı tut
+        // 4) Sadece geçerli bekleme süresi olanları ve duplicate kontrolü
+        const cleaned = computed.filter((x) => x.bekleme_dk !== null);
         const dedup = Object.values(
             cleaned.reduce((acc, r) => {
                 const key = r.sefer_no || r.id;
@@ -325,7 +323,7 @@ export default function YuklemedeBekleme() {
             .sort((a, b) => (b.bekleme_dk ?? 0) - (a.bekleme_dk ?? 0));
     }, [rows, minDakika]);
 
-    // 🛑 EXCEL EXPORT
+    // EXCEL EXPORT (Değişmedi)
     const handleExport = async () => {
         if (!filtered.length) return;
 
@@ -387,6 +385,7 @@ export default function YuklemedeBekleme() {
         saveAs(blob, filename);
     };
 
+    // Detay satırları (Değişmedi)
     const stopRows = useMemo(() => {
         if (!selectedRow) return [];
         const det = detailByNo.get(selectedRow.sefer_no) || [];
@@ -416,7 +415,8 @@ export default function YuklemedeBekleme() {
         }));
     }, [selectedRow, detailByNo]);
 
-    const columns = [
+    /* ===== DataGrid Sütunları (Güncellendi) ===== */
+    const columns = useMemo(() => [
         {
             field: "sefer_no",
             headerName: "Sefer No",
@@ -426,13 +426,14 @@ export default function YuklemedeBekleme() {
                     size="small"
                     startIcon={<InfoOutlinedIcon />}
                     onClick={() => openDetail(p.row)}
-                    sx={{ fontWeight: 600 }}
+                    sx={{ fontWeight: 600, textTransform: 'none', px: 1, py: 0.5 }}
                 >
                     {p.value || "—"}
                 </Button>
             ),
         },
-        { field: "plaka", headerName: "Plaka", width: 120 },
+        { field: "plaka", headerName: "Plaka", width: 100 },
+        { field: "treyler", headerName: "Treyler", width: 100, hide: true },
         { field: "surucu_ad_soyad", headerName: "Şoför", width: 180 },
         { field: "proje_adi", headerName: "Proje Adı", width: 150 },
         {
@@ -452,106 +453,140 @@ export default function YuklemedeBekleme() {
             headerName: "Bekleme Süresi",
             width: 160,
             renderCell: (p) => <WaitChip minutes={p.value} />,
+            sortComparator: (a, b) => (a ?? 0) - (b ?? 0),
         },
-    ];
+    ], []);
 
     return (
         <Box
             sx={{
                 minHeight: "100dvh",
                 py: { xs: 2, md: 4 },
-                bgcolor: (t) => (t.palette.mode === "dark" ? "#121212" : "grey.100"),
+                bgcolor: (t) => (t.palette.mode === "dark" ? "#121212" : "grey.50"),
             }}
         >
             <Container
                 maxWidth={false}
                 sx={{ maxWidth: "1680px", px: { xs: 2, md: 4 } }}
             >
-                <Paper elevation={3} sx={{ borderRadius: 4, overflow: "hidden" }}>
+                <Paper elevation={6} sx={{ borderRadius: 3, overflow: "hidden", p: 0 }}>
+                    {/* Başlık ve Filtre Alanı */}
                     <Box
                         sx={{
-                            p: 2,
+                            p: 3,
                             display: "flex",
                             justifyContent: "space-between",
+                            alignItems: { xs: 'flex-start', md: 'center' },
                             flexWrap: "wrap",
                             gap: 2,
+                            bgcolor: 'secondary.main', // Yükleme raporu için farklı bir vurgu rengi
+                            color: 'secondary.contrastText',
                         }}
                     >
                         <Stack>
-                            <Typography variant="h6" fontWeight={700}>
-                                Yüklemede Bekleme Süreleri
+                            <Typography variant="h5" fontWeight={700}>
+                                Yüklemede Bekleme Analizi ⏳
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                {dayjs(dateFilter).format("DD MMMM YYYY")}
+                            <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                                **{dayjs(dateFilter).format("DD MMMM YYYY")}** tarihli seferlerdeki ilk yükleme noktasındaki bekleme süreleri
                             </Typography>
                         </Stack>
 
                         {/* ==== Üst Aksiyonlar ==== */}
-                        <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="center">
+                            <TextField
+                                label="Tarih Seçin"
+                                type="date"
+                                InputLabelProps={{ shrink: true, sx: { color: 'secondary.contrastText' } }}
+                                InputProps={{ sx: { color: 'secondary.contrastText' } }}
+                                value={dateFilter}
+                                onChange={(e) => setDateFilter(e.target.value)}
+                                size="small"
+                                variant="outlined"
+                                sx={{
+                                    minWidth: 150,
+                                    '& .MuiOutlinedInput-root': {
+                                        '& fieldset': { borderColor: 'secondary.light' },
+                                        '&:hover fieldset': { borderColor: 'white' },
+                                        '&.Mui-focused fieldset': { borderColor: 'white' },
+                                    }
+                                }}
+                            />
                             <TextField
                                 label="Min. Bekleme (dk)"
                                 type="number"
                                 value={minDakika}
                                 onChange={(e) => setMinDakika(e.target.value)}
                                 size="small"
-                            />
-                            <TextField
-                                type="date"
-                                InputLabelProps={{ shrink: true }}
-                                value={dateFilter}
-                                onChange={(e) => setDateFilter(e.target.value)}
-                                size="small"
-                            />
-
-                            {/* Excele Aktar */}
-                            <Button
                                 variant="outlined"
-                                startIcon={<DownloadIcon />}
-                                onClick={handleExport}
-                                disabled={loading || !filtered.length}
-                            >
-                                Excele Aktar
-                            </Button>
-
-                            <Button
-                                onClick={fetchAll}
-                                variant="contained"
-                                disabled={loading}
-                                startIcon={<RefreshIcon />}
-                            >
-                                Yenile
-                            </Button>
+                                sx={{
+                                    minWidth: 150,
+                                    '& .MuiOutlinedInput-root': {
+                                        '& fieldset': { borderColor: 'secondary.light' },
+                                        '&:hover fieldset': { borderColor: 'white' },
+                                        '&.Mui-focused fieldset': { borderColor: 'white' },
+                                    },
+                                    '& .MuiInputLabel-root': { color: 'secondary.contrastText' },
+                                    '& .MuiInputBase-input': { color: 'secondary.contrastText' },
+                                }}
+                            />
+                            <Tooltip title="Verileri Güncelle">
+                                <span>
+                                    <Button
+                                        onClick={fetchAll}
+                                        variant="outlined"
+                                        disabled={loading}
+                                        startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
+                                        sx={{ height: '40px', color: 'secondary.contrastText', borderColor: 'secondary.light', '&:hover': { borderColor: 'white' } }}
+                                    >
+                                        Yenile
+                                    </Button>
+                                </span>
+                            </Tooltip>
                         </Stack>
                     </Box>
 
-                    <Box sx={{ height: "70vh" }}>
-                        {/* v5 uyumlu API */}
+                    {/* Veri Alanı */}
+                    <Box sx={{ height: "70vh", position: 'relative' }}>
+                        {loading && (
+                            <LinearProgress sx={{ position: 'absolute', top: 0, width: '100%', zIndex: 1 }} color="secondary" />
+                        )}
                         <DataGrid
                             rows={filtered}
                             columns={columns}
                             loading={loading}
-                            density="compact"
-                            components={{
-                                Toolbar: ExcelToolbar,
-                            }}
-                            componentsProps={{
+                            density="comfortable"
+                            slots={{ toolbar: ExcelToolbar }}
+                            slotProps={{
                                 toolbar: {
                                     onExport: handleExport,
                                     onRefresh: fetchAll,
                                     disabled: loading || !filtered.length,
                                 },
                             }}
+                            initialState={{
+                                pagination: { paginationModel: { pageSize: 25 } },
+                            }}
+                            pageSizeOptions={[10, 25, 50]}
+                            sx={{
+                                '& .MuiDataGrid-columnHeaders': {
+                                    bgcolor: 'grey.100',
+                                    fontWeight: 700,
+                                },
+                            }}
                         />
                     </Box>
 
+                    {/* Hata Bildirimi */}
                     {fetchError && (
-                        <Alert severity="warning" sx={{ m: 2 }}>
-                            {fetchError}
+                        <Alert severity="error" sx={{ m: 2 }}>
+                            **Veri Yükleme Hatası:** {fetchError}
                         </Alert>
                     )}
                 </Paper>
             </Container>
 
+            {/* Detay Modal Bileşeni */}
             <TripDetailModal
                 open={isDetailModalOpen}
                 onClose={closeDetail}

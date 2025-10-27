@@ -33,11 +33,12 @@ export const APP_PAGES = [
     { title: "Araç Cari & Fiyat", path: "/hakedis/arac-cari-ve-fiyat" },
     { title: "Hakediş Seferleri", path: "/hakedis/hakedis-seferleri" },
     { title: "Hamaliye", path: "/hakedis/hamaliye" },
-    { title: "Frigo Yakıt Hakediş", path: "/hakedis/frigo-yakit-hakedis" }, // ✅ Yeni eklendi
+    { title: "Frigo Yakıt Hakediş", path: "/hakedis/frigo-yakit-hakedis" },
 
     // KPI & Raporlar
     { title: "KPI Ölçümü", path: "/raporlar/kpi-olcumu" },
     { title: "Yüklemede Bekleme", path: "/raporlar/yuklemede-bekleme" },
+    { title: "Teslimde Bekleme", path: "/raporlar/teslimde-bekleme" }, // ✅ YENİ EKRAN EKLENDİ
     { title: "Lokasyon Raporları", path: "/raporlar/lokasyon-rapor" },
     { title: "ETA Uyumsuzluğu", path: "/raporlar/eta-uyumsuzlugu" },
 

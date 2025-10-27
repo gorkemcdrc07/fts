@@ -196,14 +196,14 @@ export default function Sidebar(props) {
             ])
         );
 
-        // RAPORLAR (Frigo burada DEĞİL)
+        // RAPORLAR (Yüklemede Gecikme path'i kaldırıldı)
         setRaporMenuAcik(
             anyStartsWith([
                 "/raporlar/kpi-olcumu",
                 "/raporlar/lokasyon-rapor",
                 "/raporlar/yuklemede-bekleme",
-                "/raporlar/teslimde-bekleme", // Teslimde Bekleme
-                "/raporlar/yuklemede-gecikme",
+                "/raporlar/teslimde-bekleme",
+                // "/raporlar/yuklemede-gecikme", <-- KALDIRILDI
                 "/raporlar/sefer-sureleri",
                 "/raporlar/plaka-bazli",
                 "/raporlar/tools",
@@ -253,12 +253,9 @@ export default function Sidebar(props) {
             { ad: "KPI Ölçümü", yol: "/raporlar/kpi-olcumu", ikon: <AssessmentIcon /> },
             { ad: "Lokasyon Raporları", yol: "/raporlar/lokasyon-rapor", ikon: <MapIcon /> },
             { ad: "ETA Uyumsuzluğu", yol: "/raporlar/eta-uyumsuz", ikon: <ScheduleIcon /> },
-            // ❌ Frigo Yakıt Hakediş buradan kaldırıldı
             { ad: "Yüklemede Bekleme", yol: "/raporlar/yuklemede-bekleme", ikon: <ScheduleIcon /> },
-            { ad: "Teslimde Bekleme", yol: "/raporlar/teslimde-bekleme", ikon: <AvTimerIcon /> }, // Sadece bu kaldı
-            { ad: "Yüklemede Gecikme", yol: "/raporlar/yuklemede-gecikme", ikon: <QueryStatsIcon /> },
-            // { ad: "Teslimde bekleme", yol: "/raporlar/teslimde-bekleme", ikon: <AvTimerIcon /> }, // ❌ DUPLİKAT KALDIRILDI
-            // { ad: "Teslimde Gecikme", yol: "/raporlar/teslimde-gecikme", ikon: <AvTimerIcon /> }, // ❌ İSTEK ÜZERİNE KALDIRILDI
+            { ad: "Teslimde Bekleme", yol: "/raporlar/teslimde-bekleme", ikon: <AvTimerIcon /> },
+            // { ad: "Yüklemede Gecikme", yol: "/raporlar/yuklemede-gecikme", ikon: <QueryStatsIcon /> }, <-- KALDIRILDI
             { ad: "Sefer Süreleri", yol: "/raporlar/sefer-sureleri", ikon: <AirportShuttleIcon /> },
             { ad: "Plaka Bazlı", yol: "/raporlar/plaka-bazli", ikon: <AirportShuttleOutlinedIcon /> },
         ],

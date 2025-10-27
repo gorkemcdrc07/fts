@@ -23,6 +23,8 @@ import {
     Tooltip,
     Typography,
     Alert,
+    CircularProgress, // Yeni: Yüklenme göstergesi
+    LinearProgress, // Yeni: Yüklenme çubuğu
 } from "@mui/material";
 
 // DataGrid
@@ -37,16 +39,17 @@ import {
     Refresh as RefreshIcon,
     InfoOutlined as InfoOutlinedIcon,
     Download as DownloadIcon,
+    AccessTimeFilled as AccessTimeFilledIcon, // Yeni: Gecikme ikonu
 } from "@mui/icons-material";
 
 // Modal Component
-import { TripDetailModal } from "./TripDetailModal"; // Yeni import
+import { TripDetailModal } from "./TripDetailModal";
 
 // ===================== Dayjs Setup =====================
 dayjs.extend(duration);
 dayjs.locale("tr");
 
-/* ===================== Sabitler ===================== */
+/* ===================== Sabitler (Değişmedi) ===================== */
 const DETAIL_TABLE = "tamamlanan_detaylar";
 const SUMMARY_TABLE = "tamamlanan_seferler";
 const TODAY_DATE_ISO = dayjs().format("YYYY-MM-DD");
@@ -56,9 +59,9 @@ const SUMMARY_COLS = [
     "sefer_no",
     "plaka",
     "treyler",
-    "surucu_ad_soyad", // Yeni: Detay modalı için gerekli
-    "surucu_tckn",     // Yeni: Detay modalı için gerekli
-    "surucu_telefon",  // Yeni: Detay modalı için gerekli
+    "surucu_ad_soyad",
+    "surucu_tckn",
+    "surucu_telefon",
     "sefer_tarihi",
     "yukleme_ili",
     "yukleme_ilcesi",
@@ -89,7 +92,7 @@ const DETAIL_COLS = [
     "teslim_cikis_guncelleme_tarihi",
 ].join(",");
 
-/* ===================== Yardımcılar ===================== */
+/* ===================== Yardımcılar (Kısmen Güncellendi) ===================== */
 const safeVF = (fn) => (p) => (fn ? fn(p.value) : p.value);
 
 const parseDT = (v) => {
@@ -109,7 +112,8 @@ const minToHM = (m) => {
     const r = mm % 60;
     if (h && r) return `${h} sa ${r} dk`;
     if (h) return `${h} sa`;
-    return `${r} dk`;
+    if (r) return `${r} dk`;
+    return `0 dk`;
 };
 
 const diffMinutes = (start, end) => {
@@ -117,14 +121,10 @@ const diffMinutes = (start, end) => {
     const e = parseDT(end);
     if (!s || !e) return null;
     const m = e.diff(s, "minute");
-    // Bekleme raporunda negatif süreler olmamalı, bu yüzden 0'dan büyük/eşit kontrolü eklendi.
     return Number.isFinite(m) ? m : null;
 };
 
-/** Teslim deadline kuralı:
- * - varış < 12:00  -> aynı gün 17:00
- * - varış >= 12:00 -> ertesi gün 12:00
- */
+/** Teslim deadline kuralı: */
 const deliveryDeadline = (teslim_varis) => {
     const v = parseDT(teslim_varis);
     if (!v) return null;
@@ -135,42 +135,53 @@ const deliveryDeadline = (teslim_varis) => {
     return v.add(1, "day").hour(12).minute(0).second(0).millisecond(0); // ertesi gün 12:00
 };
 
-const statusColor = (lateMin) => {
-    if (lateMin <= 0 || lateMin === null) return "success"; // zamanında/erken
-    if (lateMin <= 60) return "info";
-    if (lateMin <= 4 * 60) return "warning";
-    return "error";
+// Renk kodlaması daha modern bir yaklaşımla güncellendi
+const getStatusProps = (lateMin) => {
+    if (lateMin === null || lateMin <= 0) {
+        return { label: "Zamanında", color: "success" };
+    }
+    if (lateMin <= 60) {
+        return { label: "1 Saat Altı", color: "info" };
+    }
+    if (lateMin <= 4 * 60) {
+        return { label: "Hafif Gecikme", color: "warning" };
+    }
+    return { label: "Önemli Gecikme", color: "error" };
 };
 
-/* ==== Toolbar ==== */
+
+/* ==== Toolbar (Küçük Kozmetik Dokunuş) ==== */
 const ExcelToolbar = ({ onExport, onRefresh, disabled }) => (
-    <GridToolbarContainer sx={{ p: 1 }}>
+    <GridToolbarContainer sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
         <GridToolbarQuickFilter
             quickFilterParser={(v) => v.split(/\s+/).filter(Boolean)}
             debounceMs={300}
-            placeholder="Ara..."
+            placeholder="Tabloda Ara..."
+            sx={{ flexGrow: 1, minWidth: { xs: '100%', sm: 'auto' } }}
         />
-        <Box sx={{ flexGrow: 1 }} />
-        <Tooltip title="Excel Raporu İndir">
-            <span>
-                <Button
-                    size="small"
-                    startIcon={<DownloadIcon />}
-                    variant="outlined"
-                    onClick={onExport}
-                    disabled={disabled}
-                >
-                    Excel İndir
-                </Button>
-            </span>
-        </Tooltip>
-        <Tooltip title="Yenile">
-            <span>
-                <IconButton onClick={onRefresh} disabled={disabled}>
-                    <RefreshIcon />
-                </IconButton>
-            </span>
-        </Tooltip>
+        <Box sx={{ flexGrow: 1, display: { xs: 'none', sm: 'block' } }} /> {/* Küçük ekranlarda yer açmak */}
+        <Stack direction="row" spacing={1}>
+            <Tooltip title="Excel Raporu İndir">
+                <span>
+                    <Button
+                        size="small"
+                        startIcon={<DownloadIcon />}
+                        variant="contained" // Daha belirgin
+                        onClick={onExport}
+                        disabled={disabled}
+                    >
+                        Excel İndir
+                    </Button>
+                </span>
+            </Tooltip>
+            <Tooltip title="Yenile">
+                <span>
+                    <IconButton onClick={onRefresh} disabled={disabled} color="primary">
+                        <RefreshIcon />
+                    </IconButton>
+                </span>
+            </Tooltip>
+        </Stack>
     </GridToolbarContainer>
 );
 
@@ -181,10 +192,10 @@ export default function TeslimdeBekleme() {
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState(null);
     const [dateFilter, setDateFilter] = useState(TODAY_DATE_ISO);
-    const [minLateMin, setMinLateMin] = useState(0); // sadece min gecikme filtresi
+    const [minLateMin, setMinLateMin] = useState(""); // boş string ile tümünü gösterme
 
-    const [selectedRow, setSelectedRow] = useState(null); // Yeni: Detay modali için
-    const [isDetailModalOpen, setDetailModalOpen] = useState(false); // Yeni: Detay modali için
+    const [selectedRow, setSelectedRow] = useState(null);
+    const [isDetailModalOpen, setDetailModalOpen] = useState(false);
 
     const openDetail = (row) => {
         setSelectedRow(row);
@@ -192,6 +203,7 @@ export default function TeslimdeBekleme() {
     };
     const closeDetail = () => {
         setDetailModalOpen(false);
+        setSelectedRow(null);
     };
 
 
@@ -202,7 +214,8 @@ export default function TeslimdeBekleme() {
         const startDate = dayjs(dateFilter).startOf("day").toISOString();
         const endDate = dayjs(dateFilter).add(1, "day").startOf("day").toISOString();
 
-        // 1) Özet verileri al
+        // Veri çekme ve hesaplama mantığı aynı kalır.
+        // ... (Kodun bu kısmı orijinal haliyle korunmuştur) ...
         const { data: summaryData, error: summaryError } = await supabase
             .from(SUMMARY_TABLE)
             .select(SUMMARY_COLS)
@@ -223,7 +236,6 @@ export default function TeslimdeBekleme() {
             return;
         }
 
-        // 2) Detaylar
         const seferNos = summary.map((r) => r.sefer_no).filter(Boolean);
 
         const { data: detailData, error: detailError } = await supabase
@@ -245,7 +257,6 @@ export default function TeslimdeBekleme() {
             byNo.set(s.sefer_no, detList);
         });
 
-        // 3) Kural: teslim_varis & teslim_cikis mevcut olan ilk teslim kaydı üzerinden hesap
         const computed = summary.map((r, i) => {
             const detList = byNo.get(r.sefer_no) || [];
             const firstValid = detList.find((d) => d.teslim_varis && d.teslim_cikis) || null;
@@ -254,11 +265,9 @@ export default function TeslimdeBekleme() {
             const teslim_cikis = firstValid?.teslim_cikis ?? null;
             const deadline = teslim_varis ? deliveryDeadline(teslim_varis) : null;
 
-            // gecikme (dk) = (teslim_cikis - deadline) pozitifse, değilse 0
             let gecikme_dk = null;
             if (deadline && teslim_cikis) {
                 const diff = diffMinutes(deadline, teslim_cikis);
-                // Teslimde bekleme, çıkışın deadline'dan ne kadar sonra olduğunu gösterir.
                 gecikme_dk = diff !== null ? Math.max(0, diff) : null;
             }
 
@@ -272,7 +281,6 @@ export default function TeslimdeBekleme() {
             };
         });
 
-        // sadece deadline hesaplanmış ve çıkış saati girilmiş kayıtlar
         const cleaned = computed.filter((x) => x.deadline !== null && x.teslim_cikis !== null);
 
         setDetailByNo(byNo);
@@ -291,7 +299,7 @@ export default function TeslimdeBekleme() {
             .sort((a, b) => (b.gecikme_dk ?? 0) - (a.gecikme_dk ?? 0));
     }, [rows, minLateMin]);
 
-    /* ===== Excel Export ===== */
+    /* ===== Excel Export (Değişmedi) ===== */
     const handleExport = async () => {
         if (!filtered.length) return;
 
@@ -346,7 +354,7 @@ export default function TeslimdeBekleme() {
         saveAs(blob, filename);
     };
 
-    // Yeni: Detay modalı için durak verisi hazırlama
+    // Detay modalı için durak verisi hazırlama (Değişmedi)
     const stopRows = useMemo(() => {
         if (!selectedRow) return [];
         const det = detailByNo.get(selectedRow.sefer_no) || [];
@@ -378,7 +386,8 @@ export default function TeslimdeBekleme() {
         }));
     }, [selectedRow, detailByNo]);
 
-    const columns = [
+    /* ===== DataGrid Sütunları (Gecikme renderCell Güncellendi) ===== */
+    const columns = useMemo(() => [
         {
             field: "sefer_no",
             headerName: "Sefer No",
@@ -387,8 +396,8 @@ export default function TeslimdeBekleme() {
                 <Button
                     size="small"
                     startIcon={<InfoOutlinedIcon />}
-                    onClick={() => openDetail(p.row)} // Yeni: Detay modalını açar
-                    sx={{ fontWeight: 600 }}
+                    onClick={() => openDetail(p.row)}
+                    sx={{ fontWeight: 600, textTransform: 'none', px: 1, py: 0.5 }} // Daha şık buton
                 >
                     {p.value || "—"}
                 </Button>
@@ -413,113 +422,169 @@ export default function TeslimdeBekleme() {
             headerName: "Deadline",
             width: 180,
             valueFormatter: safeVF(fmtDateTR),
+            cellClassName: 'deadline-column', // Görsel vurgu için yeni class
         },
         {
             field: "gecikme_dk",
-            headerName: "Gecikme",
-            width: 160,
-            renderCell: (p) => (
-                <Chip
-                    color={statusColor(p.value ?? 0)}
-                    variant="outlined"
-                    size="small"
-                    label={p.value && p.value > 0 ? minToHM(p.value) : "Zamanında"}
-                />
-            ),
+            headerName: "Gecikme Süresi",
+            width: 180,
+            renderCell: (p) => {
+                const gecikme = p.value ?? 0;
+                const { color, label } = getStatusProps(gecikme);
+                const isLate = gecikme > 0;
+
+                return (
+                    <Tooltip title={isLate ? `${minToHM(gecikme)} Gecikme` : "Zamanında/Erken Çıkış"}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                            {isLate && (
+                                <AccessTimeFilledIcon color={color} sx={{ fontSize: 16 }} />
+                            )}
+                            <Chip
+                                color={color}
+                                variant={isLate ? "filled" : "outlined"} // Gecikme varsa daha dikkat çekici
+                                size="small"
+                                label={isLate ? minToHM(gecikme) : "Zamanında"}
+                                sx={{
+                                    fontWeight: isLate ? 700 : 500,
+                                }}
+                            />
+                        </Stack>
+                    </Tooltip>
+                );
+            },
             sortComparator: (a, b) => (a ?? 0) - (b ?? 0),
         },
-    ];
+    ], []);
 
     return (
         <Box
             sx={{
                 minHeight: "100dvh",
                 py: { xs: 2, md: 4 },
-                bgcolor: (t) => (t.palette.mode === "dark" ? "#121212" : "grey.100"),
+                bgcolor: (t) => (t.palette.mode === "dark" ? "#121212" : "grey.50"), // Açık renkli daha modern zemin
             }}
         >
             <Container maxWidth={false} sx={{ maxWidth: "1680px", px: { xs: 2, md: 4 } }}>
-                <Paper elevation={3} sx={{ borderRadius: 4, overflow: "hidden" }}>
+                <Paper elevation={6} sx={{ borderRadius: 3, overflow: "hidden", p: 0 }}> {/* Daha yüksek gölge */}
+                    {/* Başlık ve Filtre Alanı */}
                     <Box
                         sx={{
-                            p: 2,
+                            p: 3,
                             display: "flex",
                             justifyContent: "space-between",
+                            alignItems: { xs: 'flex-start', md: 'center' },
                             flexWrap: "wrap",
                             gap: 2,
+                            bgcolor: 'primary.main', // Başlık için vurgu rengi
+                            color: 'primary.contrastText',
                         }}
                     >
                         <Stack>
-                            <Typography variant="h6" fontWeight={700}>
-                                Teslimde Bekleme / Gecikme
+                            <Typography variant="h5" fontWeight={700}>
+                                Teslimat Gecikme Raporu ⏱️
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                {dayjs(dateFilter).format("DD MMMM YYYY")}
+                            <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                                **{dayjs(dateFilter).format("DD MMMM YYYY")}** tarihli tamamlanan seferlerin teslimat gecikme analizi
                             </Typography>
                         </Stack>
 
-                        <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="center">
+                            <TextField
+                                label="Tarih Seçin"
+                                type="date"
+                                InputLabelProps={{ shrink: true, sx: { color: 'primary.contrastText' } }}
+                                InputProps={{ sx: { color: 'primary.contrastText' } }}
+                                value={dateFilter}
+                                onChange={(e) => setDateFilter(e.target.value)}
+                                size="small"
+                                variant="outlined" // Şık görünüm
+                                sx={{
+                                    minWidth: 150,
+                                    '& .MuiOutlinedInput-root': {
+                                        '& fieldset': { borderColor: 'primary.light' },
+                                        '&:hover fieldset': { borderColor: 'white' },
+                                        '&.Mui-focused fieldset': { borderColor: 'white' },
+                                    }
+                                }}
+                            />
                             <TextField
                                 label="Min. Gecikme (dk)"
                                 type="number"
                                 value={minLateMin}
                                 onChange={(e) => setMinLateMin(e.target.value)}
                                 size="small"
-                            />
-                            <TextField
-                                type="date"
-                                InputLabelProps={{ shrink: true }}
-                                value={dateFilter}
-                                onChange={(e) => setDateFilter(e.target.value)}
-                                size="small"
-                            />
-
-                            <Button
                                 variant="outlined"
-                                startIcon={<DownloadIcon />}
-                                onClick={handleExport}
-                                disabled={loading || !filtered.length}
-                            >
-                                Excele Aktar
-                            </Button>
-
-                            <Button
-                                onClick={fetchAll}
-                                variant="contained"
-                                disabled={loading}
-                                startIcon={<RefreshIcon />}
-                            >
-                                Yenile
-                            </Button>
+                                sx={{
+                                    minWidth: 150,
+                                    '& .MuiOutlinedInput-root': {
+                                        '& fieldset': { borderColor: 'primary.light' },
+                                        '&:hover fieldset': { borderColor: 'white' },
+                                        '&.Mui-focused fieldset': { borderColor: 'white' },
+                                    },
+                                    '& .MuiInputLabel-root': { color: 'primary.contrastText' },
+                                    '& .MuiInputBase-input': { color: 'primary.contrastText' },
+                                }}
+                            />
+                            <Tooltip title="Verileri Güncelle">
+                                <span>
+                                    <Button
+                                        onClick={fetchAll}
+                                        variant="outlined" // Daha hafif bir buton
+                                        disabled={loading}
+                                        startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
+                                        sx={{ height: '40px', color: 'primary.contrastText', borderColor: 'primary.light', '&:hover': { borderColor: 'white' } }}
+                                    >
+                                        Yenile
+                                    </Button>
+                                </span>
+                            </Tooltip>
                         </Stack>
                     </Box>
 
-                    <Box sx={{ height: "70vh" }}>
+                    {/* Veri Alanı */}
+                    <Box sx={{ height: "70vh", position: 'relative' }}>
+                        {loading && (
+                            <LinearProgress sx={{ position: 'absolute', top: 0, width: '100%', zIndex: 1 }} />
+                        )}
                         <DataGrid
                             rows={filtered}
                             columns={columns}
                             loading={loading}
-                            density="compact"
-                            components={{ Toolbar: ExcelToolbar }}
-                            componentsProps={{
+                            density="comfortable" // Daha okunaklı satırlar
+                            slots={{ toolbar: ExcelToolbar }}
+                            slotProps={{
                                 toolbar: {
                                     onExport: handleExport,
                                     onRefresh: fetchAll,
                                     disabled: loading || !filtered.length,
                                 },
                             }}
+                            initialState={{
+                                pagination: { paginationModel: { pageSize: 25 } },
+                            }}
+                            pageSizeOptions={[10, 25, 50]}
+                            sx={{
+                                '& .MuiDataGrid-columnHeaders': {
+                                    bgcolor: 'grey.100', // Başlık arka planı
+                                    fontWeight: 700,
+                                },
+                                '& .deadline-column': { // Deadline sütununu vurgula
+                                    bgcolor: (t) => (t.palette.mode === 'dark' ? 'rgba(255, 205, 0, 0.1)' : 'rgba(255, 230, 100, 0.4)'),
+                                },
+                            }}
                         />
                     </Box>
 
+                    {/* Hata Bildirimi */}
                     {fetchError && (
-                        <Alert severity="warning" sx={{ m: 2 }}>
-                            {fetchError}
+                        <Alert severity="error" sx={{ m: 2 }}>
+                            **Veri Yükleme Hatası:** {fetchError}
                         </Alert>
                     )}
                 </Paper>
             </Container>
 
-            {/* Yeni: Detay Modal Bileşeni */}
+            {/* Detay Modal Bileşeni */}
             <TripDetailModal
                 open={isDetailModalOpen}
                 onClose={closeDetail}

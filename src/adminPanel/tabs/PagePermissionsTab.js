@@ -27,17 +27,37 @@ function normalizePath(path) {
     return s;
 }
 
+/** * DEĞİŞİKLİK YAPILDI: Kategori isimleri ve yolları güncellendi.
+ */
 function getCategoryByPath(path) {
     const p = normalizePath(path);
+
+    // Genel
     if (p === "/anasayfa") return "Genel";
-    if (p.startsWith("/planlama") || ["/plaka-onerisi", "/siparisler", "/siparis-analiz"].includes(p)) return "Planlama";
-    if (p.startsWith("/aktifseferler") || p === "/seferler") return "Aktif Seferler";
-    if (p.startsWith("/tamamlanan-seferler")) return "Tamamlanan Seferler";
-    if (p.startsWith("/arac/")) return "Araç";
+
+    // Kullanıcı İşlemleri (Planlama, Aktif Seferler ve Tamamlanan Seferler birleştirildi)
+    if (
+        p.startsWith("/planlama") ||
+        ["/plaka-onerisi", "/siparisler", "/siparis-analiz"].includes(p) ||
+        p.startsWith("/aktifseferler") || p === "/seferler" ||
+        p.startsWith("/tamamlanan-seferler")
+    ) return "Kullanıcı İşlemleri";
+
+    // Araç Yönetimi
+    if (p.startsWith("/arac/")) return "Araç Yönetimi";
+
+    // Görevler
     if (p.startsWith("/gorevler/")) return "Görevler";
-    if (p.startsWith("/hakedis/")) return "Hakediş";
+
+    // Hakedişler
+    if (p.startsWith("/hakedis/")) return "Hakedişler";
+
+    // Raporlar
     if (p.startsWith("/raporlar/")) return "Raporlar";
+
+    // Yönetim (Admin)
     if (p === "/admin" || p.startsWith("/admin/")) return "Yönetim";
+
     return "Diğer";
 }
 
@@ -85,7 +105,7 @@ export default function PagePermissionsTab() {
     const [dirty, setDirty] = useState(false);
     const [q, setQ] = useState("");
 
-    /** ---- Veri yükleme (DEĞİŞİKLİK YAPILDI: useCallback kullanıldı) ---- */
+    /** ---- Veri yükleme (useCallback kullanıldı) ---- */
     const load = useCallback(async () => {
         setLoading(true);
         try {
@@ -124,9 +144,9 @@ export default function PagePermissionsTab() {
         } finally {
             setLoading(false);
         }
-    }, [cols]); // <-- load fonksiyonu içinde kullanılan 'cols' bağımlılık olarak eklendi.
+    }, [cols]);
 
-    // Satır 127: DEĞİŞİKLİK YAPILDI: 'load' bağımlılık olarak eklendi.
+    // 'load' bağımlılık olarak eklendi.
     useEffect(() => { load(); }, [load]);
 
     /** ---- Etkileşimler (Değişiklik yapılmadı) ---- */
@@ -277,8 +297,6 @@ export default function PagePermissionsTab() {
                                             maxWidth: 100,
                                             p: 0.5, // Daha kompakt
                                             fontWeight: 600,
-                                            // Başlıkları dikey yazma (isteğe bağlı, kaldırılabilir)
-                                            // transform: 'rotate(-45deg)', // Dikey başlıklar için
                                         }}
                                     >
                                         <Stack

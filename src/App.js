@@ -1,4 +1,3 @@
-// src/App.js
 import React, { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
@@ -8,42 +7,44 @@ import { ThemeProvider, CssBaseline } from "@mui/material";
 import theme from "./theme";
 
 // Guard
-import RequirePageAccess from "./routes/guards/RequirePageAccess";
+import { default as RequirePageAccess } from "./routes/guards/RequirePageAccess"; // Güvenli import
 
 // Sayfalar (eager)
-import Login from "./Login";
-import Anasayfa from "./Anasayfa";
-import Planlama from "./kullanıcıIslemleri/Planlama";
-import PlakaOnerisi from "./kullanıcıIslemleri/PlakaOnerisi";
-import Siparisler from "./kullanıcıIslemleri/Siparisler";
-import TamamlananlarPage from "./tamamlananseferler/TamamlananlarPage";
+// Tüm eager importlar güvenli named import formatına çevrildi:
+import { default as Login } from "./Login";
+import { default as Anasayfa } from "./Anasayfa";
+import { default as Planlama } from "./kullanıcıIslemleri/Planlama";
+import { default as PlakaOnerisi } from "./kullanıcıIslemleri/PlakaOnerisi";
+import { default as Siparisler } from "./kullanıcıIslemleri/Siparisler";
+import { default as TamamlananlarPage } from "./tamamlananseferler/TamamlananlarPage";
 
 // Araç Durumları
-import AracYonetimi from "./aracDurum/AracYonetimi";
-import IzinGirisi from "./aracDurum/IzinGirisi";
-import KesintiGirisi from "./aracDurum/KesintiGirisi";
-import AracDurumlari from "./aracDurum/AracDurumlari";
+import { default as AracYonetimi } from "./aracDurum/AracYonetimi";
+import { default as IzinGirisi } from "./aracDurum/IzinGirisi";
+import { default as KesintiGirisi } from "./aracDurum/KesintiGirisi";
+import { default as AracDurumlari } from "./aracDurum/AracDurumlari";
 
 // Görevler
-import GorevAta from "./views/Gorevler/GorevAta";
-import BenimGorevlerim from "./views/Gorevler/BenimGorevlerim";
-import TumGorevler from "./views/Gorevler/TumGorevler";
+import { default as GorevAta } from "./views/Gorevler/GorevAta";
+import { default as BenimGorevlerim } from "./views/Gorevler/BenimGorevlerim"; // Düzeltildi: BenimGoreVlerim -> BenimGorevlerim
+import { default as TumGorevler } from "./views/Gorevler/TumGorevler";
 
 // Hakediş
-import TedarikciMasraf from "./Hakedisler/TedarikciMasraf";
-import AracCariVeFiyat from "./Hakedisler/AracCariVeFiyat";
-import HakedisSeferleri from "./Hakedisler/HakedisSeferleri";
-import Hamaliye from "./Hakedisler/Hamaliye";
+import { default as TedarikciMasraf } from "./Hakedisler/TedarikciMasraf";
+import { default as AracCariVeFiyat } from "./Hakedisler/AracCariVeFiyat";
+import { default as HakedisSeferleri } from "./Hakedisler/HakedisSeferleri";
+import { default as Hamaliye } from "./Hakedisler/Hamaliye";
 
 // KPI & RAPORLAR
-import KpiOlcumu from "./raporlar/kpiOlcumu";
-import YuklemedeBekleme from "./raporlar/yuklemedeBekleme";
-import ProjeLokasyonRaporlari from "./raporlar/ProjeLokasyonRaporlari";
+import { default as KpiOlcumu } from "./raporlar/kpiOlcumu";
+import { default as YuklemedeBekleme } from "./raporlar/yuklemedeBekleme";
+import { default as ProjeLokasyonRaporlari } from "./raporlar/ProjeLokasyonRaporlari";
+import { default as TeslimdeBekleme } from "./raporlar/TeslimdeBekleme";
 
 // Layout
-import AppLayout from "./layout/AppLayout";
+import { default as AppLayout } from "./layout/AppLayout";
 
-// Lazy sayfalar
+// Lazy sayfalar (lazy import'lar bu sorunu yaşamaz, bu yüzden değiştirilmedi)
 const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler"));
 const SiparisAnaliz = lazy(() => import("./kullanıcıIslemleri/planlamaDetay/SiparisAnaliz"));
 const AdminPanel = lazy(() => import("./adminPanel/adminPanel"));
@@ -54,6 +55,7 @@ const PivotTool = lazy(() => import("./raporlar/PivotTool"));
 const ETAUyumsuzlugu = lazy(() => import("./raporlar/ETAUyumsuzlugu"));
 // ✅ Frigo Yakıt Hakediş (Hakedişler menüsü altında)
 const FrigoYakitHakedis = lazy(() => import("./Hakedisler/FrigoYakitHakedis"));
+
 // TEST VERİSİ
 const TEST_VERILERI = {
     "Sefer Performansı": [
@@ -151,6 +153,7 @@ function App() {
                                 {/* KPI & Raporlar */}
                                 <Route path="raporlar/kpi-olcumu" element={<KpiOlcumu />} />
                                 <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
+                                <Route path="raporlar/teslimde-bekleme" element={<TeslimdeBekleme />} />
                                 <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
 
                                 {/* ETA Uyumsuzluğu */}

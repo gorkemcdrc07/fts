@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { useNavigate } from "react-router-dom";
 
-// GERÇEK SUPABASE İMPORT'U (Projenizde bu dosyayı oluşturmalısınız)
+// GERÇEK SUPABASE İMPORT'U
 import { supabase } from "../supabaseClient";
+
+// YETKİ: tamamlanan_seferler için
+import usePermissions from "../auth/usePermissions";
 
 /* MUI */
 import {
@@ -30,7 +33,6 @@ import SaveIcon from "@mui/icons-material/Save";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { DataGrid, GridToolbarContainer, GridToolbarQuickFilter, GridToolbarColumnsButton } from "@mui/x-data-grid";
-
 
 // =================================================================
 // 2. DATE TIME HELPERS
@@ -78,7 +80,6 @@ const fmtDateTR = (isoString) => {
 
 // Tarihi ISO stringine çevirir veya null döndürür
 const toISO = (d) => d instanceof Date && !isNaN(d) ? d.toISOString() : null;
-
 
 // =================================================================
 // 3. TOOLBAR LITE COMPONENT
@@ -161,7 +162,6 @@ function ToolbarLite(props) {
         </GridToolbarContainer>
     );
 }
-
 
 // =================================================================
 // 4. DASHBOARD PANEL COMPONENT
@@ -310,7 +310,6 @@ function DashboardPanel({ dateRangeText, totalCount, summary, lateBuckets, onFil
 // =================================================================
 // 5. YENİ YARDIMCI BİLEŞEN: DetailTooltip
 // =================================================================
-
 function DetailTooltip({ dateISO, updater, updateDateISO, fmtDateTimeFixed }) {
     const mainText = fmtDateTimeFixed(dateISO); // dışarıdan fmtDateTimeTR gönderiyoruz
     const theme = useTheme();
@@ -361,7 +360,6 @@ function DetailTooltip({ dateISO, updater, updateDateISO, fmtDateTimeFixed }) {
 // =================================================================
 // 6. ANA BİLEŞEN: TamamlananlarPage
 // =================================================================
-
 const HOME_PATH = "/anasayfa";
 const now = new Date();
 const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -400,6 +398,10 @@ export default function TamamlananlarPage() {
         summary: { early: 0, ontime: 0, late: 0, avgDelayMin: 0, avgEarlyMin: 0 },
         lateBuckets: [],
     });
+
+    // ---- YETKİLER (Tamamlanan Seferler) ----
+    const { loading: permLoading, canEdit, flags } = usePermissions("tamamlanan_seferler");
+    const canEditCompleted = !!(flags?.tmam_can_edit_details || canEdit);
 
     const fetchPage = useCallback(async () => {
         setLoading(true);
@@ -598,7 +600,6 @@ export default function TamamlananlarPage() {
         }
     }, [downMd, downSm]);
 
-
     const openDetails = useCallback(async (row) => {
         setSelected(row);
         setDetailOpen(true);
@@ -614,8 +615,13 @@ export default function TamamlananlarPage() {
         setDetailLoading(false);
     }, []);
 
-    // Düzenleme modalını açar ve veriyi hazırlar
+    // Düzenleme modalını açar ve veriyi hazırlar (YETKİ KONTROLÜ EKLİ)
     const openEditModal = useCallback(async (seferRow) => {
+        if (!canEditCompleted) {
+            alert("Bu işlem için yetkiniz yok.");
+            return;
+        }
+
         setEditingSefer(seferRow);
         setDetailOpen(false);
         setEditModalOpen(true);
@@ -639,10 +645,15 @@ export default function TamamlananlarPage() {
         } else {
             console.error("Detaylar çekilemedi:", error);
         }
-    }, []);
+    }, [canEditCompleted]);
 
-    // Değişiklikleri Supabase'e kaydeder
+    // Değişiklikleri Supabase'e kaydeder (YETKİ KONTROLÜ EKLİ)
     const handleSaveEdit = useCallback(async (updatedSefer, updatedDetails) => {
+        if (!canEditCompleted) {
+            alert("Bu işlem için yetkiniz yok.");
+            return;
+        }
+
         const { data: userData } = await supabase.auth.getUser();
         const guncelleyen = userData?.user?.email || "Unknown User";
         const nowISO = new Date().toISOString();
@@ -690,8 +701,7 @@ export default function TamamlananlarPage() {
             setEditModalOpen(false);
             fetchPage();
         }
-    }, [fetchPage]);
-
+    }, [canEditCompleted, fetchPage]);
 
     const columns = useMemo(
         () => [
@@ -708,9 +718,7 @@ export default function TamamlananlarPage() {
                             fontWeight: 600,
                             color: theme.palette.info.light,
                             textDecoration: "underline",
-                            "&:hover": {
-                                background: 'transparent'
-                            }
+                            "&:hover": { background: 'transparent' }
                         }}
                     >
                         {params.value}
@@ -744,7 +752,6 @@ export default function TamamlananlarPage() {
                 field: "sefer_tarihi",
                 headerName: "Sefer Tarihi",
                 width: 140,
-                // Europe/Istanbul'a sabit tarih
                 valueGetter: (v, row) => (row?.sefer_tarihi ? fmtDateTR(row.sefer_tarihi) : "-"),
             },
 
@@ -1109,7 +1116,7 @@ export default function TamamlananlarPage() {
                 <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
                     <Typography variant="h5" sx={{ color: theme.palette.info.light }}>Detaylar — {selected?.sefer_no ?? "-"}</Typography>
 
-                    {selected && (
+                    {selected && canEditCompleted && (
                         <Button
                             variant="contained"
                             size="small"
@@ -1244,6 +1251,7 @@ export default function TamamlananlarPage() {
                 sefer={editingSefer}
                 details={editingDetails}
                 onSave={handleSaveEdit}
+                canEditCompleted={canEditCompleted}
             />
         </Box>
     );
@@ -1252,8 +1260,7 @@ export default function TamamlananlarPage() {
 // =================================================================
 // 7. YENİ BİLEŞEN: EditModal
 // =================================================================
-
-function EditModal({ open, onClose, sefer, details, onSave }) {
+function EditModal({ open, onClose, sefer, details, onSave, canEditCompleted }) {
     const theme = useTheme();
     // Local state'i Date objeleri olarak tutuyoruz.
     const [localSefer, setLocalSefer] = useState(sefer);
@@ -1389,7 +1396,7 @@ function EditModal({ open, onClose, sefer, details, onSave }) {
                     variant="contained"
                     color="warning"
                     startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                    disabled={isSaving}
+                    disabled={isSaving || !canEditCompleted}
                 >
                     Kaydet
                 </Button>

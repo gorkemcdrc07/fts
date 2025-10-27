@@ -1,5 +1,5 @@
 // src/adminPanel/tabs/RolesTab.js
-// DİKKAT: useCallback import'u eklendi!
+
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "../../supabaseClient";
 import {
@@ -27,7 +27,7 @@ const SCREENS = [
     { key: "tedarikci_masraf", name: "Tedarikçi Masraf" },
     { key: "arac_cari_fiyat", name: "Araç ve Cari Fiyat" },
     { key: "hakedis_seferleri", name: "Hakediş Seferleri" },
-    { key: "izin_yonetimi", name: "İzin Yönetimi" }, // eklendi
+    { key: "izin_yonetimi", name: "İzin Yönetimi" },
 ];
 
 /** role_permissions tablosundaki GERÇEK kolon isimleri — user_permissions ile BİREBİR */
@@ -38,6 +38,7 @@ const PERM_KEYS_BY_SCREEN = {
         { key: "aktif_can_eta", label: "ETA Gör" },
         { key: "aktif_may_open_edit", label: "Editörü Aç" },
         { key: "aktif_may_open_eta", label: "ETA Paneli Aç" },
+        { key: "aktif_can_delete", label: "Sefer Sil" }, // 💡 YENİ
     ],
     planlama: [
         { key: "pln_update", label: "Güncelle" },

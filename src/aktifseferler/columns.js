@@ -1,3 +1,4 @@
+// columns.js
 import {
     Chip,
     Stack,
@@ -8,19 +9,28 @@ import {
     Typography,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/EditNote";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import { fromISOToCombined } from "./utils/datetime";
 
 /**
- * buildColumns({ openETA, openEditor, COLORS, perms, userOrder, hasUserOrder })
- * perms: { loading, mayOpenETA, canETA, mayOpenEdit, canEdit }
+ * buildColumns({
+ *   openETA,
+ *   openEditor,
+ *   onDeleteRow,
+ *   COLORS,
+ *   perms,
+ *   userOrder
+ * })
+ *
+ * perms: { loading, mayOpenETA, canETA, mayOpenEdit, canEdit, canDelete }
  */
 export default function buildColumns({
     openETA,
     openEditor,
+    onDeleteRow,
     COLORS,
     perms,
     userOrder = [],
-    hasUserOrder = false,
 }) {
     const {
         loading = false,
@@ -28,17 +38,24 @@ export default function buildColumns({
         canETA = false,
         mayOpenEdit = false,
         canEdit = false,
+        canDelete = false,
     } = perms || {};
 
     // Basit metin kolonu helper
-    const txt = (f, t, w = 170) => ({ field: f, headerName: t, width: w, sortable: true });
+    const txt = (f, t, w = 170) => ({
+        field: f,
+        headerName: t,
+        width: w,
+        sortable: true,
+    });
 
     // ETA
     const etaCol = {
         field: "eta_varis",
         headerName: "ETA",
         width: 190,
-        renderCell: (p) => p.row.eta_note || fromISOToCombined(p.row.eta_varis || ""),
+        renderCell: (p) =>
+            p.row.eta_note || fromISOToCombined(p.row.eta_varis || ""),
         sortComparator: (a, b) => new Date(a) - new Date(b),
     };
 
@@ -51,11 +68,11 @@ export default function buildColumns({
         headerAlign: "center",
     };
 
-    // İşlem
+    // İşlem (ETA, Düzenle, Sil)
     const actionsCol = {
         field: "actions",
         headerName: "İşlem",
-        width: 160,
+        width: 210,
         sortable: false,
         filterable: false,
         renderCell: (p) => (
@@ -72,7 +89,15 @@ export default function buildColumns({
                 )}
 
                 {(loading || mayOpenEdit) && (
-                    <Tooltip title={loading ? "Yükleniyor..." : canEdit ? "Detayları Düzenle" : "Düzenleme yetkiniz yok"}>
+                    <Tooltip
+                        title={
+                            loading
+                                ? "Yükleniyor..."
+                                : canEdit
+                                    ? "Detayları Düzenle"
+                                    : "Düzenleme yetkiniz yok"
+                        }
+                    >
                         <span>
                             <IconButton
                                 size="small"
@@ -84,19 +109,38 @@ export default function buildColumns({
                         </span>
                     </Tooltip>
                 )}
+
+                <Tooltip
+                    title={
+                        loading ? "Yükleniyor..." : canDelete ? "Kaydı Sil" : "Silme yetkiniz yok"
+                    }
+                >
+                    <span>
+                        <IconButton
+                            size="small"
+                            onClick={() => onDeleteRow && onDeleteRow(p.row)}
+                            disabled={loading || !canDelete}
+                        >
+                            <DeleteOutlineOutlinedIcon fontSize="small" />
+                        </IconButton>
+                    </span>
+                </Tooltip>
             </Stack>
         ),
     };
 
     // Durum hesaplama
     const calcStatus = (enter, exit) => {
-        if (enter && exit) return { borderColor: "success.main", hint: "Giriş & Çıkış hazır" };
-        if (enter && !exit) return { borderColor: "warning.main", hint: "Çıkış eksik" };
-        if (!enter && exit) return { borderColor: "error.main", hint: "Giriş eksik" };
+        if (enter && exit)
+            return { borderColor: "success.main", hint: "Giriş & Çıkış hazır" };
+        if (enter && !exit)
+            return { borderColor: "warning.main", hint: "Çıkış eksik" };
+        if (!enter && exit)
+            return { borderColor: "error.main", hint: "Giriş eksik" };
         return { borderColor: "error.main", hint: "Kayıt yok" };
     };
 
-    // Daha anlaşılır: 1 G✓ Ç– biçiminde kapsüller
+    // Nokta kayıt bilgisi kapsülleri
     const noktaKayitBilgisiCol = {
         field: "nokta_kayit_bilgisi",
         headerName: "Nokta Kayıt Bilgisi",
@@ -121,12 +165,10 @@ export default function buildColumns({
                         width: "100%",
                     }}
                 >
-                    {/* sayaç */}
                     <Typography variant="caption" sx={{ fontWeight: 800, flex: "0 0 auto" }}>
                         {ozet.completed}/{ozet.total}
                     </Typography>
 
-                    {/* kapsüller: tek satır ve yatay kaydırılabilir */}
                     <Box
                         sx={{
                             display: "flex",
@@ -160,13 +202,20 @@ export default function buildColumns({
                                             px: 0.75,
                                             py: 0.25,
                                             bgcolor: "transparent",
-                                            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                                            fontFamily:
+                                                "ui-monospace, SFMono-Regular, Menlo, monospace",
                                         }}
                                     >
-                                        <Typography sx={{ fontSize: 11, fontWeight: 800 }}>{i + 1}</Typography>
+                                        <Typography sx={{ fontSize: 11, fontWeight: 800 }}>
+                                            {i + 1}
+                                        </Typography>
                                         <Stack direction="row" spacing={1}>
-                                            <Typography sx={{ fontSize: 11 }}>G{enter ? "✓" : "–"}</Typography>
-                                            <Typography sx={{ fontSize: 11 }}>Ç{exit ? "✓" : "–"}</Typography>
+                                            <Typography sx={{ fontSize: 11 }}>
+                                                G{enter ? "✓" : "–"}
+                                            </Typography>
+                                            <Typography sx={{ fontSize: 11 }}>
+                                                Ç{exit ? "✓" : "–"}
+                                            </Typography>
                                         </Stack>
                                     </Box>
                                 </Tooltip>
@@ -176,6 +225,21 @@ export default function buildColumns({
                 </Box>
             );
         },
+    };
+
+    // >>> YENİ: Görünüm editörde olan ama burada eksik olan 2 kolon
+    const ilkNoktaKmCol = {
+        field: "ilk_nokta_km",
+        headerName: "İlk Noktanın KM",
+        width: 150,
+        renderCell: (p) => p.row.ilk_nokta_km ?? "", // placeholder
+    };
+
+    const noteCol = {
+        field: "_note",
+        headerName: "Açıklama Rozeti",
+        width: 140,
+        renderCell: () => <Chip size="small" label="—" />, // placeholder (isterseniz rozet/ikon koyabilirsiniz)
     };
 
     // Çekirdek kolonlar
@@ -194,6 +258,9 @@ export default function buildColumns({
 
         // Yeni görünüm
         noktaKayitBilgisiCol,
+
+        // >>> YENİ kolonu görünüm sırasına uygun yere ekledik
+        ilkNoktaKmCol,
 
         txt("sefer_no", "Sefer No", 160),
         txt("statu", "Statü", 160),
@@ -223,7 +290,6 @@ export default function buildColumns({
         txt("teslim_noktasi", "Teslim Noktası", 280),
         txt("irsaliye_no", "İrsaliye No", 170),
 
-        // (Varsa) kayıt zamanları
         {
             field: "yukleme_kayit_zamani",
             headerName: "Yükleme Kayıt Zm.",
@@ -238,7 +304,6 @@ export default function buildColumns({
             renderCell: (p) => fromISOToCombined(p.row.teslim_kayit_zamani || ""),
             sortComparator: (a, b) => new Date(a) - new Date(b),
         },
-
         {
             field: "kayit_zamani",
             headerName: "Kayıt Zamanı",
@@ -253,13 +318,16 @@ export default function buildColumns({
             renderCell: (p) => fromISOToCombined(p.row.atama_tarihi || ""),
             sortComparator: (a, b) => new Date(a) - new Date(b),
         },
+
+        // >>> YENİ: placeholder not kolonu (preset’lerde var)
+        noteCol,
     ];
 
     // Tüm kolonlar
     let all = [actionsCol, ...baseCols, etaCol, kalanCol];
 
-    // Kullanıcı sırası varsa uygula
-    if (hasUserOrder && Array.isArray(userOrder) && userOrder.length) {
+    // Kullanıcı sırası varsa UYGULA (her zaman)
+    if (Array.isArray(userOrder) && userOrder.length) {
         const byId = new Map(all.map((c) => [c.field, c]));
         const picked = [];
         userOrder.forEach((id) => {

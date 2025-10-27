@@ -3,6 +3,7 @@ import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 
+
 /* MUI */
 import {
     Box,
@@ -167,16 +168,84 @@ export default function ReelAtananSeferler() {
     const navigate = useNavigate();
     // Yetkiler
     const { loading: permsLoading, flags = {} } = usePermissions("aktif_seferler");
+
+    // FLAGS: olası alternatif anahtar isimlerini de destekle
     const {
+        // birincil isimler
         aktif_can_sync = false,
         aktif_can_edit = false,
         aktif_may_open_edit = false,
+        aktif_can_delete = false,
+
+        // muhtemel alternatif isimler (backend farklı isimle gönderiyorsa)
+        aktif_seferler_can_sync = false,
+        aktif_seferler_can_edit = false,
+        aktif_seferler_may_open_edit = false,
+        aktif_seferler_can_delete = false,
+
+        // admin sinyalleri
+        admin = false,
+        is_admin = false,
+        role = "",
     } = flags;
 
-    // Uyum için yerel alias'lar
-    const canSync = aktif_can_sync;
-    const canEdit = aktif_can_edit;
-    const mayOpenEdit = aktif_may_open_edit;
+    // string/number → bool
+    const toBool = (v) => {
+        if (typeof v === "boolean") return v;
+        if (typeof v === "number") return v === 1;
+        if (v == null) return false;
+        const s = String(v).trim().toLowerCase();
+        return s === "true" || s === "1" || s === "yes" || s === "y" || s === "on";
+    };
+
+    // admin bypass
+    const isAdminBypass =
+        toBool(admin) ||
+        toBool(is_admin) ||
+        String(role).toLowerCase() === "admin" ||
+        toBool(localStorage.getItem("isAdmin")) ||
+        toBool(localStorage.getItem("admin"));
+
+    // önce birincil, yoksa alternatif → yoksa edit yetkisine düş
+    const rawCanSync = (aktif_can_sync ?? aktif_seferler_can_sync ?? false);
+    const rawCanEdit = (aktif_can_edit ?? aktif_seferler_can_edit ?? false);
+    const rawMayOpen = (aktif_may_open_edit ?? aktif_seferler_may_open_edit ?? false);
+    const rawCanDelete = (
+        aktif_can_delete ??
+        aktif_seferler_can_delete ??
+        aktif_can_edit ??              // ← fallback: edit varsa delete de olsun (istiyorsan kaldırabilirsin)
+        aktif_seferler_can_edit ??     // ← fallback
+        false
+    );
+
+    const canSync = isAdminBypass || toBool(rawCanSync);
+    const canEdit = isAdminBypass || toBool(rawCanEdit);
+    const mayOpenEdit = isAdminBypass || toBool(rawMayOpen);
+    const canDelete = isAdminBypass || toBool(rawCanDelete);
+
+    console.debug("[perms:raw]", {
+        aktif_can_delete, aktif_seferler_can_delete,
+        aktif_can_edit, aktif_seferler_can_edit,
+        rawCanDelete, canDelete, isAdminBypass
+    });
+
+
+    // (isteğe bağlı) görünür debug
+    useEffect(() => {
+        console.debug("[perms]", {
+            flags,
+            isAdminBypass,
+            canSync,
+            canEdit,
+            mayOpenEdit,
+            canDelete,
+        });
+        window.__perms = { flags, isAdminBypass, canSync, canEdit, mayOpenEdit, canDelete };
+    }, [flags, isAdminBypass, canSync, canEdit, mayOpenEdit, canDelete]);
+
+
+    // (isteğe bağlı) debug
+    // console.debug("[perms]", { flags, isAdminBypass, canSync, canEdit, mayOpenEdit, canDelete });
     // ETA Kontrollerini UI'da kapatıyoruz (Arka plan odaklı çözüm)
     const canETA = false;
     const mayOpenETA = false;
@@ -684,6 +753,42 @@ export default function ReelAtananSeferler() {
         }
     }, [detailRows, editSefer, rows, seferTarihiYeni, closeEditor, addLog]);
 
+    const deleteSefer = useCallback(async (row) => {
+        if (!canDelete) {
+            console.debug("[delete] blocked", {
+                flags,
+                isAdminBypass,
+                rawCanDelete: flags?.aktif_can_delete ?? flags?.aktif_seferler_can_delete,
+                canDelete
+            });
+            setSnack({ open: true, msg: "Silme yetkiniz yok.", severity: "warning" });
+            return;
+        }
+
+        const id = await getSeferIdByNo(row);
+        if (!id) {
+            setSnack({ open: true, msg: "Sefer ID bulunamadı.", severity: "error" });
+            return;
+        }
+        if (!window.confirm(`${row?.sefer_no || id} kaydı silinecek. Devam edilsin mi?`)) return;
+
+        setSaving(true);
+        try {
+            await supabase.from("sefer_detaylari").delete().eq("sefer_id", id);
+            await supabase.from("seferler").delete().eq("id", id);
+
+            setRows((prev) => prev.filter((r) => String(r.id) !== String(id)));
+            addLog({ action: "Sefer silindi", sefer_no: row?.sefer_no || "-", fields: ["delete"] });
+            setSnack({ open: true, msg: "Sefer silindi.", severity: "success" });
+        } catch (e) {
+            console.error("deleteSefer error:", e);
+            setSnack({ open: true, msg: "Silme işleminde hata oluştu.", severity: "error" });
+        } finally {
+            setSaving(false);
+        }
+    }, [canDelete, flags, isAdminBypass, setSaving, setRows]);
+
+
     /* ===== ETA PANELİ FONKSİYONLARI: DEVRE DIŞI BIRAKILDI (Ancak varlığı korunuyor) ===== */
     const openEditor = useCallback(
         async (row, aktarModu = false) => {
@@ -872,8 +977,9 @@ export default function ReelAtananSeferler() {
         let cols = buildColumns({
             openETA,
             openEditor,
+            onDeleteRow: deleteSefer, // ✅ eklendi
             COLORS,
-            perms: { loading: permsLoading, mayOpenETA, canETA, mayOpenEdit, canEdit },
+            perms: { loading: permsLoading, mayOpenETA, canETA, mayOpenEdit, canEdit, canDelete }, // ✅ eklendi
             userOrder: userOrder,
             hasUserOrder: hasUserOrder,
             reasonNos: reasonNos,
@@ -886,8 +992,10 @@ export default function ReelAtananSeferler() {
         canETA,
         mayOpenEdit,
         canEdit,
+        canDelete,
         openETA,
         openEditor,
+        deleteSefer,
         viewBump,
         reasonNos,
     ]);

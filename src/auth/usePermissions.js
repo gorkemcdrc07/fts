@@ -9,6 +9,11 @@ const MAP_BY_SCREEN = {
         "aktif_can_eta",
         "aktif_may_open_edit",
         "aktif_may_open_eta",
+        "aktif_can_delete",
+    ],
+    /** Tamamlanan Seferler: sadece detay düzenleme butonu */
+    tamamlanan_seferler: [
+        "tmam_can_edit_details",
     ],
     planlama: ["pln_update", "pln_save", "pln_export_excel", "pln_import_excel"],
     arac_durumlari: ["adur_create", "adur_edit", "adur_delete"],
@@ -69,8 +74,18 @@ const CANDIDATES = {
         "acf_edit_aylik_surucu",
         "acf_edit_calisma_gunu",
         "acf_edit_pasif",
+        // Tamamlanan seferler: sadece bu anahtar edit kabul edilsin
+        "tmam_can_edit_details",
     ],
-    delete: ["izin_delete", "ayon_delete", "adur_delete", "kes_delete", "tdm_delete", "acf_delete"],
+    delete: [
+        "aktif_can_delete", // Aktif sefer silme yetkisi
+        "izin_delete",
+        "ayon_delete",
+        "adur_delete",
+        "kes_delete",
+        "tdm_delete",
+        "acf_delete",
+    ],
 };
 
 /**

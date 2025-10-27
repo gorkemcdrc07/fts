@@ -13,19 +13,40 @@ import { saveAs } from "file-saver";
 
 // MUI
 import {
-    Box, Button, Card, CardContent, Chip, Container, Grid, IconButton,
-    InputAdornment, Paper, Stack, Tab, Tabs, TextField, Tooltip, Typography, Alert,
-    CircularProgress
+    Box,
+    Button,
+    Card,
+    CardContent,
+    Chip,
+    Container,
+    Grid,
+    IconButton,
+    InputAdornment,
+    Paper,
+    Stack,
+    Tab,
+    Tabs,
+    TextField,
+    Tooltip,
+    Typography,
+    Alert,
+    CircularProgress,
 } from "@mui/material";
 
 // DataGrid
-import { DataGrid, GridToolbarContainer, GridToolbarQuickFilter } from "@mui/x-data-grid";
+import {
+    DataGrid,
+    GridToolbarContainer,
+    GridToolbarQuickFilter,
+} from "@mui/x-data-grid";
 
 // ICONS IMPORT
 import {
-    Refresh as RefreshIcon, InfoOutlined as InfoOutlinedIcon,
-    CalendarToday as CalendarTodayIcon, HourglassEmpty as HourglassEmptyIcon,
-    Download as DownloadIcon
+    Refresh as RefreshIcon,
+    InfoOutlined as InfoOutlinedIcon,
+    CalendarToday as CalendarTodayIcon,
+    HourglassEmpty as HourglassEmptyIcon,
+    Download as DownloadIcon,
 } from "@mui/icons-material";
 
 // Modal Component
@@ -42,34 +63,73 @@ const TARGET_WAIT_MINUTES = 240;
 const TODAY_DATE_ISO = dayjs().format("YYYY-MM-DD");
 
 const SUMMARY_COLS = [
-    "id", "sefer_no", "plaka", "treyler", "surucu_ad_soyad", "surucu_tckn", "surucu_telefon",
-    "sefer_tarihi", "yukleme_ili", "yukleme_ilcesi", "teslim_ili", "teslim_ilcesi",
-    "musteri_adi", "yukleme_noktasi", "teslim_noktasi", "proje_adi",
-].join(',');
+    "id",
+    "sefer_no",
+    "plaka",
+    "treyler",
+    "surucu_ad_soyad",
+    "surucu_tckn",
+    "surucu_telefon",
+    "sefer_tarihi",
+    "yukleme_ili",
+    "yukleme_ilcesi",
+    "teslim_ili",
+    "teslim_ilcesi",
+    "musteri_adi",
+    "yukleme_noktasi",
+    "teslim_noktasi",
+    "proje_adi",
+].join(",");
 
 // ✅ DÜZELTME: sefer_id yerine sefer_no kullanılıyor
 const DETAIL_COLS = [
-    "sefer_no", // <-- Anahtar düzeltildi
+    "sefer_no", // <-- Anahtar
     "nokta_sirasi",
     "yukleme_noktasi",
     "teslim_noktasi",
-    "yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis",
-    "yukleme_varis_guncelleyen", "yukleme_varis_guncelleme_tarihi",
-    "yukleme_cikis_guncelleyen", "yukleme_cikis_guncelleme_tarihi",
-    "teslim_varis_guncelleyen", "teslim_varis_guncelleme_tarihi",
-    "teslim_cikis_guncelleyen", "teslim_cikis_guncelleme_tarihi"
-].join(',');
+    "yukleme_varis",
+    "yukleme_cikis",
+    "teslim_varis",
+    "teslim_cikis",
+    "yukleme_varis_guncelleyen",
+    "yukleme_varis_guncelleme_tarihi",
+    "yukleme_cikis_guncelleyen",
+    "yukleme_cikis_guncelleme_tarihi",
+    "teslim_varis_guncelleyen",
+    "teslim_varis_guncelleme_tarihi",
+    "teslim_cikis_guncelleyen",
+    "teslim_cikis_guncelleme_tarihi",
+].join(",");
 
 /* ===================== Yardımcılar ===================== */
-const safeVF = (fn) => (p) => fn ? fn(p.value) : p.value;
+const safeVF = (fn) => (p) => (fn ? fn(p.value) : p.value);
 
-const firstOf = (obj, keys) => { for (const k of keys) { const v = obj?.[k]; if (v !== undefined && v !== null && v !== "") return v; } return null; };
+const firstOf = (obj, keys) => {
+    for (const k of keys) {
+        const v = obj?.[k];
+        if (v !== undefined && v !== null && v !== "") return v;
+    }
+    return null;
+};
 
-const parseDT = (v) => { if (!v && v !== 0) return null; const d = dayjs(v); return d.isValid() ? d : null; };
+const parseDT = (v) => {
+    if (!v && v !== 0) return null;
+    const d = dayjs(v);
+    return d.isValid() ? d : null;
+};
 
-const diffMinutes = (start, end) => { const s = parseDT(start); const e = parseDT(end); if (!s || !e) return null; const m = e.diff(s, "minute"); return Number.isFinite(m) && m >= 0 ? m : null; };
+const diffMinutes = (start, end) => {
+    const s = parseDT(start);
+    const e = parseDT(end);
+    if (!s || !e) return null;
+    const m = e.diff(s, "minute");
+    return Number.isFinite(m) && m >= 0 ? m : null;
+};
 
-const fmtDateTR = (v) => { const d = parseDT(v); return d ? d.format("DD.MM.YYYY HH:mm") : "—"; };
+const fmtDateTR = (v) => {
+    const d = parseDT(v);
+    return d ? d.format("DD.MM.YYYY HH:mm") : "—";
+};
 
 const minToHM = (m) => {
     const mm = Math.max(0, Math.round(m || 0));
@@ -80,13 +140,32 @@ const minToHM = (m) => {
     return `${r} dk`;
 };
 
-const fmtMinutes = (min) => { if (min === null || min === undefined) return "—"; const n = Math.round(Number(min)); return minToHM(n); };
+const fmtMinutes = (min) => {
+    if (min === null || min === undefined) return "—";
+    const n = Math.round(Number(min));
+    return minToHM(n);
+};
 
-function calcETAFromDistance() { return null; }
-
+function calcETAFromDistance() {
+    return null;
+}
 
 /* ===================== Küçük UI Bileşenleri ===================== */
-const WaitChip = ({ minutes }) => { let color = "default"; if (minutes >= 240) color = "error"; else if (minutes >= 180) color = "warning"; else if (minutes >= 120) color = "info"; return <Chip color={color} label={fmtMinutes(minutes)} variant="outlined" size="small" />; };
+const WaitChip = ({ minutes }) => {
+    let color = "default";
+    if (minutes >= 240) color = "error";
+    else if (minutes >= 180) color = "warning";
+    else if (minutes >= 120) color = "info";
+    return (
+        <Chip
+            color={color}
+            label={fmtMinutes(minutes)}
+            variant="outlined"
+            size="small"
+        />
+    );
+};
+
 const ExcelToolbar = ({ onExport, onRefresh, disabled }) => (
     <GridToolbarContainer sx={{ p: 1 }}>
         <GridToolbarQuickFilter
@@ -97,7 +176,13 @@ const ExcelToolbar = ({ onExport, onRefresh, disabled }) => (
         <Box sx={{ flexGrow: 1 }} />
         <Tooltip title="Excel Raporu İndir">
             <span>
-                <Button size="small" startIcon={<DownloadIcon />} variant="outlined" onClick={onExport} disabled={disabled}>
+                <Button
+                    size="small"
+                    startIcon={<DownloadIcon />}
+                    variant="outlined"
+                    onClick={onExport}
+                    disabled={disabled}
+                >
                     Excel İndir
                 </Button>
             </span>
@@ -123,28 +208,49 @@ export default function YuklemedeBekleme() {
     const [selectedRow, setSelectedRow] = useState(null);
     const [isDetailModalOpen, setDetailModalOpen] = useState(false);
 
-    const openDetail = (row) => { setSelectedRow(row); setDetailModalOpen(true); };
-    const closeDetail = () => { setDetailModalOpen(false); };
+    const openDetail = (row) => {
+        setSelectedRow(row);
+        setDetailModalOpen(true);
+    };
+    const closeDetail = () => {
+        setDetailModalOpen(false);
+    };
 
     const fetchAll = useCallback(async () => {
-        setLoading(true); setFetchError(null);
-        const startDate = dayjs(dateFilter).startOf('day').toISOString();
-        const endDate = dayjs(dateFilter).add(1, 'day').startOf('day').toISOString();
+        setLoading(true);
+        setFetchError(null);
 
-        // 1. Özet verileri çek
-        const { data: summaryData, error: summaryError } = await supabase.from(SUMMARY_TABLE).select(SUMMARY_COLS).gte("sefer_tarihi", startDate).lt("sefer_tarihi", endDate);
+        const startDate = dayjs(dateFilter).startOf("day").toISOString();
+        const endDate = dayjs(dateFilter).add(1, "day").startOf("day").toISOString();
 
-        if (summaryError) { setFetchError(`Veritabanı Hatası: ${summaryError.message}`); setLoading(false); return; }
+        // 1) Özet verileri çek
+        const { data: summaryData, error: summaryError } = await supabase
+            .from(SUMMARY_TABLE)
+            .select(SUMMARY_COLS)
+            .gte("sefer_tarihi", startDate)
+            .lt("sefer_tarihi", endDate);
+
+        if (summaryError) {
+            setFetchError(`Veritabanı Hatası: ${summaryError.message}`);
+            setLoading(false);
+            return;
+        }
 
         const summaryResult = summaryData || [];
-        if (summaryResult.length === 0) { setRows([]); setDetailByNo(new Map()); setLoading(false); return; }
+        if (summaryResult.length === 0) {
+            setRows([]);
+            setDetailByNo(new Map());
+            setLoading(false);
+            return;
+        }
 
-        // 2. Detay verilerini sefer_no'ya göre çek (Düzeltme Uygulandı)
-        const seferNos = summaryResult.map(r => r.sefer_no).filter(Boolean);
+        // 2) Detayları sefer_no'ya göre çek
+        const seferNos = summaryResult.map((r) => r.sefer_no).filter(Boolean);
 
-        const { data: detailData, error: detailError } = await supabase.from(DETAIL_TABLE)
+        const { data: detailData, error: detailError } = await supabase
+            .from(DETAIL_TABLE)
             .select(DETAIL_COLS)
-            .in("sefer_no", seferNos); // ✅ sefer_no üzerinden filtreleme
+            .in("sefer_no", seferNos);
 
         if (detailError) {
             console.error("Detay tablosu alınamadı:", detailError.message);
@@ -154,52 +260,90 @@ export default function YuklemedeBekleme() {
         const detailResult = detailData || [];
         const byNo = new Map();
 
-        // 3. Verileri eşleştir
-        summaryResult.forEach(s => {
+        // 3) Verileri eşleştir
+        summaryResult.forEach((s) => {
             const detailsForSefer = detailResult
-                .filter(d => d.sefer_no === s.sefer_no) // ✅ sefer_no ile eşleştirme
-                .sort((a, b) => (a.nokta_sirasi ?? 999) - (b.nokta_sirasi ?? 999));
+                .filter((d) => d.sefer_no === s.sefer_no)
+                .sort(
+                    (a, b) => (a.nokta_sirasi ?? 999) - (b.nokta_sirasi ?? 999)
+                );
             byNo.set(s.sefer_no, detailsForSefer);
         });
 
+        // 4) Bekleme dakikasını yalnızca varış & çıkış dolu olan ilk yükleme kaydından hesapla
         const all = summaryResult.map((r, i) => {
             const sefer_no = firstOf(r, ["sefer_no"]) || `NO-${r.id ?? i}`;
             const detList = byNo.get(sefer_no) || [];
-            const firstDet = detList.find(d => firstOf(d, ["yukleme_varis", "yukleme_cikis"])) || detList[0] || {};
-            const yukleme_varis = firstOf(firstDet, ["yukleme_varis"]) ?? null;
-            const yukleme_cikis = firstOf(firstDet, ["yukleme_cikis"]) ?? null;
+
+            const firstValidLoad =
+                detList.find((d) => d.yukleme_varis && d.yukleme_cikis) || null;
+
+            const yukleme_varis = firstValidLoad ? firstValidLoad.yukleme_varis : null;
+            const yukleme_cikis = firstValidLoad ? firstValidLoad.yukleme_cikis : null;
             const bekleme_dk = diffMinutes(yukleme_varis, yukleme_cikis);
-            return { id: `${SUMMARY_TABLE}-${r.id ?? i}`, sefer_no, ...r, yukleme_varis, yukleme_cikis, bekleme_dk };
+
+            return {
+                id: `${SUMMARY_TABLE}-${r.id ?? i}`,
+                sefer_no,
+                ...r,
+                yukleme_varis,
+                yukleme_cikis,
+                bekleme_dk,
+            };
         });
 
-        const cleaned = all.filter(x => x.bekleme_dk !== null);
-        const dedup = Object.values(cleaned.reduce((acc, r) => { const key = r.sefer_no || r.id; if (!acc[key] || (acc[key].bekleme_dk ?? 0) < (r.bekleme_dk ?? 0)) { acc[key] = r; } return acc; }, {}));
-        setDetailByNo(byNo); setRows(dedup); setLoading(false);
+        // 5) Sadece geçerli bekleme süresi olanları tut
+        const cleaned = all.filter((x) => x.bekleme_dk !== null);
+
+        // (Opsiyonel) Aynı sefer_no gelirse, beklemesi büyük olanı tut
+        const dedup = Object.values(
+            cleaned.reduce((acc, r) => {
+                const key = r.sefer_no || r.id;
+                if (
+                    !acc[key] ||
+                    (acc[key].bekleme_dk ?? 0) < (r.bekleme_dk ?? 0)
+                ) {
+                    acc[key] = r;
+                }
+                return acc;
+            }, {})
+        );
+
+        setDetailByNo(byNo);
+        setRows(dedup);
+        setLoading(false);
     }, [dateFilter]);
 
-    useEffect(() => { fetchAll(); }, [fetchAll]);
+    useEffect(() => {
+        fetchAll();
+    }, [fetchAll]);
 
-    const filtered = useMemo(() => { const minTime = Number(minDakika) || 0; return rows.filter((r) => r.bekleme_dk >= minTime).sort((a, b) => (b.bekleme_dk ?? 0) - (a.bekleme_dk ?? 0)); }, [rows, minDakika]);
+    const filtered = useMemo(() => {
+        const minTime = Number(minDakika) || 0;
+        return rows
+            .filter((r) => (r.bekleme_dk ?? -1) >= minTime)
+            .sort((a, b) => (b.bekleme_dk ?? 0) - (a.bekleme_dk ?? 0));
+    }, [rows, minDakika]);
 
-    // 🛑 EXCEL EXPORT FONKSİYONU DÜZELTİLDİ
+    // 🛑 EXCEL EXPORT
     const handleExport = async () => {
         if (!filtered.length) return;
 
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet("Bekleme Analiz Raporu");
 
-        const dataToExport = filtered.map(r => ({
+        const dataToExport = filtered.map((r) => ({
             "Sefer No": r.sefer_no,
-            "Plaka": r.plaka,
-            "Treyler": r.treyler,
+            Plaka: r.plaka,
+            Treyler: r.treyler,
             "Şoför": r.surucu_ad_soyad,
             "Proje Adı": r.proje_adi,
             "Yükleme Noktası": r.yukleme_noktasi,
             "Yükleme İli": r.yukleme_ili,
             "Teslim Noktası": r.teslim_noktasi,
             "Teslim İli": r.teslim_ili,
-            "Varış Zamanı": r.yukleme_varis ? dayjs(r.yukleme_varis).toDate() : null, // ExcelJS Date objesi
-            "Çıkış Zamanı": r.yukleme_cikis ? dayjs(r.yukleme_cikis).toDate() : null, // ExcelJS Date objesi
+            "Varış Zamanı": r.yukleme_varis ? dayjs(r.yukleme_varis).toDate() : null,
+            "Çıkış Zamanı": r.yukleme_cikis ? dayjs(r.yukleme_cikis).toDate() : null,
             "Bekleme (dk)": r.bekleme_dk,
             "Bekleme Süresi": minToHM(r.bekleme_dk),
         }));
@@ -214,8 +358,18 @@ export default function YuklemedeBekleme() {
             { header: "Yükleme İli", key: "Yükleme İli", width: 15 },
             { header: "Teslim Noktası", key: "Teslim Noktası", width: 25 },
             { header: "Teslim İli", key: "Teslim İli", width: 15 },
-            { header: "Varış Zamanı", key: "Varış Zamanı", width: 20, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
-            { header: "Çıkış Zamanı", key: "Çıkış Zamanı", width: 20, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
+            {
+                header: "Varış Zamanı",
+                key: "Varış Zamanı",
+                width: 20,
+                style: { numFmt: "dd.mm.yyyy hh:mm" },
+            },
+            {
+                header: "Çıkış Zamanı",
+                key: "Çıkış Zamanı",
+                width: 20,
+                style: { numFmt: "dd.mm.yyyy hh:mm" },
+            },
             { header: "Bekleme (dk)", key: "Bekleme (dk)", width: 12 },
             { header: "Bekleme Süresi", key: "Bekleme Süresi", width: 18 },
         ];
@@ -223,8 +377,13 @@ export default function YuklemedeBekleme() {
         worksheet.addRows(dataToExport);
 
         const buffer = await workbook.xlsx.writeBuffer();
-        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-        const filename = `yuklemede_bekleme_${dayjs(dateFilter).format("YYYYMMDD")}.xlsx`;
+        const blob = new Blob([buffer], {
+            type:
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const filename = `yuklemede_bekleme_${dayjs(dateFilter).format(
+            "YYYYMMDD"
+        )}.xlsx`;
         saveAs(blob, filename);
     };
 
@@ -258,26 +417,76 @@ export default function YuklemedeBekleme() {
     }, [selectedRow, detailByNo]);
 
     const columns = [
-        { field: "sefer_no", headerName: "Sefer No", width: 150, renderCell: (p) => (<Button size="small" startIcon={<InfoOutlinedIcon />} onClick={() => openDetail(p.row)} sx={{ fontWeight: 600 }}>{p.value || "—"}</Button>), },
+        {
+            field: "sefer_no",
+            headerName: "Sefer No",
+            width: 150,
+            renderCell: (p) => (
+                <Button
+                    size="small"
+                    startIcon={<InfoOutlinedIcon />}
+                    onClick={() => openDetail(p.row)}
+                    sx={{ fontWeight: 600 }}
+                >
+                    {p.value || "—"}
+                </Button>
+            ),
+        },
         { field: "plaka", headerName: "Plaka", width: 120 },
         { field: "surucu_ad_soyad", headerName: "Şoför", width: 180 },
         { field: "proje_adi", headerName: "Proje Adı", width: 150 },
-        { field: "yukleme_varis", headerName: "Varış Zm.", width: 180, valueFormatter: safeVF(fmtDateTR) },
-        { field: "yukleme_cikis", headerName: "Çıkış Zm.", width: 180, valueFormatter: safeVF(fmtDateTR) },
-        { field: "bekleme_dk", headerName: "Bekleme Süresi", width: 160, renderCell: (p) => <WaitChip minutes={p.value} />, },
+        {
+            field: "yukleme_varis",
+            headerName: "Varış Zm.",
+            width: 180,
+            valueFormatter: safeVF(fmtDateTR),
+        },
+        {
+            field: "yukleme_cikis",
+            headerName: "Çıkış Zm.",
+            width: 180,
+            valueFormatter: safeVF(fmtDateTR),
+        },
+        {
+            field: "bekleme_dk",
+            headerName: "Bekleme Süresi",
+            width: 160,
+            renderCell: (p) => <WaitChip minutes={p.value} />,
+        },
     ];
 
     return (
-        <Box sx={{ minHeight: "100dvh", py: { xs: 2, md: 4 }, bgcolor: (t) => t.palette.mode === 'dark' ? '#121212' : 'grey.100' }}>
-            <Container maxWidth={false} sx={{ maxWidth: "1680px", px: { xs: 2, md: 4 } }}>
+        <Box
+            sx={{
+                minHeight: "100dvh",
+                py: { xs: 2, md: 4 },
+                bgcolor: (t) => (t.palette.mode === "dark" ? "#121212" : "grey.100"),
+            }}
+        >
+            <Container
+                maxWidth={false}
+                sx={{ maxWidth: "1680px", px: { xs: 2, md: 4 } }}
+            >
                 <Paper elevation={3} sx={{ borderRadius: 4, overflow: "hidden" }}>
-                    <Box sx={{ p: 2, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
+                    <Box
+                        sx={{
+                            p: 2,
+                            display: "flex",
+                            justifyContent: "space-between",
+                            flexWrap: "wrap",
+                            gap: 2,
+                        }}
+                    >
                         <Stack>
-                            <Typography variant="h6" fontWeight={700}>Yüklemede Bekleme Süreleri</Typography>
-                            <Typography variant="body2" color="text.secondary">{dayjs(dateFilter).format("DD MMMM YYYY")}</Typography>
+                            <Typography variant="h6" fontWeight={700}>
+                                Yüklemede Bekleme Süreleri
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {dayjs(dateFilter).format("DD MMMM YYYY")}
+                            </Typography>
                         </Stack>
 
-                        {/* ==== Üst Aksiyonlar (Excele Aktar eklendi) ==== */}
+                        {/* ==== Üst Aksiyonlar ==== */}
                         <Stack direction="row" spacing={1.5} alignItems="center">
                             <TextField
                                 label="Min. Bekleme (dk)"
@@ -294,7 +503,7 @@ export default function YuklemedeBekleme() {
                                 size="small"
                             />
 
-                            {/* Yeni “Excele Aktar” butonu */}
+                            {/* Excele Aktar */}
                             <Button
                                 variant="outlined"
                                 startIcon={<DownloadIcon />}
@@ -304,14 +513,19 @@ export default function YuklemedeBekleme() {
                                 Excele Aktar
                             </Button>
 
-                            <Button onClick={fetchAll} variant="contained" disabled={loading} startIcon={<RefreshIcon />}>
+                            <Button
+                                onClick={fetchAll}
+                                variant="contained"
+                                disabled={loading}
+                                startIcon={<RefreshIcon />}
+                            >
                                 Yenile
                             </Button>
                         </Stack>
                     </Box>
 
                     <Box sx={{ height: "70vh" }}>
-                        {/* ===================== DEĞİŞİKLİK BURADA (v5 UYUMLU) ===================== */}
+                        {/* v5 uyumlu API */}
                         <DataGrid
                             rows={filtered}
                             columns={columns}
@@ -328,10 +542,13 @@ export default function YuklemedeBekleme() {
                                 },
                             }}
                         />
-                        {/* ========================================================================= */}
                     </Box>
 
-                    {fetchError && <Alert severity="warning" sx={{ m: 2 }}>{fetchError}</Alert>}
+                    {fetchError && (
+                        <Alert severity="warning" sx={{ m: 2 }}>
+                            {fetchError}
+                        </Alert>
+                    )}
                 </Paper>
             </Container>
 

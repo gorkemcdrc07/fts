@@ -122,8 +122,8 @@ async function fetchPerformanceData(startDate, endDate) {
     const rangeMin = `${startDate || ""}T00:00:00`;
     const rangeMax = `${endDate || ""}T23:59:59`;
 
-    // Sorgu formatı ve teslim_varis
-    const activeSeferSelectQuery = `id,sefer_no,sefer_tarihi,plaka,surucu_ad_soyad,eta_varis,eta_note,sefer_detaylari(teslim_varis,nokta_sirasi,yukleme_ili,yukleme_ilcesi,teslim_ili,teslim_ilcesi,yukleme_noktasi,teslim_noktasi)`;
+    // Sorgu formatı: yukleme_varis yerine yukleme_cikis eklendi
+    const activeSeferSelectQuery = `id,sefer_no,sefer_tarihi,plaka,surucu_ad_soyad,eta_varis,eta_note,sefer_detaylari(teslim_varis,yukleme_cikis,nokta_sirasi,yukleme_ili,yukleme_ilcesi,teslim_ili,teslim_ilcesi,yukleme_noktasi,teslim_noktasi)`;
 
     const { data: activeData, error: activeError } = await supabase
         .from('seferler')
@@ -144,6 +144,9 @@ async function fetchPerformanceData(startDate, endDate) {
         // Fiili teslimat zamanı
         const firstDeliveryTimeISO = firstDeliveryDetail?.teslim_varis || null;
         const deliveryTime = firstDeliveryTimeISO ? new Date(firstDeliveryTimeISO) : null;
+
+        // Fiili Yükleme Çıkış Zamanı (Yeni Eklenen Alan)
+        const firstLoadExitTimeISO = firstDeliveryDetail?.yukleme_cikis || null;
 
         let durum = 'KULLANICI GİRİŞİ BEKLENİYOR';
         let fark_dk_signed = null;
@@ -170,11 +173,12 @@ async function fetchPerformanceData(startDate, endDate) {
             sefer_tarihi: sefer.sefer_tarihi,
             eta_gosterim: eta_display,
             ilk_teslim_varis: firstDeliveryTimeISO,
+            ilk_yukleme_cikis: firstLoadExitTimeISO, // GÜNCELLENEN ALAN
             fark_dk_signed,
             fark_dk,
             durum,
             sefer_tipi: 'Aktif',
-            // Mesafe diyalogu için
+            // Mesafe diyalogu ve yeni tablo sütunları için
             yukleme_ili: firstDeliveryDetail?.yukleme_ili || null,
             yukleme_ilcesi: firstDeliveryDetail?.yukleme_ilcesi || null,
             teslim_ili: firstDeliveryDetail?.teslim_ili || null,
@@ -469,6 +473,9 @@ export default function Dashboard({
             "Sefer No": r.sefer_no,
             Plaka: r.plaka,
             "Tarih": createExcelDate(r.sefer_tarihi),
+            "Yükleme Noktası": r.yukleme_noktasi || '-',
+            "Teslim Noktası": r.teslim_noktasi || '-',
+            "Yükleme Çıkış": createExcelDate(r.ilk_yukleme_cikis), // GÜNCELLENDİ
             "ETA / Not": r.eta_gosterim,
             "Teslim Varış": createExcelDate(r.ilk_teslim_varis),
             "Fark": r.fark_dk !== null ?
@@ -484,6 +491,9 @@ export default function Dashboard({
             { header: "Sefer No", key: "Sefer No", width: 14 },
             { header: "Plaka", key: "Plaka", width: 12 },
             { header: "Tarih", key: "Tarih", width: 18, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
+            { header: "Yükleme Noktası", key: "Yükleme Noktası", width: 30 },
+            { header: "Teslim Noktası", key: "Teslim Noktası", width: 30 },
+            { header: "Yükleme Çıkış", key: "Yükleme Çıkış", width: 18, style: { numFmt: 'dd.mm.yyyy hh:mm' } }, // GÜNCELLENDİ
             { header: "ETA / Not", key: "ETA / Not", width: 30 },
             { header: "Teslim Varış", key: "Teslim Varış", width: 18, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
             { header: "Fark", key: "Fark", width: 18 },
@@ -492,12 +502,13 @@ export default function Dashboard({
 
         worksheet.addRows(rows);
 
-        const fileName = `${excelFilePrefix}_${getTodayDateString()}.xlsx`;
+        // EXCEL DOSYA ADI GÜNCELLENDİ: Başlangıç ve Bitiş tarihleri kullanılıyor
+        const fileName = `${excelFilePrefix}_${startDate}_${endDate}.xlsx`;
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
         saveAs(blob, fileName);
 
-    }, [filteredReport, excelFilePrefix]);
+    }, [filteredReport, excelFilePrefix, startDate, endDate]);
 
     return (
         <Container maxWidth="lg" disableGutters sx={{ color: DARK_COLORS.text }}>
@@ -594,19 +605,20 @@ export default function Dashboard({
                             <Table size="small" stickyHeader>
                                 <TableHead>
                                     <TableRow sx={{ '& th': { bgcolor: DARK_COLORS.surface2, color: DARK_COLORS.textMuted, fontWeight: 700, borderBottom: `1px solid ${DARK_COLORS.border}` } }}>
-                                        {['Tip', 'Sefer No', 'Plaka', 'Tarih', 'ETA / Not', 'Teslim Varış', 'Fark', 'Durum'].map(head => <TableCell key={head}>{head}</TableCell>)}
+                                        {/* Yükleme Çıkış sütunu tablo başlığına eklendi */}
+                                        {['Tip', 'Sefer No', 'Plaka', 'Tarih', 'Yükleme Noktası', 'Teslim Noktası', 'Yükleme Çıkış', 'ETA / Not', 'Teslim Varış', 'Fark', 'Durum'].map(head => <TableCell key={head}>{head}</TableCell>)}
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
                                     {loading ? (
                                         <TableRow>
-                                            <TableCell colSpan={8} align="center" sx={{ bgcolor: DARK_COLORS.surface }}>
+                                            <TableCell colSpan={11} align="center" sx={{ bgcolor: DARK_COLORS.surface }}>
                                                 <CircularProgress color="primary" size={30} />
                                             </TableCell>
                                         </TableRow>
                                     ) : filteredReport.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={8} align="center" sx={{ bgcolor: DARK_COLORS.surface, color: DARK_COLORS.textMuted }}>
+                                            <TableCell colSpan={11} align="center" sx={{ bgcolor: DARK_COLORS.surface, color: DARK_COLORS.textMuted }}>
                                                 Kriterlere uygun sefer bulunamadı.
                                             </TableCell>
                                         </TableRow>
@@ -650,6 +662,17 @@ export default function Dashboard({
 
                                                     <TableCell sx={{ color: DARK_COLORS.text }}>{r.plaka}</TableCell>
                                                     <TableCell sx={{ color: DARK_COLORS.text }}>{fmt(r.sefer_tarihi)}</TableCell>
+
+                                                    {/* Yükleme ve Teslim Noktası Hücreleri */}
+                                                    <TableCell sx={{ color: DARK_COLORS.textMuted, minWidth: 120 }}>
+                                                        {r.yukleme_noktasi || '-'}
+                                                    </TableCell>
+                                                    <TableCell sx={{ color: DARK_COLORS.textMuted, minWidth: 120 }}>
+                                                        {r.teslim_noktasi || '-'}
+                                                    </TableCell>
+
+                                                    {/* YENİ ALAN: Yükleme Çıkış Hücresi */}
+                                                    <TableCell sx={{ color: DARK_COLORS.text }}>{fmt(r.ilk_yukleme_cikis)}</TableCell>
 
                                                     <TableCell
                                                         onClick={() => handleEtaClick(r)}

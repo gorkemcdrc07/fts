@@ -28,11 +28,14 @@ import {
     TextField,
     alpha,
     useTheme,
+    styled,
 } from "@mui/material";
-import Grid from "@mui/material/Grid"; // ✅ Klasik Grid
+// DÜZELTME: Import yolu '@mui/material/Unstable_Grid2' yerine stabil olan '@mui/material/Grid' kullanıldı
+import Grid from "@mui/material/Grid";
 
 import RefreshIcon from "@mui/icons-material/Refresh";
 import DownloadIcon from "@mui/icons-material/Download";
+import AssessmentIcon from "@mui/icons-material/Assessment";
 
 /* -------------------- Helpers -------------------- */
 const pad = (n) => String(n).padStart(2, "0");
@@ -114,89 +117,149 @@ async function fetchAllRows(table) {
     return { rows: out, warn: "" };
 }
 
-// Basit bar liste
-function BarList({ rows = [], max = 10, height = 18 }) {
+/* -------------------- Styled Components (Modern MUI Styling) -------------------- */
+const StyledPaper = styled(Paper)(({ theme }) => ({
+    borderRadius: theme.shape.borderRadius * 3, // Daha yuvarlak köşeler
+    padding: theme.spacing(3), // Daha fazla padding
+    backdropFilter: "saturate(140%) blur(8px)",
+    backgroundColor:
+        theme.palette.mode === "dark"
+            ? alpha(theme.palette.background.paper, 0.8)
+            : alpha(theme.palette.background.paper, 0.95),
+    border: `1px solid ${alpha(theme.palette.text.primary, 0.12)}`,
+    boxShadow: theme.shadows[4], // Daha belirgin gölge
+    transition: "transform 0.3s ease-in-out",
+    "&:hover": {
+        transform: "translateY(-2px)",
+    },
+}));
+
+const StyledPanel = styled(Paper)(({ theme }) => ({
+    padding: theme.spacing(2),
+    borderRadius: theme.shape.borderRadius * 2,
+    backgroundColor:
+        theme.palette.mode === "dark"
+            ? alpha(theme.palette.grey[800], 0.6)
+            : alpha(theme.palette.grey[100], 0.8),
+    border: `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
+    height: "100%", // Panellerin yüksekliği eşitleniyor
+    display: "flex",
+    flexDirection: "column",
+}));
+
+// Tablo satır stili
+const rowSX = {
+    height: 40,
+    "& td, & th": {
+        borderBottomColor: (t) => alpha(t.palette.text.primary, 0.12), // Koyu modda daha iyi görünmesi için
+        verticalAlign: "middle",
+        paddingTop: 0.5,
+        paddingBottom: 0.5,
+        lineHeight: 1.2,
+    },
+};
+const nameCellSX = { whiteSpace: "nowrap", maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis" };
+
+/* -------------------- Custom Components -------------------- */
+
+// Basit Bar Liste
+function BarList({ rows = [], max = 10, height = 24 }) {
     const data = rows.slice(0, max);
     const maxVal = Math.max(1, ...data.map((d) => d.value));
+    const theme = useTheme();
+
     return (
-        <Stack spacing={1}>
+        <Stack spacing={1.5} sx={{ pr: 1 }}>
             {data.map((d, i) => (
-                <Stack key={d.key || i} direction="row" alignItems="center" spacing={1}>
-                    <Typography sx={{ width: 28, opacity: 0.6 }}>{i + 1}.</Typography>
+                <Stack key={d.key || i} direction="row" alignItems="center" spacing={2}>
+                    <Typography sx={{ width: 24, fontWeight: 700, color: "text.secondary" }}>
+                        {i + 1}.
+                    </Typography>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography noWrap title={d.key} sx={{ fontWeight: 700 }}>
+                        <Typography noWrap title={d.key} variant="body2" sx={{ fontWeight: 600 }}>
                             {d.key || "—"}
                         </Typography>
-                        <Box sx={{ position: "relative", height, mt: 0.4, borderRadius: 1, bgcolor: "action.hover" }}>
-                            <Box
-                                sx={{
-                                    position: "absolute",
-                                    inset: 0,
-                                    width: `${(d.value / maxVal) * 100}%`,
-                                    bgcolor: "primary.main",
-                                    borderRadius: 1,
-                                }}
-                            />
-                        </Box>
+                        <Tooltip title={`${d.key}: ${d.value} adet`}>
+                            <Box sx={{ position: "relative", height, mt: 0.4, borderRadius: 1, bgcolor: "action.hover" }}>
+                                <Box
+                                    sx={{
+                                        position: "absolute",
+                                        inset: 0,
+                                        width: `${(d.value / maxVal) * 100}%`,
+                                        bgcolor: theme.palette.primary.light,
+                                        borderRadius: 1,
+                                        transition: "width 0.5s ease-out",
+                                    }}
+                                />
+                            </Box>
+                        </Tooltip>
                     </Box>
-                    <Chip size="small" label={d.value} />
+                    <Chip size="small" label={d.value} color="primary" variant="outlined" sx={{ minWidth: 40 }} />
                 </Stack>
             ))}
         </Stack>
     );
 }
 
-// CSV
-function downloadCSV(filename, rows, headers) {
-    const headerLine = headers.map((h) => `"${h.label}"`).join(",");
-    const lines = rows.map((r) => headers.map((h) => `"${String(r[h.key] ?? "").replace(/"/g, '""')}"`).join(","));
-    const csv = [headerLine, ...lines].join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-/* -------------------- Mini Chart Components (SVG) -------------------- */
-function DonutChart({ data = [], size = 148, thickness = 18, title, subtitle }) {
+// Donut Chart
+function DonutChart({ data = [], size = 148, thickness = 22, title, subtitle }) {
     const theme = useTheme();
     const radius = size / 2;
-    const inner = radius - thickness;
+    const inner = radius - thickness / 2;
     const C = size / 2;
     const total = data.reduce((a, c) => a + (c.value || 0), 0);
-    let acc = 0;
+    let acc = -Math.PI / 2;
+    const circumference = 2 * Math.PI * inner;
+
+    // Paletteyi dize içinden almak yerine doğrudan prop'lardan alıyoruz
     const palette = [
         theme.palette.primary.main,
-        theme.palette.secondary.main,
-        theme.palette.success.main,
-        theme.palette.warning.main,
         theme.palette.info.main,
+        theme.palette.warning.main,
+        theme.palette.success.main,
+        theme.palette.secondary.main,
         theme.palette.error.main,
+        theme.palette.grey[500],
     ];
 
     return (
         <Box sx={{ position: "relative", display: "inline-flex" }}>
             <svg width={size} height={size}>
-                {/* Arka plan */}
-                <circle cx={C} cy={C} r={inner} fill="none" stroke={alpha(theme.palette.text.primary, 0.08)} strokeWidth={thickness} />
+                {/* Arka plan / Tam daire */}
+                <circle
+                    cx={C}
+                    cy={C}
+                    r={inner}
+                    fill="none"
+                    stroke={alpha(theme.palette.text.primary, 0.08)}
+                    strokeWidth={thickness}
+                />
                 {/* Dilimler */}
                 {data.map((d, i) => {
                     const val = d.value || 0;
-                    const angle = (val / (total || 1)) * Math.PI * 2;
-                    const x1 = C + inner * Math.cos(acc);
-                    const y1 = C + inner * Math.sin(acc);
-                    const x2 = C + inner * Math.cos(acc + angle);
-                    const y2 = C + inner * Math.sin(acc + angle);
-                    const large = angle > Math.PI ? 1 : 0;
-                    const path = `M ${x1} ${y1} A ${inner} ${inner} 0 ${large} 1 ${x2} ${y2}`;
+                    const dashoffset = circumference - (val / (total || 1)) * circumference;
                     const stroke = d.color || palette[i % palette.length];
-                    const el = <path key={d.label + i} d={path} stroke={stroke} strokeWidth={thickness} fill="none" />;
-                    acc += angle;
+
+                    const el = (
+                        <circle
+                            key={d.label + i}
+                            cx={C}
+                            cy={C}
+                            r={inner}
+                            fill="none"
+                            stroke={stroke}
+                            strokeWidth={thickness}
+                            strokeDasharray={circumference}
+                            strokeDashoffset={dashoffset}
+                            strokeLinecap="round"
+                            style={{
+                                transformOrigin: "center",
+                                transform: `rotate(${acc * (180 / Math.PI)}deg)`,
+                                transition: "stroke-dashoffset 0.5s ease-out, transform 0.5s ease-out",
+                            }}
+                        />
+                    );
+                    acc += (val / (total || 1)) * Math.PI * 2;
                     return el;
                 })}
             </svg>
@@ -215,15 +278,15 @@ function DonutChart({ data = [], size = 148, thickness = 18, title, subtitle }) 
                 }}
             >
                 {title ? (
-                    <Typography variant="body2" sx={{ opacity: 0.75 }}>
+                    <Typography variant="body2" sx={{ opacity: 0.75, lineHeight: 1 }}>
                         {title}
                     </Typography>
                 ) : null}
-                <Typography variant="h6" fontWeight={900}>
+                <Typography variant="h5" fontWeight={900}>
                     {total}
                 </Typography>
                 {subtitle ? (
-                    <Typography variant="caption" sx={{ opacity: 0.75 }}>
+                    <Typography variant="caption" sx={{ opacity: 0.75, lineHeight: 1 }}>
                         {subtitle}
                     </Typography>
                 ) : null}
@@ -232,77 +295,93 @@ function DonutChart({ data = [], size = 148, thickness = 18, title, subtitle }) 
     );
 }
 
+// Sparkline Chart (Mini çizgi grafik)
 function Sparkline({ points = [], width = 260, height = 80 }) {
     const theme = useTheme();
     const max = Math.max(1, ...points);
     const step = points.length > 1 ? width / (points.length - 1) : width;
-    const path = points
-        .map((v, i) => {
+    const padding = 6;
+
+    const normalizedPoints = points.map((v) => height - padding - (v / max) * (height - 2 * padding));
+
+    const path = normalizedPoints
+        .map((y, i) => {
             const x = i * step;
-            const y = height - (v / max) * (height - 6) - 3;
             return `${i === 0 ? "M" : "L"} ${x} ${y}`;
         })
         .join(" ");
 
     const area = `${path} L ${width} ${height} L 0 ${height} Z`;
 
+    const lastPoint = points.length > 0 ? normalizedPoints[normalizedPoints.length - 1] : height / 2;
+    const lastX = points.length > 0 ? (points.length - 1) * step : width / 2;
+
     return (
-        <svg width={width} height={height}>
-            <path d={area} fill={alpha(theme.palette.primary.main, 0.18)} />
-            <path d={path} fill="none" stroke={theme.palette.primary.main} strokeWidth={2} />
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+            <path d={area} fill={alpha(theme.palette.primary.main, 0.1)} style={{ transition: "all 0.5s" }} />
+            <path d={path} fill="none" stroke={theme.palette.primary.main} strokeWidth={2.5} style={{ transition: "all 0.5s" }} />
+            <circle cx={lastX} cy={lastPoint} r={4} fill={theme.palette.primary.main} />
         </svg>
     );
 }
 
-/* -------------------- Styles -------------------- */
-const cardSX = {
-    borderRadius: 3,
-    p: 2,
-    backdropFilter: "saturate(140%) blur(8px)",
-    bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.9)"),
-    border: (t) => `1px solid ${t.palette.mode === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"}`,
-};
-const panelSX = {
-    p: 2,
-    borderRadius: 3,
-    bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.9)"),
-    border: (t) => `1px solid ${t.palette.mode === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"}`,
-};
-const rowSX = {
-    height: 40,
-    "& td, & th": {
-        borderBottomColor: "rgba(255,255,255,0.08)",
-        verticalAlign: "middle",
-        paddingTop: 0.5,
-        paddingBottom: 0.5,
-        lineHeight: 1.2,
-    },
-};
-const nameCellSX = { whiteSpace: "nowrap", maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis" };
+// CSV
+function downloadCSV(filename, rows, headers) {
+    const headerLine = headers.map((h) => `"${h.label}"`).join(",");
+    const lines = rows.map((r) => headers.map((h) => `"${String(r[h.key] ?? "").replace(/"/g, '""')}"`).join(","));
+    const BOM = "\ufeff";
+    const csv = BOM + [headerLine, ...lines].join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
 
 /* -------------------- Page -------------------- */
 export default function ProjeLokasyonRaporlari() {
+    // 💡 Hata Çözümü: Hook'u bileşenin en üst seviyesinde çağırın
+    const theme = useTheme();
+
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState("");
 
     const [seferler, setSeferler] = useState([]);
     const [tamamlanan, setTamamlanan] = useState([]);
 
-    const [mode, setMode] = useState("MONTH"); // 'MONTH' | 'RANGE'
+    const [mode, setMode] = useState("MONTH");
     const [month, setMonth] = useState(monthKey(todayISO()));
     const [startDate, setStartDate] = useState(startOfMonthISO());
     const [endDate, setEndDate] = useState(todayISO());
 
     const [selectedProject, setSelectedProject] = useState("");
 
+    // DonutChart için renk paleti, theme objesini kullanıyor
+    const donutChartColors = [
+        theme.palette.primary.main,
+        theme.palette.info.main,
+        theme.palette.warning.main,
+        theme.palette.success.main,
+        theme.palette.secondary.main,
+        theme.palette.error.main,
+        theme.palette.grey[500], // Diğer
+    ];
+
+    // Veri çekme fonksiyonu
     const fetchData = useCallback(async () => {
         try {
             setLoading(true);
             setErr("");
-            const a = await fetchAllRows("seferler");
-            const b = await fetchAllRows("tamamlanan_seferler");
+            const [a, b] = await Promise.all([
+                fetchAllRows("seferler"),
+                fetchAllRows("tamamlanan_seferler"),
+            ]);
             const warns = [a.warn, b.warn].filter(Boolean);
-            if (warns.length) setErr(warns.join("  "));
+            if (warns.length) setErr(warns.join(" — "));
             setSeferler(a.rows || []);
             setTamamlanan(b.rows || []);
         } catch (e) {
@@ -318,6 +397,7 @@ export default function ProjeLokasyonRaporlari() {
 
     const unified = useMemo(() => [...seferler, ...tamamlanan], [seferler, tamamlanan]);
 
+    // Kullanılabilir tüm aylar
     const allMonths = useMemo(() => {
         const s = new Set();
         for (const r of unified) {
@@ -327,6 +407,7 @@ export default function ProjeLokasyonRaporlari() {
         return Array.from(s).sort().reverse();
     }, [unified]);
 
+    // Tarih filtrelemesi
     const filteredRows = useMemo(() => {
         if (!unified.length) return [];
         if (mode === "MONTH") {
@@ -342,6 +423,7 @@ export default function ProjeLokasyonRaporlari() {
         });
     }, [unified, mode, month, startDate, endDate]);
 
+    // Projelerin sayımı
     const projects = useMemo(() => {
         const m = new Map();
         for (const r of filteredRows) {
@@ -353,10 +435,16 @@ export default function ProjeLokasyonRaporlari() {
             .sort((a, b) => b.count - a.count || a.proje.localeCompare(b.proje, "tr"));
     }, [filteredRows]);
 
+    // Seçili projeyi varsayılana ayarlama
     useEffect(() => {
-        if (!selectedProject && projects.length) setSelectedProject(projects[0].proje);
+        if (projects.length && !projects.some(p => p.proje === selectedProject)) {
+            setSelectedProject(projects[0].proje);
+        } else if (!projects.length) {
+            setSelectedProject("");
+        }
     }, [projects, selectedProject]);
 
+    // Özet istatistikler
     const summary = useMemo(() => {
         const TOPLAM = filteredRows.length;
         const PROJE = projects.length;
@@ -366,19 +454,21 @@ export default function ProjeLokasyonRaporlari() {
             days.set(d, (days.get(d) || 0) + 1);
         }
         const peak = Array.from(days.entries()).sort((a, b) => b[1] - a[1])[0];
-        return { TOPLAM, PROJE, PEAK_DAY: peak?.[0] || "-", PEAK_COUNT: peak?.[1] || 0 };
+        return { TOPLAM, PROJE, PEAK_DAY: peak?.[0] || "—", PEAK_COUNT: peak?.[1] || 0 };
     }, [filteredRows, projects.length]);
 
+    // Etkin tarih aralığı
     const effectiveRange = useMemo(() => {
         if (mode === "MONTH") {
-            const { start, end } = monthStartEndByKey(month);
-            return { start, end };
+            if (!month) return { start: todayISO(), end: todayISO() };
+            return monthStartEndByKey(month);
         }
         return { start: startDate, end: endDate };
     }, [mode, month, startDate, endDate]);
 
     const dayNamesTR = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cts", "Paz"];
 
+    // Günlük - Tüm Projeler (Sparkline ve Tablo için)
     const dailyAll = useMemo(() => {
         const days = enumerateDates(effectiveRange.start, effectiveRange.end, 180);
         const map = new Map(days.map((d) => [d, { date: d, TOPLAM: 0 }]));
@@ -394,20 +484,21 @@ export default function ProjeLokasyonRaporlari() {
         }
         for (const [d, row] of map.entries()) {
             const pm = byDayProj.get(d);
-            if (!pm) {
-                row.PEAK_PROJE = "—";
-                row.PEAK_SAYI = 0;
-            } else {
+            if (pm) {
                 const top = Array.from(pm.entries()).sort((a, b) => b[1] - a[1])[0];
                 row.PEAK_PROJE = top?.[0] || "—";
                 row.PEAK_SAYI = top?.[1] || 0;
+            } else {
+                row.PEAK_PROJE = "—";
+                row.PEAK_SAYI = 0;
             }
             const wd = new Date(d + "T00:00:00").getDay();
             row.HAFTA_GUNU = dayNamesTR[(wd + 6) % 7];
         }
-        return Array.from(map.values());
+        return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
     }, [effectiveRange, filteredRows]);
 
+    // Proje bazlı haftanın günü pivot tablosu
     const projectWeekdayAgg = useMemo(() => {
         const m = new Map();
         for (const r of filteredRows) {
@@ -415,30 +506,32 @@ export default function ProjeLokasyonRaporlari() {
             const d = getRowDate(r);
             if (!d) continue;
             const wd = new Date(d + "T00:00:00").getDay();
-            const idx = (wd + 6) % 7;
+            const idx = (wd + 6) % 7; // Pzt = 0, Paz = 6
             if (!m.has(p)) m.set(p, Array(7).fill(0));
             const arr = m.get(p);
             arr[idx] += 1;
         }
         const rows = Array.from(m.entries()).map(([proje, arr]) => {
-            const maxIdx = arr.reduce((mi, v, i, a) => (v > a[mi] ? i : mi), 0);
+            const maxVal = Math.max(...arr);
+            const maxIdx = arr.findIndex(v => v === maxVal);
             return {
                 proje,
                 Pzt: arr[0],
                 Sal: arr[1],
-                Çar: arr[2],
+                "Çar": arr[2],
                 Per: arr[3],
                 Cum: arr[4],
                 Cts: arr[5],
                 Paz: arr[6],
                 TOPLAM: arr.reduce((a, b) => a + b, 0),
-                TEPE_GUN: dayNamesTR[maxIdx],
+                TEPE_GUN: maxVal > 0 ? dayNamesTR[maxIdx] : "—",
             };
         });
         rows.sort((a, b) => b.TOPLAM - a.TOPLAM || a.proje.localeCompare(b.proje, "tr"));
         return rows;
     }, [filteredRows]);
 
+    // Günlük - Seçili Proje (Sparkline ve Tablo için)
     const dailyForProject = useMemo(() => {
         if (!selectedProject) return [];
         const days = enumerateDates(effectiveRange.start, effectiveRange.end, 180);
@@ -454,14 +547,16 @@ export default function ProjeLokasyonRaporlari() {
             const wd = new Date(row.date + "T00:00:00").getDay();
             row.HAFTA_GUNU = dayNamesTR[(wd + 6) % 7];
         }
-        return Array.from(map.values());
+        return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
     }, [effectiveRange, filteredRows, selectedProject]);
 
+    // BarList ve Donut için TOP 10/5 projeler
     const topProjects = useMemo(
         () => projects.map((x) => ({ key: x.proje, value: x.count })),
         [projects]
     );
 
+    // Genel Yükleme ve Teslim İl Dağılımı
     const overallLoadCities = useMemo(() => {
         const m = new Map();
         for (const r of filteredRows) {
@@ -484,6 +579,7 @@ export default function ProjeLokasyonRaporlari() {
             .sort((a, b) => b.value - a.value || a.key.localeCompare(b.key, "tr"));
     }, [filteredRows]);
 
+    // Seçili Proje Yükleme ve Teslim İl Dağılımı
     const projectLoadCities = useMemo(() => {
         if (!selectedProject) return [];
         const m = new Map();
@@ -510,6 +606,7 @@ export default function ProjeLokasyonRaporlari() {
             .sort((a, b) => b.value - a.value || a.key.localeCompare(b.key, "tr"));
     }, [filteredRows, selectedProject]);
 
+    // Son güncelleme zamanı
     const lastUpdated = useMemo(
         () =>
             new Date().toLocaleTimeString("tr-TR", {
@@ -520,34 +617,24 @@ export default function ProjeLokasyonRaporlari() {
         [filteredRows.length]
     );
 
-    const donutProjects = useMemo(() => {
-        const top = projects.slice(0, 5);
-        const topSum = top.reduce((a, c) => a + c.count, 0);
-        const rest = Math.max(0, filteredRows.length - topSum);
-        const items = top.map((p) => ({ label: p.proje, value: p.count }));
-        if (rest > 0) items.push({ label: "Diğer", value: rest });
-        return items;
-    }, [projects, filteredRows.length]);
-
-    const donutLoadCities = useMemo(() => {
-        const top = overallLoadCities.slice(0, 5);
+    // Donut chart verileri
+    const getDonutData = (dataArray) => {
+        const top = dataArray.slice(0, 5);
         const topSum = top.reduce((a, c) => a + c.value, 0);
-        const rest = Math.max(0, overallLoadCities.reduce((a, c) => a + c.value, 0) - topSum);
-        const items = top.map((x) => ({ label: x.key, value: x.value }));
-        if (rest > 0) items.push({ label: "Diğer", value: rest });
+        const total = dataArray.reduce((a, c) => a + c.value, 0);
+        const rest = Math.max(0, total - topSum);
+        // Renklerin prop'lardan doğru atanması için
+        const items = top.map((x, i) => ({ label: x.key, value: x.value, color: donutChartColors[i] }));
+        if (rest > 0) items.push({ label: "Diğer", value: rest, color: donutChartColors[5] || theme.palette.grey[500] });
         return items;
-    }, [overallLoadCities]);
+    }
 
-    const donutDelivCities = useMemo(() => {
-        const top = overallDelivCities.slice(0, 5);
-        const topSum = top.reduce((a, c) => a + c.value, 0);
-        const rest = Math.max(0, overallDelivCities.reduce((a, c) => a + c.value, 0) - topSum);
-        const items = top.map((x) => ({ label: x.key, value: x.value }));
-        if (rest > 0) items.push({ label: "Diğer", value: rest });
-        return items;
-    }, [overallDelivCities]);
+    const donutProjects = useMemo(() => getDonutData(topProjects), [topProjects, donutChartColors]);
+    const donutLoadCities = useMemo(() => getDonutData(overallLoadCities), [overallLoadCities, donutChartColors]);
+    const donutDelivCities = useMemo(() => getDonutData(overallDelivCities), [overallDelivCities, donutChartColors]);
 
-    // Shortcuts
+
+    // Kısa yol buton fonksiyonları
     const setToday = () => {
         const t = todayISO();
         setMode("RANGE");
@@ -573,8 +660,9 @@ export default function ProjeLokasyonRaporlari() {
         setMonth(monthKey(todayISO()));
     };
     const setPrevMonth = () => {
+        const currentMonthKey = monthKey(todayISO());
         setMode("MONTH");
-        setMonth(prevMonthKey(monthKey(todayISO())));
+        setMonth(prevMonthKey(currentMonthKey));
     };
 
     return (
@@ -592,42 +680,65 @@ export default function ProjeLokasyonRaporlari() {
                             t.palette.mode === "dark"
                                 ? "linear-gradient(180deg,#0b1020,#0e1428)"
                                 : "linear-gradient(180deg,#f6f9ff,#f4f7ff)",
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 1000,
+                        borderBottom: (t) => `1px solid ${alpha(t.palette.text.primary, 0.08)}`,
                     }}
                 >
                     <Container maxWidth={false} sx={{ px: { xs: 2, md: 4 }, maxWidth: "1600px" }}>
                         <Stack
                             direction={{ xs: "column", md: "row" }}
-                            spacing={1.2}
+                            spacing={2}
                             alignItems={{ xs: "flex-start", md: "center" }}
                             justifyContent="space-between"
                         >
                             <Box>
-                                <Typography variant="h5" fontWeight={900}>
-                                    Proje & Lokasyon Raporları
-                                </Typography>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    <AssessmentIcon color="primary" />
+                                    <Typography variant="h5" fontWeight={900}>
+                                        Proje & Lokasyon Raporları
+                                    </Typography>
+                                </Stack>
                                 <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
                                     <Chip
                                         size="small"
-                                        color={mode === "MONTH" ? "info" : "default"}
+                                        color={mode === "MONTH" ? "info" : "primary"}
                                         variant={mode === "MONTH" ? "filled" : "outlined"}
                                         label={mode === "MONTH" ? month : `${startDate} → ${endDate}`}
                                     />
                                     <Chip size="small" variant="outlined" label={`Son güncelleme: ${lastUpdated}`} />
-                                    {err && <Chip size="small" color="error" label="Uyarı / Eksik tablo" />}
+                                    {err && (
+                                        <Tooltip title={err}>
+                                            <Chip size="small" color="error" label="Veri Uyarısı/Eksik Tablo" />
+                                        </Tooltip>
+                                    )}
                                 </Stack>
                             </Box>
 
-                            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                                <Button size="small" onClick={setToday}>Bugün</Button>
-                                <Button size="small" onClick={setLast7}>Son 7 Gün</Button>
-                                <Button size="small" onClick={setLast30}>Son 30 Gün</Button>
-                                <Button size="small" onClick={setThisMonth}>Bu Ay</Button>
-                                <Button size="small" onClick={setPrevMonth}>Geçen Ay</Button>
+                            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                                <Button size="small" onClick={setToday} variant="text">Bugün</Button>
+                                <Button size="small" onClick={setLast7} variant="text">Son 7 Gün</Button>
+                                <Button size="small" onClick={setLast30} variant="text">Son 30 Gün</Button>
+                                <Button size="small" onClick={setThisMonth} variant="text">Bu Ay</Button>
+                                <Button size="small" onClick={setPrevMonth} variant="text">Geçen Ay</Button>
+
+                                <Tooltip title="Görünüm Modunu Değiştir">
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={() => setMode((m) => (m === "MONTH" ? "RANGE" : "MONTH"))}
+                                    >
+                                        {mode === "MONTH" ? "Tarih Aralığı" : "Ay Görünümü"}
+                                    </Button>
+                                </Tooltip>
+
+                                <Divider orientation="vertical" flexItem sx={{ mx: 1, height: 28 }} />
 
                                 {mode === "MONTH" && (
-                                    <FormControl size="small" sx={{ minWidth: 180 }}>
-                                        <InputLabel>Ay</InputLabel>
-                                        <Select label="Ay" value={month || ""} onChange={(e) => setMonth(e.target.value)}>
+                                    <FormControl size="small" sx={{ minWidth: 140 }}>
+                                        <InputLabel>Ay Seç</InputLabel>
+                                        <Select label="Ay Seç" value={month || ""} onChange={(e) => setMonth(e.target.value)}>
                                             {allMonths.map((m) => (
                                                 <MenuItem key={m} value={m}>
                                                     {m}
@@ -646,6 +757,7 @@ export default function ProjeLokasyonRaporlari() {
                                             InputLabelProps={{ shrink: true }}
                                             value={startDate}
                                             onChange={(e) => setStartDate(e.target.value)}
+                                            sx={{ maxWidth: 140 }}
                                         />
                                         <TextField
                                             size="small"
@@ -654,39 +766,32 @@ export default function ProjeLokasyonRaporlari() {
                                             InputLabelProps={{ shrink: true }}
                                             value={endDate}
                                             onChange={(e) => setEndDate(e.target.value)}
+                                            sx={{ maxWidth: 140 }}
                                         />
                                     </Stack>
                                 )}
 
-                                <FormControl size="small" sx={{ minWidth: 220 }}>
-                                    <InputLabel>Proje</InputLabel>
+                                <FormControl size="small" sx={{ minWidth: 200 }}>
+                                    <InputLabel>Proje Seç</InputLabel>
                                     <Select
-                                        label="Proje"
+                                        label="Proje Seç"
                                         value={selectedProject || ""}
                                         onChange={(e) => setSelectedProject(e.target.value)}
+                                        displayEmpty
                                     >
                                         {projects.map((p) => (
                                             <MenuItem key={p.proje} value={p.proje}>
-                                                {p.proje} &nbsp;—&nbsp; {p.count}
+                                                {p.proje} <Typography variant="caption" sx={{ ml: 1, opacity: 0.7 }}>({p.count})</Typography>
                                             </MenuItem>
                                         ))}
+                                        {projects.length === 0 && <MenuItem value="" disabled>Proje yok</MenuItem>}
                                     </Select>
                                 </FormControl>
 
-                                <Tooltip title="Görünüm: Ay / Aralık">
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        onClick={() => setMode((m) => (m === "MONTH" ? "RANGE" : "MONTH"))}
-                                    >
-                                        {mode === "MONTH" ? "Tarih Aralığı" : "Ay Görünümü"}
-                                    </Button>
-                                </Tooltip>
-
-                                <Tooltip title="Yenile">
+                                <Tooltip title="Verileri Yenile">
                                     <span>
                                         <IconButton onClick={fetchData} disabled={loading} color="primary">
-                                            {loading ? <CircularProgress size={18} /> : <RefreshIcon />}
+                                            {loading ? <CircularProgress size={20} /> : <RefreshIcon />}
                                         </IconButton>
                                     </span>
                                 </Tooltip>
@@ -695,137 +800,144 @@ export default function ProjeLokasyonRaporlari() {
                     </Container>
                 </Box>
 
-                {/* Dashboard */}
-                <Container maxWidth={false} sx={{ px: { xs: 2, md: 4 }, maxWidth: "1600px", py: 2 }}>
+                {/* Dashboard İçeriği */}
+                <Container maxWidth={false} sx={{ px: { xs: 2, md: 4 }, maxWidth: "1600px", py: 4 }}>
                     {/* Özet Kartlar */}
-                    <Grid container spacing={2}>
+                    <Grid container spacing={3}>
                         <Grid item xs={12} md={3}>
-                            <Paper elevation={6} sx={cardSX}>
-                                <Typography variant="subtitle2" sx={{ opacity: 0.7 }}>
+                            <StyledPaper>
+                                <Typography variant="subtitle2" sx={{ opacity: 0.7, mb: 0.5 }}>
                                     Toplam Kayıt (filtre)
                                 </Typography>
-                                <Typography variant="h4" fontWeight={900} sx={{ mt: 0.25 }}>
-                                    {summary.TOPLAM}
+                                <Typography variant="h3" fontWeight={900}>
+                                    {summary.TOPLAM.toLocaleString("tr-TR")}
                                 </Typography>
-                                <Chip size="small" variant="outlined" label={`${summary.PROJE} proje`} sx={{ mt: 1 }} />
-                            </Paper>
+                                <Chip size="small" variant="outlined" label={`${summary.PROJE} proje`} color="primary" sx={{ mt: 1 }} />
+                            </StyledPaper>
                         </Grid>
 
                         <Grid item xs={12} md={3}>
-                            <Paper elevation={6} sx={cardSX}>
-                                <Typography variant="subtitle2" sx={{ opacity: 0.7 }}>
-                                    En Yoğun Gün (tümü)
+                            <StyledPaper>
+                                <Typography variant="subtitle2" sx={{ opacity: 0.7, mb: 0.5 }}>
+                                    En Yoğun Gün
                                 </Typography>
-                                <Typography variant="h6" fontWeight={800} sx={{ mt: 0.25 }}>
+                                <Typography variant="h4" fontWeight={800}>
                                     {summary.PEAK_DAY}
                                 </Typography>
                                 <Chip size="small" color="info" label={`${summary.PEAK_COUNT} kayıt`} sx={{ mt: 1 }} />
-                            </Paper>
+                            </StyledPaper>
                         </Grid>
 
                         <Grid item xs={12} md={3}>
-                            <Paper elevation={6} sx={cardSX}>
-                                <Typography variant="subtitle2" sx={{ opacity: 0.7 }}>
+                            <StyledPaper>
+                                <Typography variant="subtitle2" sx={{ opacity: 0.7, mb: 0.5 }}>
                                     En Çok Proje (TOP 1)
                                 </Typography>
-                                <Typography variant="h6" fontWeight={800} sx={{ mt: 0.25 }}>
+                                <Typography variant="h6" fontWeight={800} sx={{ height: 28, overflow: 'hidden' }}>
                                     {projects[0]?.proje || "—"}
                                 </Typography>
-                                <Chip size="small" label={`${projects[0]?.count || 0} adet`} sx={{ mt: 1 }} />
-                            </Paper>
+                                <Chip size="small" color="success" label={`${projects[0]?.count || 0} adet`} sx={{ mt: 1 }} />
+                            </StyledPaper>
                         </Grid>
 
                         <Grid item xs={12} md={3}>
-                            <Paper elevation={6} sx={cardSX}>
-                                <Typography variant="subtitle2" sx={{ opacity: 0.7 }}>
-                                    Seçili Proje
+                            <StyledPaper>
+                                <Typography variant="subtitle2" sx={{ opacity: 0.7, mb: 0.5 }}>
+                                    Seçili Proje Kayıt Sayısı
                                 </Typography>
-                                <Typography variant="h6" fontWeight={800} sx={{ mt: 0.25 }}>
-                                    {selectedProject || "—"}
+                                <Typography variant="h4" fontWeight={800}>
+                                    {projects.find((p) => p.proje === selectedProject)?.count?.toLocaleString("tr-TR") || 0}
                                 </Typography>
                                 <Chip
                                     size="small"
                                     variant="outlined"
-                                    label={`${projects.find((p) => p.proje === selectedProject)?.count || 0} adet`}
+                                    label={selectedProject || "Proje Seçiniz"}
                                     sx={{ mt: 1 }}
                                 />
-                            </Paper>
+                            </StyledPaper>
                         </Grid>
                     </Grid>
+
+                    <Divider sx={{ my: 3, opacity: 0.1 }} />
 
                     {/* Donut Paneller */}
-                    <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                    <Grid container spacing={3}>
                         <Grid item xs={12} md={4}>
-                            <Paper elevation={0} sx={{ ...panelSX, height: 300, display: "flex", alignItems: "center", justifyContent: "space-between", px: 3 }}>
-                                <Box>
-                                    <Typography variant="subtitle1" fontWeight={800}>
-                                        Proje Payları (TOP 5 + Diğer)
-                                    </Typography>
-                                    <Typography variant="body2" sx={{ opacity: 0.7 }}>
-                                        Filtrelenen kayıtlar içinde
-                                    </Typography>
-                                    <Stack spacing={0.5} sx={{ mt: 1 }}>
-                                        {donutProjects.slice(0, 6).map((d, i) => (
-                                            <Typography key={i} variant="body2">
-                                                • {d.label} — <b>{d.value}</b>
-                                            </Typography>
-                                        ))}
-                                    </Stack>
-                                </Box>
-                                <DonutChart data={donutProjects} title="Toplam" subtitle="kayıt" />
-                            </Paper>
+                            <StyledPanel sx={{ height: 360 }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" flexGrow={1}>
+                                    <Box flexGrow={1} pr={2}>
+                                        <Typography variant="h6" fontWeight={800} mb={1}>
+                                            Proje Payları (TOP 5 + Diğer)
+                                        </Typography>
+                                        <Stack spacing={0.5}>
+                                            {donutProjects.map((d, i) => (
+                                                <Typography key={i} variant="body2">
+                                                    <Box component="span" sx={{ color: d.color || 'text.secondary', fontWeight: 900 }}>
+                                                        &bull;
+                                                    </Box> {d.label} — <b>{d.value}</b>
+                                                </Typography>
+                                            ))}
+                                        </Stack>
+                                    </Box>
+                                    <DonutChart data={donutProjects} title="Toplam" subtitle="kayıt" />
+                                </Stack>
+                            </StyledPanel>
                         </Grid>
 
                         <Grid item xs={12} md={4}>
-                            <Paper elevation={0} sx={{ ...panelSX, height: 300, display: "flex", alignItems: "center", justifyContent: "space-between", px: 3 }}>
-                                <Box>
-                                    <Typography variant="subtitle1" fontWeight={800}>
-                                        Yükleme İli Payları (TOP 5 + Diğer)
-                                    </Typography>
-                                    <Typography variant="body2" sx={{ opacity: 0.7 }}>
-                                        Tüm veride, filtre bazında
-                                    </Typography>
-                                    <Stack spacing={0.5} sx={{ mt: 1 }}>
-                                        {donutLoadCities.slice(0, 6).map((d, i) => (
-                                            <Typography key={i} variant="body2">
-                                                • {d.label} — <b>{d.value}</b>
-                                            </Typography>
-                                        ))}
-                                    </Stack>
-                                </Box>
-                                <DonutChart data={donutLoadCities} title="Toplam" subtitle="yükleme" />
-                            </Paper>
+                            <StyledPanel sx={{ height: 360 }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" flexGrow={1}>
+                                    <Box flexGrow={1} pr={2}>
+                                        <Typography variant="h6" fontWeight={800} mb={1}>
+                                            Yükleme İl Payları (TOP 5 + Diğer)
+                                        </Typography>
+                                        <Stack spacing={0.5}>
+                                            {donutLoadCities.map((d, i) => (
+                                                <Typography key={i} variant="body2">
+                                                    <Box component="span" sx={{ color: d.color || 'text.secondary', fontWeight: 900 }}>
+                                                        &bull;
+                                                    </Box> {d.label} — <b>{d.value}</b>
+                                                </Typography>
+                                            ))}
+                                        </Stack>
+                                    </Box>
+                                    <DonutChart data={donutLoadCities} title="Toplam" subtitle="yükleme" />
+                                </Stack>
+                            </StyledPanel>
                         </Grid>
 
                         <Grid item xs={12} md={4}>
-                            <Paper elevation={0} sx={{ ...panelSX, height: 300, display: "flex", alignItems: "center", justifyContent: "space-between", px: 3 }}>
-                                <Box>
-                                    <Typography variant="subtitle1" fontWeight={800}>
-                                        Teslim İli Payları (TOP 5 + Diğer)
-                                    </Typography>
-                                    <Typography variant="body2" sx={{ opacity: 0.7 }}>
-                                        Tüm veride, filtre bazında
-                                    </Typography>
-                                    <Stack spacing={0.5} sx={{ mt: 1 }}>
-                                        {donutDelivCities.slice(0, 6).map((d, i) => (
-                                            <Typography key={i} variant="body2">
-                                                • {d.label} — <b>{d.value}</b>
-                                            </Typography>
-                                        ))}
-                                    </Stack>
-                                </Box>
-                                <DonutChart data={donutDelivCities} title="Toplam" subtitle="teslim" />
-                            </Paper>
+                            <StyledPanel sx={{ height: 360 }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" flexGrow={1}>
+                                    <Box flexGrow={1} pr={2}>
+                                        <Typography variant="h6" fontWeight={800} mb={1}>
+                                            Teslim İl Payları (TOP 5 + Diğer)
+                                        </Typography>
+                                        <Stack spacing={0.5}>
+                                            {donutDelivCities.map((d, i) => (
+                                                <Typography key={i} variant="body2">
+                                                    <Box component="span" sx={{ color: d.color || 'text.secondary', fontWeight: 900 }}>
+                                                        &bull;
+                                                    </Box> {d.label} — <b>{d.value}</b>
+                                                </Typography>
+                                            ))}
+                                        </Stack>
+                                    </Box>
+                                    <DonutChart data={donutDelivCities} title="Toplam" subtitle="teslim" />
+                                </Stack>
+                            </StyledPanel>
                         </Grid>
                     </Grid>
 
+                    <Divider sx={{ my: 3, opacity: 0.1 }} />
+
                     {/* TOP Projeler + Pivot */}
-                    <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                    <Grid container spacing={3}>
                         <Grid item xs={12} md={5}>
-                            <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
-                                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                    <Typography variant="subtitle1" fontWeight={800}>
-                                        En çok proje (TOP 10)
+                            <StyledPanel sx={{ height: 460 }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+                                    <Typography variant="h6" fontWeight={800}>
+                                        En Çok Proje (TOP 10)
                                     </Typography>
                                     <Button
                                         size="small"
@@ -840,21 +952,22 @@ export default function ProjeLokasyonRaporlari() {
                                                 ]
                                             )
                                         }
+                                        disabled={!topProjects.length}
                                     >
-                                        CSV
+                                        CSV İndir
                                     </Button>
                                 </Stack>
-                                <Box sx={{ mt: 1.5, flex: 1, overflow: "auto" }}>
+                                <Box sx={{ flex: 1, overflow: "auto", pr: 1 }}>
                                     <BarList rows={topProjects} />
                                 </Box>
-                            </Paper>
+                            </StyledPanel>
                         </Grid>
 
                         <Grid item xs={12} md={7}>
-                            <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
-                                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                    <Typography variant="subtitle1" fontWeight={800}>
-                                        Proje ↔ Haftanın Günü (tepe gün işaretli)
+                            <StyledPanel sx={{ height: 460 }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                                    <Typography variant="h6" fontWeight={800}>
+                                        Proje ↔ Haftanın Günü (Tepe Gün)
                                     </Typography>
                                     <Button
                                         size="small"
@@ -888,42 +1001,48 @@ export default function ProjeLokasyonRaporlari() {
                                                 ]
                                             )
                                         }
+                                        disabled={!projectWeekdayAgg.length}
                                     >
-                                        CSV
+                                        CSV İndir
                                     </Button>
                                 </Stack>
 
-                                <Box sx={{ mt: 1, flex: 1, overflow: "auto" }}>
+                                <Box sx={{ flex: 1, overflow: "auto" }}>
                                     <Table size="small" stickyHeader>
                                         <TableHead>
                                             <TableRow sx={rowSX}>
                                                 <TableCell>#</TableCell>
                                                 <TableCell>Proje</TableCell>
-                                                <TableCell align="right">Pzt</TableCell>
-                                                <TableCell align="right">Sal</TableCell>
-                                                <TableCell align="right">Çar</TableCell>
-                                                <TableCell align="right">Per</TableCell>
-                                                <TableCell align="right">Cum</TableCell>
-                                                <TableCell align="right">Cts</TableCell>
-                                                <TableCell align="right">Paz</TableCell>
+                                                {dayNamesTR.map(d => <TableCell key={d} align="right">{d}</TableCell>)}
                                                 <TableCell align="right">Toplam</TableCell>
                                                 <TableCell align="right">Tepe Gün</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
                                             {projectWeekdayAgg.map((r, i) => (
-                                                <TableRow key={r.proje || i} sx={rowSX}>
+                                                <TableRow
+                                                    key={r.proje || i}
+                                                    sx={{
+                                                        ...rowSX,
+                                                        bgcolor: r.proje === selectedProject ? alpha(theme.palette.info.light, 0.1) : 'inherit'
+                                                    }}
+                                                >
                                                     <TableCell width={32}>{i + 1}</TableCell>
-                                                    <TableCell sx={nameCellSX}>{r.proje || "—"}</TableCell>
-                                                    <TableCell align="right">{r.Pzt}</TableCell>
-                                                    <TableCell align="right">{r.Sal}</TableCell>
-                                                    <TableCell align="right">{r["Çar"]}</TableCell>
-                                                    <TableCell align="right">{r.Per}</TableCell>
-                                                    <TableCell align="right">{r.Cum}</TableCell>
-                                                    <TableCell align="right">{r.Cts}</TableCell>
-                                                    <TableCell align="right">{r.Paz}</TableCell>
+                                                    <TableCell sx={{ ...nameCellSX, fontWeight: 600 }}>{r.proje || "—"}</TableCell>
+                                                    {dayNamesTR.map(d => (
+                                                        <TableCell
+                                                            key={d}
+                                                            align="right"
+                                                            sx={{
+                                                                fontWeight: r.TEPE_GUN === d ? 700 : 400,
+                                                                color: r.TEPE_GUN === d ? 'primary.main' : 'text.primary',
+                                                            }}
+                                                        >
+                                                            {r[d]}
+                                                        </TableCell>
+                                                    ))}
                                                     <TableCell align="right">
-                                                        <Chip size="small" color="info" label={r.TOPLAM} sx={{ height: 22 }} />
+                                                        <Chip size="small" color="primary" label={r.TOPLAM} sx={{ height: 22 }} />
                                                     </TableCell>
                                                     <TableCell align="right">
                                                         <Chip size="small" variant="outlined" label={r.TEPE_GUN} sx={{ height: 22 }} />
@@ -940,18 +1059,19 @@ export default function ProjeLokasyonRaporlari() {
                                         </TableBody>
                                     </Table>
                                 </Box>
-                            </Paper>
+                            </StyledPanel>
                         </Grid>
                     </Grid>
 
+                    <Divider sx={{ my: 3, opacity: 0.1 }} />
+
                     {/* Günlük paneller */}
-                    <Divider sx={{ my: 3, opacity: 0.2 }} />
-                    <Grid container spacing={2}>
+                    <Grid container spacing={3}>
                         <Grid item xs={12} md={6}>
-                            <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
-                                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                    <Typography variant="subtitle1" fontWeight={800}>
-                                        Günlük — Tüm projeler (o gün en çok proje)
+                            <StyledPanel sx={{ height: 500 }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                                    <Typography variant="h6" fontWeight={800}>
+                                        Günlük Toplam Kayıtlar (Tüm Projeler)
                                     </Typography>
                                     <Button
                                         size="small"
@@ -975,33 +1095,34 @@ export default function ProjeLokasyonRaporlari() {
                                                 ]
                                             )
                                         }
+                                        disabled={!dailyAll.length}
                                     >
-                                        CSV
+                                        CSV İndir
                                     </Button>
                                 </Stack>
-                                <Box sx={{ mt: 1, px: 1 }}>
-                                    <Sparkline points={dailyAll.map((d) => d.TOPLAM)} />
+                                <Box sx={{ mt: 1, px: 1, textAlign: 'center' }}>
+                                    <Sparkline points={dailyAll.map((d) => d.TOPLAM)} width={500} height={100} />
                                 </Box>
-                                <Box sx={{ mt: 1, flex: 1, overflow: "auto" }}>
+                                <Box sx={{ mt: 2, flex: 1, overflow: "auto" }}>
                                     <Table size="small" stickyHeader>
                                         <TableHead>
                                             <TableRow sx={rowSX}>
                                                 <TableCell>Tarih</TableCell>
                                                 <TableCell align="right">Hafta Günü</TableCell>
                                                 <TableCell align="right">Toplam</TableCell>
-                                                <TableCell>O gün en çok</TableCell>
+                                                <TableCell>En Çok Proje</TableCell>
                                                 <TableCell align="right">Adet</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
                                             {dailyAll.map((d) => (
                                                 <TableRow key={d.date} sx={rowSX}>
-                                                    <TableCell>{d.date}</TableCell>
+                                                    <TableCell sx={{ fontWeight: 600 }}>{d.date}</TableCell>
                                                     <TableCell align="right">{d.HAFTA_GUNU}</TableCell>
                                                     <TableCell align="right">
-                                                        <Chip size="small" color="info" label={d.TOPLAM} sx={{ height: 22 }} />
+                                                        <Chip size="small" color="primary" label={d.TOPLAM} sx={{ height: 22 }} />
                                                     </TableCell>
-                                                    <TableCell>{d.PEAK_PROJE}</TableCell>
+                                                    <TableCell sx={nameCellSX}>{d.PEAK_PROJE}</TableCell>
                                                     <TableCell align="right">{d.PEAK_SAYI}</TableCell>
                                                 </TableRow>
                                             ))}
@@ -1015,14 +1136,14 @@ export default function ProjeLokasyonRaporlari() {
                                         </TableBody>
                                     </Table>
                                 </Box>
-                            </Paper>
+                            </StyledPanel>
                         </Grid>
 
                         <Grid item xs={12} md={6}>
-                            <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
-                                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                    <Typography variant="subtitle1" fontWeight={800}>
-                                        Günlük — {selectedProject || "Proje seçiniz"}
+                            <StyledPanel sx={{ height: 500 }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                                    <Typography variant="h6" fontWeight={800}>
+                                        Günlük — **{selectedProject || "Proje Seçiniz"}**
                                     </Typography>
                                     <Button
                                         size="small"
@@ -1042,15 +1163,15 @@ export default function ProjeLokasyonRaporlari() {
                                                 ]
                                             )
                                         }
-                                        disabled={!selectedProject}
+                                        disabled={!selectedProject || !dailyForProject.length}
                                     >
-                                        CSV
+                                        CSV İndir
                                     </Button>
                                 </Stack>
-                                <Box sx={{ mt: 1, px: 1 }}>
-                                    <Sparkline points={dailyForProject.map((d) => d.ADET)} />
+                                <Box sx={{ mt: 1, px: 1, textAlign: 'center' }}>
+                                    <Sparkline points={dailyForProject.map((d) => d.ADET)} width={500} height={100} />
                                 </Box>
-                                <Box sx={{ mt: 1, flex: 1, overflow: "auto" }}>
+                                <Box sx={{ mt: 2, flex: 1, overflow: "auto" }}>
                                     <Table size="small" stickyHeader>
                                         <TableHead>
                                             <TableRow sx={rowSX}>
@@ -1062,35 +1183,36 @@ export default function ProjeLokasyonRaporlari() {
                                         <TableBody>
                                             {dailyForProject.map((d) => (
                                                 <TableRow key={d.date} sx={rowSX}>
-                                                    <TableCell>{d.date}</TableCell>
+                                                    <TableCell sx={{ fontWeight: 600 }}>{d.date}</TableCell>
                                                     <TableCell align="right">{d.HAFTA_GUNU}</TableCell>
                                                     <TableCell align="right">
-                                                        <Chip size="small" color="info" label={d.ADET} sx={{ height: 22 }} />
+                                                        <Chip size="small" color="primary" label={d.ADET} sx={{ height: 22 }} />
                                                     </TableCell>
                                                 </TableRow>
                                             ))}
                                             {dailyForProject.length === 0 && (
                                                 <TableRow sx={rowSX}>
                                                     <TableCell colSpan={3}>
-                                                        <Typography sx={{ opacity: 0.7 }}>Kayıt yok.</Typography>
+                                                        <Typography sx={{ opacity: 0.7 }}>Kayıt yok veya proje seçili değil.</Typography>
                                                     </TableCell>
                                                 </TableRow>
                                             )}
                                         </TableBody>
                                     </Table>
                                 </Box>
-                            </Paper>
+                            </StyledPanel>
                         </Grid>
                     </Grid>
 
+                    <Divider sx={{ my: 3, opacity: 0.1 }} />
+
                     {/* Lokasyon panelleri */}
-                    <Divider sx={{ my: 3, opacity: 0.2 }} />
-                    <Grid container spacing={2}>
+                    <Grid container spacing={3}>
                         <Grid item xs={12} md={6}>
-                            <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
-                                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                    <Typography variant="subtitle1" fontWeight={800}>
-                                        Yükleme İl dağılımı (tümü) — TOP 15
+                            <StyledPanel sx={{ height: 460 }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+                                    <Typography variant="h6" fontWeight={800}>
+                                        Yükleme İl Dağılımı (Tüm Projeler) — TOP 15
                                     </Typography>
                                     <Button
                                         size="small"
@@ -1107,20 +1229,20 @@ export default function ProjeLokasyonRaporlari() {
                                         }
                                         disabled={!overallLoadCities.length}
                                     >
-                                        CSV
+                                        CSV İndir
                                     </Button>
                                 </Stack>
-                                <Box sx={{ mt: 1.5, flex: 1, overflow: "auto" }}>
+                                <Box sx={{ flex: 1, overflow: "auto", pr: 1 }}>
                                     <BarList rows={overallLoadCities} max={15} />
                                 </Box>
-                            </Paper>
+                            </StyledPanel>
                         </Grid>
 
                         <Grid item xs={12} md={6}>
-                            <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
-                                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                    <Typography variant="subtitle1" fontWeight={800}>
-                                        Teslim İl dağılımı (tümü) — TOP 15
+                            <StyledPanel sx={{ height: 460 }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+                                    <Typography variant="h6" fontWeight={800}>
+                                        Teslim İl Dağılımı (Tüm Projeler) — TOP 15
                                     </Typography>
                                     <Button
                                         size="small"
@@ -1137,23 +1259,25 @@ export default function ProjeLokasyonRaporlari() {
                                         }
                                         disabled={!overallDelivCities.length}
                                     >
-                                        CSV
+                                        CSV İndir
                                     </Button>
                                 </Stack>
-                                <Box sx={{ mt: 1.5, flex: 1, overflow: "auto" }}>
+                                <Box sx={{ mt: 1.5, flex: 1, overflow: "auto", pr: 1 }}>
                                     <BarList rows={overallDelivCities} max={15} />
                                 </Box>
-                            </Paper>
+                            </StyledPanel>
                         </Grid>
                     </Grid>
 
+                    <Divider sx={{ my: 3, opacity: 0.1 }} />
+
                     {/* Seçili proje için lokasyonlar */}
-                    <Grid container spacing={2} sx={{ mt: 0.5, pb: 4 }}>
+                    <Grid container spacing={3} sx={{ pb: 4 }}>
                         <Grid item xs={12} md={6}>
-                            <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
-                                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                    <Typography variant="subtitle1" fontWeight={800}>
-                                        {selectedProject || "Proje"} — Yükleme İl — TOP 15
+                            <StyledPanel sx={{ height: 460 }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+                                    <Typography variant="h6" fontWeight={800}>
+                                        **{selectedProject || "Proje"}** — Yükleme İl — TOP 15
                                     </Typography>
                                     <Button
                                         size="small"
@@ -1170,20 +1294,20 @@ export default function ProjeLokasyonRaporlari() {
                                         }
                                         disabled={!selectedProject || !projectLoadCities.length}
                                     >
-                                        CSV
+                                        CSV İndir
                                     </Button>
                                 </Stack>
-                                <Box sx={{ mt: 1.5, flex: 1, overflow: "auto" }}>
+                                <Box sx={{ flex: 1, overflow: "auto", pr: 1 }}>
                                     <BarList rows={projectLoadCities} max={15} />
                                 </Box>
-                            </Paper>
+                            </StyledPanel>
                         </Grid>
 
                         <Grid item xs={12} md={6}>
-                            <Paper elevation={0} sx={{ ...panelSX, height: 420, display: "flex", flexDirection: "column" }}>
-                                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                    <Typography variant="subtitle1" fontWeight={800}>
-                                        {selectedProject || "Proje"} — Teslim İl — TOP 15
+                            <StyledPanel sx={{ height: 460 }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+                                    <Typography variant="h6" fontWeight={800}>
+                                        **{selectedProject || "Proje"}** — Teslim İl — TOP 15
                                     </Typography>
                                     <Button
                                         size="small"
@@ -1200,13 +1324,13 @@ export default function ProjeLokasyonRaporlari() {
                                         }
                                         disabled={!selectedProject || !projectDelivCities.length}
                                     >
-                                        CSV
+                                        CSV İndir
                                     </Button>
                                 </Stack>
-                                <Box sx={{ mt: 1.5, flex: 1, overflow: "auto" }}>
+                                <Box sx={{ mt: 1.5, flex: 1, overflow: "auto", pr: 1 }}>
                                     <BarList rows={projectDelivCities} max={15} />
                                 </Box>
-                            </Paper>
+                            </StyledPanel>
                         </Grid>
                     </Grid>
                 </Container>

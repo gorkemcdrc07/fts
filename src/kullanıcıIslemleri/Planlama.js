@@ -44,11 +44,10 @@ import { alpha } from "@mui/material/styles";
 // gridClasses, koşullu satır stilini uygulamak için gereklidir
 import { DataGrid, gridClasses } from "@mui/x-data-grid";
 
-// MUI Icons - Import yolu düzeltildi
+// MUI Icons - Düzeltilmiş Import Yolu
 import AddIcon from "@mui/icons-material/Add";
 import SaveIcon from "@mui/icons-material/Save";
 import TuneIcon from "@mui/icons-material/Tune";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import CleaningServicesIcon from "@mui/icons-material/CleaningServices";
@@ -58,6 +57,7 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import EditNoteIcon from "@mui/icons-material/EditNote";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import BoltIcon from "@mui/icons-material/Bolt";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle"; // Eksik import edildiği için eklendi
 
 import usePermissions from "../auth/usePermissions";
 
@@ -83,6 +83,9 @@ const plakaKey = (s) => toUpperTr(String(s || "")).replace(/[^A-Z0-9]/g, "");
 const primaryPlaka = (s) => toUpperTr(String(s || "")).split("-")[0].trim();
 
 // ... Diğer helpers
+/**
+ * YENİ STATÜ EKLENDİ
+ */
 const STATU_LISTESI = [
     "Planlandı",
     "Yolda",
@@ -90,6 +93,7 @@ const STATU_LISTESI = [
     "Tahliyede",
     "Tamamlandı",
     "İptal",
+    "İŞ YOK ARAÇ BOŞ", // YENİ STATÜ EKLENDİ
 ];
 
 const statuRenkMap = (statu) => {
@@ -108,6 +112,8 @@ const statuRenkMap = (statu) => {
             return { color: "success", hex: "#4ADE80" }; // Yeşil
         case "İPTAL":
             return { color: "error", hex: "#EF4444" }; // Kırmızı
+        case "İŞ YOK ARAÇ BOŞ": // YENİ STATÜ RENGİ
+            return { color: "info", hex: "#22D3EE" }; // Mavi
         default:
             return { color: "default", hex: "#C8D1E6" };
     }
@@ -280,10 +286,9 @@ const toNumber = (v) => {
     return isNaN(n) ? null : n;
 };
 
-// Yeni Yardımcı Fonksiyon: Excel Dosyasını Okuma
+// Yeni Yardımcı Fonksiyon: Excel Dosyasını Oku
 const readExcelFile = (file) => {
     return new Promise((resolve, reject) => {
-        // 🔥 DÜZELTME: 'const const' yerine sadece 'const' kullanıldı.
         const reader = new FileReader();
 
         reader.onload = async (e) => {
@@ -372,6 +377,10 @@ export default function PlanlamaDeluxe() {
     const [dragActive, setDragActive] = useState(false);
     const fileInputRef = useRef(null);
 
+    // YENİ STATÜ RAPORU STATE'LERİ (Kaldırıldı veya Kullanılmıyor)
+    // const [excelReportDialogOpen, setExcelReportDialogOpen] = useState(false); 
+    // const [selectedStatusForReport, setSelectedStatusForReport] = useState([]); 
+
     const lastSavedSnapshot = useRef("[]");
     const isDirty = useMemo(() => lastSavedSnapshot.current !== JSON.stringify(rows), [rows]);
 
@@ -379,6 +388,7 @@ export default function PlanlamaDeluxe() {
     const [bolgeler, setBolgeler] = useState([]);
     const [plakaFilter, setPlakaFilter] = useState([]);
     const [bolgeFilter, setBolgeFilter] = useState([]);
+    const [statuFilter, setStatuFilter] = useState([]); // Statü filtresi
     const [plakaInput, setPlakaInput] = useState("");
     const [bolgeInput, setBolgeInput] = useState("");
     const [search, setSearch] = useState("");
@@ -527,7 +537,7 @@ export default function PlanlamaDeluxe() {
                     </Stack>
                 ),
             },
-            // STATÜ SÜTUNU 
+            // STATÜ SÜTUNU 
             {
                 field: "statü",
                 headerName: "STATÜ",
@@ -682,6 +692,7 @@ export default function PlanlamaDeluxe() {
     const fetchData = useCallback(async () => {
         setLoading(true);
         // DB'de olmayan excel_sira sıralaması kaldırıldı, sadece sefer_no'ya göre sıralanır.
+        // HATA İPUCU: Supabase'de statü alanı "statu" olarak tanımlanmış olabilir.
         const { data, error } = await supabase
             .from("planlama")
             .select("*")
@@ -701,12 +712,13 @@ export default function PlanlamaDeluxe() {
             // Benzersiz anahtar olarak veritabanı ID'si (varsa) veya geçici ID kullan
             const _rowId = v.id ?? v.sefer_no ?? `tmp-${Date.now()}-${index}`;
 
-            // Boş (null) gelirse boş olarak tutulur.
+            // Statü alanını hem 'statü' hem de 'statu' olarak kontrol et
             const statu = v.statü || v.statu || "";
 
             return {
                 ...v,
-                statü: statu,
+                statü: statu, // DataGrid'de kullanılan alan
+                statu: statu, // DB'den gelen raw veriyi koru
                 son_nokta,
                 bolge: bolge || v.bolge || "",
                 tarih,
@@ -770,9 +782,15 @@ export default function PlanlamaDeluxe() {
     const clearFilters = useCallback(() => {
         setPlakaFilter([]);
         setBolgeFilter([]);
+        setStatuFilter([]); // Statü filtresini temizle
         setPlakaInput("");
         setBolgeInput("");
         setSearch("");
+    }, []);
+
+    // Statü Filtreleme Toggle fonksiyonu
+    const toggleStatuFilter = useCallback((s) => {
+        setStatuFilter((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
     }, []);
 
     // Drawer değişikliklerini uygulama
@@ -837,7 +855,6 @@ export default function PlanlamaDeluxe() {
         try {
             const { error } = await supabase
                 .from("kullanici_planlama_gorunumleri")
-                // columnOrder'dan aksiyon alanlarını hariç tuttuk
                 .upsert({ kullanici_id: kullaniciId, sayfa: "planlama", gorunum: columnOrder.filter(c => c !== 'actions') }, { onConflict: ["kullanici_id", "sayfa"] });
             if (error) {
                 setSnack({ open: true, msg: "Görünüm kaydedilemedi.", severity: "error" });
@@ -979,7 +996,7 @@ export default function PlanlamaDeluxe() {
                 ...((row.id && { id: row.id }) || {}),
 
                 // Statü boşsa null gönder.
-                statu: row.statü || row.statu || null,
+                statu: row.statü || row.statu || null, // hem statü hem statu kontrolü
 
                 sefer_no: row.sefer_no || null,
                 sevk_no: row.sevk_no || null,
@@ -1035,7 +1052,7 @@ export default function PlanlamaDeluxe() {
         });
     }, [perms.pln_save, rows, isDirty, fetchData]);
 
-    // Excel Aktar
+    // Excel Aktar (Mevcut Filtrelenmiş Veri)
     const handleExportExcel = useCallback(async () => {
 
         if (!perms.pln_export_excel) {
@@ -1091,6 +1108,144 @@ export default function PlanlamaDeluxe() {
 
     }, [perms.pln_export_excel, filteredRows, columns, columnOrder]);
 
+    // YENİ FONKSİYON: SADECE 'İŞ YOK ARAÇ BOŞ' STATÜSÜ İÇİN ÖZEL EXCEL RAPORU
+    const handleAracBosRaporExport = useCallback(async () => {
+        if (!perms.pln_export_excel) {
+            setSnack({ open: true, msg: "Excel aktarım yetkiniz yok.", severity: "warning" });
+            return;
+        }
+
+        setSaving(true);
+
+        // 1. Veri Filtreleme: Yalnızca "İŞ YOK ARAÇ BOŞ" statüsündeki kayıtlar
+        const TARGET_STATUS = "İŞ YOK ARAÇ BOŞ";
+        const detailedRows = rows.filter(row => {
+            const rowStatus = toUpperTr(row.statü || row.statu || "");
+            return rowStatus === TARGET_STATUS.toLocaleUpperCase("tr-TR");
+        });
+
+        if (!detailedRows.length) {
+            setSnack({ open: true, msg: `"${TARGET_STATUS}" statüsüne ait kayıt bulunmuyor.`, severity: "info" });
+            setSaving(false);
+            return;
+        }
+
+        // 2. Sütun Seçimi ve Sıralaması
+        const REPORT_FIELDS = ["plaka", "ad_soyad", "telefon", "tc", "son_nokta"];
+        const map = Object.fromEntries(columns.map((c) => [c.field, c]));
+
+        // Sadece istenen 5 alanı içeren kolonları oluştur
+        const finalExportColumns = REPORT_FIELDS.map(field => map[field]).filter(Boolean);
+
+        try {
+            const workbook = new ExcelJS.Workbook();
+
+            // --- STİL SABİTLERİ (Kullanılan Hex Renkler) ---
+            const NEON_TURQUOISE = 'FF22D3EE';
+            const DARK_BLUE = 'FF1A2033';
+            const BLACK_TEXT = 'FF000000';
+            const LIGHT_GREY = 'FFF0F0F5';
+            const BORDER_GREY = 'FFDDDDDD';
+
+            // --- Statü Özeti Sayfası (Basitleştirilmiş) ---
+            const worksheetOzet = workbook.addWorksheet("Statü Özeti", { views: [{ state: 'frozen', ySplit: 1 }] });
+            worksheetOzet.properties.defaultRowHeight = 25;
+
+            const ozetHeaders = ["STATÜ", "ARAÇ SAYISI"];
+            const ozetHeaderRow = worksheetOzet.addRow(ozetHeaders);
+
+            ozetHeaderRow.eachCell(cell => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NEON_TURQUOISE } };
+                cell.font = { color: { argb: BLACK_TEXT }, bold: true, size: 14 };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                cell.border = {
+                    bottom: { style: 'thick', color: { argb: BLACK_TEXT } },
+                    top: { style: 'thin', color: { argb: BLACK_TEXT } }
+                };
+            });
+
+            // Tek bir satır eklenir
+            const reportRow = worksheetOzet.addRow([
+                TARGET_STATUS,
+                detailedRows.length
+            ]);
+            reportRow.getCell(1).font = { color: { argb: statuRenkMap(TARGET_STATUS).hex.replace('#', '') }, size: 12, bold: true };
+            reportRow.getCell(2).numFmt = '#,##0';
+            reportRow.getCell(2).alignment = { horizontal: 'right', vertical: 'middle' };
+
+            worksheetOzet.columns.forEach(column => { column.width = 25; });
+
+            // --- Detaylı Araç Boş Planlama Sayfası ---
+            const worksheetDetay = workbook.addWorksheet("Araç Boş Detay", { views: [{ state: 'frozen', ySplit: 1 }] });
+            worksheetDetay.properties.defaultRowHeight = 22;
+            worksheetDetay.views = [{ showGridLines: true }];
+
+            // Header Yazma ve Stil
+            const headers = finalExportColumns.map(c => c.headerName);
+            const headerRow = worksheetDetay.addRow(headers);
+
+            const headerDetayFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_BLUE } };
+            const headerDetayFont = { color: { argb: NEON_TURQUOISE }, bold: true, size: 12 };
+
+            headerRow.eachCell(cell => {
+                cell.fill = headerDetayFill;
+                cell.font = headerDetayFont;
+                cell.border = { bottom: { style: 'medium', color: { argb: NEON_TURQUOISE } } };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            });
+
+            // Veri Satırlarını Yazma ve Stil
+            detailedRows.forEach((row, index) => {
+                // Sadece seçilen alanların değerlerini al
+                const dataRow = finalExportColumns.map(c => row[c.field] || '');
+                const excelRow = worksheetDetay.addRow(dataRow);
+
+                const isOdd = index % 2 === 0;
+                const rowColor = isOdd ? 'FF070B14' : 'FF1A2033'; // Koyu şeritli satır
+
+                excelRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowColor } };
+                    cell.font = { color: { argb: 'FFE8EAF9' }, size: 11 };
+                    cell.border = { bottom: { style: 'thin', color: { argb: 'FF334466' } } };
+
+                    // Sadece plaka sütununu vurgulayalım
+                    if (finalExportColumns[colNumber - 1].field === 'plaka') {
+                        cell.font = { color: { argb: NEON_TURQUOISE }, bold: true, size: 11 };
+                    }
+                });
+            });
+
+            // Sütun Genişliklerini Ayarlama
+            worksheetDetay.columns.forEach(column => {
+                let maxColumnLength = 0;
+                column.eachCell({ includeEmpty: true }, cell => {
+                    const columnLength = cell.value ? String(cell.value).length : 10;
+                    if (columnLength > maxColumnLength) {
+                        maxColumnLength = columnLength;
+                    }
+                });
+                column.width = maxColumnLength < 10 ? 12 : maxColumnLength + 2;
+            });
+
+            // --- Excel Oluşturma Bitti ---
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `Planlama_Arac_Bos_Raporu_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
+
+            setSnack({ open: true, msg: `"${TARGET_STATUS}" statüsündeki ${detailedRows.length} kayıt Excel olarak indirildi.`, severity: "success" });
+        } catch (e) {
+            console.error("Araç Boş Raporu Export Hatası:", e);
+            setSnack({ open: true, msg: "Araç boş raporu oluşturulurken bir hata oluştu.", severity: "error" });
+        } finally {
+            setSaving(false);
+        }
+
+    }, [perms.pln_export_excel, rows, columns]);
+
+    // YUKARIDAKİ handleStatuReportExport KISMINI İSTEĞİNİZE GÖRE DÜZENLEYEREK YENİ FONKSİYONUMUZU OLUŞTURDUK.
+    // ŞİMDİ ESKİ handleStatuReportExport'un yerine, ihtiyacınız olmayan kısımları temizlenmiş olarak bu alana bırakıyoruz.
+    // NOT: Kodun orijinal hali içindeki handleStatuReportExport fonksiyonunu tamamen kaldırdım.
+
 
     const handleRowUpdateCommit = useCallback(() => {
         // processRowUpdate zaten setRows'u çağırdığı için bu fonksiyon sadece DataGrid'e sinyal verir.
@@ -1134,6 +1289,14 @@ export default function PlanlamaDeluxe() {
             r = r.filter((x) => secimler.has(plakaKey(x.plaka)));
         }
         if (bolgeFilter?.length) r = r.filter((x) => bolgeFilter.includes(x.bolge || ""));
+
+        // Statü Filtresi
+        if (statuFilter?.length) {
+            const secimler = new Set(statuFilter.map(toUpperTr));
+            // Satırdaki statü boşsa "— Boş —" ile eşleştirilir
+            r = r.filter((x) => secimler.has(toUpperTr(x.statü || x.statu || "— Boş —")));
+        }
+
         if (debouncedSearch) {
             const s = debouncedSearch.toLowerCase();
             r = r.filter((x) => Object.values(x || {}).some((v) => String(v ?? "").toLowerCase().includes(s)));
@@ -1157,7 +1320,7 @@ export default function PlanlamaDeluxe() {
 
 
         setFilteredRows(sortedR);
-    }, [rows, plakaFilter, bolgeFilter, debouncedSearch]);
+    }, [rows, plakaFilter, bolgeFilter, debouncedSearch, statuFilter]);
 
 
     /* -------------------- RENDER BÖLÜMÜ -------------------- */
@@ -1171,6 +1334,18 @@ export default function PlanlamaDeluxe() {
         }
         return m;
     }, [filteredRows]);
+
+    // Statü Sayıları
+    const statuCounts = useMemo(() => {
+        const m = {};
+        for (const r of filteredRows) {
+            // 'statü' veya 'statu' alanını kullan
+            const s = r.statü || r.statu || "— Boş —";
+            m[s] = (m[s] || 0) + 1;
+        }
+        return m;
+    }, [filteredRows]);
+
 
     // Bölge Filtreleme Toggle
     const toggleBolgeFilter = useCallback((b) => {
@@ -1198,7 +1373,7 @@ export default function PlanlamaDeluxe() {
                 height: "100dvh",
                 overflow: "hidden",
                 display: "grid",
-                gridTemplateRows: "auto auto auto 1fr auto",
+                gridTemplateRows: "auto auto auto auto 1fr auto", // Statü Paneli için bir satır daha
                 gap: 1.5,
                 p: 2,
                 // DERİNLEŞTİRİLMİŞ FÜTÜRİSTİK ARKA PLAN
@@ -1290,6 +1465,26 @@ export default function PlanlamaDeluxe() {
                     <Tooltip title={perms.pln_export_excel ? "Filtrelenmiş veriyi dışa aktarır" : "Yetkiniz yok"}>
                         <span><Button variant="outlined" startIcon={<CheckCircleIcon />} onClick={handleExportExcel} disabled={!perms.pln_export_excel} size="small">Excel Aktar</Button></span>
                     </Tooltip>
+
+                    {/* YENİ ARAÇ BOŞ RAPORU BUTONU (İstenen özelliklere sahip) */}
+                    <Tooltip title={perms.pln_export_excel ? "Sadece 'İŞ YOK ARAÇ BOŞ' statüsündeki kayıtları dışa aktarır (Plaka, Ad Soyad, Telefon, TC, Son Nokta)" : "Yetkiniz yok"}>
+                        <span>
+                            <Button
+                                variant="outlined"
+                                startIcon={<CheckCircleIcon />}
+                                onClick={handleAracBosRaporExport} // Yeni fonksiyonu çağır
+                                disabled={!perms.pln_export_excel || !rows.length || saving}
+                                size="small"
+                                sx={{
+                                    color: statuRenkMap("İŞ YOK ARAÇ BOŞ").hex,
+                                    borderColor: alpha(statuRenkMap("İŞ YOK ARAÇ BOŞ").hex, 0.5),
+                                }}
+                            >
+                                Araç Boş Raporu
+                            </Button>
+                        </span>
+                    </Tooltip>
+
                     <Tooltip title={"Kolonların sırasını kaydet"}>
                         <span><Button variant="outlined" startIcon={<SaveIcon />} onClick={saveView} size="small" disabled={saving}>Görünüm Kaydet</Button></span>
                     </Tooltip>
@@ -1346,6 +1541,84 @@ export default function PlanlamaDeluxe() {
                         ))}
                 </Stack>
             </Box>
+
+            {/* Statü Raporu Paneli (Filtre ve Rapor) */}
+            <Box sx={{ overflowX: "auto", pb: 0.5, pr: 0.5 }}>
+                <Stack direction="row" spacing={1} sx={{ minWidth: 'max-content' }}>
+                    <Paper
+                        onClick={() => { clearFilters(); }}
+                        sx={{
+                            p: 1, minWidth: 120, borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, cursor: "pointer",
+                            backgroundColor: alpha("#fff", 0.05),
+                            border: "1px solid rgba(255,255,255,0.06)",
+                            boxShadow: `inset 0 1px 0 ${alpha("#fff", 0.04)}`,
+                            transition: "all .15s ease",
+                            "&:hover": { transform: "scale(1.02)", backgroundColor: alpha("#fff", 0.07) },
+                        }}
+                    >
+                        <Stack sx={{ minWidth: 0 }}>
+                            <Typography variant="overline" sx={{ opacity: 0.7, lineHeight: 1 }}>GÖSTERİLEN TOPLAM</Typography>
+                            <Typography variant="h6" fontWeight={700} noWrap sx={{ color: '#FCD34D' }}>
+                                {filteredRows.length}
+                            </Typography>
+                        </Stack>
+                    </Paper>
+
+                    <Divider orientation="vertical" flexItem sx={{ borderColor: alpha("#fff", 0.1) }} />
+
+                    {/* Statüye Göre Dağılım */}
+                    {Object.entries(statuCounts)
+                        .filter(([, count]) => count > 0) // Sadece 0'dan büyük olanları göster
+                        .sort(([a], [b]) => {
+                            // Belirli statüleri öne al (Örn: Boş, Planlandı)
+                            const order = (s) => {
+                                if (s === "— Boş —") return 0; // Boşta olan en üstte
+                                if (toUpperTr(s) === "İŞ YOK ARAÇ BOŞ") return 1; // Yeni statüyü öne al
+                                if (toUpperTr(s) === "PLANLANDI") return 2;
+                                if (toUpperTr(s) === "YOLDA") return 3;
+                                if (toUpperTr(s) === "İPTAL") return 99;
+                                return 100;
+                            }
+                            return order(a) - order(b);
+                        })
+                        .map(([s, count]) => {
+                            const isSelected = statuFilter.includes(s);
+                            const { hex } = statuRenkMap(s);
+                            return (
+                                <Paper
+                                    key={s}
+                                    onClick={() => toggleStatuFilter?.(s)}
+                                    sx={{
+                                        p: 1, minWidth: 160, borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, cursor: "pointer",
+                                        backgroundColor: alpha(hex, 0.05),
+                                        // Seçiliyse border ve glow uygula
+                                        border: isSelected ? `2px solid ${alpha(hex, 0.8)}` : `1px solid ${alpha("#fff", 0.06)}`,
+                                        boxShadow: isSelected ? `0 0 10px ${alpha(hex, 0.5)}` : `inset 0 1px 0 ${alpha("#fff", 0.04)}`,
+                                        transition: "all .15s ease",
+                                        "&:hover": { transform: "scale(1.02)", backgroundColor: alpha(hex, 0.1) },
+                                    }}
+                                >
+                                    <Stack sx={{ minWidth: 0 }}>
+                                        <Typography variant="overline" sx={{ opacity: 0.7, lineHeight: 1 }}>STATÜ</Typography>
+                                        <Typography variant="subtitle2" fontWeight={700} noWrap title={s} sx={{ color: hex }}>
+                                            {s}
+                                        </Typography>
+                                    </Stack>
+                                    <Chip
+                                        label={count}
+                                        size="small"
+                                        sx={{
+                                            fontWeight: 800,
+                                            backgroundColor: isSelected ? hex : alpha(hex, 0.3),
+                                            color: isSelected ? (hex === '#FCD34D' ? '#0B1220' : '#E8EAF9') : '#E8EAF9', // Sarı için metin rengini koyu yap
+                                        }}
+                                    />
+                                </Paper>
+                            );
+                        })}
+                </Stack>
+            </Box>
+
 
             {/* Filtreler ve Arama Çubuğu */}
             <Paper
@@ -1412,7 +1685,13 @@ export default function PlanlamaDeluxe() {
 
                 <Tooltip title="Tüm filtreleri temizle">
                     <span>
-                        <Button onClick={clearFilters} variant="outlined" startIcon={<CleaningServicesIcon />} disabled={!plakaFilter.length && !bolgeFilter.length && !search} size="small">
+                        <Button
+                            onClick={clearFilters}
+                            variant="outlined"
+                            startIcon={<CleaningServicesIcon />}
+                            disabled={!plakaFilter.length && !bolgeFilter.length && !search && !statuFilter.length}
+                            size="small"
+                        >
                             Temizle
                         </Button>
                     </span>
@@ -1659,6 +1938,8 @@ export default function PlanlamaDeluxe() {
                 </DialogActions>
             </Dialog>
 
+            {/* YENİ: Statü Raporu Hazırlama Dialogu (Kaldırıldı) */}
+
             {/* Hızlı Düzenleme Çekmecesi */}
             <Drawer
                 anchor="right"
@@ -1784,6 +2065,10 @@ export default function PlanlamaDeluxe() {
             {/* Drag & Drop Overlay */}
             {dragActive && perms.pln_import_excel && (
                 <Box
+                    onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); }}
+                    onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); const files = e.dataTransfer?.files; if (files?.length) handleFiles(files); }}
                     sx={{
                         position: "fixed", inset: 0, zIndex: (t) => t.zIndex.modal + 1,
                         backgroundColor: alpha("#000", 0.7), display: "flex", alignItems: "center", justifyContent: "center",

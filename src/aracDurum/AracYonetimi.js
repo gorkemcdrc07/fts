@@ -3,8 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
-// import * as XLSX from "xlsx"; // 🛑 KALDIRILDI!
-import ExcelJS from "exceljs"; // ✅ EXCELJS EKLENDİ!
+import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
 // MUI
@@ -63,7 +62,6 @@ import { DataGrid, GridToolbar, gridClasses } from "@mui/x-data-grid";
 
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
@@ -376,7 +374,7 @@ function Section({ title, right, sx, children }) {
 /* ===================== Ana Bileşen ===================== */
 export default function AracYonetimiMUI() {
     const navigate = useNavigate();
-    const currentTheme = useTheme(); // Temayı kullanmak için
+    const currentTheme = useTheme();
 
     const [tumAraclar, setTumAraclar] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -386,7 +384,7 @@ export default function AracYonetimiMUI() {
     const [drawerOpen, setDrawerOpen] = useState(false);
 
     // DataGrid kalıcılık
-    const [density, setDensity] = useLocalStorage("aracGridDensity", "compact"); // compact/standard/comfortable
+    const [density, setDensity] = useLocalStorage("aracGridDensity", "compact");
     const [colVis, setColVis] = useLocalStorage("aracColVis", {});
     const [pinnedCols, setPinnedCols] = useLocalStorage("aracPinned", { left: ["plaka", "treyler", "surucu_adi"], right: ["__actions"] });
 
@@ -416,8 +414,6 @@ export default function AracYonetimiMUI() {
 
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
     const openSnack = useCallback((msg, severity = "success") => setSnack({ open: true, msg, severity }), []);
-    const mountedRef = useRef(true);
-    useEffect(() => () => { mountedRef.current = false; }, []);
 
     // ► YETKİ
     const [canCreate, setCanCreate] = useState(false);
@@ -425,7 +421,7 @@ export default function AracYonetimiMUI() {
     const [canDelete, setCanDelete] = useState(false);
 
     // =============================================================
-    // FONKSİYON TANIMLARI (TÜM useEffect ve Diğer Fonksiyonlardan önce)
+    // FONKSİYON TANIMLARI
     // =============================================================
 
     const verileriGetir = useCallback(async () => {
@@ -435,6 +431,7 @@ export default function AracYonetimiMUI() {
 
             const bugun = new Date();
             const guncelData = (data || []).map((arac) => {
+                // Kesinti bitmişse statüyü güncelle
                 if (arac.kesinti_bitis_tarihi) {
                     const bitis = new Date(arac.kesinti_bitis_tarihi);
                     if (bitis < bugun) {
@@ -547,61 +544,111 @@ export default function AracYonetimiMUI() {
         [editId, form, openSnack, temizleVeKapat, tumAraclar, verileriGetir, validateForm, canCreate, canEdit]
     );
 
-    // =============================================================
-    // USEEFFECT HOOKLARI (Tüm fonksiyon tanımlarından sonra)
-    // =============================================================
-
-    // Login kontrolü
-    useEffect(() => {
-        const kullanici = localStorage.getItem("kullanici");
-        if (!kullanici) navigate("/login");
-    }, [navigate]);
-
-    // İlk yükleme: veri + yetkiler
-    useEffect(() => {
-        verileriGetir();
-        (async () => {
-            try {
-                const perms = await fetchAracPerms();
-                setCanCreate(perms.canCreate);
-                setCanEdit(perms.canEdit);
-                setCanDelete(perms.canDelete);
-            } catch {
-                setCanCreate(false);
-                setCanEdit(false);
-                setCanDelete(false);
+    const handleDuzenle = useCallback(
+        (arac) => {
+            if (!canEdit) {
+                openSnack("Düzenleme yetkiniz yok.", "warning");
+                return;
             }
-        })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+            if (!arac?.id) return openSnack("HATA: Bu aracın ID bilgisi eksik.", "error");
+            setForm({
+                plaka: arac.plaka || "",
+                treyler: arac.treyler || "",
+                surucu_adi: arac.surucu_adi || "",
+                surucu_telefon: arac.surucu_telefon || "",
+                surucu_tc: arac.surucu_tc || "",
+                ikamet_adresi: arac.ikamet_adresi || "",
+                cekici_ruhsat_no: arac.cekici_ruhsat_no || "",
+                dorse_ruhsat_no: arac.dorse_ruhsat_no || "",
+                tedarikci_isim: arac.tedarikci_isim || "",
+                // Tarih formatları YYYY-MM-DD olmalı
+                cekici_muayene: arac.cekici_muayene ? String(arac.cekici_muayene).slice(0, 10) : "",
+                dorse_muayene: arac.dorse_muayene ? String(arac.dorse_muayene).slice(0, 10) : "",
+                trafik_sigorta: arac.trafik_sigorta ? String(arac.trafik_sigorta).slice(0, 10) : "",
+                arac_yil: arac.arac_yil || "",
+                dorse_yil: arac.dorse_yil || "",
+                bolge: arac.bolge || "",
+                arac_tip: arac.arac_tip || "",
+                dorse_tip: arac.dorse_tip || "",
+                liftmaster: arac.liftmaster || "",
+                gps_seri_no: arac.gps_seri_no || "",
+                gps_sim_kart_no: arac.gps_sim_kart_no || "",
+                odak_k1: arac.odak_k1 || "",
+            });
+            setFormErrors({});
+            setEditId(arac.id);
+            setDuzenleAcik(true);
+        },
+        [openSnack, canEdit]
+    );
+
+    const handleSilIstegi = useCallback(
+        (id) => {
+            if (!canDelete) {
+                openSnack("Silme yetkiniz yok.", "warning");
+                return;
+            }
+            setSeciliAracId(id);
+            setSilmeSebebi("");
+            setSilinmeTarihi(dayjs().format("YYYY-MM-DDTHH:mm")); // Güncel tarih/saat
+            setSilModalAcik(true);
+        },
+        [canDelete, openSnack]
+    );
+
+    const handleSilOnayla = useCallback(async () => {
+        if (!canDelete) {
+            openSnack("Silme yetkiniz yok.", "warning");
+            return;
+        }
+        if (!(silmeSebebi || "").trim() || !silinmeTarihi) {
+            openSnack("Lütfen silme sebebini ve tarihini girin.", "warning");
+            return;
+        }
+        const kullanici = getMevcutKullanici();
+        const { error } = await supabase
+            .from("plakalar")
+            .update({
+                statu: "ÇIKARILDI",
+                silme_sebebi: silmeSebebi,
+                silinme_tarihi: silinmeTarihi,
+                silen_kullanici: kullanici,
+            })
+            .eq("id", seciliAracId);
+        if (!error) {
+            openSnack("Araç statüsü ÇIKARILDI olarak güncellendi");
+            setSilModalAcik(false);
+            setSeciliAracId(null);
+            verileriGetir();
+        } else openSnack("Silme işlemi başarısız", "error");
+    }, [seciliAracId, silinmeTarihi, silmeSebebi, openSnack, verileriGetir, canDelete]);
+
+    const handleBilgiAc = useCallback(async (arac) => {
+        const plakaTreyler = `${arac.plaka} - ${arac.treyler}`;
+
+        const { data: izinData } = await supabase.from("izinler").select("*").eq("plaka_treyler", plakaTreyler).order("id", { ascending: false }).limit(1);
+        setIzinBilgisi(izinData?.[0] || null);
+
+        const { data: kesintiData } = await supabase.from("kesintiler").select("*").eq("plaka_treyler", plakaTreyler).order("id", { ascending: false }).limit(1);
+
+        let gosterilecek = { ...arac };
+        if (kesintiData?.[0]) {
+            setKesintiBilgisi(kesintiData[0]);
+            const bitis = new Date(kesintiData[0].bitis_tarihi);
+            const bugun = new Date();
+            if (bitis < bugun) {
+                const farkGun = Math.floor((+bugun - +bitis) / (1000 * 60 * 60 * 24));
+                gosterilecek = { ...gosterilecek, statu: `${farkGun} gün kesintiden yeni çıktı` };
+            }
+        } else setKesintiBilgisi(null);
+
+        setBilgiArac(gosterilecek);
+        setBilgiModalAcik(true);
     }, []);
 
-    // Klavye kısayolları
-    useEffect(() => {
-        const onKey = (e) => {
-            const isMac = navigator.platform.toUpperCase().includes("MAC");
-            const metaK = (isMac && e.metaKey && e.key.toLowerCase() === "k") || (!isMac && e.ctrlKey && e.key.toLowerCase() === "k");
-            if (metaK) {
-                e.preventDefault();
-                const el = document.getElementById("global-search-input");
-                el?.focus();
-                el?.select();
-            }
-            if (e.key.toLowerCase() === "n") canCreate && handleYeniEkle(); // ARTIK ERİŞİLEBİLİR
-            if (e.key.toLowerCase() === "r") verileriGetir();
-            if (e.key === "/") {
-                const quick = document.querySelector('input[placeholder*="Quick filter"]');
-                quick?.focus();
-                e.preventDefault();
-            }
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [canCreate, verileriGetir, handleYeniEkle]);
-
     // =============================================================
-    // KALAN KISIMLAR
+    // USEMEMO TANIMLARI
     // =============================================================
-
 
     // Filtrelenmiş liste
     const araclar = useMemo(() => {
@@ -650,108 +697,8 @@ export default function AracYonetimiMUI() {
     const aktifSayisi = useMemo(() => tumAraclar.filter((a) => a.statu !== "ÇIKARILDI").length, [tumAraclar]);
     const pasifSayisi = useMemo(() => tumAraclar.filter((a) => a.statu === "ÇIKARILDI").length, [tumAraclar]);
 
-    const handleDuzenle = useCallback(
-        (arac) => {
-            if (!canEdit) {
-                openSnack("Düzenleme yetkiniz yok.", "warning");
-                return;
-            }
-            if (!arac?.id) return openSnack("HATA: Bu aracın ID bilgisi eksik.", "error");
-            setForm({
-                plaka: arac.plaka || "",
-                treyler: arac.treyler || "",
-                surucu_adi: arac.surucu_adi || "",
-                surucu_telefon: arac.surucu_telefon || "",
-                surucu_tc: arac.surucu_tc || "",
-                ikamet_adresi: arac.ikamet_adresi || "",
-                cekici_ruhsat_no: arac.cekici_ruhsat_no || "",
-                dorse_ruhsat_no: arac.dorse_ruhsat_no || "",
-                tedarikci_isim: arac.tedarikci_isim || "",
-                cekici_muayene: arac.cekici_muayene || "",
-                dorse_muayene: arac.dorse_muayene || "",
-                trafik_sigorta: arac.trafik_sigorta || "",
-                arac_yil: arac.arac_yil || "",
-                dorse_yil: arac.dorse_yil || "",
-                bolge: arac.bolge || "",
-                arac_tip: arac.arac_tip || "",
-                dorse_tip: arac.dorse_tip || "",
-                liftmaster: arac.liftmaster || "",
-                gps_seri_no: arac.gps_seri_no || "",
-                gps_sim_kart_no: arac.gps_sim_kart_no || "",
-                odak_k1: arac.odak_k1 || "",
-            });
-            setFormErrors({});
-            setEditId(arac.id);
-            setDuzenleAcik(true);
-        },
-        [openSnack, canEdit]
-    );
+    const rows = useMemo(() => araclar.map((a, i) => ({ id: a.id ?? `${a.plaka}-${a.treyler}-${i}`, ...a })), [araclar]);
 
-    const handleSilIstegi = useCallback(
-        (id) => {
-            if (!canDelete) {
-                openSnack("Silme yetkiniz yok.", "warning");
-                return;
-            }
-            setSeciliAracId(id);
-            setSilmeSebebi("");
-            setSilinmeTarihi(turkiyeSaatISOString().slice(0, 16));
-            setSilModalAcik(true);
-        },
-        [canDelete, openSnack]
-    );
-
-    const handleSilOnayla = useCallback(async () => {
-        if (!canDelete) {
-            openSnack("Silme yetkiniz yok.", "warning");
-            return;
-        }
-        if (!(silmeSebebi || "").trim() || !silinmeTarihi) {
-            openSnack("Lütfen silme sebebini ve tarihini girin.", "warning");
-            return;
-        }
-        const kullanici = getMevcutKullanici();
-        const { error } = await supabase
-            .from("plakalar")
-            .update({
-                statu: "ÇIKARILDI",
-                silme_sebebi: silmeSebebi,
-                silinme_tarihi: silinmeTarihi,
-                silen_kullanici: kullanici,
-            })
-            .eq("id", seciliAracId);
-        if (!error) {
-            openSnack("Araç statüsü ÇIKARILDI olarak güncellendi");
-            setSilModalAcik(false);
-            setSeciliAracId(null);
-            verileriGetir();
-        } else openSnack("Silme işlemi başarısız", "error");
-    }, [seciliAracId, silinmeTarihi, silmeSebebi, openSnack, verileriGetir, canDelete]);
-
-    const handleBilgiAc = useCallback(async (arac) => {
-        const plakaTreyler = `${arac.plaka} - ${arac.treyler}`;
-
-        const { data: izinData } = await supabase.from("izinler").select("*").eq("plaka_treyler", plakaTreyler).order("id", { ascending: false }).limit(1);
-        setIzinBilgisi(izinData?.[0] || null);
-
-        const { data: kesintiData } = await supabase.from("kesintiler").select("*").eq("plaka_treyler", plakaTreyler).order("id", { ascending: false }).limit(1);
-
-        let gosterilecek = { ...arac };
-        if (kesintiData?.[0]) {
-            setKesintiBilgisi(kesintiData[0]);
-            const bitis = new Date(kesintiData[0].bitis_tarihi);
-            const bugun = new Date();
-            if (bitis < bugun) {
-                const farkGun = Math.floor((+bugun - +bitis) / (1000 * 60 * 60 * 24));
-                gosterilecek = { ...gosterilecek, statu: `${farkGun} gün kesintiden çıktı` };
-            }
-        } else setKesintiBilgisi(null);
-
-        setBilgiArac(gosterilecek);
-        setBilgiModalAcik(true);
-    }, []);
-
-    // 🛑 EXCEL AKTAR FONKSİYONU DEĞİŞTİRİLDİ
     const excelAktar = useCallback(async () => {
         const liste = araclar;
         if (!liste.length) return openSnack("Aktarılacak araç bulunamadı", "warning");
@@ -759,8 +706,6 @@ export default function AracYonetimiMUI() {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet(`${tab} Araçlar`);
 
-        // Sütun başlıklarını ve veriyi almak için geçici bir yapı.
-        // Bu yapı, DataGrid'deki sütun sırasına uymak zorunda değildir, ancak okunabilir olmalıdır.
         const headerMap = {
             plaka: "Plaka",
             treyler: "Treyler",
@@ -792,17 +737,15 @@ export default function AracYonetimiMUI() {
 
         worksheet.columns = columns;
 
-        // Veri formatlama
         const dataToExport = liste.map((arac) => {
             const row = {};
             Object.keys(headerMap).forEach(key => {
                 let value = arac[key];
 
-                // Tarih formatlama
                 if (key.includes("muayene") || key.includes("sigorta") || key.includes("tarih")) {
-                    row[key] = value ? dayjs(value).toDate() : null; // Date objesi olarak sakla
+                    row[key] = value ? dayjs(value).toDate() : null;
                 } else if (key.includes("yil")) {
-                    row[key] = Number(value) || null; // Sayısal yıl
+                    row[key] = Number(value) || null;
                 } else {
                     row[key] = value;
                 }
@@ -812,14 +755,13 @@ export default function AracYonetimiMUI() {
 
         worksheet.addRows(dataToExport);
 
-        // Dosyayı oluştur ve indir
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
         saveAs(blob, `arac_listesi_${tab}.xlsx`);
     }, [araclar, openSnack, tab]);
 
 
-    // GRID sütunları (Aynı kalır, actions'a handleDuzenle/handleSilIstegi eklendi)
+    // GRID sütunları
     const columns = useMemo(
         () => [
             { field: "plaka", headerName: "Plaka", minWidth: 120, flex: 0.9 },
@@ -842,9 +784,33 @@ export default function AracYonetimiMUI() {
             { field: "cekici_ruhsat_no", headerName: "Çekici Ruhsat", minWidth: 160, flex: 1 },
             { field: "dorse_ruhsat_no", headerName: "Dorse Ruhsat", minWidth: 160, flex: 1 },
             { field: "tedarikci_isim", headerName: "Tedarikçi", minWidth: 150, flex: 1 },
-            { field: "cekici_muayene", headerName: "Çekici Muayene", minWidth: 150, flex: 1 },
-            { field: "dorse_muayene", headerName: "Dorse Muayene", minWidth: 150, flex: 1 },
-            { field: "trafik_sigorta", headerName: "Trafik Sigorta", minWidth: 150, flex: 1 },
+            {
+                field: "cekici_muayene",
+                headerName: "Çekici Muayene Bitiş",
+                minWidth: 150,
+                flex: 1,
+                type: 'date',
+                // NULL kontrolü eklendi
+                valueFormatter: (p) => (p && p.value) ? dayjs(p.value).format("DD.MM.YYYY") : '-'
+            },
+            {
+                field: "dorse_muayene",
+                headerName: "Dorse Muayene Bitiş",
+                minWidth: 150,
+                flex: 1,
+                type: 'date',
+                // NULL kontrolü eklendi
+                valueFormatter: (p) => (p && p.value) ? dayjs(p.value).format("DD.MM.YYYY") : '-'
+            },
+            {
+                field: "trafik_sigorta",
+                headerName: "Trafik Sigorta Bitiş",
+                minWidth: 150,
+                flex: 1,
+                type: 'date',
+                // NULL kontrolü eklendi
+                valueFormatter: (p) => (p && p.value) ? dayjs(p.value).format("DD.MM.YYYY") : '-'
+            },
             { field: "arac_yil", headerName: "Araç Yıl", minWidth: 110, flex: 0.7 },
             { field: "dorse_yil", headerName: "Dorse Yıl", minWidth: 110, flex: 0.7 },
             { field: "bolge", headerName: "Bölge", minWidth: 120, flex: 0.9 },
@@ -890,7 +856,6 @@ export default function AracYonetimiMUI() {
                             variant={isRemoved ? "outlined" : "filled"}
                             sx={{
                                 fontWeight: 600,
-                                // Özel renk geçişleri
                                 bgcolor: isRemoved ? alpha(currentTheme.palette.error.main, 0.1) : isWarning ? alpha(currentTheme.palette.warning.main, 0.1) : alpha(currentTheme.palette.success.main, 0.1),
                                 color: isRemoved ? currentTheme.palette.error.main : isWarning ? currentTheme.palette.warning.main : currentTheme.palette.success.main,
                                 border: 'none',
@@ -939,8 +904,6 @@ export default function AracYonetimiMUI() {
         [tab, handleBilgiAc, handleDuzenle, handleSilIstegi, canEdit, canDelete, currentTheme.palette.error.main, currentTheme.palette.warning.main, currentTheme.palette.success.main]
     );
 
-    const rows = useMemo(() => araclar.map((a, i) => ({ id: a.id ?? `${a.plaka}-${a.treyler}-${i}`, ...a })), [araclar]);
-
     // Aktif filtre rozetleri
     const activeFilterChips = useMemo(() => {
         const chips = [];
@@ -949,6 +912,61 @@ export default function AracYonetimiMUI() {
         if (filters?.surucu) chips.push({ k: "surucu", label: `Sürücü: ${filters.surucu}` });
         return chips;
     }, [filters]);
+
+    // =============================================================
+    // USEEFFECT HOOKLARI
+    // =============================================================
+
+    // Login kontrolü
+    useEffect(() => {
+        const kullanici = localStorage.getItem("kullanici");
+        if (!kullanici) navigate("/login");
+    }, [navigate]);
+
+    // İlk yükleme: veri + yetkiler
+    useEffect(() => {
+        verileriGetir();
+        (async () => {
+            try {
+                const perms = await fetchAracPerms();
+                setCanCreate(perms.canCreate);
+                setCanEdit(perms.canEdit);
+                setCanDelete(perms.canDelete);
+            } catch {
+                setCanCreate(false);
+                setCanEdit(false);
+                setCanDelete(false);
+            }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Klavye kısayolları
+    useEffect(() => {
+        const onKey = (e) => {
+            const isMac = navigator.platform.toUpperCase().includes("MAC");
+            const metaK = (isMac && e.metaKey && e.key.toLowerCase() === "k") || (!isMac && e.ctrlKey && e.key.toLowerCase() === "k");
+            if (metaK) {
+                e.preventDefault();
+                const el = document.getElementById("global-search-input");
+                el?.focus();
+                el?.select();
+            }
+            if (e.key.toLowerCase() === "n") canCreate && handleYeniEkle();
+            if (e.key.toLowerCase() === "r") verileriGetir();
+            if (e.key === "/") {
+                const quick = document.querySelector('input[placeholder*="Quick filter"]');
+                quick?.focus();
+                e.preventDefault();
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [canCreate, verileriGetir, handleYeniEkle]);
+
+    // =============================================================
+    // RETURN / JSX BAŞLANGICI
+    // =============================================================
 
     return (
         <ThemeProvider theme={theme}>
@@ -965,11 +983,11 @@ export default function AracYonetimiMUI() {
                         color="transparent"
                         elevation={0}
                         sx={{
-                            borderRadius: 3, // Daha yuvarlak hatlar
+                            borderRadius: 3,
                             ...glass(0.95, 0.8),
                             mx: 0,
                             mt: 0,
-                            backgroundImage: "linear-gradient(90deg, rgba(139,92,246,0.2), rgba(34,211,238,0.2))", // Daha belirgin gradient
+                            backgroundImage: "linear-gradient(90deg, rgba(139,92,246,0.2), rgba(34,211,238,0.2))",
                             borderBottom: '2px solid rgba(139,92,246,0.3)',
                         }}
                     >
@@ -1128,7 +1146,7 @@ export default function AracYonetimiMUI() {
                     <Box sx={{ flexGrow: 1, minHeight: 0 }}>
                         <Paper
                             sx={{
-                                height: "100%", // Kalan tüm dikey alanı kapla
+                                height: "100%",
                                 borderRadius: 3,
                                 overflow: "hidden",
                                 background: "transparent",
@@ -1285,7 +1303,7 @@ export default function AracYonetimiMUI() {
                         </Stack>
                     </DialogTitle>
                     <DialogContent dividers>
-                        <Grid container spacing={3} sx={{ mt: 0 }}> {/* Spacing artırıldı */}
+                        <Grid component="form" onSubmit={handleSubmit} container spacing={3} sx={{ mt: 0 }}>
                             <Grid item xs={12} md={4}>
                                 <TextField
                                     fullWidth
@@ -1420,7 +1438,7 @@ export default function AracYonetimiMUI() {
                             borderTop: "1px solid rgba(255,255,255,0.06)",
                         }}
                     >
-                        <Button onClick={handleSubmit} variant="contained" size="large" color={editId ? "primary" : "success"} sx={{ px: 4, py: 1.2, fontWeight: 700 }}>
+                        <Button type="submit" form="arac-form" variant="contained" size="large" color={editId ? "primary" : "success"} sx={{ px: 4, py: 1.2, fontWeight: 700 }} onClick={handleSubmit}>
                             {editId ? "Güncelle" : "Kaydet"}
                         </Button>
                         <Button onClick={temizleVeKapat} variant="outlined" size="large">
@@ -1508,8 +1526,8 @@ export default function AracYonetimiMUI() {
                                             <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1, color: currentTheme.palette.secondary.light }}>İzin Kaydı (Son)</Typography>
                                             <Grid container spacing={1}>
                                                 <Grid item xs={12} md={4}><Typography variant="body2"><b>Tür:</b> {izinBilgisi.izin_turu}</Typography></Grid>
-                                                <Grid item xs={12} md={4}><Typography variant="body2"><b>Başlangıç:</b> {new Date(izinBilgisi.baslangic_tarihi).toLocaleDateString()}</Typography></Grid>
-                                                <Grid item xs={12} md={4}><Typography variant="body2"><b>Bitiş:</b> {new Date(izinBilgisi.bitis_tarihi).toLocaleDateString()}</Typography></Grid>
+                                                <Grid item xs={12} md={4}><Typography variant="body2"><b>Başlangıç:</b> {izinBilgisi.baslangic_tarihi ? new Date(izinBilgisi.baslangic_tarihi).toLocaleDateString() : '-'}</Typography></Grid>
+                                                <Grid item xs={12} md={4}><Typography variant="body2"><b>Bitiş:</b> {izinBilgisi.bitis_tarihi ? new Date(izinBilgisi.bitis_tarihi).toLocaleDateString() : '-'}</Typography></Grid>
                                                 <Grid item xs={12}><Typography variant="body2"><b>Açıklama:</b> {izinBilgisi.aciklama || "-"}</Typography></Grid>
                                             </Grid>
                                         </Paper>
@@ -1522,8 +1540,8 @@ export default function AracYonetimiMUI() {
                                             <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1, color: currentTheme.palette.warning.light }}>Kesinti Kaydı (Son)</Typography>
                                             <Grid container spacing={1}>
                                                 <Grid item xs={12} md={4}><Typography variant="body2"><b>Tür:</b> {kesintiBilgisi.kesinti_turu}</Typography></Grid>
-                                                <Grid item xs={12} md={4}><Typography variant="body2"><b>Başlangıç:</b> {new Date(kesintiBilgisi.baslangic_tarihi).toLocaleDateString()}</Typography></Grid>
-                                                <Grid item xs={12} md={4}><Typography variant="body2"><b>Bitiş:</b> {new Date(kesintiBilgisi.bitis_tarihi).toLocaleDateString()}</Typography></Grid>
+                                                <Grid item xs={12} md={4}><Typography variant="body2"><b>Başlangıç:</b> {kesintiBilgisi.baslangic_tarihi ? new Date(kesintiBilgisi.baslangic_tarihi).toLocaleDateString() : '-'}</Typography></Grid>
+                                                <Grid item xs={12} md={4}><Typography variant="body2"><b>Bitiş:</b> {kesintiBilgisi.bitis_tarihi ? new Date(kesintiBilgisi.bitis_tarihi).toLocaleDateString() : '-'}</Typography></Grid>
                                                 <Grid item xs={12}><Typography variant="body2"><b>Açıklama:</b> {kesintiBilgisi.aciklama || "-"}</Typography></Grid>
                                             </Grid>
                                         </Paper>

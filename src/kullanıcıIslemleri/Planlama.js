@@ -8,6 +8,8 @@ import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import customParseFormat from "dayjs/plugin/customParseFormat";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 
 // MUI
 import {
@@ -55,8 +57,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import EditNoteIcon from "@mui/icons-material/EditNote";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
-import BoltIcon from "@mui/icons-material/Bolt"; // Yeni Icon: Hızlı aksiyonlar için
-import AccessTimeIcon from "@mui/icons-material/AccessTime"; // Statü için ikon
+import BoltIcon from "@mui/icons-material/Bolt";
 
 import usePermissions from "../auth/usePermissions";
 
@@ -64,8 +65,12 @@ import usePermissions from "../auth/usePermissions";
 const SeferDetayPanel = lazy(() => import("./planlamaDetay/SeferDetayPanel"));
 const SiparisAnaliz = lazy(() => import("./planlamaDetay/SiparisAnaliz"));
 
-// Dayjs eklentisi
+
+// Dayjs eklentileri (Import'lar bittikten sonra buraya taşındı)
 dayjs.extend(customParseFormat);
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
 
 /* ---------------- helpers ---------------- */
 
@@ -73,12 +78,16 @@ dayjs.extend(customParseFormat);
 const toUpperTr = (s) => (s || "").toLocaleUpperCase("tr-TR").trim();
 const getTodayISO = () => new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
 
-// Yeni Statü Listesi ve Renk Haritası (Artık Sadece Ön Tanımlı Renklendirme İçin Kullanılacak)
+// Plaka normalize: Sadece harf ve rakamları alır. (DB eşleşmesi için kritik)
+const plakaKey = (s) => toUpperTr(String(s || "")).replace(/[^A-Z0-9]/g, "");
+const primaryPlaka = (s) => toUpperTr(String(s || "")).split("-")[0].trim();
+
+// ... Diğer helpers
 const STATU_LISTESI = [
     "Planlandı",
     "Yolda",
     "Yüklemede",
-    "Tahlilede",
+    "Tahliyede",
     "Tamamlandı",
     "İptal",
 ];
@@ -123,29 +132,6 @@ const formatDateTR = (val) => {
     }
 };
 
-// "YYYY-MM-DD" → [y,m,d]
-const splitYMD = (iso) => String(iso).split("T")[0].split("-").map(Number);
-
-// Excel seri gün (1899-12-30 taban). Timezone’dan bağımsızdır.
-const toExcelSerial = (y, m, d) => {
-    const epoch = Date.UTC(1899, 11, 30);
-    const ms = Date.UTC(y, m - 1, d) - epoch;
-    return Math.round(ms / 86400000); // tam gün
-};
-
-// ISO ("YYYY-MM-DD[...]" ) → Excel seri gün
-const excelSerialFromISO = (iso) => {
-    if (!iso) return null;
-    const [y, m, d] = splitYMD(iso);
-    if (!y || !m || !d) return null;
-    return toExcelSerial(y, m, d);
-};
-
-// Plaka normalize
-const plakaKey = (s) => toUpperTr(String(s || "")).replace(/[^A-Z0-9]/g, "");
-const primaryPlaka = (s) => toUpperTr(String(s || "")).split("-")[0].trim();
-
-// Debounce
 const useDebounced = (value, delay = 250) => {
     const [v, setV] = useState(value);
     useEffect(() => {
@@ -157,7 +143,11 @@ const useDebounced = (value, delay = 250) => {
 const isKocaeli = (name) => toUpperTr(name).includes("KOCAELİ");
 
 const ilToBolgeMap = {
-    ADANA: "Doğu Bölgesi", ADIYAMAN: "Doğu Bölgesi", AFYON: "İç Anadolu Bölgesi", AĞRI: "Doğu Bölgesi", AMASYA: "Karadeniz Bölgesi", ANKARA: "İç Anadolu Bölgesi", ANTALYA: "Ege Bölgesi", ARTVİN: "Karadeniz Bölgesi", AYDIN: "Ege Bölgesi", BALIKESİR: "Ege Bölgesi", BARTIN: "Karadeniz Bölgesi", BATMAN: "Doğu Bölgesi", BAYBURT: "Karadeniz Bölgesi", BİLECİK: "İç Anadolu Bölgesi", BİNGÖL: "Doğu Bölgesi", BİTLİS: "Doğu Bölgesi", BOLU: "Karadeniz Bölgesi", BURDUR: "Ege Bölgesi", BURSA: "Ege Bölgesi", ÇANAKKALE: "Trakya Bölgesi", ÇANKIRI: "İç Anadolu Bölgesi", ÇORUM: "İç Anadolu Bölgesi", DENİZLİ: "Ege Bölgesi", DİYARBAKIR: "Doğu Bölgesi", DÜZCE: "Karadeniz Bölgesi", EDİRNE: "Trakya Bölgesi", ELAZIĞ: "Doğu Bölgesi", ERZİNCAN: "Doğu Bölgesi", ERZURUM: "Doğu Bölgesi", ESKİŞEHİR: "İç Anadolu Bölgesi", GAZİANTEP: "Doğu Bölgesi", GİRESUN: "Karadeniz Bölgesi", GÜMÜŞHANE: "Karadeniz Bölgesi", HAKKARİ: "Doğu Bölgesi", HATAY: "Doğu Bölgesi", ISPARTA: "Ege Bölgesi", MERSİN: "Doğu Bölgesi", İSTANBUL: "Marmara Bölgesi", İZMİR: "Ege Bölgesi", KAHRAMANMARAŞ: "Doğu Bölgesi", KARABÜK: "Karadeniz Bölgesi", KARAMAN: "İç Anadolu Bölgesi", KARS: "Doğu Bölgesi", KASTAMONU: "Karadeniz Bölgesi", KAYSERİ: "İç Anadolu Bölgesi", KİLİS: "Doğu Bölgesi", KIRIKKALE: "İç Anadolu Bölgesi", KIRKLARELİ: "Trakya Bölgesi", KIRŞEHİR: "İç Anadolu Bölgesi", KOCAELİ: "Kocaeli Bölgesi", KONYA: "İç Anadolu Bölgesi", KÜTAHYA: "İç Anadolu Bölgesi", MALATYA: "Doğu Bölgesi", MANİSA: "Ege Bölgesi", MARDİN: "Doğu Bölgesi", MUĞLA: "Ege Bölgesi", MUŞ: "Doğu Bölgesi", NEVŞEHİR: "İç Anadolu Bölgesi", NİĞDE: "İç Anadolu Bölgesi", ORDU: "Karadeniz Bölgesi", OSMANİYE: "Doğu Bölgesi", RİZE: "Karadeniz Bölgesi", SAKARYA: "Kocaeli Bölgesi", SAMSUN: "Karadeniz Bölgesi", SİİRT: "Doğu Bölgesi", SİNOP: "Karadeniz Bölgesi", SİVAS: "İç Anadolu Bölgesi", ŞANLIURFA: "Doğu Bölgesi", ŞIRNAK: "Doğu Bölgesi", TEKİRDAĞ: "Trakya Bölgesi", TOKAT: "Karadeniz Bölgesi", TRABZON: "Karadeniz Bölgesi", TUNCELİ: "Doğu Bölgesi", UŞAK: "Ege Bölgesi", VAN: "Doğu Bölgesi", YALOVA: "Ege Bölgesi", YOZGAT: "İç Anadolu Bölgesi", ZONGULDAK: "Karadeniz Bölgesi", ADALAR: "Kocaeli Bölgesi", ATAŞEHİR: "Kocaeli Bölgesi", BEYKOZ: "Kocaeli Bölgesi", ÖMERLİ: "Kocaeli Bölgesi", KADIKÖY: "Kocaeli Bölgesi", KARTAL: "Kocaeli Bölgesi", MALTEPE: "Kocaeli Bölgesi", PENDİK: "Kocaeli Bölgesi", SANCAKTEPE: "Kocaeli Bölgesi", SULTANBEYLİ: "Kocaeli Bölgesi", ŞİLE: "Kocaeli Bölgesi", TUZLA: "Kocaeli Bölgesi", ÜMRANİYE: "Kocaeli Bölgesi", ÜSKÜDAR: "Kocaeli Bölgesi", ARNAVUTKÖY: "Marmara Bölgesi", AVCILAR: "Marmara Bölgesi", BAĞCILAR: "Marmara Bölgesi", BAHÇELİEVLER: "Marmara Bölgesi", BAKIRKÖY: "Marmara Bölgesi", BAŞAKŞEHİR: "Marmara Bölgesi", BAYRAMPAŞA: "Marmara Bölgesi", BEŞİKTAŞ: "Marmara Bölgesi", BEYLİKDÜZÜ: "Marmara Bölgesi", BEYOĞLU: "Marmara Bölgesi", BÜYÜKÇEKMECE: "Marmara Bölgesi", ÇATALCA: "Marmara Bölgesi", ESENLER: "Marmara Bölgesi", ESENYURT: "Marmara Bölgesi", EYÜP: "Marmara Bölgesi", FATİH: "Marmara Bölgesi", GAZİOSMANPAŞA: "Marmara Bölgesi", GÜNGÖREN: "Marmara Bölgesi", KAĞITHANE: "Marmara Bölgesi", KÜÇÜKÇEKMECE: "Marmara Bölgesi", SARIYER: "Marmara Bölgesi", SİLİVRİ: "Marmara Bölgesi", SULTANGAZİ: "Marmara Bölgesi", ŞİŞLİ: "Marmara Bölgesi", ZEYTİNBURNU: "Marmara Bölgesi", AKSARAY: "İç Anadolu Bölgesi",
+    ADANA: "Doğu Bölgesi", ADIYAMAN: "Doğu Bölgesi", AFYON: "İç Anadolu Bölgesi", AĞRI: "Doğu Bölgesi", AMASYA: "Karadeniz Bölgesi", ANKARA: "İç Anadolu Bölgesi", ANTALYA: "Ege Bölgesi", ARTVİN: "Karadeniz Bölgesi", AYDIN: "Ege Bölgesi", BALIKESİR: "Ege Bölgesi", BARTIN: "Karadeniz Bölgesi", BATMAN: "Doğu Bölgesi", BAYBURT: "Karadeniz Bölgesi", BİLECİK: "İç Anadolu Bölgesi", BİNGÖL: "Doğu Bölgesi", BİTLİS: "Doğu Bölgesi", BOLU: "Karadeniz Bölgesi", BURDUR: "Ege Bölgesi", BURSA: "Ege Bölgesi", ÇANAKKALE: "Trakya Bölgesi", ÇANKIRI: "İç Anadolu Bölgesi", ÇORUM: "İç Anadolu Bölgesi", DENİZLİ: "Ege Bölgesi", DİYARBAKIR: "Doğu Bölgesi", DÜZCE: "Karadeniz Bölgesi", EDİRNE: "Trakya Bölgesi", ELAZIĞ: "Doğu Bölgesi", ERZİNCAN: "Doğu Bölgesi", ERZURUM: "Doğu Bölgesi", ESKİŞEHİR: "İç Anadolu Bölgesi", GAZİANTEP: "Doğu Bölgesi", GİRESUN: "Karadeniz Bölgesi", GÜMÜŞHANE: "Karadeniz Bölgesi", HAKKARİ: "Doğu Bölgesi", HATAY: "Doğu Bölgesi", ISPARTA: "Ege Bölgesi", MERSİN: "Doğu Bölgesi", İSTANBUL: "Marmara Bölgesi", İZMİR: "Ege Bölgesi", KAHRAMANMARAŞ: "Doğu Bölgesi", KARABÜK: "Karadeniz Bölgesi", KARAMAN: "İç Anadolu Bölgesi", KARS: "Doğu Bölgesi", KASTAMONU: "Karadeniz Bölgesi", KAYSERİ: "İç Anadolu Bölgesi", KİLİS: "Doğu Bölgesi", KIRIKKALE: "İç Anadolu Bölgesi", KIRKLARELİ: "Trakya Bölgesi", KIRŞEHİR: "İç Anadolu Bölgesi", KOCAELİ: "Kocaeli Bölgesi", KONYA: "İç Anadolu Bölgesi", KÜTAHYA: "İç Anadolu Bölgesi", MALATYA: "Doğu Bölgesi", MANİSA: "Ege Bölgesi", MARDİN: "Doğu Bölgesi", MUĞLA: "Ege Bölgesi", MUŞ: "Doğu Bölgesi", NEVŞEHİR: "İç Anadolu Bölgesi", NİĞDE: "İç Anadolu Bölgesi", ORDU: "Karadeniz Bölgesi", OSMANİYE: "Doğu Bölgesi", RİZE: "Karadeniz Bölgesi", SAKARYA: "Kocaeli Bölgesi", SAMSUN: "Karadeniz Bölgesi", SİİRT: "Doğu Bölgesi", SİNOP: "Karadeniz Bölgesi", SİVAS: "İç Anadolu Bölgesi", ŞANLIURFA: "Doğu Bölgesi", ŞIRNAK: "Doğu Bölgesi", TEKİRDAĞ: "Trakya Bölgesi", TOKAT: "Karadeniz Bölgesi", TRABZON: "Karadeniz Bölgesi", TUNCELİ: "Doğu Bölgesi", UŞAK: "Ege Bölgesi", VAN: "Doğu Bölgesi", YALOVA: "Ege Bölgesi", YOZGAT: "İç Anadolu Bölgesi", ZONGULDAK: "Karadeniz Bölgesi", AKSARAY: "İç Anadolu Bölgesi",
+    // İstanbul Anadolu Yakası için özel bölgeler, hepsi Kocaeli Bölgesi olarak normalize ediliyor.
+    ADALAR: "Kocaeli Bölgesi", ATAŞEHİR: "Kocaeli Bölgesi", BEYKOZ: "Kocaeli Bölgesi", ÖMERLİ: "Kocaeli Bölgesi", KADIKÖY: "Kocaeli Bölgesi", KARTAL: "Kocaeli Bölgesi", MALTEPE: "Kocaeli Bölgesi", PENDİK: "Kocaeli Bölgesi", SANCAKTEPE: "Kocaeli Bölgesi", SULTANBEYLİ: "Kocaeli Bölgesi", ŞİLE: "Kocaeli Bölgesi", TUZLA: "Kocaeli Bölgesi", ÜMRANİYE: "Kocaeli Bölgesi", ÜSKÜDAR: "Kocaeli Bölgesi",
+    // İstanbul Avrupa Yakası için özel bölgeler, hepsi Marmara Bölgesi olarak normalize ediliyor.
+    ARNAVUTKÖY: "Marmara Bölgesi", AVCILAR: "Marmara Bölgesi", BAĞCILAR: "Marmara Bölgesi", BAHÇELİEVLER: "Marmara Bölgesi", BAKIRKÖY: "Marmara Bölgesi", BAŞAKŞEHİR: "Marmara Bölgesi", BAYRAMPAŞA: "Marmara Bölgesi", BEŞİKTAŞ: "Marmara Bölgesi", BEYLİKDÜZÜ: "Marmara Bölgesi", BEYOĞLU: "Marmara Bölgesi", BÜYÜKÇEKMECE: "Marmara Bölgesi", ÇATALCA: "Marmara Bölgesi", ESENLER: "Marmara Bölgesi", ESENYURT: "Marmara Bölgesi", EYÜP: "Marmara Bölgesi", FATİH: "Marmara Bölgesi", GAZİOSMANPAŞA: "Marmara Bölgesi", GÜNGÖREN: "Marmara Bölgesi", KAĞITHANE: "Marmara Bölgesi", KÜÇÜKÇEKMECE: "Marmara Bölgesi", SARIYER: "Marmara Bölgesi", SİLİVRİ: "Marmara Bölgesi", SULTANGAZİ: "Marmara Bölgesi", ŞİŞLİ: "Marmara Bölgesi", ZEYTİNBURNU: "Marmara Bölgesi",
 };
 
 const normalizeSonNoktaAndRegion = (raw) => {
@@ -165,8 +155,13 @@ const normalizeSonNoktaAndRegion = (raw) => {
     let son_nokta = raw || "";
 
     if (u === "ANTEP") son_nokta = "GAZİANTEP";
-    if (u === "URFA") son_nokta = "ŞANLIURFA";
-    if (u === "MARAŞ") son_nokta = "KAHRAMANMARAŞ";
+    else if (u === "URFA") son_nokta = "ŞANLIURFA";
+    else if (u === "MARAŞ") son_nokta = "KAHRAMANMARAŞ";
+    else {
+        // Tam il adını bulmaya çalış
+        const exactMatch = Object.keys(ilToBolgeMap).find(il => toUpperTr(il) === u);
+        if (exactMatch) son_nokta = exactMatch;
+    }
 
     let bolge = "";
     if (u.includes("İSTANBUL AVRUPA")) {
@@ -228,7 +223,7 @@ const alanlar = [
 // Excel Başlıklarını Veritabanı Alanlarına Eşleştirme Haritası (Genişletilmiş)
 const headerMap = {
     // Statü ile ilgili olabilecek başlıklar
-    "STATÜ": "statü", "DURUM": "statü",
+    "STATÜ": "statü", "DURUM": "statü", "STATUS": "statü",
     // Diğerleri
     "SEFER NO": "sefer_no", "SEVK NO": "sevk_no",
     "TARİH": "tarih", "TARİH_1": "tarih",
@@ -251,25 +246,31 @@ const headerMap = {
 
 const parseDateLike = (v) => {
     if (!v) return null;
-    if (typeof v === "string" && v.includes(".")) {
-        const [g, a, y] = v.split(".");
-        if (y && a && g) return `${y}-${a.padStart(2, "0")}-${g.padStart(2, "0")}`;
-    }
-    // ExcelJS, tarihleri bazen sayı (seri gün) olarak döndürür
-    if (typeof v === 'number' && v > 10000) { // Basit kontrol
+
+    // 1. Excel JS sayı (seri gün) olarak döndüğünde
+    if (typeof v === 'number' && v > 1) {
         try {
-            // Excel tarih başlangıç noktası (1899-12-30) kullanılır
-            const date = dayjs('1899-12-30').add(v, 'day').format('YYYY-MM-DD');
-            return date;
-        } catch {
+            // Excel'deki seri günü doğru şekilde DayJS'e aktar
+            return dayjs('1899-12-30').add(v, 'day').format('YYYY-MM-DD');
+        } catch (e) {
+            console.error("Number Date Parse Error:", e);
             return null;
         }
     }
+
+    // 2. DD.MM.YYYY formatında string (Kullanıcı girişi veya bazı Excel formatları)
+    if (typeof v === "string" && /\b\d{1,2}\.\d{1,2}\.\d{4}\b/.test(v)) {
+        const [g, a, y] = v.split(".");
+        if (y && a && g) return `${y}-${a.padStart(2, "0")}-${g.padStart(2, "0")}`;
+    }
+
+    // 3. Standart ISO veya Date string formatları için
     try {
-        // Standart ISO tarih formatları için
-        const d = new Date(v);
-        if (!isNaN(d)) return d.toISOString().slice(0, 10);
+        const d = dayjs(v);
+        // Date nesnesi geçerliyse formatla
+        if (d.isValid()) return d.format('YYYY-MM-DD');
     } catch { }
+
     return null;
 };
 
@@ -279,9 +280,10 @@ const toNumber = (v) => {
     return isNaN(n) ? null : n;
 };
 
-// Yeni Yardımcı Fonksiyon: Excel Dosyasını Okuma (Hata Düzeltildi)
+// Yeni Yardımcı Fonksiyon: Excel Dosyasını Okuma
 const readExcelFile = (file) => {
     return new Promise((resolve, reject) => {
+        // 🔥 DÜZELTME: 'const const' yerine sadece 'const' kullanıldı.
         const reader = new FileReader();
 
         reader.onload = async (e) => {
@@ -296,6 +298,7 @@ const readExcelFile = (file) => {
 
                 const rows = [];
                 let headers = [];
+                let dataRowIndex = 0; // Excel'den okunan veri satırı sayısı (başlık hariç)
 
                 worksheet.eachRow((row, rowNumber) => {
                     const rowData = {};
@@ -319,7 +322,11 @@ const readExcelFile = (file) => {
                     });
 
                     // Satırda anlamlı bir veri varsa (örneğin plaka varsa) ekle
-                    if (Object.keys(rowData).length > 0 && rowData.plaka) {
+                    // En azından sefer no veya plaka varsa kabul et.
+                    if (Object.keys(rowData).length > 0 && (rowData.plaka || rowData.sefer_no)) {
+                        dataRowIndex++;
+                        // Excel sırasını korumak için index ekleniyor (Yerel Sıralama için kullanılır)
+                        rowData.excel_sira = dataRowIndex;
                         rows.push(rowData);
                     }
                 });
@@ -331,7 +338,6 @@ const readExcelFile = (file) => {
         };
         reader.onerror = (error) => reject(error);
 
-        // DÜZELTME: readArrayBuffer yerine readAsArrayBuffer kullanılmalı
         reader.readAsArrayBuffer(file);
     });
 };
@@ -379,74 +385,46 @@ export default function PlanlamaDeluxe() {
     const searchRef = useRef(null);
     const debouncedSearch = useDebounced(search, 300);
 
-    const normalizeHeader = (s = "") => toUpperTr(String(s)).replace(/\s+/g, " ").replace(/\./g, "").trim();
+    // const normalizeHeader = (s = "") => toUpperTr(String(s)).replace(/\s+/g, " ").replace(/\./g, "").trim();
 
 
-    /* ---------- data fetch ---------- */
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from("planlama")
-            .select("*")
-            .order("sefer_no", { ascending: false });
+    /* ---------- data fetch helpers (TDZ'den kaçınmak için erken tanımlanmıştır) ---------- */
 
-        if (error) {
-            console.error(error);
-            setSnack({ open: true, msg: "Veri çekilirken hata oluştu.", severity: "error" });
-            setLoading(false);
-            return;
+    // Tamamlama Yüzdesi
+    const completenessOf = useCallback((row) => {
+        const keys = [
+            "statü", "sefer_no", "tarih", "plaka", "ad_soyad", "telefon", "tc", "varis_tarihi",
+            "son_nokta", "tahliye_il", "tonaj",
+        ];
+        // Hem statü hem de statu alanlarını kontrol edin (DB'den gelen veri için)
+        const statuValue = row?.statü || row?.statu;
+        const filled = keys.filter((k) => {
+            if (k === "statü") return !!statuValue;
+            return !!(row?.[k] ?? "");
+        }).length;
+        return Math.round((filled / keys.length) * 100);
+    }, []);
+
+    // Satır Silme
+    const handleSil = useCallback(async (_rowId) => {
+        const satir = rows.find((r) => r._rowId === _rowId);
+        if (!satir) return;
+        if (!window.confirm("Bu satırı silmek istiyor musunuz?")) return;
+
+        // EĞER ID VARSA SUPABASE'DEN SİL
+        if (satir.id) {
+            const { error } = await supabase.from("planlama").delete().eq("id", satir.id);
+            if (error) {
+                setSnack({ open: true, msg: "Kayıt silinemedi. Lütfen tekrar deneyin.", severity: "error" });
+                return;
+            }
         }
 
-        const enriched = (data || []).map((v, index) => {
-            const { son_nokta, bolge } = normalizeSonNoktaAndRegion(v.son_nokta);
-            const tarih = v.tarih || getTodayISO();
-            const varis_tarihi = v.varis_tarihi || v.tarih || tarih;
-            const _rowId = v.id ?? v.sefer_no ?? `tmp-${Date.now()}-${index}`;
-            // Statü ekleme (Eğer Supabase'te statü alanı yoksa varsayılan atama)
-            const statu = v.statü || STATU_LISTESI[Math.floor(Math.random() * STATU_LISTESI.length)];
-            return { ...v, statü: statu, son_nokta, bolge: bolge || v.bolge || "", tarih, varis_tarihi, _rowId };
-        });
-
-        setRows(enriched);
-        setFilteredRows(enriched);
-        setBolgeler([...new Set(enriched.map((r) => r.bolge).filter(Boolean))]);
-
-        const plakalarFromRows = Array.from(
-            new Map(
-                enriched
-                    .filter((r) => r?.plaka)
-                    .map((r) => [plakaKey(r.plaka), r.plaka])
-            ).values()
-        );
-        setPlakalar(plakalarFromRows);
-
-        lastSavedSnapshot.current = JSON.stringify(enriched);
-        setLoading(false);
-    }, []);
-
-    const loadView = useCallback(async () => {
-        const kullaniciId = parseInt(localStorage.getItem("kullaniciId"));
-        if (!kullaniciId) return;
-
-        const { data } = await supabase
-            .from("kullanici_planlama_gorunumleri")
-            .select("gorunum")
-            .eq("kullanici_id", kullaniciId)
-            .eq("sayfa", "planlama")
-            .maybeSingle();
-
-        if (data?.gorunum && Array.isArray(data.gorunum) && data.gorunum.length) {
-            const valid = data.gorunum.filter((c) => alanlar.includes(c));
-            // Sütun sırasını alanlar dizisine göre zorla (statü > sefer_no)
-            setColumnOrder(valid);
-        }
-    }, []);
-
-    // Yeni Plaka Diyaloğu açma
-    const openPlakaDialog = useCallback(() => {
-        setYeniPlaka({ plaka: "", ad_soyad: "", telefon: "", tc: "" });
-        setPlakaDialogOpen(true);
-    }, []);
+        // Yerelden sil
+        const r = rows.filter((x) => x._rowId !== _rowId);
+        setRows(r);
+        setSnack({ open: true, msg: "Satır silindi (lokal). Kaydet ile kalıcı olur.", severity: "info" });
+    }, [rows]);
 
     // Hızlı Düzenle Çekmecesini açma
     const openDrawer = useCallback((row) => {
@@ -460,372 +438,41 @@ export default function PlanlamaDeluxe() {
         setAnalizOpen(true);
     }, []);
 
-    // Geri Al fonksiyonu
-    const revertRows = useCallback(() => {
-        try {
-            const snap = JSON.parse(lastSavedSnapshot.current || "[]");
-            setRows(snap);
-            setSnack({ open: true, msg: "Yerel değişiklikler geri alındı.", severity: "info" });
-        } catch { }
-    }, []);
-
-    // Filtreleri temizleme
-    const clearFilters = useCallback(() => {
-        setPlakaFilter([]);
-        setBolgeFilter([]);
-        setPlakaInput("");
-        setBolgeInput("");
-        setSearch("");
-    }, []);
-
-    // Drawer değişikliklerini uygulama
-    const applyDrawerChanges = useCallback(() => {
-        if (!activeEditRow) return;
-
-        // Drawer'dan gelen veriyi DataGrid'deki gibi normalize et
-        const tempRow = { ...activeEditRow };
-
-        ["tarih", "varis_tarihi"].forEach((k) => {
-            const iso = parseDateLike(tempRow[k]);
-            tempRow[k] = iso;
-        });
-
-        const { son_nokta, bolge } = normalizeSonNoktaAndRegion(tempRow.son_nokta);
-        tempRow.son_nokta = son_nokta;
-        tempRow.bolge = bolge;
-
-        // Rows state'ini güncelle
-        setRows((prev) => prev.map((r) => (r._rowId === tempRow._rowId ? tempRow : r)));
-
-        setDrawerOpen(false);
-        setSnack({ open: true, msg: "Değişiklikler uygulandı (lokal)", severity: "success" });
-    }, [activeEditRow]);
-
-
-    // Yeni Plaka Satırı Ekleme
-    const saveYeniPlaka = useCallback(() => {
-        const { plaka, ad_soyad, telefon, tc } = yeniPlaka;
-        if (!plaka || !ad_soyad || !telefon || !tc) {
-            setSnack({ open: true, msg: "Tüm alanlar zorunlu.", severity: "warning" });
-            return;
-        }
-
-        const yeni = {
-            statü: "Planlandı", // Yeni satır varsayılan statü
-            sefer_no: "", sevk_no: "", tarih: getTodayISO(), varis_tarihi: getTodayISO(), son_nokta: "",
-            fatura_musterisi: "", yukleme_noktasi: "", tahliye_noktasi: "", tahliye_il: "", tonaj: "",
-            bir_onceki_is: "", bolge: "", plaka, ad_soyad, telefon, tc,
-        };
-
-        const _rowId = `tmp-${Date.now()}`;
-        setRows((prev) => [{ ...yeni, _rowId }, ...prev]);
-        setPlakaDialogOpen(false);
-        setSnack({ open: true, msg: "Yeni satır eklendi (lokal). Kaydet ile yazılır.", severity: "success" });
-    }, [yeniPlaka]);
-
-    // Satır Silme
-    const handleSil = useCallback(async (_rowId) => {
-        const satir = rows.find((r) => r._rowId === _rowId);
-        if (!satir) return;
-        if (!window.confirm("Bu satırı silmek istiyor musunuz?")) return;
-
-        if (satir.id) {
-            const { error } = await supabase.from("planlama").delete().eq("id", satir.id);
-            if (error) {
-                setSnack({ open: true, msg: "Kayıt silinemedi.", severity: "error" });
-                return;
-            }
-        }
-        const r = rows.filter((x) => x._rowId !== _rowId);
-        setRows(r);
-        setSnack({ open: true, msg: "Satır silindi (lokal). Kaydet ile kalıcı olur.", severity: "info" });
-    }, [rows]);
-
-    // Görünüm Kaydetme
-    const saveView = useCallback(async () => {
-        const kullaniciId = parseInt(localStorage.getItem("kullaniciId"));
-        if (!kullaniciId) {
-            setSnack({ open: true, msg: "Kullanıcı bulunamadı.", severity: "warning" });
-            return;
-        }
-        setSaving(true);
-        try {
-            const { error } = await supabase
-                .from("kullanici_planlama_gorunumleri")
-                .upsert({ kullanici_id: kullaniciId, sayfa: "planlama", gorunum: columnOrder.filter(c => c !== 'actions') }, { onConflict: ["kullanici_id", "sayfa"] });
-            if (error) {
-                setSnack({ open: true, msg: "Görünüm kaydedilemedi.", severity: "error" });
-            } else {
-                setSnack({ open: true, msg: "Görünüm kaydedildi.", severity: "success" });
-            }
-        } catch (e) {
-            console.error(e);
-            setSnack({ open: true, msg: "Kaydetme sırasında hata oluştu.", severity: "error" });
-        } finally {
-            setSaving(false);
-        }
-    }, [columnOrder]);
-
-    // DataGrid Sütun Sırası Değişikliği
-    const onColumnOrderChange = useCallback((params) => {
-        setColumnOrder((prev) => {
-            const f = params.column?.field;
-            if (!f || !alanlar.includes(f)) return prev;
-            // Aksiyon sütununu sıralama dışı tut
-            const filterablePrev = prev.filter(x => x !== 'actions');
-            const arr = filterablePrev.filter((x) => x !== f);
-            arr.splice(params.targetIndex - 1, 0, f); // -1 aksiyon sütununu saymamak için
-            return ['actions', ...arr];
-        });
-    }, []);
-
-    // Excel Dosya İşleme (İçe Aktar)
-    const handleFiles = useCallback(async (files) => {
-        if (!perms.pln_import_excel) {
-            setSnack({ open: true, msg: "Dosya içe aktarma yetkiniz yok.", severity: "warning" });
-            return;
-        }
-
-        const file = files?.[0];
-        if (!file) return;
-
-        setLoading(true);
-        try {
-            const rawObjects = await readExcelFile(file); // Excel dosyasını oku ve nesne dizisine çevir
-
-            if (!rawObjects.length) {
-                setSnack({ open: true, msg: "Dosyada okunabilir veri bulunamadı veya başlıklar eşleşmedi.", severity: "info" });
-                return;
-            }
-
-            const built = rawObjects.map((v, index) => {
-                const { son_nokta, bolge } = normalizeSonNoktaAndRegion(v.tahliye_il || v.son_nokta);
-                const tarih = parseDateLike(v.tarih) || getTodayISO();
-                const varis_tarihi = parseDateLike(v.varis_tarihi) || tarih;
-                const tonaj = toNumber(v.tonaj);
-
-                // Veri doğrulama ve zenginleştirme
-                const processedRow = {
-                    ...v,
-                    _rowId: `excel-imp-${Date.now()}-${index}`,
-                    // Zorunlu alanları dönüştür
-                    tarih: tarih,
-                    varis_tarihi: varis_tarihi,
-                    tonaj: tonaj,
-                    plaka: toUpperTr(v.plaka),
-                    ad_soyad: v.ad_soyad ? toUpperTr(v.ad_soyad) : '',
-
-                    // STATÜ DÜZELTİLDİ: Excel'de ne varsa onu al (boşsa "Planlandı" ata)
-                    statü: toUpperTr(v.statü) || "Planlandı",
-
-                    // Tahliye ili varsa son nokta ve bölgeyi ona göre ayarla
-                    son_nokta: son_nokta || v.son_nokta || '',
-                    bolge: bolge || v.bolge || '',
-
-                    // Önceki iş bilgisini geçici alanlardan oluştur
-                    bir_onceki_is: [v.fatura_musterisi, v.yukleme_noktasi, v.tahliye_noktasi].filter(Boolean).join(" / "),
-                };
-
-                // Supabase ID'si Excel'den gelmez, bu yüzden null kalır (yeni kayıt demektir)
-
-                return processedRow;
-            });
-
-            // Yeni aktarılanları yüklüyoruz.
-            setRows(built);
-            setFilteredRows(built);
-
-            // Plakaları ve Bölgeleri Güncelleme
-            setBolgeler([...new Set(built.map((r) => r.bolge).filter(Boolean))]);
-            setPlakalar(Array.from(new Map(built.filter((r) => r?.plaka).map((r) => [plakaKey(r.plaka), r.plaka])).values()));
-
-            lastSavedSnapshot.current = JSON.stringify(built);
-
-            setSnack({ open: true, msg: `${built.length} satır içe aktarıldı. Kaydetmeyi unutmayın.`, severity: "success" });
-        } catch (e) {
-            console.error("İçe aktarma sırasında hata oluştu:", e);
-            setSnack({ open: true, msg: `İçe aktarma sırasında hata oluştu: ${e.message || "Bilinmeyen bir hata"}`, severity: "error" });
-        } finally {
-            setLoading(false);
-            setDragActive(false);
-            if (fileInputRef.current) fileInputRef.current.value = "";
-        }
-    }, [perms.pln_import_excel]);
-
-    // Kaydet (Insert/Update)
-    const handleKaydet = useCallback(async () => {
-        if (!perms.pln_save) {
-            setSnack({ open: true, msg: "Kaydet yetkiniz yok.", severity: "warning" });
-            return;
-        }
-        setSaving(true);
-        // Gerçek veritabanı işlemi burada yapılmalıdır. (Supabase upsert)
-
-        await fetchData(); // İşlem bitince veriyi tekrar çek
-        setSaving(false);
-        setSnack({
-            open: true,
-            msg: "Tablo ekrandakiyle değiştirildi.",
-            severity: "success",
-        });
-    }, [perms.pln_save, filteredRows, fetchData]);
-
-    // Excel Aktar
-    const handleExportExcel = useCallback(async () => {
-        if (!perms.pln_export_excel) {
-            setSnack({ open: true, msg: "Excel aktarım yetkiniz yok.", severity: "warning" });
-            return;
-        }
-        if (!filteredRows.length) {
-            setSnack({ open: true, msg: "Aktarılacak veri bulunmuyor.", severity: "info" });
-            return;
-        }
-
-        // EXCELJS ile dışa aktarma mantığı
-        try {
-            const workbook = new ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet("Planlama");
-
-            // Statü sütun başlığı eklendi
-            const headers = orderedColumns.filter(c => c.field !== 'actions').map(c => c.headerName);
-            worksheet.addRow(headers);
-
-            // Sütun başlıklarını kalın yap (Fütüristik Excel!)
-            worksheet.getRow(1).font = { bold: true };
-
-            filteredRows.forEach((row) => {
-                const dataRow = orderedColumns.filter(c => c.field !== 'actions').map(c => {
-                    const value = row[c.field];
-                    if (c.field === 'tarih' || c.field === 'varis_tarihi') {
-                        return formatDateTR(value); // TR formatında göster
-                    }
-                    return value;
-                });
-                worksheet.addRow(dataRow);
-            });
-
-            const buffer = await workbook.xlsx.writeBuffer();
-            saveAs(new Blob([buffer]), `Planlama_Deluxe_Export_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
-
-            setSnack({ open: true, msg: "Veriler Excel olarak indirildi.", severity: "success" });
-        } catch (e) {
-            console.error("Excel Export Error:", e);
-            setSnack({ open: true, msg: "Excel oluşturulurken bir hata oluştu.", severity: "error" });
-        }
-
-    }, [perms.pln_export_excel, filteredRows]);
-
-
-    /* ---------- Diğer Tanımlar ---------- */
-    // Tamamlama Yüzdesi
-    const completenessOf = useCallback((row) => {
-        const keys = [
-            "statü", "sefer_no", "tarih", "plaka", "ad_soyad", "telefon", "tc", "varis_tarihi",
-            "son_nokta", "tahliye_il", "tonaj",
-        ];
-        const filled = keys.filter((k) => !!(row?.[k] ?? "")).length;
-        return Math.round((filled / keys.length) * 100);
-    }, []);
-
-    // Bölge Sayıları
-    const bolgeCounts = useMemo(() => {
-        const m = {};
-        for (const r of filteredRows) {
-            const b = r.bolge || "—";
-            m[b] = (m[b] || 0) + 1;
-        }
-        return m;
-    }, [filteredRows]);
-
-    // Bölge Filtreleme Toggle
-    const toggleBolgeFilter = useCallback((b) => {
-        setBolgeFilter((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]));
-    }, []);
-
-    // Koşullu Satır Sınıfı
-    const getRowClassName = useCallback((params) => {
-        if (params.row.bolge === "Kocaeli Bölgesi") {
-            return 'super-highlighted-row';
-        }
-        if (toUpperTr(params.row.statü) === "İPTAL") {
-            return 'canceled-row';
-        }
-        return '';
-    }, []);
-
-    // DataGrid Row Update
+    // DataGrid Row Update 
     const processRowUpdate = useCallback((incomingNewRow, oldRow) => {
         const newRow = { ...incomingNewRow };
+
+        // Son nokta değiştiyse bölgeyi tekrar hesapla
         if (newRow.son_nokta !== oldRow.son_nokta) {
             const { son_nokta, bolge } = normalizeSonNoktaAndRegion(newRow.son_nokta);
             newRow.son_nokta = son_nokta;
             newRow.bolge = bolge;
         }
+
+        // Tarih formatlarını temizle ve ISO'ya çevir
         ["tarih", "varis_tarihi"].forEach((k) => {
             const val = newRow?.[k];
+            // Eğer DD.MM.YYYY formatında girilmişse ISO'ya çevir
             if (typeof val === "string" && /\b\d{1,2}\.\d{1,2}\.\d{4}\b/.test(val)) {
                 const iso = parseDateLike(val);
                 if (iso) {
                     newRow[k] = iso;
                 } else {
-                    newRow[k] = oldRow[k] || null;
+                    newRow[k] = oldRow[k] || null; // Geçersiz formatı geri al
                 }
             } else if (val === "") {
                 newRow[k] = null;
             }
         });
+
+        // Tonaj alanını sayıya çevir
+        newRow.tonaj = toNumber(newRow.tonaj);
+
+
+        // Rows state'ini güncelle
         setRows((prev) => prev.map((r) => (r._rowId === newRow._rowId ? newRow : r)));
         return newRow;
     }, []);
-
-    const handleRowUpdateCommit = useCallback((updatedRow) => {
-        setRows((prev) => prev.map((r) => (r._rowId === updatedRow._rowId ? updatedRow : r)));
-    }, []);
-
-    /* ---------- useEffect'ler ---------- */
-    useEffect(() => {
-        const onKey = (e) => {
-            const isMac = navigator.platform.toUpperCase().includes("MAC");
-            const metaK = (isMac && e.metaKey && e.key.toLowerCase() === "k") || (!isMac && e.ctrlKey && e.key.toLowerCase() === "k");
-            if (metaK) { e.preventDefault(); const el = document.getElementById("global-search-input"); el?.focus(); el?.select(); }
-            if (e.key.toLowerCase() === "n") perms.pln_update && openPlakaDialog();
-            if (e.key.toLowerCase() === "r") fetchData();
-            if (e.key === "/") { const quick = document.querySelector('input[placeholder*="Quick filter"]'); quick?.focus(); e.preventDefault(); }
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [fetchData, openPlakaDialog, perms.pln_update]);
-
-    useEffect(() => {
-        fetchData();
-        loadView();
-    }, [fetchData, loadView]);
-
-    useEffect(() => {
-        // rows → plaka seçenekleri ve seçili plaka tutarlılığı
-        const opts = Array.from(
-            new Map((rows || []).filter((r) => r?.plaka).map((r) => [plakaKey(r.plaka), r.plaka])).values()
-        );
-        setPlakalar(opts);
-        setPlakaFilter((prev) =>
-            (prev || []).filter((v) => opts.some((o) => plakaKey(o) === plakaKey(v)))
-        );
-    }, [rows]);
-
-    useEffect(() => {
-        // filtering
-        let r = [...rows];
-        if (plakaFilter?.length) {
-            const secimler = new Set(plakaFilter.map(plakaKey));
-            r = r.filter((x) => secimler.has(plakaKey(x.plaka)));
-        }
-        if (bolgeFilter?.length) r = r.filter((x) => bolgeFilter.includes(x.bolge || ""));
-        if (debouncedSearch) {
-            const s = debouncedSearch.toLowerCase();
-            r = r.filter((x) => Object.values(x || {}).some((v) => String(v ?? "").toLowerCase().includes(s)));
-        }
-        setFilteredRows(r);
-    }, [rows, plakaFilter, bolgeFilter, debouncedSearch]);
 
 
     /* -------------------- DataGrid Kolonları -------------------- */
@@ -880,16 +527,17 @@ export default function PlanlamaDeluxe() {
                     </Stack>
                 ),
             },
-            // STATÜ SÜTUNU (Artık Sefer No'dan önce)
+            // STATÜ SÜTUNU 
             {
                 field: "statü",
                 headerName: "STATÜ",
                 width: 150,
                 editable: perms.pln_update,
                 type: 'singleSelect',
-                valueOptions: STATU_LISTESI, // Edit modunda ön tanımlı listeyi kullanmak için
+                // Boş statü opsiyonu eklendi
+                valueOptions: ["", ...STATU_LISTESI],
                 renderCell: (params) => {
-                    const status = params.value || "Bilinmiyor";
+                    const status = params.value || "— Boş —";
                     const { color, hex } = statuRenkMap(status);
                     return (
                         <Chip
@@ -908,17 +556,16 @@ export default function PlanlamaDeluxe() {
                 },
                 renderEditCell: (params) => (
                     <FormControl fullWidth size="small">
-                        {/* Not: valueOptions listesinde olmayan statüleri de gösterebilmek için buradaki listeyi güncelleyeceğiz. */}
                         <Select
                             value={params.value || ""}
                             onChange={(e) => params.api.setEditCellValue({ id: params.id, field: params.field, value: e.target.value })}
                             inputProps={{ sx: { py: 0.5, px: 1, color: statuRenkMap(params.value).hex, fontWeight: 700 } }}
                             sx={{ '& .MuiOutlinedInput-notchedOutline': { border: 'none !important' } }}
                         >
-                            {/* Hem ön tanımlı listeyi, hem de anlık rows'da bulunan statüleri seçeneklere ekleyelim */}
-                            {[...new Set([...STATU_LISTESI, params.value || ""])].filter(Boolean).map((statu) => (
+                            {/* Boş statü opsiyonu eklenmeli */}
+                            {[...new Set(["", ...STATU_LISTESI, params.value || ""])].filter(statu => statu !== null).map((statu) => (
                                 <MenuItem key={statu} value={statu} sx={{ color: statuRenkMap(statu).hex, fontWeight: 700 }}>
-                                    {statu}
+                                    {statu || "— Boş —"}
                                 </MenuItem>
                             ))}
                         </Select>
@@ -933,12 +580,13 @@ export default function PlanlamaDeluxe() {
                 renderCell: (params) => <Typography variant="body2" fontWeight={500} sx={{ color: '#FCD34D', textShadow: '0 0 4px rgba(252, 211, 77, 0.2)' }}>{formatDateTR(params.row?.tarih)}</Typography>,
                 valueGetter: (_, row) => row?.tarih ?? null,
             }),
-            textCol("plaka", "PLAKA", 120, false, {
+            textCol("plaka", "PLAKA", 120, true, {
                 renderCell: (params) => <Typography variant="body2" fontWeight={700} sx={{ color: "#22D3EE", textShadow: '0 0 4px rgba(34, 211, 238, 0.2)' }}>{params.row?.plaka}</Typography>,
+                valueGetter: (_, row) => row?.plaka ?? null,
             }),
-            textCol("ad_soyad", "AD SOYAD", 160, false),
-            textCol("telefon", "TELEFON", 140, false),
-            textCol("tc", "TC", 120, false),
+            textCol("ad_soyad", "AD SOYAD", 160, true),
+            textCol("telefon", "TELEFON", 140, true),
+            textCol("tc", "TC", 120, true),
             textCol("varis_tarihi", "VARIŞ TARİHİ", 120, true, {
                 renderCell: (params) => <Typography variant="body2" fontWeight={500} sx={{ color: '#FCD34D', textShadow: '0 0 4px rgba(252, 211, 77, 0.2)' }}>{formatDateTR(params.row?.varis_tarihi)}</Typography>,
                 valueGetter: (_, row) => row?.varis_tarihi ?? null,
@@ -948,7 +596,11 @@ export default function PlanlamaDeluxe() {
             textCol("yukleme_noktasi", "YÜKLEME NOKTASI", 200),
             textCol("tahliye_noktasi", "TAHLİYE NOKTASI", 200),
             textCol("tahliye_il", "TAHLİYE İL", 140),
-            textCol("tonaj", "TONAJ", 100, true, { align: "right", headerAlign: "right" }),
+            textCol("tonaj", "TONAJ", 100, true, {
+                align: "right",
+                headerAlign: "right",
+                renderCell: (params) => <Typography variant="body2">{toNumber(params.value)?.toFixed(2) || ''}</Typography>
+            }),
             textCol("bir_onceki_is", "BİR ÖNCEKİ İŞ", 220, false),
             {
                 field: "bolge",
@@ -979,7 +631,7 @@ export default function PlanlamaDeluxe() {
             {
                 field: "tamam",
                 headerName: "DOLULUK",
-                width: 140, // Daha belirgin göstermek için genişletildi
+                width: 140,
                 sortable: true,
                 filterable: false,
                 valueGetter: (value, row) => completenessOf(row),
@@ -987,10 +639,9 @@ export default function PlanlamaDeluxe() {
                     <Stack direction="row" alignItems="center" spacing={1}>
                         <CircularProgress
                             variant="determinate"
-                            size={24} // Daha belirgin
+                            size={24}
                             value={params.value}
                             sx={{
-                                // Daha parlak renkler ve glow efekti
                                 color: params.value > 90 ? '#4ADE80' : params.value > 60 ? '#FCD34D' : '#EF4444',
                                 filter: 'drop-shadow(0 0 4px rgba(34, 211, 238, 0.6))',
                             }}
@@ -1009,14 +660,13 @@ export default function PlanlamaDeluxe() {
             },
         ];
         return allCols;
-    }, [perms.pln_update, openDrawer, openSiparisAnaliz, handleSil, completenessOf, rows.length]); // rows.length eklendi, böylece statü options güncellenebilir
+    }, [perms.pln_update, openDrawer, openSiparisAnaliz, handleSil, completenessOf]);
 
     const orderedColumns = useMemo(() => {
         const map = Object.fromEntries(columns.map((c) => [c.field, c]));
-        // 'actions' her zaman en başta olmalı, diğerleri columnOrder'a göre sıralanır.
+        // 'excel_sira' DB'den kaldırıldığı için sadece 'actions' başta kalır.
         const orderWithoutActions = columnOrder.filter(f => f !== 'actions');
 
-        // Final sırası: [actions, statü, sefer_no, ...]
         const ordered = orderWithoutActions.map((f) => map[f]).filter(Boolean);
 
         const orderedFields = new Set(['actions', ...ordered.map(c => c.field)]);
@@ -1026,7 +676,518 @@ export default function PlanlamaDeluxe() {
     }, [columns, columnOrder]);
 
 
+    /* -------------------- Data Fetch & Actions -------------------- */
+
+    /* ---------- data fetch ---------- */
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        // DB'de olmayan excel_sira sıralaması kaldırıldı, sadece sefer_no'ya göre sıralanır.
+        const { data, error } = await supabase
+            .from("planlama")
+            .select("*")
+            .order("sefer_no", { ascending: false });
+
+        if (error) {
+            console.error(error);
+            setSnack({ open: true, msg: "Veri çekilirken hata oluştu.", severity: "error" });
+            setLoading(false);
+            return;
+        }
+
+        const enriched = (data || []).map((v, index) => {
+            const { son_nokta, bolge } = normalizeSonNoktaAndRegion(v.son_nokta);
+            const tarih = v.tarih || getTodayISO();
+            const varis_tarihi = v.varis_tarihi || v.tarih || tarih;
+            // Benzersiz anahtar olarak veritabanı ID'si (varsa) veya geçici ID kullan
+            const _rowId = v.id ?? v.sefer_no ?? `tmp-${Date.now()}-${index}`;
+
+            // Boş (null) gelirse boş olarak tutulur.
+            const statu = v.statü || v.statu || "";
+
+            return {
+                ...v,
+                statü: statu,
+                son_nokta,
+                bolge: bolge || v.bolge || "",
+                tarih,
+                varis_tarihi,
+                _rowId,
+            };
+        });
+
+        // Veriyi çekme sırasına göre sıralamayı kabul ediyoruz (eğer DB kuralı yeterliyse)
+
+        setRows(enriched);
+        setFilteredRows(enriched);
+        setBolgeler([...new Set(enriched.map((r) => r.bolge).filter(Boolean))]);
+
+        const plakalarFromRows = Array.from(
+            new Map(
+                enriched
+                    .filter((r) => r?.plaka)
+                    .map((r) => [plakaKey(r.plaka), r.plaka])
+            ).values()
+        );
+        setPlakalar(plakalarFromRows);
+
+        lastSavedSnapshot.current = JSON.stringify(enriched);
+        setLoading(false);
+    }, []);
+
+    const loadView = useCallback(async () => {
+        const kullaniciId = parseInt(localStorage.getItem("kullaniciId"));
+        if (!kullaniciId) return;
+
+        const { data } = await supabase
+            .from("kullanici_planlama_gorunumleri")
+            .select("gorunum")
+            .eq("kullanici_id", kullaniciId)
+            .eq("sayfa", "planlama")
+            .maybeSingle();
+
+        if (data?.gorunum && Array.isArray(data.gorunum) && data.gorunum.length) {
+            const valid = data.gorunum.filter((c) => alanlar.includes(c));
+            setColumnOrder(valid);
+        }
+    }, []);
+
+    // Yeni Plaka Diyaloğu açma
+    const openPlakaDialog = useCallback(() => {
+        setYeniPlaka({ plaka: "", ad_soyad: "", telefon: "", tc: "" });
+        setPlakaDialogOpen(true);
+    }, []);
+
+    // Geri Al fonksiyonu
+    const revertRows = useCallback(() => {
+        try {
+            const snap = JSON.parse(lastSavedSnapshot.current || "[]");
+            setRows(snap);
+            setSnack({ open: true, msg: "Yerel değişiklikler geri alındı.", severity: "info" });
+        } catch { }
+    }, []);
+
+    // Filtreleri temizleme
+    const clearFilters = useCallback(() => {
+        setPlakaFilter([]);
+        setBolgeFilter([]);
+        setPlakaInput("");
+        setBolgeInput("");
+        setSearch("");
+    }, []);
+
+    // Drawer değişikliklerini uygulama
+    const applyDrawerChanges = useCallback(() => {
+        if (!activeEditRow) return;
+
+        // Drawer'dan gelen veriyi DataGrid'deki gibi normalize et
+        const tempRow = { ...activeEditRow };
+
+        ["tarih", "varis_tarihi"].forEach((k) => {
+            const iso = parseDateLike(tempRow[k]);
+            tempRow[k] = iso;
+        });
+
+        const { son_nokta, bolge } = normalizeSonNoktaAndRegion(tempRow.son_nokta);
+        tempRow.son_nokta = son_nokta;
+        tempRow.bolge = bolge;
+        tempRow.tonaj = toNumber(tempRow.tonaj);
+
+        // Rows state'ini güncelle
+        setRows((prev) => prev.map((r) => (r._rowId === tempRow._rowId ? tempRow : r)));
+
+        setDrawerOpen(false);
+        setSnack({ open: true, msg: "Değişiklikler uygulandı (lokal)", severity: "success" });
+    }, [activeEditRow]);
+
+
+    // Yeni Plaka Satırı Ekleme
+    const saveYeniPlaka = useCallback(() => {
+        const { plaka, ad_soyad, telefon, tc } = yeniPlaka;
+        if (!plaka || !ad_soyad || !telefon || !tc) {
+            setSnack({ open: true, msg: "Tüm alanlar zorunlu.", severity: "warning" });
+            return;
+        }
+
+        // _rowId ile yeni bir satır oluştur
+        const _rowId = `tmp-${Date.now()}`;
+
+        const yeni = {
+            _rowId,
+            id: null, // Supabase'e yeni kayıt olarak gitmeli
+            statü: "", // Statü boş bırakıldı
+            sefer_no: "", sevk_no: "", tarih: getTodayISO(), varis_tarihi: getTodayISO(), son_nokta: "",
+            fatura_musterisi: "", yukleme_noktasi: "", tahliye_noktasi: "", tahliye_il: "", tonaj: null, // tonaj null olmalı
+            bir_onceki_is: "", bolge: "", plaka: toUpperTr(plaka), ad_soyad: toUpperTr(ad_soyad), telefon, tc,
+        };
+
+        // En üste ekle
+        setRows((prev) => [yeni, ...prev]);
+        setPlakaDialogOpen(false);
+        setSnack({ open: true, msg: "Yeni satır eklendi (lokal). Kaydet ile yazılır.", severity: "success" });
+    }, [yeniPlaka]);
+
+    // Görünüm Kaydetme
+    const saveView = useCallback(async () => {
+        const kullaniciId = parseInt(localStorage.getItem("kullaniciId"));
+        if (!kullaniciId) {
+            setSnack({ open: true, msg: "Kullanıcı bulunamadı.", severity: "warning" });
+            return;
+        }
+        setSaving(true);
+        try {
+            const { error } = await supabase
+                .from("kullanici_planlama_gorunumleri")
+                // columnOrder'dan aksiyon alanlarını hariç tuttuk
+                .upsert({ kullanici_id: kullaniciId, sayfa: "planlama", gorunum: columnOrder.filter(c => c !== 'actions') }, { onConflict: ["kullanici_id", "sayfa"] });
+            if (error) {
+                setSnack({ open: true, msg: "Görünüm kaydedilemedi.", severity: "error" });
+            } else {
+                setSnack({ open: true, msg: "Görünüm kaydedildi.", severity: "success" });
+            }
+        } catch (e) {
+            console.error(e);
+            setSnack({ open: true, msg: "Kaydetme sırasında hata oluştu.", severity: "error" });
+        } finally {
+            setSaving(false);
+        }
+    }, [columnOrder]);
+
+    // DataGrid Sütun Sırası Değişikliği
+    const onColumnOrderChange = useCallback((params) => {
+        setColumnOrder((prev) => {
+            const f = params.column?.field;
+            // aksiyonlar sütununu sıralama dışı tut
+            if (!f || !alanlar.includes(f) || f === 'actions') return prev;
+
+            const filterablePrev = prev.filter(x => x !== 'actions');
+            const arr = filterablePrev.filter((x) => x !== f);
+
+            // params.targetIndex düzeltmesi, actions sütunu baştaysa çalışır.
+            const targetIndexAdjusted = params.targetIndex > 0 ? params.targetIndex - 1 : 0;
+
+            arr.splice(targetIndexAdjusted, 0, f);
+            // actions her zaman başta
+            return ['actions', ...arr];
+        });
+    }, []);
+
+    // Excel Dosya İşleme (İçe Aktar)
+    const handleFiles = useCallback(async (files) => {
+        if (!perms.pln_import_excel) {
+            setSnack({ open: true, msg: "Dosya içe aktarma yetkiniz yok.", severity: "warning" });
+            return;
+        }
+
+        const file = files?.[0];
+        if (!file) return;
+
+        setLoading(true);
+        try {
+            const rawObjects = await readExcelFile(file); // Excel dosyasını oku ve nesne dizisine çevir
+
+            if (!rawObjects.length) {
+                setSnack({ open: true, msg: "Dosyada okunabilir veri bulunamadı veya başlıklar eşleşmedi.", severity: "info" });
+                return;
+            }
+
+            const built = rawObjects.map((v) => {
+                // Tarih normalization'ı için parseDateLike kullanıldı
+                const tarih = parseDateLike(v.tarih) || getTodayISO();
+                const varis_tarihi = parseDateLike(v.varis_tarihi) || tarih;
+
+                // Normalizasyon için tahliye il'i kullan
+                const { son_nokta, bolge } = normalizeSonNoktaAndRegion(v.tahliye_il || v.son_nokta);
+                const tonaj = toNumber(v.tonaj);
+
+                // Veri doğrulama ve zenginleştirme
+                const processedRow = {
+                    ...v,
+                    _rowId: `excel-imp-${Date.now()}-${v.excel_sira}`, // excel_sira ile benzersizliği koru
+                    id: null, // Yeni kayıt olmasını sağlamak için id'yi temizle
+
+                    // Zorunlu alanları dönüştür
+                    tarih: tarih,
+                    varis_tarihi: varis_tarihi,
+                    tonaj: tonaj,
+                    plaka: toUpperTr(v.plaka), // Plaka normalizasyonu
+                    ad_soyad: v.ad_soyad ? toUpperTr(v.ad_soyad) : '',
+
+                    // Statü boşsa boş kalsın.
+                    statü: toUpperTr(v.statü) || "",
+
+                    // Tahliye ili varsa son nokta ve bölgeyi ona göre ayarla
+                    son_nokta: son_nokta || v.son_nokta || '',
+                    bolge: bolge || v.bolge || '',
+
+                    // Önceki iş bilgisini geçici alanlardan oluştur
+                    bir_onceki_is: [v.fatura_musterisi, v.yukleme_noktasi, v.tahliye_noktasi].filter(Boolean).join(" / "),
+
+                    // excel_sira yerel sıralama için kullanılır
+                    excel_sira: v.excel_sira,
+                };
+
+                return processedRow;
+            });
+
+            // Veriyi Excel sırasına göre sırala.
+            const sortedBuilt = built.sort((a, b) => (a.excel_sira || Infinity) - (b.excel_sira || Infinity));
+
+
+            // Yeni aktarılanları yüklüyoruz.
+            setRows(sortedBuilt);
+            setFilteredRows(sortedBuilt);
+
+            // Plakaları ve Bölgeleri Güncelleme
+            setBolgeler([...new Set(sortedBuilt.map((r) => r.bolge).filter(Boolean))]);
+            setPlakalar(Array.from(new Map(sortedBuilt.filter((r) => r?.plaka).map((r) => [plakaKey(r.plaka), r.plaka])).values()));
+
+            // Kaydetmeyi zorlamak için snapshot'ı kasıtlı olarak güncellemiyoruz, böylece isDirty=true kalır.
+            setSnack({ open: true, msg: `${sortedBuilt.length} satır içe aktarıldı ve sıralandı. Kaydetmeyi unutmayın.`, severity: "success" });
+        } catch (e) {
+            console.error("İçe aktarma sırasında hata oluştu:", e);
+            setSnack({ open: true, msg: `İçe aktarma sırasında hata oluştu: ${e.message || "Bilinmeyen bir hata"}`, severity: "error" });
+        } finally {
+            setLoading(false);
+            setDragActive(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    }, [perms.pln_import_excel]);
+
+    // Kaydet (Insert/Update)
+    const handleKaydet = useCallback(async () => {
+        if (!perms.pln_save) {
+            setSnack({ open: true, msg: "Kaydet yetkiniz yok.", severity: "warning" });
+            return;
+        }
+        if (!isDirty) {
+            setSnack({ open: true, msg: "Kaydedilecek değişiklik yok.", severity: "info" });
+            return;
+        }
+
+        setSaving(true);
+
+        // Supabase'e gönderilecek veriyi temizle ve sadece DB'deki alanları dahil et
+        const rowsToSave = rows.map(row => {
+
+            // Plaka ve Tarih DB'ye göndermeden önce kesinlikle normalize edilmeli
+            const normalizedPlaka = toUpperTr(row.plaka);
+            const normalizedTarih = parseDateLike(row.tarih);
+
+            // Sadece veritabanı şemasına uygun alanları manuel olarak tanımlayın.
+            const dbReadyRow = {
+                // ID varsa (güncelleme) ekle, yoksa (yeni kayıt) HİÇ EKLEME.
+                ...((row.id && { id: row.id }) || {}),
+
+                // Statü boşsa null gönder.
+                statu: row.statü || row.statu || null,
+
+                sefer_no: row.sefer_no || null,
+                sevk_no: row.sevk_no || null,
+                // Tarih normalize edilmiş hali gönderilir
+                tarih: normalizedTarih || null,
+                // Plaka normalize edilmiş hali gönderilir (onConflict için önemli)
+                plaka: normalizedPlaka || null,
+
+                ad_soyad: toUpperTr(row.ad_soyad) || null,
+                telefon: row.telefon || null,
+                tc: row.tc || null,
+                varis_tarihi: row.varis_tarihi || null,
+                son_nokta: row.son_nokta || null,
+                fatura_musterisi: row.fatura_musterisi || null,
+                yukleme_noktasi: row.yukleme_noktasi || null,
+                tahliye_noktasi: row.tahliye_noktasi || null,
+                tahliye_il: row.tahliye_il || null,
+                tonaj: toNumber(row.tonaj),
+                bir_onceki_is: row.bir_onceki_is || null,
+                bolge: row.bolge || null,
+                // 'excel_sira' DB'de olmadığı için gönderilmez.
+            };
+            return dbReadyRow;
+        });
+
+        // onConflict kuralı 'plaka,tarih' olarak kaldı. Bu, aynı plaka ve tarih çakışmasını güncelleme olarak ele alır.
+        const { error: upsertError } = await supabase
+            .from("planlama")
+            .upsert(rowsToSave, {
+                onConflict: 'plaka,tarih',
+                ignoreDuplicates: false
+            });
+
+        if (upsertError) {
+            console.error("Toplu Kayıt Hatası:", upsertError);
+            setSnack({
+                open: true,
+                msg: `Kaydedilirken hata oluştu: ${upsertError.message || 'Bilinmeyen bir sunucu hatası.'}`,
+                severity: "error"
+            });
+            setSaving(false);
+            return;
+        }
+
+        // Başarılı kayıttan sonra veriyi tekrar çek (Yeni ID'leri ve güncel durumu almak için)
+        await fetchData();
+
+        setSaving(false);
+        setSnack({
+            open: true,
+            msg: "Tüm değişiklikler başarıyla kaydedildi.",
+            severity: "success",
+        });
+    }, [perms.pln_save, rows, isDirty, fetchData]);
+
+    // Excel Aktar
+    const handleExportExcel = useCallback(async () => {
+
+        if (!perms.pln_export_excel) {
+            setSnack({ open: true, msg: "Excel aktarım yetkiniz yok.", severity: "warning" });
+            return;
+        }
+        if (!filteredRows.length) {
+            setSnack({ open: true, msg: "Aktarılacak veri bulunmuyor.", severity: "info" });
+            return;
+        }
+
+        const map = Object.fromEntries(columns.map((c) => [c.field, c]));
+        const orderWithoutActions = columnOrder.filter(f => f !== 'actions');
+        const ordered = orderWithoutActions.map((f) => map[f]).filter(Boolean);
+        const orderedFields = new Set(['actions', ...ordered.map(c => c.field)]);
+        const rest = columns.filter((c) => !orderedFields.has(c.field));
+
+        const finalExportColumns = [map['actions'], ...ordered, ...rest].filter(Boolean).filter(c => c.field !== 'actions' && c.field !== 'tamam');
+
+        // EXCELJS ile dışa aktarma mantığı
+        try {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet("Planlama");
+
+            const headers = finalExportColumns.map(c => c.headerName);
+            worksheet.addRow(headers);
+
+            // Sütun başlıklarını kalın yap
+            worksheet.getRow(1).font = { bold: true };
+
+            filteredRows.forEach((row) => {
+                const dataRow = finalExportColumns.map(c => {
+                    const value = row[c.field];
+                    if (c.field === 'tarih' || c.field === 'varis_tarihi') {
+                        return formatDateTR(value); // TR formatında göster
+                    }
+                    if (c.field === 'tonaj') {
+                        return toNumber(value); // Sayı olarak gönder
+                    }
+                    return value;
+                });
+                worksheet.addRow(dataRow);
+            });
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `Planlama_Deluxe_Export_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
+
+            setSnack({ open: true, msg: "Veriler Excel olarak indirildi.", severity: "success" });
+        } catch (e) {
+            console.error("Excel Export Error:", e);
+            setSnack({ open: true, msg: "Excel oluşturulurken bir hata oluştu.", severity: "error" });
+        }
+
+    }, [perms.pln_export_excel, filteredRows, columns, columnOrder]);
+
+
+    const handleRowUpdateCommit = useCallback(() => {
+        // processRowUpdate zaten setRows'u çağırdığı için bu fonksiyon sadece DataGrid'e sinyal verir.
+    }, []);
+
+    /* ---------- useEffect'ler ---------- */
+    useEffect(() => {
+        const onKey = (e) => {
+            const isMac = navigator.platform.toUpperCase().includes("MAC");
+            const metaK = (isMac && e.metaKey && e.key.toLowerCase() === "k") || (!isMac && e.ctrlKey && e.key.toLowerCase() === "k");
+            if (metaK) { e.preventDefault(); const el = document.getElementById("global-search-input"); el?.focus(); el?.select(); }
+            if (e.key.toLowerCase() === "n") perms.pln_update && openPlakaDialog();
+            if (e.key.toLowerCase() === "r") fetchData();
+            if (e.key === "/") { const quick = document.querySelector('input[placeholder*="Quick filter"]'); quick?.focus(); e.preventDefault(); }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [fetchData, openPlakaDialog, perms.pln_update]);
+
+    useEffect(() => {
+        fetchData();
+        loadView();
+    }, [fetchData, loadView]);
+
+    useEffect(() => {
+        // rows → plaka seçenekleri ve seçili plaka tutarlılığı
+        const opts = Array.from(
+            new Map((rows || []).filter((r) => r?.plaka).map((r) => [plakaKey(r.plaka), r.plaka])).values()
+        );
+        setPlakalar(opts);
+        setPlakaFilter((prev) =>
+            (prev || []).filter((v) => opts.some((o) => plakaKey(o) === plakaKey(v)))
+        );
+    }, [rows]);
+
+    useEffect(() => {
+        // filtering
+        let r = [...rows];
+        if (plakaFilter?.length) {
+            const secimler = new Set(plakaFilter.map(plakaKey));
+            r = r.filter((x) => secimler.has(plakaKey(x.plaka)));
+        }
+        if (bolgeFilter?.length) r = r.filter((x) => bolgeFilter.includes(x.bolge || ""));
+        if (debouncedSearch) {
+            const s = debouncedSearch.toLowerCase();
+            r = r.filter((x) => Object.values(x || {}).some((v) => String(v ?? "").toLowerCase().includes(s)));
+        }
+
+        // Excel'den yeni eklenenler (id: null olanlar) için yerel sıralamayı koru
+        const currentRowsWithOrder = r.map(row => ({
+            ...row,
+            // excel_sira geçici bir alan olduğundan onu kullanıyoruz
+            _sortOrder: row.id === null ? row.excel_sira : Infinity
+        }));
+
+        const sortedR = currentRowsWithOrder.sort((a, b) => {
+            // Yeni eklenenleri excel_sira'ya göre sırala
+            if (a._sortOrder !== Infinity || b._sortOrder !== Infinity) {
+                return (a._sortOrder || Infinity) - (b._sortOrder || Infinity);
+            }
+            // Diğerlerini varsayılan sıralamaya bırak
+            return 0;
+        });
+
+
+        setFilteredRows(sortedR);
+    }, [rows, plakaFilter, bolgeFilter, debouncedSearch]);
+
+
     /* -------------------- RENDER BÖLÜMÜ -------------------- */
+
+    // Bölge Sayıları
+    const bolgeCounts = useMemo(() => {
+        const m = {};
+        for (const r of filteredRows) {
+            const b = r.bolge || "—";
+            m[b] = (m[b] || 0) + 1;
+        }
+        return m;
+    }, [filteredRows]);
+
+    // Bölge Filtreleme Toggle
+    const toggleBolgeFilter = useCallback((b) => {
+        setBolgeFilter((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]));
+    }, []);
+
+    // Koşullu Satır Sınıfı
+    const getRowClassName = useCallback((params) => {
+        if (params.row.bolge === "Kocaeli Bölgesi") {
+            return 'super-highlighted-row';
+        }
+        if (toUpperTr(params.row.statü) === "İPTAL") {
+            return 'canceled-row';
+        }
+        return '';
+    }, []);
+
 
     return (
         <Box
@@ -1109,7 +1270,8 @@ export default function PlanlamaDeluxe() {
                                 variant="contained"
                                 startIcon={<SaveIcon />}
                                 onClick={handleKaydet}
-                                disabled={!perms.pln_save || saving}
+                                // Kaydet yetkisi yoksa VEYA kaydetme devam ediyorsa VEYA değişiklik yapılmadıysa pasif
+                                disabled={!perms.pln_save || saving || !isDirty}
                                 size="small"
                                 sx={{
                                     background: 'linear-gradient(45deg, #E879F9 30%, #22D3EE 90%)', // Mor-Mavi degrade buton
@@ -1384,7 +1546,7 @@ export default function PlanlamaDeluxe() {
                                     variant="contained"
                                     startIcon={<SaveIcon />}
                                     onClick={handleKaydet}
-                                    disabled={!perms.pln_save}
+                                    disabled={!perms.pln_save} // isDirty bu alanda zaten kontrol edildi
                                     size="small"
                                     sx={{
                                         background: 'linear-gradient(45deg, #E879F9 30%, #22D3EE 90%)',
@@ -1455,7 +1617,7 @@ export default function PlanlamaDeluxe() {
             {/* Toplu Güncelle Onay */}
             <Dialog open={guncelleDialogOpen} onClose={() => setGuncelleDialogOpen(false)}>
                 <DialogTitle>Güncelleme Onayı</DialogTitle>
-                <DialogContent><Typography>Tüm kayıtlar güncellenecek. Devam etmek istiyor musunuz?</Typography></DialogContent>
+                <DialogContent><Typography>Tüm filtrelenmiş kayıtlar güncellenecek. Devam etmek istiyor musunuz?</Typography></DialogContent>
                 <DialogActions>
                     <Button onClick={() => setGuncelleDialogOpen(false)} size="small">İptal</Button>
                     <Button
@@ -1473,20 +1635,22 @@ export default function PlanlamaDeluxe() {
                                 return {
                                     ...item,
                                     bir_onceki_is,
+                                    // Sadece Tahliye İl'den Son Nokta/Bölge tekrar hesaplanır
                                     son_nokta,
+                                    bolge,
+                                    // Bu alanlar 'Bir Önceki İş'e taşındığı için temizlenir
                                     fatura_musterisi: "",
                                     yukleme_noktasi: "",
                                     tahliye_noktasi: "",
                                     tahliye_il: "",
-                                    tonaj: "",
-                                    bolge,
-                                    // Statü güncellenirken değişmemeli veya varsayılan atanmamalıdır.
+                                    tonaj: null, // Temizle
                                 };
                             });
+                            // Güncellenmiş satırları ana rows state'i içinde bulup değiştirme
                             const updated = rows.map((r) => guncellenmis.find((g) => g._rowId === r._rowId) || r);
                             setRows(updated);
                             setGuncelleDialogOpen(false);
-                            setSnack({ open: true, msg: "Satırlar güncellendi (lokal). Kaydet ile yazılır.", severity: "success" });
+                            setSnack({ open: true, msg: `${guncellenmis.length} satır güncellendi (lokal). Kaydet ile yazılır.`, severity: "success" });
                         }}
                         size="small"
                     >
@@ -1521,9 +1685,13 @@ export default function PlanlamaDeluxe() {
                             <Select
                                 labelId="statu-select-label"
                                 label="Statü"
-                                value={activeEditRow?.statü || STATU_LISTESI[0]}
+                                value={activeEditRow?.statü || ""}
                                 onChange={(e) => setActiveEditRow((r) => ({ ...r, statü: e.target.value }))}
                             >
+                                {/* Boş opsiyon */}
+                                <MenuItem value="">
+                                    — Boş —
+                                </MenuItem>
                                 {STATU_LISTESI.map((statu) => (
                                     <MenuItem key={statu} value={statu} sx={{ color: statuRenkMap(statu).hex, fontWeight: 700 }}>
                                         {statu}
@@ -1556,6 +1724,12 @@ export default function PlanlamaDeluxe() {
                                     });
                                 }}
                                 size="small"
+                                // Tarih alanları için type="date" kullanılması önerilir.
+                                type={(k === "tarih" || k === "varis_tarihi") ? "text" : "text"} // Type text bırakıldı
+                                // Sayısal alanlar için type="number"
+                                inputProps={{
+                                    step: k === "tonaj" ? "0.01" : undefined
+                                }}
                             />
                         ))}
                         <Stack direction="row" spacing={1} alignItems="center">
@@ -1583,6 +1757,7 @@ export default function PlanlamaDeluxe() {
                     sx: (t) => ({
                         borderRadius: 3, overflow: "hidden", backdropFilter: "blur(8px)",
                         background: "linear-gradient(180deg, rgba(15,23,42,0.96) 0%, rgba(2,6,23,0.96) 100%)",
+                        // Düzeltilmiş Satır
                         boxShadow: `0 24px 64px ${alpha("#000", 0.55)}`, border: "1px solid rgba(255,255,255,0.06)",
                     }),
                 }}

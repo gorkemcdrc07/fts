@@ -2084,7 +2084,7 @@ export default function PlanlamaDeluxe() {
                 </Box>
             )}
 
-            {/* Snackbar */}
+            {/* Snackbar test 1 */}
             <Snackbar
                 open={snack.open}
                 autoHideDuration={3000}

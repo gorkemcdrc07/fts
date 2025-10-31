@@ -15,9 +15,9 @@ import CloseIcon from "@mui/icons-material/Close";
 import VisibilityIcon from '@mui/icons-material/Visibility'; // Sayfa Erişim İkonu
 
 import { supabase } from "../../supabaseClient";
-import { APP_PAGES } from "../../routes/pages";
+import { APP_PAGES } from "../../routes/pages"; // Bu dosyanın dışarıdan geldiği varsayılıyor
 
-/** Yardımcılar (Değişiklik yapılmadı) */
+/** Yardımcılar */
 function normalizePath(path) {
     if (!path) return "/";
     let s = String(path).trim().toLowerCase();
@@ -27,7 +27,8 @@ function normalizePath(path) {
     return s;
 }
 
-/** * DEĞİŞİKLİK YAPILDI: Kategori isimleri ve yolları güncellendi.
+/** * GÜNCEL KATEGORİLEME MANTIĞI: Yeni eklenen "/raporlar/sefer-tamamlayan" yolu, 
+ * p.startsWith("/raporlar/") kuralına uyduğu için Raporlar kategorisine dahil edilir.
  */
 function getCategoryByPath(path) {
     const p = normalizePath(path);
@@ -35,7 +36,8 @@ function getCategoryByPath(path) {
     // Genel
     if (p === "/anasayfa") return "Genel";
 
-    // Kullanıcı İşlemleri (Planlama, Aktif Seferler ve Tamamlanan Seferler birleştirildi)
+    // Kullanıcı İşlemleri (Eski /sefer-tamamlayan path'i bu listeye dahildi,
+    // ancak şu anki yeni path'i (/raporlar/sefer-tamamlayan) Raporlar'a taşınmıştır.)
     if (
         p.startsWith("/planlama") ||
         ["/plaka-onerisi", "/siparisler", "/siparis-analiz"].includes(p) ||
@@ -52,7 +54,7 @@ function getCategoryByPath(path) {
     // Hakedişler
     if (p.startsWith("/hakedis/")) return "Hakedişler";
 
-    // Raporlar
+    // Raporlar (Yeni ekranlar dahil)
     if (p.startsWith("/raporlar/")) return "Raporlar";
 
     // Yönetim (Admin)
@@ -86,14 +88,18 @@ async function upsertUserPageAccess(rows) {
 export default function PagePermissionsTab() {
     const cols = useMemo(() => PAGE_COLUMNS, []);
 
-    // Kategori State Yönetimi (Daha modern Select bileşeni için)
-    const initialCategory = cols[0]?.category || "Genel";
-    const [category, setCategory] = useState(initialCategory);
-
+    // Kategori State Yönetimi
     const categories = useMemo(() => {
         const set = new Set(cols.map(c => c.category));
         return Array.from(set);
     }, [cols]);
+
+    // Varsayılan kategoriyi "Raporlar" olarak ayarlayabiliriz, çünkü en son oraya ekleme yaptık.
+    const initialCategory = categories.includes("Raporlar")
+        ? "Raporlar"
+        : (cols[0]?.category || "Genel");
+
+    const [category, setCategory] = useState(initialCategory);
 
     const visibleCols = useMemo(() => {
         return cols.filter(c => c.category === category);
@@ -109,12 +115,14 @@ export default function PagePermissionsTab() {
     const load = useCallback(async () => {
         setLoading(true);
         try {
+            // 1. Kullanıcıları yükle
             const { data: users, error: e1 } = await supabase
                 .from("login")
                 .select("id, kullanici, kullaniciAdi, rol")
                 .order("kullaniciAdi", { ascending: true });
             if (e1) throw e1;
 
+            // 2. Sayfa erişim yetkilerini yükle
             const { data: accessRows, error: e2 } = await supabase
                 .from("user_page_access")
                 .select("*");
@@ -122,6 +130,7 @@ export default function PagePermissionsTab() {
 
             const byUser = new Map((accessRows || []).map((r) => [String(r.user_id), r]));
 
+            // 3. Kullanıcı ve yetki verilerini birleştir
             const uiRows = (users || []).map((u) => {
                 const dbRow = byUser.get(String(u.id)) || {};
                 const base = {
@@ -131,7 +140,7 @@ export default function PagePermissionsTab() {
                     rol: u.rol || "",
                     _hasRow: !!byUser.get(String(u.id)),
                 };
-                // cols bağımlılığı burada kullanılıyor.
+                // Dinamik olarak tüm yetki sütunlarını ekle
                 cols.forEach(({ col }) => { base[col] = dbRow[col] ?? false; });
                 return base;
             });
@@ -149,7 +158,7 @@ export default function PagePermissionsTab() {
     // 'load' bağımlılık olarak eklendi.
     useEffect(() => { load(); }, [load]);
 
-    /** ---- Etkileşimler (Değişiklik yapılmadı) ---- */
+    /** ---- Etkileşimler ---- */
     const toggle = (user_id, col) => {
         setRows((prev) =>
             prev.map((r) => (r.user_id === user_id ? { ...r, [col]: !r[col] } : r))
@@ -162,6 +171,7 @@ export default function PagePermissionsTab() {
             prev.map((r) => {
                 if (r.user_id !== user_id) return r;
                 const next = { ...r };
+                // Sadece görünür sütunları (mevcut kategori) değiştirir
                 visibleCols.forEach(({ col }) => { next[col] = value; });
                 return next;
             })
@@ -174,6 +184,7 @@ export default function PagePermissionsTab() {
             prev.map((r) => {
                 if (r.user_id !== user_id) return r;
                 const next = { ...r };
+                // Tüm sütunları (tüm kategoriler) sıfırlar
                 cols.forEach(({ col }) => { next[col] = false; });
                 return next;
             })
@@ -186,15 +197,15 @@ export default function PagePermissionsTab() {
             setSaving(true);
             const payload = rows.map((r) => {
                 const obj = { user_id: Number(r.user_id), updated_at: new Date().toISOString() };
+                // Yeni eklenen sütunlar dahil, tüm sütunları payload'a dahil eder.
                 cols.forEach(({ col }) => { obj[col] = !!r[col]; });
                 return obj;
             });
 
             if (!payload.length) { setSaving(false); return; }
-            await upsertUserPageAccess(payload);
+            await upsertUserPageAccess(payload); // Kaydetme işlemi
             setDirty(false);
-            // load fonksiyonu artık useCallback ile sarmalandığı için çağrımı güvenlidir.
-            await load();
+            await load(); // Veriyi yeniden yükle
         } catch (e) {
             console.error("save user_page_access error:", e);
             alert("Kaydetme hatası: " + (e?.message || e));
@@ -203,7 +214,7 @@ export default function PagePermissionsTab() {
         }
     };
 
-    /** ---- Arama filtresi (Değişiklik yapılmadı) ---- */
+    /** ---- Arama filtresi ---- */
     const filtered = useMemo(() => {
         const needle = q.trim().toLowerCase();
         if (!needle) return rows;

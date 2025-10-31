@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     Box, Stack, Button, Typography, TextField, Grid, Card, CardContent, CardHeader,
-    Tooltip, IconButton, InputAdornment
+    Tooltip, IconButton, InputAdornment, Alert, Divider
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
@@ -11,6 +11,7 @@ import SaveIcon from "@mui/icons-material/Save";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
+import WarningIcon from "@mui/icons-material/Warning";
 
 /* ----------------------------------------------------------------------------- 
     Yardımcılar (tarih alanı) 
@@ -67,16 +68,11 @@ function isISODateTimeValid(isoString) {
     return !isNaN(d.getTime());
 }
 
-// Orijinal fromISO mantığı (sadece parçalama yapar, kayma içermez)
 export const fromISO = (raw) => {
     if (!raw) return { d: "", t: "" };
-
     const s = String(raw).trim().replace(" ", "T");
-
-    // "2025-05-13T13:13" → parçala
     const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
     if (!m) return { d: "", t: "" };
-
     const [, y, mo, dd, hh, mi] = m;
     return { d: `${dd}.${mo}.${y}`, t: `${hh}:${mi}` };
 };
@@ -88,7 +84,7 @@ export const fromISOToCombined = (raw) => {
 
 
 // =================================================================
-// DateTimeSingleField: EndAdornment kullanmak için güncellendi
+// DateTimeSingleField
 // =================================================================
 function DateTimeSingleField({
     label,
@@ -105,7 +101,6 @@ function DateTimeSingleField({
     const [touched, setTouched] = React.useState(false);
 
     React.useEffect(() => {
-        // Ana tarih alanları fromISOToCombined ile formatlanır
         if (!value) { setText(""); return; }
         if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
             setText(fromISOToCombined(value));
@@ -115,7 +110,6 @@ function DateTimeSingleField({
     }, [value]);
 
     function handleChange(e) {
-        // ... (Değişiklik yönetimi mantığı)
         const raw = e.target.value;
         const digs = normalizeFormattedToDigits(raw);
         const masked = formatFromDigits(digs);
@@ -128,7 +122,6 @@ function DateTimeSingleField({
             const HH = parseInt(digs.slice(8, 10), 10);
             const mm = parseInt(digs.slice(10, 12), 10);
 
-            // Burada new Date(Y, M-1, D, H, M) ile yerel zaman objesi oluşturulur.
             const dt = new Date(yyyy, MM - 1, dd, HH, mm);
             if (!isNaN(dt.getTime())) {
                 onChange(toLocalISOString(dt));
@@ -146,7 +139,6 @@ function DateTimeSingleField({
     const isValid = complete && !!dd && !!MM && !!yyyy && !!HH && !!mm;
     const showError = touched && !isValid && (required || digs.length > 0);
 
-    // Ana bileşeni döndür
     return (
         <TextField
             label={label}
@@ -161,10 +153,9 @@ function DateTimeSingleField({
             disabled={disabled}
             error={showError}
             helperText={showError ? errorText : " "}
-            // InputProps içine Adornment ekleniyor
             InputProps={EndAdornment ? {
                 endAdornment: EndAdornment,
-                sx: { pr: 1.5 } // Adornment için biraz sağ boşluk bırak
+                sx: { pr: 1.5 }
             } : undefined}
         />
     );
@@ -172,7 +163,7 @@ function DateTimeSingleField({
 
 
 /* ----------------------------------------------------------------------------- 
-    Dialog
+    Dialog Yardımcıları 
 ----------------------------------------------------------------------------- */
 
 /** * GÜNCELLEME ZAMANINA +3 saat kayması EKLEYEN fonksiyon (13:23 -> 16:23)
@@ -185,20 +176,16 @@ function fromISOTooltipFixed(raw) {
     const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
     if (!m) return "";
 
-    // Dize parçalarını al
     let [y, mo, dd, hh, mi] = m.map(Number).slice(1);
 
     // YALNIZCA BURADA 3 SAAT EKLEME YAPILIYOR (13:23 -> 16:23)
     let totalMinutes = (hh * 60) + mi + (3 * 60);
 
-    // Yeni saat ve gün/saat kaymalarını hesapla
     const carryHours = Math.floor(totalMinutes / 60);
     const newHH = carryHours % 24;
     const newMI = totalMinutes % 60;
-
     const daysToAdd = Math.floor(carryHours / 24);
 
-    // Gün kayması varsa, tarih parçalarını kullanarak günü ayarla
     if (daysToAdd > 0) {
         const tempDate = new Date(y, mo - 1, dd);
         tempDate.setDate(tempDate.getDate() + daysToAdd);
@@ -210,16 +197,11 @@ function fromISOTooltipFixed(raw) {
 
     const pad = (n) => String(n).padStart(2, "0");
 
-    // Sadece saat/dakika ve günü döndür (gg.aa formatında)
     return `${pad(newHH)}:${pad(newMI)} ${pad(dd)}.${pad(mo)}`;
 }
 
 
-/** * YENİ: Alan Altı için gerekli bilgiyi hazırlar ve JSX Adornment'ı döndürür
- * @param {object} row - Sefer detay satırı
- * @param {string} fieldName - Alan adı ('yukleme_varis' vb.)
- * @param {object} COLORS - Renk sabitleri
- */
+/** * Alan Altı için gerekli bilgiyi hazırlar ve JSX Adornment'ı döndürür */
 function createFieldUpdateInfoText(row, fieldName, COLORS) {
     const userKey = `${fieldName}_guncelleyen`;
     const dateKey = `${fieldName}_guncelleme_tarihi`;
@@ -229,9 +211,8 @@ function createFieldUpdateInfoText(row, fieldName, COLORS) {
 
     if (user && dateISO) {
         const formattedDate = fromISOTooltipFixed(dateISO);
-        const shortUser = user.split(' ')[0].slice(0, 1); // Kullanıcı adının sadece ilk harfi
+        const shortUser = user.split(' ')[0].slice(0, 1);
 
-        // Bilgiyi zarif bir EndAdornment içinde minimalist bir etiket olarak döndürürüz
         const infoJSX = (
             <InputAdornment position="end" sx={{
                 position: 'absolute',
@@ -273,6 +254,156 @@ function createFieldUpdateInfoText(row, fieldName, COLORS) {
     return null;
 }
 
+/* ----------------------------------------------------------------------------- 
+    YENİ DOĞRULAMA YARDIMCILARI 
+----------------------------------------------------------------------------- */
+
+/**
+ * ISO tarih/saat dizesini (örn: "2025-05-13T13:13") karşılaştırma için milisaniye cinsinden sayıya çevirir.
+ * Geçersizse NaN döndürür.
+ */
+function toMoment(isoString) {
+    if (!isISODateTimeValid(isoString)) return NaN;
+    // Yıl, ay, gün, saat, dakika
+    const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!match) return NaN;
+    const [, y, m, d, h, mi] = match.map(Number);
+    // Date objesi oluştururken yerel saat dilimini kullanır
+    return new Date(y, m - 1, d, h, mi).getTime();
+}
+
+/**
+ * Detay satırlarındaki sıralamayı ve yıl kısıtlamasını kontrol eder.
+ * @returns {Array<{type: 'sequence'|'old_year', row: number, message: string}>} Hata listesi
+ */
+function getValidationErrors(detailRows) {
+    const errors = [];
+    // Anlık yılı alıyoruz.
+    const currentYear = new Date().getFullYear();
+
+    for (let i = 0; i < detailRows.length; i++) {
+        const row = detailRows[i];
+        const moments = {
+            yukleme_varis: toMoment(row.yukleme_varis),
+            yukleme_cikis: toMoment(row.yukleme_cikis),
+            teslim_varis: toMoment(row.teslim_varis),
+            teslim_cikis: toMoment(row.teslim_cikis),
+        };
+        const fields = ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"];
+        const fieldLabels = {
+            yukleme_varis: "Yükleme Giriş",
+            yukleme_cikis: "Yükleme Çıkış",
+            teslim_varis: "Teslim Giriş",
+            teslim_cikis: "Teslim Çıkış",
+        };
+
+        // 1. Sıralama Kısıtlamaları (Bir alan kendisinden önce gelenden küçük olamaz)
+        for (let j = 1; j < fields.length; j++) {
+            const currentField = fields[j];
+            const prevField = fields[j - 1];
+
+            const currentMoment = moments[currentField];
+            const prevMoment = moments[prevField];
+
+            // Her iki alan da doluysa ve sıralama bozuksa
+            if (!isNaN(currentMoment) && !isNaN(prevMoment) && currentMoment < prevMoment) {
+                errors.push({
+                    type: "sequence",
+                    row: i + 1,
+                    message: `${i + 1}. Satır: **${fieldLabels[currentField]}** tarihi **${fieldLabels[prevField]}** tarihinden küçük olamaz.`,
+                });
+                // Bir satırda birden fazla sıralama hatası olabilir ama bir tane bulduğumuzda uyarmak yeterli.
+                // Ancak, biz tüm sıralama hatalarını kontrol etmek istiyoruz, bu yüzden break'i kaldırıyorum.
+                // Bu kodda her alan bir öncekini kontrol ettiğinden, döngüyü tamamen kırmadan devam edelim.
+                // Eğer "Yükleme Çıkış" < "Yükleme Giriş" ise, döngü sonuna kadar devam etsin.
+            }
+        }
+
+        // 2. Yıl Kısıtlaması (Girilen yıl mevcut yıldan küçük olamaz)
+        fields.forEach(field => {
+            const isoString = row[field];
+            if (isISODateTimeValid(isoString)) {
+                const yearMatch = isoString.match(/^(\d{4})/);
+                if (yearMatch) {
+                    const year = parseInt(yearMatch[1], 10);
+                    if (year < currentYear) {
+                        errors.push({
+                            type: "old_year",
+                            row: i + 1,
+                            field: fieldLabels[field],
+                            message: `${i + 1}. Satır: **${fieldLabels[field]}** yılı (${year}) mevcut yıl (${currentYear}) veya daha büyük olmalıdır.`,
+                        });
+                    }
+                }
+            }
+        });
+    }
+
+    return errors;
+}
+
+// =================================================================
+// Hata Uyarı Diyaloğu (Modal/Panel)
+// =================================================================
+function ValidationAlert({ open, onClose, errors }) {
+    if (!open) return null;
+
+    // Hata türlerine göre grupla
+    const sequenceErrors = errors.filter(e => e.type === 'sequence');
+    const oldYearErrors = errors.filter(e => e.type === 'old_year');
+
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', bgcolor: 'error.main', color: 'white', fontWeight: 700 }}>
+                <WarningIcon sx={{ mr: 1 }} />
+                Doğrulama Hatası
+            </DialogTitle>
+            <DialogContent dividers>
+                <Alert severity="error" sx={{ mb: 2, fontWeight: 600 }}>
+                    Lütfen aşağıdaki tarih/saat girişlerindeki hataları düzeltin.
+                </Alert>
+
+                {(sequenceErrors.length > 0) && (
+                    <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle1" fontWeight={700} color="error.dark">Tarih Sıralaması Hataları:</Typography>
+                        <ul>
+                            {sequenceErrors.map((e, index) => (
+                                <Typography component="li" key={index} variant="body2" sx={{ my: 0.5 }}>
+                                    {/* HTML bolds are simulated with strong */}
+                                    <span dangerouslySetInnerHTML={{ __html: e.message.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+                                </Typography>
+                            ))}
+                        </ul>
+                    </Box>
+                )}
+
+                {(sequenceErrors.length > 0 && oldYearErrors.length > 0) && <Divider sx={{ my: 2 }} />}
+
+                {(oldYearErrors.length > 0) && (
+                    <Box>
+                        <Typography variant="subtitle1" fontWeight={700} color="error.dark">Eski Yıl Girişi Hataları:</Typography>
+                        <ul>
+                            {oldYearErrors.map((e, index) => (
+                                <Typography component="li" key={index} variant="body2" sx={{ my: 0.5 }}>
+                                    <span dangerouslySetInnerHTML={{ __html: e.message.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+                                </Typography>
+                            ))}
+                        </ul>
+                    </Box>
+                )}
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose} color="primary" variant="contained">Tamam</Button>
+            </DialogActions>
+        </Dialog>
+    );
+}
+
+
+/* ----------------------------------------------------------------------------- 
+    Ana Bileşen: EditorDialog
+----------------------------------------------------------------------------- */
+
 export default function EditorDialog(props) {
     const {
         open, onClose, COLORS, computeAracStatu, fromISOToCombined, baseInputSX,
@@ -282,9 +413,40 @@ export default function EditorDialog(props) {
         onSaveClick, onMoveToCompleted
     } = props;
 
+    // --- Hata Yönetimi State'i ve Uyarı Diyaloğu ---
+    const [validationModalOpen, setValidationModalOpen] = React.useState(false);
+
+    // Yeni sefer tarihi doğrulama
+    const isSeferTarihiValid = isISODateTimeValid(seferTarihiYeni);
+
+    // Kısıtlama Kontrolü (Sıralama ve Yıl)
+    const errors = useMemo(() => {
+        // Sefer tarihi kontrolü
+        const seferTarihiErrors = [];
+        const currentYear = new Date().getFullYear();
+        if (isISODateTimeValid(seferTarihiYeni)) {
+            const yearMatch = seferTarihiYeni.match(/^(\d{4})/);
+            if (yearMatch) {
+                const year = parseInt(yearMatch[1], 10);
+                if (year < currentYear) {
+                    seferTarihiErrors.push({
+                        type: "old_year",
+                        row: 0,
+                        field: "Sefer Tarihi (Yeni)",
+                        message: `**Sefer Tarihi (Yeni)** yılı (${yearMatch[1]}) mevcut yıl (${currentYear}) veya daha büyük olmalıdır.`,
+                    });
+                }
+            }
+        }
+
+        return [...seferTarihiErrors, ...getValidationErrors(detailRows)];
+    }, [seferTarihiYeni, detailRows]);
+
+    const hasValidationError = errors.length > 0;
+
     // Tüm tarih alanlarının dolu olup olmadığını kontrol eden ana mantık
     const allDatesComplete = useMemo(() => {
-        if (!isISODateTimeValid(seferTarihiYeni)) return false;
+        if (!isSeferTarihiValid) return false;
 
         const requiredFields = ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"];
 
@@ -295,174 +457,212 @@ export default function EditorDialog(props) {
         );
 
         return allValid;
-    }, [seferTarihiYeni, detailRows]);
+    }, [isSeferTarihiValid, detailRows]);
 
-    // Kaydet butonu: Düzenleme izni varsa VE tüm tarihler henüz tamamlanmamışsa aktif
+    // Kaydet butonu: Düzenleme izni varsa VE tüm tarihler tamamlanmamışsa aktif. (Hata kontrolü tıklama ile yapılır)
     const canSave = canEdit && !allDatesComplete;
 
-    // Tamamlananlara Aktar butonu: Düzenleme izni varsa VE tüm tarihler TAMAMLANMIŞSA aktif
-    const canMoveToCompleted = canEdit && allDatesComplete;
+    // Tamamlananlara Aktar butonu: Düzenleme izni varsa VE tüm tarihler TAMAMLANMIŞSA VE hata yoksa aktif
+    const canMoveToCompleted = canEdit && allDatesComplete && !hasValidationError;
+
+    // Buton tıklama işleyici
+    const handleActionClick = (action) => {
+        if (hasValidationError) {
+            // Hata varsa, uyarı diyaloğunu açar.
+            setValidationModalOpen(true);
+            return;
+        }
+
+        if (action === 'save' && onSaveClick) {
+            onSaveClick();
+        } else if (action === 'complete' && onMoveToCompleted) {
+            onMoveToCompleted();
+        }
+    };
+
 
     return (
-        <Dialog
-            open={open}
-            onClose={onClose}
-            fullWidth
-            maxWidth="xl"
-            PaperProps={{
-                sx: {
-                    backgroundColor: COLORS.surface,
-                    color: COLORS.text,
-                    border: `1px solid ${COLORS.border}`
-                }
-            }}
-        >
-            <DialogTitle sx={{ fontWeight: 900 }}>
-                <Typography variant="h6" component="span" sx={{ fontWeight: 900 }}>
-                    {editSefer?.sefer_no || "-"} • {editSefer?.plaka || "-"} • {editSefer?.musteri_adi || "-"}
-                </Typography>
-                <Typography variant="caption" component="span" sx={{ color: COLORS.textMuted, ml: 1 }}>
-                    {computeAracStatu(detailRows) || "—"}
-                </Typography>
-            </DialogTitle>
+        <>
+            {/* Doğrulama Hataları Paneli (Ekranın Ortasında) */}
+            <ValidationAlert
+                open={validationModalOpen}
+                onClose={() => setValidationModalOpen(false)}
+                errors={errors}
+            />
 
-            <DialogContent dividers sx={{ backgroundColor: alpha("#fff", 0.01) }}>
-                {/* Sefer Tarihi Alanları */}
-                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 1, mb: 1.2 }}>
-                    <TextField
-                        label="Sefer Tarihi (Eski)"
-                        size="small"
-                        value={fromISOToCombined(editSefer?.sefer_tarihi || "")}
-                        InputProps={{ readOnly: true }}
-                        InputLabelProps={{ shrink: true }}
-                        sx={baseInputSX}
-                    />
+            <Dialog
+                open={open}
+                onClose={onClose}
+                fullWidth
+                maxWidth="xl"
+                PaperProps={{
+                    sx: {
+                        backgroundColor: COLORS.surface,
+                        color: COLORS.text,
+                        border: `1px solid ${COLORS.border}`
+                    }
+                }}
+            >
+                <DialogTitle sx={{ fontWeight: 900 }}>
+                    <Typography variant="h6" component="span" sx={{ fontWeight: 900 }}>
+                        {editSefer?.sefer_no || "-"} • {editSefer?.plaka || "-"} • {editSefer?.musteri_adi || "-"}
+                    </Typography>
+                    <Typography variant="caption" component="span" sx={{ color: COLORS.textMuted, ml: 1 }}>
+                        {computeAracStatu(detailRows) || "—"}
+                    </Typography>
+                </DialogTitle>
 
-                    <DateTimeSingleField
-                        label="Sefer Tarihi (Yeni)"
-                        value={seferTarihiYeni || ""}
-                        onChange={(v) => setSeferTarihiYeni(v)}
-                        baseInputSX={baseInputSX}
-                        required
-                        disabled={!canEdit}
-                    />
-                </Box>
+                <DialogContent dividers sx={{ backgroundColor: alpha("#fff", 0.01) }}>
 
-                {/* Satır Ekle Butonu */}
-                {canEdit && (
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                        <Button startIcon={<AddIcon />} onClick={addDetailRow} color="info" variant="contained">
-                            Satır Ekle
-                        </Button>
-                        <Typography variant="body2" sx={{ color: COLORS.textMuted }}>
-                            Format: gg.aa.yyyy ss:dd (ör: 13.05.2025 09:35)
-                        </Typography>
-                    </Stack>
-                )}
-
-                {/* Detay Satırları */}
-                <Grid container spacing={1.2}>
-                    {detailRows.map((r, i) => (
-                        <Grid item xs={12} key={i}>
-                            <Card variant="outlined" sx={{ borderColor: COLORS.border, background: COLORS.surface2, borderRadius: 2 }}>
-
-                                {/* Card Header (Başlık ve Aksiyonlar) */}
-                                <CardHeader
-                                    sx={{
-                                        "& .MuiCardHeader-title": { fontWeight: 800, fontSize: 16 },
-                                        "& .MuiCardHeader-subheader": { color: COLORS.textMuted },
-                                        pb: 0.5
-                                    }}
-                                    title={`${i + 1}. Nokta`}
-                                    subheader={r.yukleme_ili || r.teslim_ili ? `${r.yukleme_ili ?? ""} → ${r.teslim_ili ?? ""}` : ""}
-                                    action={canEdit && (
-                                        <Stack direction="row" spacing={0.5}>
-                                            <Tooltip title="Bu satırı kopyala">
-                                                <span><IconButton onClick={() => copyDetailRow(i)} size="small" color="info"><ContentCopyIcon fontSize="inherit" /></IconButton></span>
-                                            </Tooltip>
-                                            <Tooltip title="Satırı sil">
-                                                <span><IconButton onClick={() => removeDetailRow(i)} size="small" color="error"><DeleteIcon fontSize="inherit" /></IconButton></span>
-                                            </Tooltip>
-                                        </Stack>
-                                    )}
-                                />
-
-                                <CardContent sx={{ pt: 1.5, pb: 2 }}>
-                                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 1 }}>
-                                        {/* Metin Alanları (Değişmedi) */}
-                                        {[
-                                            ["proje_adi", "Proje Adı"], ["yukleme_noktasi", "Yükleme Noktası"], ["yukleme_ili", "Yükleme İl"],
-                                            ["yukleme_ilcesi", "Yükleme İlçe"], ["teslim_noktasi", "Teslim Noktası"], ["teslim_ili", "Teslim İl"],
-                                            ["teslim_ilcesi", "Teslim İlçe"],
-                                        ].map(([k, l]) => (
-                                            <TextField key={k} label={l} size="small" value={r[k] ?? ""} onChange={(e) => onDetailChange(i, k, e.target.value)}
-                                                InputLabelProps={{ shrink: true }} sx={baseInputSX} InputProps={{ readOnly: !canEdit }}
-                                            />
-                                        ))}
-
-                                        {/* YENİ: Tarih/Saat Alanları ve Sürekli Görünür Güncelleme Bilgisi */}
-                                        {[
-                                            ["yukleme_varis", "Yükleme Giriş"],
-                                            ["yukleme_cikis", "Yükleme Çıkış"],
-                                            ["teslim_varis", "Teslim Giriş"],
-                                            ["teslim_cikis", "Teslim Çıkış"],
-                                        ].map(([k, l]) => {
-                                            // COLORS prop'u createFieldUpdateInfoText'e iletiliyor
-                                            const Adornment = canEdit ? createFieldUpdateInfoText(r, k, COLORS) : null;
-
-                                            return (
-                                                <Box key={k} sx={{ position: 'relative' }}>
-                                                    <DateTimeSingleField
-                                                        label={l}
-                                                        value={r[k] || ""}
-                                                        onChange={(v) => onDetailChange(i, k, v)}
-                                                        baseInputSX={baseInputSX}
-                                                        disabled={!canEdit}
-                                                        EndAdornment={Adornment}
-                                                    />
-                                                </Box>
-                                            );
-                                        })}
-                                    </Box>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    ))}
-                </Grid>
-            </DialogContent>
-
-            <DialogActions sx={{ px: 2.5, py: 1.5, gap: 1 }}>
-                <Button onClick={onClose} startIcon={<ArrowBackIosNewIcon />}>Kapat</Button>
-                {canEdit && (
-                    <Stack direction="row" spacing={1}>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            startIcon={<SaveIcon />}
-                            onClick={onSaveClick}
-                            disabled={!canSave} // KRİTİK: YENİ MANTIK UYGULANDI
+                    {/* Hata Uyarısı Alanı (Butonlara basmadan önce görünür) */}
+                    {canEdit && hasValidationError && (
+                        <Alert
+                            severity="error"
+                            icon={<WarningIcon />}
+                            sx={{ mb: 2, fontWeight: 600 }}
                         >
-                            Kaydet
-                        </Button>
+                            Tarih/saat girişlerinde **{errors.length} adet doğrulama hatası** bulunmaktadır. Kaydetmek/Aktarmak için önce hataları düzeltin.
+                        </Alert>
+                    )}
 
-                        <Tooltip
-                            title={!canMoveToCompleted ? "Tüm detay satırlarındaki 4 tarih/saat alanı (Giriş/Çıkış) ve Sefer Tarihi (Yeni) doldurulmalıdır." : ""}
-                        >
-                            <span>
-                                <Button
-                                    variant="contained"
-                                    color="success"
-                                    startIcon={<FileDownloadDoneIcon />}
-                                    onClick={onMoveToCompleted}
-                                    disabled={!canMoveToCompleted} // KRİTİK: YENİ MANTIK UYGULANDI
-                                >
-                                    Tamamlananlara Aktar
-                                </Button>
-                            </span>
-                        </Tooltip>
-                    </Stack>
-                )}
-            </DialogActions>
-        </Dialog>
+                    {/* Sefer Tarihi Alanları */}
+                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 1, mb: 1.2 }}>
+                        <TextField
+                            label="Sefer Tarihi (Eski)"
+                            size="small"
+                            value={fromISOToCombined(editSefer?.sefer_tarihi || "")}
+                            InputProps={{ readOnly: true }}
+                            InputLabelProps={{ shrink: true }}
+                            sx={baseInputSX}
+                        />
+
+                        <DateTimeSingleField
+                            label="Sefer Tarihi (Yeni)"
+                            value={seferTarihiYeni || ""}
+                            onChange={(v) => setSeferTarihiYeni(v)}
+                            baseInputSX={baseInputSX}
+                            required
+                            disabled={!canEdit}
+                        />
+                    </Box>
+
+                    {/* Satır Ekle Butonu */}
+                    {canEdit && (
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                            <Button startIcon={<AddIcon />} onClick={addDetailRow} color="info" variant="contained">
+                                Satır Ekle
+                            </Button>
+                            <Typography variant="body2" sx={{ color: COLORS.textMuted }}>
+                                Format: gg.aa.yyyy ss:dd (ör: 13.05.2025 09:35)
+                            </Typography>
+                        </Stack>
+                    )}
+
+                    {/* Detay Satırları */}
+                    <Grid container spacing={1.2}>
+                        {detailRows.map((r, i) => (
+                            <Grid item xs={12} key={i}>
+                                <Card variant="outlined" sx={{ borderColor: COLORS.border, background: COLORS.surface2, borderRadius: 2 }}>
+
+                                    <CardHeader
+                                        sx={{
+                                            "& .MuiCardHeader-title": { fontWeight: 800, fontSize: 16 },
+                                            "& .MuiCardHeader-subheader": { color: COLORS.textMuted },
+                                            pb: 0.5
+                                        }}
+                                        title={`${i + 1}. Nokta`}
+                                        subheader={r.yukleme_ili || r.teslim_ili ? `${r.yukleme_ili ?? ""} → ${r.teslim_ili ?? ""}` : ""}
+                                        action={canEdit && (
+                                            <Stack direction="row" spacing={0.5}>
+                                                <Tooltip title="Bu satırı kopyala">
+                                                    <span><IconButton onClick={() => copyDetailRow(i)} size="small" color="info"><ContentCopyIcon fontSize="inherit" /></IconButton></span>
+                                                </Tooltip>
+                                                <Tooltip title="Satırı sil">
+                                                    <span><IconButton onClick={() => removeDetailRow(i)} size="small" color="error"><DeleteIcon fontSize="inherit" /></IconButton></span>
+                                                </Tooltip>
+                                            </Stack>
+                                        )}
+                                    />
+
+                                    <CardContent sx={{ pt: 1.5, pb: 2 }}>
+                                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 1 }}>
+                                            {/* Metin Alanları (Değişmedi) */}
+                                            {[
+                                                ["proje_adi", "Proje Adı"], ["yukleme_noktasi", "Yükleme Noktası"], ["yukleme_ili", "Yükleme İl"],
+                                                ["yukleme_ilcesi", "Yükleme İlçe"], ["teslim_noktasi", "Teslim Noktası"], ["teslim_ili", "Teslim İl"],
+                                                ["teslim_ilcesi", "Teslim İlçe"],
+                                            ].map(([k, l]) => (
+                                                <TextField key={k} label={l} size="small" value={r[k] ?? ""} onChange={(e) => onDetailChange(i, k, e.target.value)}
+                                                    InputLabelProps={{ shrink: true }} sx={baseInputSX} InputProps={{ readOnly: !canEdit }}
+                                                />
+                                            ))}
+
+                                            {/* Tarih/Saat Alanları ve Sürekli Görünür Güncelleme Bilgisi */}
+                                            {[
+                                                ["yukleme_varis", "Yükleme Giriş"],
+                                                ["yukleme_cikis", "Yükleme Çıkış"],
+                                                ["teslim_varis", "Teslim Giriş"],
+                                                ["teslim_cikis", "Teslim Çıkış"],
+                                            ].map(([k, l]) => {
+                                                const Adornment = canEdit ? createFieldUpdateInfoText(r, k, COLORS) : null;
+
+                                                return (
+                                                    <Box key={k} sx={{ position: 'relative' }}>
+                                                        <DateTimeSingleField
+                                                            label={l}
+                                                            value={r[k] || ""}
+                                                            onChange={(v) => onDetailChange(i, k, v)}
+                                                            baseInputSX={baseInputSX}
+                                                            disabled={!canEdit}
+                                                            EndAdornment={Adornment}
+                                                        />
+                                                    </Box>
+                                                );
+                                            })}
+                                        </Box>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </DialogContent>
+
+                <DialogActions sx={{ px: 2.5, py: 1.5, gap: 1 }}>
+                    <Button onClick={onClose} startIcon={<ArrowBackIosNewIcon />}>Kapat</Button>
+                    {canEdit && (
+                        <Stack direction="row" spacing={1}>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                startIcon={<SaveIcon />}
+                                onClick={() => handleActionClick('save')}
+                                // canSave = canEdit && !allDatesComplete
+                                // Hata olsa bile Kaydet'e tıklanıp modalın açılmasına izin veriyoruz.
+                                // Sadece düzenleme izni yoksa devre dışı bırakıyoruz.
+                                disabled={!canEdit}
+                            >
+                                Kaydet
+                            </Button>
+
+                            <Tooltip
+                                title={!canMoveToCompleted ? (hasValidationError ? "Önce Doğrulama Hatalarını Düzeltin" : "Tüm detay satırlarındaki 4 tarih/saat alanı (Giriş/Çıkış) ve Sefer Tarihi (Yeni) doldurulmalıdır.") : ""}
+                            >
+                                <span>
+                                    <Button
+                                        variant="contained"
+                                        color="success"
+                                        startIcon={<FileDownloadDoneIcon />}
+                                        onClick={() => handleActionClick('complete')}
+                                        disabled={!canMoveToCompleted}
+                                    >
+                                        Tamamlananlara Aktar
+                                    </Button>
+                                </span>
+                            </Tooltip>
+                        </Stack>
+                    )}
+                </DialogActions>
+            </Dialog>
+        </>
     );
 }

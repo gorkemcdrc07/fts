@@ -208,6 +208,7 @@ export default function Sidebar(props) {
                 "/raporlar/plaka-bazli",
                 "/raporlar/tools",
                 "/raporlar/eta-uyumsuz",
+                "/raporlar/sefer-tamamlayan",
             ])
         );
 
@@ -258,6 +259,7 @@ export default function Sidebar(props) {
             // { ad: "Yüklemede Gecikme", yol: "/raporlar/yuklemede-gecikme", ikon: <QueryStatsIcon /> }, <-- KALDIRILDI
             { ad: "Sefer Süreleri", yol: "/raporlar/sefer-sureleri", ikon: <AirportShuttleIcon /> },
             { ad: "Plaka Bazlı", yol: "/raporlar/plaka-bazli", ikon: <AirportShuttleOutlinedIcon /> },
+            { ad: "Sefer Tamamlayan", yol: "/raporlar/sefer-tamamlayan", ikon: <TaskAltIcon /> },
         ],
         []
     );

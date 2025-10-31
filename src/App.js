@@ -7,10 +7,9 @@ import { ThemeProvider, CssBaseline } from "@mui/material";
 import theme from "./theme";
 
 // Guard
-import { default as RequirePageAccess } from "./routes/guards/RequirePageAccess"; // Güvenli import
+import { default as RequirePageAccess } from "./routes/guards/RequirePageAccess";
 
 // Sayfalar (eager)
-// Tüm eager importlar güvenli named import formatına çevrildi:
 import { default as Login } from "./Login";
 import { default as Anasayfa } from "./Anasayfa";
 import { default as Planlama } from "./kullanıcıIslemleri/Planlama";
@@ -26,7 +25,7 @@ import { default as AracDurumlari } from "./aracDurum/AracDurumlari";
 
 // Görevler
 import { default as GorevAta } from "./views/Gorevler/GorevAta";
-import { default as BenimGorevlerim } from "./views/Gorevler/BenimGorevlerim"; // Düzeltildi: BenimGoreVlerim -> BenimGorevlerim
+import { default as BenimGorevlerim } from "./views/Gorevler/BenimGorevlerim";
 import { default as TumGorevler } from "./views/Gorevler/TumGorevler";
 
 // Hakediş
@@ -44,17 +43,18 @@ import { default as TeslimdeBekleme } from "./raporlar/TeslimdeBekleme";
 // Layout
 import { default as AppLayout } from "./layout/AppLayout";
 
-// Lazy sayfalar (lazy import'lar bu sorunu yaşamaz, bu yüzden değiştirilmedi)
+// Lazy sayfalar
 const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler"));
 const SiparisAnaliz = lazy(() => import("./kullanıcıIslemleri/planlamaDetay/SiparisAnaliz"));
 const AdminPanel = lazy(() => import("./adminPanel/adminPanel"));
 const GorunumDuzenle = lazy(() => import("./aktifseferler/GorunumDuzenle"));
 const PagePermissionsPage = lazy(() => import("./adminPanel/PagePermissionsPage"));
 const PivotTool = lazy(() => import("./raporlar/PivotTool"));
-// ETA Uyumsuzluğu
 const ETAUyumsuzlugu = lazy(() => import("./raporlar/ETAUyumsuzlugu"));
-// ✅ Frigo Yakıt Hakediş (Hakedişler menüsü altında)
 const FrigoYakitHakedis = lazy(() => import("./Hakedisler/FrigoYakitHakedis"));
+
+// Yeni: Sefer Tamamlayan Raporu
+const SeferTamamlayan = lazy(() => import("./raporlar/SeferTamamlayan"));
 
 // TEST VERİSİ
 const TEST_VERILERI = {
@@ -79,49 +79,20 @@ function App() {
                 <CssBaseline />
                 <Router>
                     <Routes>
-                        {/* Public: Login */}
+                        {/* Public */}
                         <Route path="/" element={<Login />} />
 
-                        {/* App Layout içinde tüm sayfalar */}
+                        {/* App Layout */}
                         <Route element={<AppLayout />}>
-                            {/* Whitelist (usePageAccess içinde serbest): /anasayfa */}
                             <Route path="anasayfa" element={<Anasayfa />} />
 
-                            {/* <<< BURADAN SONRASI GUARD ALTINDA >>> */}
-                            <Route
-                                element={
-                                    <RequirePageAccess>
-                                        <Outlet />
-                                    </RequirePageAccess>
-                                }
-                            >
-                                {/* Planlama */}
+                            {/* Guard */}
+                            <Route element={<RequirePageAccess><Outlet /></RequirePageAccess>}>
                                 <Route path="planlama" element={<Planlama />} />
                                 <Route path="plaka-onerisi" element={<PlakaOnerisi />} />
-
-                                {/* Reel Atanan Seferler (lazy) */}
-                                <Route
-                                    path="seferler"
-                                    element={
-                                        <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
-                                            <ReelAtananSeferler />
-                                        </Suspense>
-                                    }
-                                />
-
-                                {/* Görünüm Düzenle (lazy) */}
-                                <Route
-                                    path="aktifseferler/gorunum"
-                                    element={
-                                        <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
-                                            <GorunumDuzenle />
-                                        </Suspense>
-                                    }
-                                />
-
+                                <Route path="seferler" element={<Suspense fallback={<div>Yükleniyor...</div>}><ReelAtananSeferler /></Suspense>} />
+                                <Route path="aktifseferler/gorunum" element={<Suspense fallback={<div>Yükleniyor...</div>}><GorunumDuzenle /></Suspense>} />
                                 <Route path="siparisler" element={<Siparisler />} />
-
-                                {/* Tamamlanan Seferler */}
                                 <Route path="tamamlanan-seferler" element={<TamamlananlarPage />} />
 
                                 {/* Araç Durumları */}
@@ -136,78 +107,30 @@ function App() {
                                 <Route path="gorevler/tum" element={<TumGorevler />} />
 
                                 {/* Hakediş */}
+                                <Route path="hakedis/frigo-yakit-hakedis" element={<Suspense fallback={<div>Frigo Yakıt Hakediş yükleniyor...</div>}><FrigoYakitHakedis /></Suspense>} />
                                 <Route path="hakedis/tedarikci-masraf" element={<TedarikciMasraf />} />
                                 <Route path="hakedis/arac-cari-ve-fiyat" element={<AracCariVeFiyat />} />
                                 <Route path="hakedis/hakedis-seferleri" element={<HakedisSeferleri />} />
                                 <Route path="hakedis/hamaliye" element={<Hamaliye />} />
-                                {/* ✅ Frigo Yakıt Hakediş */}
-                                <Route
-                                    path="hakedis/frigo-yakit-hakedis"
-                                    element={
-                                        <Suspense fallback={<div style={{ padding: 24 }}>Frigo Yakıt Hakediş yükleniyor...</div>}>
-                                            <FrigoYakitHakedis />
-                                        </Suspense>
-                                    }
-                                />
 
                                 {/* KPI & Raporlar */}
                                 <Route path="raporlar/kpi-olcumu" element={<KpiOlcumu />} />
                                 <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
                                 <Route path="raporlar/teslimde-bekleme" element={<TeslimdeBekleme />} />
                                 <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
-
-                                {/* ETA Uyumsuzluğu */}
-                                <Route
-                                    path="raporlar/eta-uyumsuz"
-                                    element={
-                                        <Suspense fallback={<div style={{ padding: 24 }}>ETA Uyumsuzluğu Raporu Yükleniyor...</div>}>
-                                            <ETAUyumsuzlugu />
-                                        </Suspense>
-                                    }
-                                />
-
-                                {/* Pivot Tool */}
-                                <Route
-                                    path="raporlar/tools"
-                                    element={
-                                        <Suspense fallback={<div style={{ padding: 24 }}>Pivot Rapor Yükleniyor...</div>}>
-                                            <PivotTool datasets={TEST_VERILERI} defaultDataset="Sefer Performansı" />
-                                        </Suspense>
-                                    }
-                                />
+                                <Route path="raporlar/eta-uyumsuz" element={<Suspense fallback={<div>ETA Uyumsuzluğu yükleniyor...</div>}><ETAUyumsuzlugu /></Suspense>} />
+                                <Route path="raporlar/tools" element={<Suspense fallback={<div>Pivot Rapor Yükleniyor...</div>}><PivotTool datasets={TEST_VERILERI} defaultDataset="Sefer Performansı" /></Suspense>} />
+                                <Route path="raporlar/sefer-tamamlayan" element={<Suspense fallback={<div>Sefer Tamamlayan yükleniyor...</div>}><SeferTamamlayan /></Suspense>} />
 
                                 {/* KOCAELİ kartı */}
-                                <Route
-                                    path="siparis-analiz"
-                                    element={
-                                        <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
-                                            <SiparisAnaliz />
-                                        </Suspense>
-                                    }
-                                />
+                                <Route path="siparis-analiz" element={<Suspense fallback={<div>Yükleniyor...</div>}><SiparisAnaliz /></Suspense>} />
 
                                 {/* Admin */}
-                                <Route
-                                    path="admin"
-                                    element={
-                                        <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
-                                            <AdminPanel />
-                                        </Suspense>
-                                    }
-                                />
-                                {/* Kullanıcı Ekranları (izin yönetimi) */}
-                                <Route
-                                    path="admin/permissions"
-                                    element={
-                                        <Suspense fallback={<div style={{ padding: 24 }}>Yükleniyor...</div>}>
-                                            <PagePermissionsPage />
-                                        </Suspense>
-                                    }
-                                />
+                                <Route path="admin" element={<Suspense fallback={<div>Yükleniyor...</div>}><AdminPanel /></Suspense>} />
+                                <Route path="admin/permissions" element={<Suspense fallback={<div>Yükleniyor...</div>}><PagePermissionsPage /></Suspense>} />
                             </Route>
-                            {/* <<< GUARD BLOĞU BİTTİ >>> */}
 
-                            {/* Varsayılan */}
+                            {/* Default */}
                             <Route path="*" element={<Navigate to="/anasayfa" replace />} />
                         </Route>
                     </Routes>

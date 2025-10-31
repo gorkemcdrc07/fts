@@ -38,9 +38,11 @@ export const APP_PAGES = [
     // KPI & Raporlar
     { title: "KPI Ölçümü", path: "/raporlar/kpi-olcumu" },
     { title: "Yüklemede Bekleme", path: "/raporlar/yuklemede-bekleme" },
-    { title: "Teslimde Bekleme", path: "/raporlar/teslimde-bekleme" }, // ✅ YENİ EKRAN EKLENDİ
+    { title: "Teslimde Bekleme", path: "/raporlar/teslimde-bekleme" },
     { title: "Lokasyon Raporları", path: "/raporlar/lokasyon-rapor" },
     { title: "ETA Uyumsuzluğu", path: "/raporlar/eta-uyumsuzlugu" },
+    // ✅ YENİ EKRAN RAPORLAR KISMINA EKLENDİ
+    { title: "Sefer Tamamlayan", path: "/raporlar/sefer-tamamlayan" },
 
     // Yönetim
     { title: "Yönetim Paneli", path: "/admin" },

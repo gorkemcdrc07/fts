@@ -63,7 +63,7 @@ import usePermissions from "../auth/usePermissions";
 
 /* ---------------- Sefer Detay Panel (lazy) ---------------- */
 const SeferDetayPanel = lazy(() => import("./planlamaDetay/SeferDetayPanel"));
-const SiparisAnaliz = lazy(() => import("./planlamaDetay/SiparisAnaliz"));
+// const SiparisAnaliz = lazy(() => import("./planlamaDetay/SiparisAnaliz")); // KALDIRILDI
 
 
 // Dayjs eklentileri (Import'lar bittikten sonra buraya taşındı)
@@ -377,8 +377,8 @@ export default function PlanlamaDeluxe() {
     const [guncelleDialogOpen, setGuncelleDialogOpen] = useState(false);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [activeEditRow, setActiveEditRow] = useState(null);
-    const [analizOpen, setAnalizOpen] = useState(false);
-    const [analizContext, setAnalizContext] = useState(null);
+    // const [analizOpen, setAnalizOpen] = useState(false); // KALDIRILDI
+    // const [analizContext, setAnalizContext] = useState(null); // KALDIRILDI
     const [dragActive, setDragActive] = useState(false);
     const fileInputRef = useRef(null);
 
@@ -441,11 +441,11 @@ export default function PlanlamaDeluxe() {
         setDrawerOpen(true);
     }, []);
 
-    // Sipariş Analiz panelini açma
-    const openSiparisAnaliz = useCallback((row) => {
-        setAnalizContext(row);
-        setAnalizOpen(true);
-    }, []);
+    // Sipariş Analiz panelini açma - KALDIRILDI
+    // const openSiparisAnaliz = useCallback((row) => {
+    //     setAnalizContext(row);
+    //     setAnalizOpen(true);
+    // }, []);
 
     // DataGrid Row Update 
     const processRowUpdate = useCallback((incomingNewRow, oldRow) => {
@@ -513,7 +513,7 @@ export default function PlanlamaDeluxe() {
             {
                 field: "actions",
                 headerName: <BoltIcon sx={{ color: '#E879F9', fontSize: 18, filter: 'drop-shadow(0 0 4px #E879F9)' }} />,
-                width: 130,
+                width: 100, // Genişlik azaltıldı
                 sortable: false,
                 filterable: false,
                 renderCell: (params) => (
@@ -523,11 +523,12 @@ export default function PlanlamaDeluxe() {
                                 <EditNoteIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title="Analiz">
+                        {/* ANALİZ BUTONU KALDIRILDI */}
+                        {/* <Tooltip title="Analiz">
                             <IconButton size="small" onClick={() => openSiparisAnaliz(params.row)} sx={{ '&:hover': { color: '#22D3EE' } }}>
                                 <InfoOutlinedIcon fontSize="small" />
                             </IconButton>
-                        </Tooltip>
+                        </Tooltip> */}
                         <Tooltip title="Satırı Kaldır (Kaydet ile kalıcı olur)">
                             <IconButton size="small" onClick={() => handleSil(params.row._rowId)} sx={{ '&:hover': { color: '#EF4444' } }}>
                                 <DeleteIcon fontSize="small" />
@@ -669,7 +670,7 @@ export default function PlanlamaDeluxe() {
             },
         ];
         return allCols;
-    }, [perms.pln_update, openDrawer, openSiparisAnaliz, handleSil, completenessOf]);
+    }, [perms.pln_update, openDrawer, handleSil, completenessOf]); // openSiparisAnaliz bağımlılığı kaldırıldı
 
     const orderedColumns = useMemo(() => {
         const map = Object.fromEntries(columns.map((c) => [c.field, c]));
@@ -1500,8 +1501,8 @@ export default function PlanlamaDeluxe() {
                             <Paper
                                 key={b}
                                 onClick={() => {
-                                    if (isKocaeli(b)) { setAnalizContext({ bolge: b }); setAnalizOpen(true); }
-                                    else { toggleBolgeFilter?.(b); }
+                                    // isKocaeli kontrolü ve analiz açma mantığı KALDIRILDI
+                                    toggleBolgeFilter?.(b);
                                 }}
                                 sx={{
                                     p: 1, minWidth: 160, borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, cursor: "pointer",
@@ -2028,39 +2029,6 @@ export default function PlanlamaDeluxe() {
                 </Suspense>
             </Drawer>
 
-            {/* Sipariş Analiz — Modal */}
-            <Dialog
-                open={analizOpen}
-                onClose={() => setAnalizOpen(false)}
-                fullWidth
-                maxWidth="lg"
-                PaperProps={{
-                    sx: (t) => ({
-                        borderRadius: 3, overflow: "hidden", backdropFilter: "blur(8px)",
-                        background: "linear-gradient(180deg, rgba(15,23,42,0.96) 0%, rgba(2,6,23,0.96) 100%)",
-                        // Düzeltilmiş Satır
-                        boxShadow: `0 24px 64px ${alpha("#000", 0.55)}`, border: "1px solid rgba(255,255,255,0.06)",
-                    }),
-                }}
-            >
-                <Stack
-                    direction="row" alignItems="center" justifyContent="space-between"
-                    sx={{ px: 2, py: 1.25, borderBottom: "1px solid rgba(255,255,255,0.08)", background: "linear-gradient(180deg, rgba(34,211,238,0.08) 0%, rgba(34,211,238,0.02) 100%)", }}
-                >
-                    <Typography variant="h6" fontWeight={800} sx={{ color: '#22D3EE' }}>{`Sipariş Analiz${analizContext?.bolge ? " — " + analizContext.bolge : ""}`}</Typography>
-                    <IconButton onClick={() => setAnalizOpen(false)} size="small"><CloseIcon /></IconButton>
-                </Stack>
-                <Box sx={{ p: 2.25 }}>
-                    <Suspense
-                        fallback={<Box sx={{ p: 3, textAlign: "center" }}><CircularProgress size={26} /><Typography variant="body2" sx={{ mt: 1 }}>Yükleniyor…</Typography></Box>}
-                    >
-                        <SiparisAnaliz
-                            open={analizOpen} onClose={() => setAnalizOpen(false)} sefer={analizContext} row={analizContext}
-                            data={analizContext} plaka={primaryPlaka(analizContext?.plaka)}
-                        />
-                    </Suspense>
-                </Box>
-            </Dialog>
 
             {/* Drag & Drop Overlay */}
             {dragActive && perms.pln_import_excel && (

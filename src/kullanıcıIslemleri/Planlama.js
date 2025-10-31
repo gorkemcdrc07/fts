@@ -382,6 +382,7 @@ export default function PlanlamaDeluxe() {
     const [dragActive, setDragActive] = useState(false);
     const fileInputRef = useRef(null);
 
+    // KRİTİK: Bir önceki başarılı fetch/save işleminden gelen DB ID'lerini tutar
     const lastSavedSnapshot = useRef("[]");
     const isDirty = useMemo(() => lastSavedSnapshot.current !== JSON.stringify(rows), [rows]);
 
@@ -420,7 +421,7 @@ export default function PlanlamaDeluxe() {
         if (!satir) return;
         if (!window.confirm("Bu satırı silmek istiyor musunuz?")) return;
 
-        // EĞER ID VARSA SUPABASE'DEN SİL
+        // EĞER ID VARSA SUPABASE'DEN SİL (Bu sadece tekil silmeler için kullanılır, toplu silme kaydet butonunda yapılır.)
         if (satir.id) {
             const { error } = await supabase.from("planlama").delete().eq("id", satir.id);
             if (error) {
@@ -441,13 +442,7 @@ export default function PlanlamaDeluxe() {
         setDrawerOpen(true);
     }, []);
 
-    // Sipariş Analiz panelini açma - KALDIRILDI
-    // const openSiparisAnaliz = useCallback((row) => {
-    //     setAnalizContext(row);
-    //     setAnalizOpen(true);
-    // }, []);
-
-    // DataGrid Row Update 
+    // DataGrid Row Update 
     const processRowUpdate = useCallback((incomingNewRow, oldRow) => {
         const newRow = { ...incomingNewRow };
 
@@ -537,7 +532,7 @@ export default function PlanlamaDeluxe() {
                     </Stack>
                 ),
             },
-            // STATÜ SÜTUNU 
+            // STATÜ SÜTUNU 
             {
                 field: "statü",
                 headerName: "STATÜ",
@@ -742,6 +737,7 @@ export default function PlanlamaDeluxe() {
         );
         setPlakalar(plakalarFromRows);
 
+        // KRİTİK: Bir sonraki kaydetme işleminde silinecekleri bulmak için son kaydedilmiş durumu sakla
         lastSavedSnapshot.current = JSON.stringify(enriched);
         setLoading(false);
     }, []);
@@ -978,19 +974,59 @@ export default function PlanlamaDeluxe() {
             setSnack({ open: true, msg: "Kaydet yetkiniz yok.", severity: "warning" });
             return;
         }
-        if (!isDirty) {
-            setSnack({ open: true, msg: "Kaydedilecek değişiklik yok.", severity: "info" });
-            return;
-        }
 
         setSaving(true);
         const currentTimestamp = getCurrentTimestamp();
-        // NOT: currentUserName, bileşenin üst kısmında useMemo ile tanımlanmıştır.
 
-        // Supabase'e gönderilecek veriyi temizle ve sadece DB'deki alanları dahil et
-        const rowsToSave = rows.map(row => {
+        // 1. Silinecek ID'leri Belirle ve Batch Silme İşlemini Uygula
+        let deletedCount = 0;
+        try {
+            const previousRows = JSON.parse(lastSavedSnapshot.current || "[]");
+            const currentIds = new Set(rows.map(r => r.id).filter(Boolean));
+            const idsToDelete = previousRows
+                .map(r => r.id)
+                .filter(id => id && !currentIds.has(id));
 
-            // Plaka ve Tarih DB'ye göndermeden önce kesinlikle normalize edilmeli
+            // KRİTİK İYİLEŞTİRME: Toplu Silmeyi Batch'lere Ayırma (URL Sınırını Aşmamak İçin)
+            const BATCH_SIZE = 500;
+            let successfulDeletions = 0;
+
+            for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
+                const batch = idsToDelete.slice(i, i + BATCH_SIZE);
+
+                const { error, count } = await supabase
+                    .from("planlama")
+                    .delete()
+                    .in("id", batch)
+                    .select(); // Silinen kayıt sayısını almak için
+
+                if (error) {
+                    // Eğer bir batch başarısız olursa, işlemi durdur ve hatayı göster
+                    console.error("Batch Silme Hatası:", error); // DETAYLI HATA LOGU
+                    setSnack({ open: true, msg: `Silme sırasında toplu işlem hatası: ${error.message}. Sunucu hatası 400 ise, Foreign Key kısıtlaması olabilir.`, severity: "error" });
+                    setSaving(false);
+                    return;
+                }
+                // Supabase v2'de delete().select() ile count doğru çalışır, v1'de count bazen null dönebilir.
+                successfulDeletions += (count || batch.length);
+            }
+            deletedCount = successfulDeletions;
+
+        } catch (e) {
+            // Silme işlemi hazırlığı hatası (JSON parse vb.)
+            console.error("Silme İşlemi Hazırlık Hatası:", e);
+            setSnack({ open: true, msg: `Silme işlemi hazırlığı sırasında kritik hata.`, severity: "error" });
+            setSaving(false);
+            return;
+        }
+
+        // 2. Upsert Edilecek Satırları Hazırla ve Tekilleştir
+
+        // Sadece plaka ve tarih bilgisi olan satırları işleme al (zorunlu alanlar)
+        const rowsToProcess = rows.filter(row => row.plaka && row.tarih);
+
+        const rowsToSave = rowsToProcess.map(row => {
+
             const normalizedPlaka = toUpperTr(row.plaka);
             const normalizedTarih = parseDateLike(row.tarih);
 
@@ -1028,16 +1064,33 @@ export default function PlanlamaDeluxe() {
             return dbReadyRow;
         });
 
-        // onConflict kuralı 'plaka,tarih' olarak kaldı. Bu, aynı plaka ve tarih çakışmasını güncelleme olarak ele alır.
+        // HATA ÇÖZÜMÜ: Toplu upsert çakışmasını önlemek için yerel duplikasyonu temizle (en sonuncusu kalır)
+        const uniqueMap = new Map();
+        rowsToSave.forEach(row => {
+            const key = `${row.plaka}-${row.tarih}`;
+            // Aynı plaka+tarih'e sahip en son satır (yani döngüde en son gelen) kazanır.
+            uniqueMap.set(key, row);
+        });
+
+        const uniqueRowsToSave = Array.from(uniqueMap.values());
+
+        // Eğer kaydedilecek satır kalmadıysa ve silme yapılmadıysa çık
+        if (!uniqueRowsToSave.length && deletedCount === 0) {
+            setSnack({ open: true, msg: "Kaydedilecek değişiklik yok.", severity: "info" });
+            setSaving(false);
+            return;
+        }
+
+        // 3. Toplu Ekle/Güncelle (Upsert)
         const { error: upsertError } = await supabase
             .from("planlama")
-            .upsert(rowsToSave, {
-                onConflict: 'plaka,tarih',
+            .upsert(uniqueRowsToSave, {
+                onConflict: 'plaka,tarih', // Bu kurala uyan satır güncellenir
                 ignoreDuplicates: false
             });
 
         if (upsertError) {
-            console.error("Toplu Kayıt Hatası:", upsertError);
+            console.error("Upsert Hatası:", upsertError);
             setSnack({
                 open: true,
                 msg: `Kaydedilirken hata oluştu: ${upsertError.message || 'Bilinmeyen bir sunucu hatası.'}`,
@@ -1047,16 +1100,16 @@ export default function PlanlamaDeluxe() {
             return;
         }
 
-        // Başarılı kayıttan sonra veriyi tekrar çek (Yeni ID'leri ve güncel durumu almak için)
+        // 4. Başarılı kayıttan sonra veriyi tekrar çek (Yeni ID'leri ve güncel durumu almak için)
         await fetchData();
 
         setSaving(false);
         setSnack({
             open: true,
-            msg: "Tüm değişiklikler başarıyla kaydedildi.",
+            msg: `Tüm değişiklikler başarıyla kaydedildi. (${deletedCount} silindi, ${uniqueRowsToSave.length} güncellendi/eklendi.)`,
             severity: "success",
         });
-    }, [perms.pln_save, rows, isDirty, fetchData, currentUserName]);
+    }, [perms.pln_save, rows, fetchData, currentUserName]);
 
     // Excel Aktar (Mevcut Filtrelenmiş Veri)
     const handleExportExcel = useCallback(async () => {
@@ -1447,7 +1500,7 @@ export default function PlanlamaDeluxe() {
                                 startIcon={<SaveIcon />}
                                 onClick={handleKaydet}
                                 // Kaydet yetkisi yoksa VEYA kaydetme devam ediyorsa VEYA değişiklik yapılmadıysa pasif
-                                disabled={!perms.pln_save || saving || !isDirty}
+                                disabled={!perms.pln_save || saving}
                                 size="small"
                                 sx={{
                                     background: 'linear-gradient(45deg, #E879F9 30%, #22D3EE 90%)', // Mor-Mavi degrade buton
@@ -1794,7 +1847,7 @@ export default function PlanlamaDeluxe() {
                         },
                         "& .MuiDataGrid-row--editing": {
                             backgroundColor: alpha("#E879F9", 0.1) + ' !important',
-                            boxShadow: `inset 0 0 0 1px ${alpha("#E879F9", 0.8)}`,
+                            boxBoxShadow: `inset 0 0 0 1px ${alpha("#E879F9", 0.8)}`,
                         }
                     }}
                 />

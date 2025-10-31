@@ -57,7 +57,7 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import EditNoteIcon from "@mui/icons-material/EditNote";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import BoltIcon from "@mui/icons-material/Bolt";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle"; // Eksik import edildiği için eklendi
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
 import usePermissions from "../auth/usePermissions";
 
@@ -77,6 +77,7 @@ dayjs.extend(timezone);
 // TR uppercase
 const toUpperTr = (s) => (s || "").toLocaleUpperCase("tr-TR").trim();
 const getTodayISO = () => new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+const getCurrentTimestamp = () => dayjs().toISOString(); // "YYYY-MM-DDTHH:mm:ss.sssZ"
 
 // Plaka normalize: Sadece harf ve rakamları alır. (DB eşleşmesi için kritik)
 const plakaKey = (s) => toUpperTr(String(s || "")).replace(/[^A-Z0-9]/g, "");
@@ -233,7 +234,7 @@ const headerMap = {
     // Diğerleri
     "SEFER NO": "sefer_no", "SEVK NO": "sevk_no",
     "TARİH": "tarih", "TARİH_1": "tarih",
-    "VARİŞ TARİHİ": "varis_tarihi", "VARIS TARIHI": "varis_tarihi", "VARİŞ TARİH": "varis_tarihi", "TARİH_2": "varis_tarihi",
+    "VARIŞ TARİHİ": "varis_tarihi", "VARIS TARIHI": "varis_tarihi", "VARİŞ TARİH": "varis_tarihi", "TARİH_2": "varis_tarihi",
     "PLAKA": "plaka", "SÜRÜCÜ PLAKA": "plaka",
     "SÜRÜCÜ": "ad_soyad", "AD SOYAD": "ad_soyad",
     "TELEFON": "telefon", "TEL": "telefon",
@@ -366,6 +367,10 @@ export default function PlanlamaDeluxe() {
         [permsLoading, pln_update, pln_save, pln_export_excel, pln_import_excel]
     );
 
+    // Düzenleyen bilgisini almak için local storage kullanılır (Örnek amaçlı)
+    const currentUserName = useMemo(() => localStorage.getItem("kullaniciAdi") || "Bilinmeyen Kullanıcı", []);
+
+
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "success", action: null });
     const [plakaDialogOpen, setPlakaDialogOpen] = useState(false);
     const [yeniPlaka, setYeniPlaka] = useState({ plaka: "", ad_soyad: "", telefon: "", tc: "" });
@@ -376,10 +381,6 @@ export default function PlanlamaDeluxe() {
     const [analizContext, setAnalizContext] = useState(null);
     const [dragActive, setDragActive] = useState(false);
     const fileInputRef = useRef(null);
-
-    // YENİ STATÜ RAPORU STATE'LERİ (Kaldırıldı veya Kullanılmıyor)
-    // const [excelReportDialogOpen, setExcelReportDialogOpen] = useState(false); 
-    // const [selectedStatusForReport, setSelectedStatusForReport] = useState([]); 
 
     const lastSavedSnapshot = useRef("[]");
     const isDirty = useMemo(() => lastSavedSnapshot.current !== JSON.stringify(rows), [rows]);
@@ -394,8 +395,6 @@ export default function PlanlamaDeluxe() {
     const [search, setSearch] = useState("");
     const searchRef = useRef(null);
     const debouncedSearch = useDebounced(search, 300);
-
-    // const normalizeHeader = (s = "") => toUpperTr(String(s)).replace(/\s+/g, " ").replace(/\./g, "").trim();
 
 
     /* ---------- data fetch helpers (TDZ'den kaçınmak için erken tanımlanmıştır) ---------- */
@@ -448,7 +447,7 @@ export default function PlanlamaDeluxe() {
         setAnalizOpen(true);
     }, []);
 
-    // DataGrid Row Update 
+    // DataGrid Row Update 
     const processRowUpdate = useCallback((incomingNewRow, oldRow) => {
         const newRow = { ...incomingNewRow };
 
@@ -537,7 +536,7 @@ export default function PlanlamaDeluxe() {
                     </Stack>
                 ),
             },
-            // STATÜ SÜTUNU 
+            // STATÜ SÜTUNU 
             {
                 field: "statü",
                 headerName: "STATÜ",
@@ -692,7 +691,6 @@ export default function PlanlamaDeluxe() {
     const fetchData = useCallback(async () => {
         setLoading(true);
         // DB'de olmayan excel_sira sıralaması kaldırıldı, sadece sefer_no'ya göre sıralanır.
-        // HATA İPUCU: Supabase'de statü alanı "statu" olarak tanımlanmış olabilir.
         const { data, error } = await supabase
             .from("planlama")
             .select("*")
@@ -707,8 +705,11 @@ export default function PlanlamaDeluxe() {
 
         const enriched = (data || []).map((v, index) => {
             const { son_nokta, bolge } = normalizeSonNoktaAndRegion(v.son_nokta);
-            const tarih = v.tarih || getTodayISO();
-            const varis_tarihi = v.varis_tarihi || v.tarih || tarih;
+
+            // DÜZELTME 1: Varış Tarihi yedekleme kuralı kaldırıldı.
+            const tarih = v.tarih ?? getTodayISO();
+            const varis_tarihi = v.varis_tarihi ?? null;
+
             // Benzersiz anahtar olarak veritabanı ID'si (varsa) veya geçici ID kullan
             const _rowId = v.id ?? v.sefer_no ?? `tmp-${Date.now()}-${index}`;
 
@@ -726,8 +727,6 @@ export default function PlanlamaDeluxe() {
                 _rowId,
             };
         });
-
-        // Veriyi çekme sırasına göre sıralamayı kabul ediyoruz (eğer DB kuralı yeterliyse)
 
         setRows(enriched);
         setFilteredRows(enriched);
@@ -833,7 +832,7 @@ export default function PlanlamaDeluxe() {
             _rowId,
             id: null, // Supabase'e yeni kayıt olarak gitmeli
             statü: "", // Statü boş bırakıldı
-            sefer_no: "", sevk_no: "", tarih: getTodayISO(), varis_tarihi: getTodayISO(), son_nokta: "",
+            sefer_no: "", sevk_no: "", tarih: getTodayISO(), varis_tarihi: null, son_nokta: "",
             fatura_musterisi: "", yukleme_noktasi: "", tahliye_noktasi: "", tahliye_il: "", tonaj: null, // tonaj null olmalı
             bir_onceki_is: "", bolge: "", plaka: toUpperTr(plaka), ad_soyad: toUpperTr(ad_soyad), telefon, tc,
         };
@@ -910,7 +909,9 @@ export default function PlanlamaDeluxe() {
             const built = rawObjects.map((v) => {
                 // Tarih normalization'ı için parseDateLike kullanıldı
                 const tarih = parseDateLike(v.tarih) || getTodayISO();
-                const varis_tarihi = parseDateLike(v.varis_tarihi) || tarih;
+
+                // DÜZELTME 2: Varış Tarihi yedekleme kuralı kaldırıldı.
+                const varis_tarihi = parseDateLike(v.varis_tarihi) || null;
 
                 // Normalizasyon için tahliye il'i kullan
                 const { son_nokta, bolge } = normalizeSonNoktaAndRegion(v.tahliye_il || v.son_nokta);
@@ -924,7 +925,7 @@ export default function PlanlamaDeluxe() {
 
                     // Zorunlu alanları dönüştür
                     tarih: tarih,
-                    varis_tarihi: varis_tarihi,
+                    varis_tarihi: varis_tarihi, // Artık yedekleme yapmıyor
                     tonaj: tonaj,
                     plaka: toUpperTr(v.plaka), // Plaka normalizasyonu
                     ad_soyad: v.ad_soyad ? toUpperTr(v.ad_soyad) : '',
@@ -982,6 +983,8 @@ export default function PlanlamaDeluxe() {
         }
 
         setSaving(true);
+        const currentTimestamp = getCurrentTimestamp();
+        // NOT: currentUserName, bileşenin üst kısmında useMemo ile tanımlanmıştır.
 
         // Supabase'e gönderilecek veriyi temizle ve sadece DB'deki alanları dahil et
         const rowsToSave = rows.map(row => {
@@ -995,14 +998,13 @@ export default function PlanlamaDeluxe() {
                 // ID varsa (güncelleme) ekle, yoksa (yeni kayıt) HİÇ EKLEME.
                 ...((row.id && { id: row.id }) || {}),
 
-                // Statü boşsa null gönder.
-                statu: row.statü || row.statu || null, // hem statü hem statu kontrolü
+                // Statü alanları
+                statu: row.statü || row.statu || null,
+                statü: row.statü || row.statu || null,
 
                 sefer_no: row.sefer_no || null,
                 sevk_no: row.sevk_no || null,
-                // Tarih normalize edilmiş hali gönderilir
                 tarih: normalizedTarih || null,
-                // Plaka normalize edilmiş hali gönderilir (onConflict için önemli)
                 plaka: normalizedPlaka || null,
 
                 ad_soyad: toUpperTr(row.ad_soyad) || null,
@@ -1017,7 +1019,10 @@ export default function PlanlamaDeluxe() {
                 tonaj: toNumber(row.tonaj),
                 bir_onceki_is: row.bir_onceki_is || null,
                 bolge: row.bolge || null,
-                // 'excel_sira' DB'de olmadığı için gönderilmez.
+
+                // YENİ ALANLARIN DOLDURULMASI
+                duzenleme_tarihi: currentTimestamp, // Kayıt veya güncelleme zamanı
+                duzenleyen: currentUserName, // Düzenleyen kullanıcı adı
             };
             return dbReadyRow;
         });
@@ -1050,7 +1055,7 @@ export default function PlanlamaDeluxe() {
             msg: "Tüm değişiklikler başarıyla kaydedildi.",
             severity: "success",
         });
-    }, [perms.pln_save, rows, isDirty, fetchData]);
+    }, [perms.pln_save, rows, isDirty, fetchData, currentUserName]);
 
     // Excel Aktar (Mevcut Filtrelenmiş Veri)
     const handleExportExcel = useCallback(async () => {
@@ -1144,8 +1149,8 @@ export default function PlanlamaDeluxe() {
             const NEON_TURQUOISE = 'FF22D3EE';
             const DARK_BLUE = 'FF1A2033';
             const BLACK_TEXT = 'FF000000';
-            const LIGHT_GREY = 'FFF0F0F5';
-            const BORDER_GREY = 'FFDDDDDD';
+            // const LIGHT_GREY = 'FFF0F0F5'; // Kullanılmıyor
+            // const BORDER_GREY = 'FFDDDDDD'; // Kullanılmıyor
 
             // --- Statü Özeti Sayfası (Basitleştirilmiş) ---
             const worksheetOzet = workbook.addWorksheet("Statü Özeti", { views: [{ state: 'frozen', ySplit: 1 }] });
@@ -1241,11 +1246,6 @@ export default function PlanlamaDeluxe() {
         }
 
     }, [perms.pln_export_excel, rows, columns]);
-
-    // YUKARIDAKİ handleStatuReportExport KISMINI İSTEĞİNİZE GÖRE DÜZENLEYEREK YENİ FONKSİYONUMUZU OLUŞTURDUK.
-    // ŞİMDİ ESKİ handleStatuReportExport'un yerine, ihtiyacınız olmayan kısımları temizlenmiş olarak bu alana bırakıyoruz.
-    // NOT: Kodun orijinal hali içindeki handleStatuReportExport fonksiyonunu tamamen kaldırdım.
-
 
     const handleRowUpdateCommit = useCallback(() => {
         // processRowUpdate zaten setRows'u çağırdığı için bu fonksiyon sadece DataGrid'e sinyal verir.
@@ -1658,7 +1658,7 @@ export default function PlanlamaDeluxe() {
                     getOptionLabel={(opt) => String(opt ?? "")}
                     isOptionEqualToValue={(opt, val) => opt === val}
                     size="small"
-                    renderInput={(params) => <TextField {...params} label="Bölge" placeholder="Seçin" sx={{ minWidth: 200 }} />}
+                    renderInput={(params) => <TextField {...params} label="Bölge" placeholder="Seçin" sx={{ minMinWidth: 200 }} />}
                 />
 
                 <Chip label={`${filteredRows.length} kayıt`} color="default" variant="filled" sx={{ ml: 0.5, backgroundColor: alpha('#22D3EE', 0.15), fontWeight: 700 }} />
@@ -1938,8 +1938,6 @@ export default function PlanlamaDeluxe() {
                 </DialogActions>
             </Dialog>
 
-            {/* YENİ: Statü Raporu Hazırlama Dialogu (Kaldırıldı) */}
-
             {/* Hızlı Düzenleme Çekmecesi */}
             <Drawer
                 anchor="right"
@@ -1958,74 +1956,76 @@ export default function PlanlamaDeluxe() {
                     <IconButton onClick={() => setDrawerOpen(false)}><CloseIcon /></IconButton>
                 </Stack>
                 <Divider sx={{ my: 1, borderColor: alpha('#fff', 0.1) }} />
-                {activeEditRow ? (
-                    <Stack spacing={1.25}>
-                        {/* Statü Select Alanı */}
-                        <FormControl fullWidth size="small">
-                            <InputLabel id="statu-select-label">Statü</InputLabel>
-                            <Select
-                                labelId="statu-select-label"
-                                label="Statü"
-                                value={activeEditRow?.statü || ""}
-                                onChange={(e) => setActiveEditRow((r) => ({ ...r, statü: e.target.value }))}
-                            >
-                                {/* Boş opsiyon */}
-                                <MenuItem value="">
-                                    — Boş —
-                                </MenuItem>
-                                {STATU_LISTESI.map((statu) => (
-                                    <MenuItem key={statu} value={statu} sx={{ color: statuRenkMap(statu).hex, fontWeight: 700 }}>
-                                        {statu}
+                <Suspense fallback={<CircularProgress size={24} />}>
+                    {activeEditRow ? (
+                        <Stack spacing={1.25}>
+                            {/* Statü Select Alanı */}
+                            <FormControl fullWidth size="small">
+                                <InputLabel id="statu-select-label">Statü</InputLabel>
+                                <Select
+                                    labelId="statu-select-label"
+                                    label="Statü"
+                                    value={activeEditRow?.statü || ""}
+                                    onChange={(e) => setActiveEditRow((r) => ({ ...r, statü: e.target.value }))}
+                                >
+                                    {/* Boş opsiyon */}
+                                    <MenuItem value="">
+                                        — Boş —
                                     </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
+                                    {STATU_LISTESI.map((statu) => (
+                                        <MenuItem key={statu} value={statu} sx={{ color: statuRenkMap(statu).hex, fontWeight: 700 }}>
+                                            {statu}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
 
-                        {[
-                            ["sefer_no", "Sefer No"], ["sevk_no", "Sevk No"], ["tarih", "Tarih"], ["varis_tarihi", "Varış Tarihi"],
-                            ["plaka", "Plaka"], ["ad_soyad", "Ad Soyad"], ["telefon", "Telefon"], ["tc", "TC"],
-                            ["son_nokta", "Son Nokta"], ["tahliye_il", "Tahliye İl"], ["fatura_musterisi", "Fatura Müşterisi"],
-                            ["yukleme_noktasi", "Yükleme Noktası"], ["tahliye_noktasi", "Tahliye Noktası"],
-                            ["tonaj", "Tonaj"], ["bir_onceki_is", "Bir Önceki İş"],
-                        ].map(([k, label]) => (
-                            <TextField
-                                key={k}
-                                label={label}
-                                value={activeEditRow?.[k] ?? ""}
-                                onChange={(e) => {
-                                    const val = e.target.value;
-                                    setActiveEditRow((r) => {
-                                        const next = { ...r, [k]: val };
-                                        if (k === "son_nokta") {
-                                            const { son_nokta, bolge } = normalizeSonNoktaAndRegion(val);
-                                            next.son_nokta = son_nokta;
-                                            next.bolge = bolge;
-                                        }
-                                        return next;
-                                    });
-                                }}
-                                size="small"
-                                // Tarih alanları için type="date" kullanılması önerilir.
-                                type={(k === "tarih" || k === "varis_tarihi") ? "text" : "text"} // Type text bırakıldı
-                                // Sayısal alanlar için type="number"
-                                inputProps={{
-                                    step: k === "tonaj" ? "0.01" : undefined
-                                }}
-                            />
-                        ))}
-                        <Stack direction="row" spacing={1} alignItems="center">
-                            <Typography variant="body2" sx={{ color: "text.secondary" }}>Doluluk:</Typography>
-                            <CircularProgress variant="determinate" value={completenessOf(activeEditRow)} size={22} sx={{ color: completenessOf(activeEditRow) > 90 ? '#4ADE80' : '#E8EAF9' }} />
-                            <Typography variant="caption">%{completenessOf(activeEditRow)}</Typography>
+                            {[
+                                ["sefer_no", "Sefer No"], ["sevk_no", "Sevk No"], ["tarih", "Tarih"], ["varis_tarihi", "Varış Tarihi"],
+                                ["plaka", "Plaka"], ["ad_soyad", "Ad Soyad"], ["telefon", "Telefon"], ["tc", "TC"],
+                                ["son_nokta", "Son Nokta"], ["tahliye_il", "Tahliye İl"], ["fatura_musterisi", "Fatura Müşterisi"],
+                                ["yukleme_noktasi", "Yükleme Noktası"], ["tahliye_noktasi", "Tahliye Noktası"],
+                                ["tonaj", "Tonaj"], ["bir_onceki_is", "Bir Önceki İş"],
+                            ].map(([k, label]) => (
+                                <TextField
+                                    key={k}
+                                    label={label}
+                                    value={activeEditRow?.[k] ?? ""}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setActiveEditRow((r) => {
+                                            const next = { ...r, [k]: val };
+                                            if (k === "son_nokta") {
+                                                const { son_nokta, bolge } = normalizeSonNoktaAndRegion(val);
+                                                next.son_nokta = son_nokta;
+                                                next.bolge = bolge;
+                                            }
+                                            return next;
+                                        });
+                                    }}
+                                    size="small"
+                                    // Tarih alanları için type="date" kullanılması önerilir.
+                                    type={(k === "tarih" || k === "varis_tarihi") ? "text" : "text"} // Type text bırakıldı
+                                    // Sayısal alanlar için type="number"
+                                    inputProps={{
+                                        step: k === "tonaj" ? "0.01" : undefined
+                                    }}
+                                />
+                            ))}
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <Typography variant="body2" sx={{ color: "text.secondary" }}>Doluluk:</Typography>
+                                <CircularProgress variant="determinate" value={completenessOf(activeEditRow)} size={22} sx={{ color: completenessOf(activeEditRow) > 90 ? '#4ADE80' : '#E8EAF9' }} />
+                                <Typography variant="caption">%{completenessOf(activeEditRow)}</Typography>
+                            </Stack>
+                            <Stack direction="row" spacing={1} pt={1}>
+                                <Button onClick={() => setDrawerOpen(false)} size="small">Kapat</Button>
+                                <Button variant="contained" onClick={applyDrawerChanges} size="small">Uygula</Button>
+                            </Stack>
                         </Stack>
-                        <Stack direction="row" spacing={1} pt={1}>
-                            <Button onClick={() => setDrawerOpen(false)} size="small">Kapat</Button>
-                            <Button variant="contained" onClick={applyDrawerChanges} size="small">Uygula</Button>
-                        </Stack>
-                    </Stack>
-                ) : (
-                    <Typography>Bir satır seçin…</Typography>
-                )}
+                    ) : (
+                        <Typography>Bir satır seçin…</Typography>
+                    )}
+                </Suspense>
             </Drawer>
 
             {/* Sipariş Analiz — Modal */}

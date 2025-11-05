@@ -5,7 +5,7 @@ import {
     Select, MenuItem, InputLabel, FormControl, Dialog, DialogTitle, DialogContent,
     DialogActions, Chip, Table, TableHead, TableRow, TableCell, TableBody,
     Stack, IconButton, Pagination, Tooltip, CircularProgress, Alert, Grid,
-    Container, Paper, TableContainer // <-- Eksik olan bileşenler eklendi
+    Container, Paper, TableContainer
 } from "@mui/material";
 import Autocomplete from "@mui/material/Autocomplete";
 import FilterListIcon from "@mui/icons-material/FilterList";
@@ -17,7 +17,9 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import CloseIcon from "@mui/icons-material/Close";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import UploadFileIcon from '@mui/icons-material/UploadFile'; // <-- İçeri aktarma için eklendi
 import { supabase } from "../supabaseClient";
+import * as XLSX from 'xlsx'; // <-- Excel için eklendi
 
 // plakalar için dönen alanlar
 const PLATE_FIELDS = "id, plaka, treyler, surucu_adi";
@@ -129,6 +131,7 @@ export default function Hamaliye() {
     const [form, setForm] = useState(initialFormState);
     const [errors, setErrors] = useState({});
     const [actionErr, setActionErr] = useState(""); // insert/update/delete hataları
+    const [importLoading, setImportLoading] = useState(false); // <-- İçeri aktarma için eklendi
 
     // kullanıcı adını çek
     useEffect(() => {
@@ -245,13 +248,21 @@ export default function Hamaliye() {
     function validateForm(values) {
         const e = {};
         const required = [
-            "gelir_gider", "sefer_no", "plaka", "treyler", "tarih", "surucu",
+            "gelir_gider", "sefer_no", "plaka", "tarih", "surucu", // 'treyler' zorunlu değil
             "yukleme_musteri", "fatura_musteri", "odenen_tutar", "palet_sayisi",
             "donem", "kullanici_adi",
         ];
+        // 'treyler' isteğe bağlı olduğu için zorunlu alanlardan çıkarıldı
         for (const k of required) if (values[k] === undefined || values[k] === "" || values[k] === null) e[k] = "Zorunlu alan";
         if (values.odenen_tutar != null && Number(values.odenen_tutar) < 0) e.odenen_tutar = "+ olmalı";
         if (values.palet_sayisi != null && Number(values.palet_sayisi) < 0) e.palet_sayisi = "+ olmalı";
+
+        // Treyler için validasyon (plaka varsa zorunlu olabilir, ama formda ayrı girilmiyor)
+        // Şimdilik plaka varsa treyler'in de girildiğini varsayıyoruz (Autocomplete'dan geliyor)
+        // Manuel girişte sorun olabilir, ancak Autocomplete'u zorunlu kılmak daha iyi olur.
+        // Hata mesajı için 'plaka' kontrolü yeterli.
+        if (!values.plaka) e.plaka = "Zorunlu alan";
+
         return e;
     }
 
@@ -314,6 +325,7 @@ export default function Hamaliye() {
 
     async function handleSave() {
         setActionErr("");
+        // Validasyonu güncelleyelim, treyler artık zorunlu değil
         const e = validateForm(form);
         setErrors(e);
         if (Object.keys(e).length) return;
@@ -322,7 +334,7 @@ export default function Hamaliye() {
             gelir_gider: form.gelir_gider || "Prim",
             sefer_no: String(form.sefer_no || ""),
             plaka: String(form.plaka || ""),
-            treyler: String(form.treyler || ""),
+            treyler: String(form.treyler || ""), // treyler isteğe bağlı
             tarih: String(form.tarih || new Date().toISOString().slice(0, 10)),
             surucu: String(form.surucu || ""),
             yukleme_musteri: String(form.yukleme_musteri || ""),
@@ -374,24 +386,420 @@ export default function Hamaliye() {
         }
     }
 
-    function exportCSV() {
-        const header = COLUMNS.map((c) => c.label).join(",");
-        const body = filtered.map((r) =>
-            [
-                r.created_at ? new Date(r.created_at).toLocaleString("tr-TR") : "",
-                r.gelir_gider, r.sefer_no, (r.plaka || "").toUpperCase(), r.treyler,
-                r.tarih, r.surucu, r.yukleme_musteri, r.fatura_musteri,
-                r.bolge_palet_sayisi, r.odenen_tutar, r.palet_sayisi,
-                r.donem, r.kullanici_adi,
-            ].map((x) => `"${String(x ?? "").replaceAll('"', '""')}"`).join(",")
-        ).join("\n");
-        const csv = "\ufeff" + header + "\n" + body; // UTF-8 BOM eklenir
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = `hamaliye_${new Date().toISOString().slice(0, 10)}.csv`;
-        a.click(); URL.revokeObjectURL(url);
+    // --- EXCEL DIŞA AKTARMA FONKSİYONU ---
+    function exportExcel() {
+        try {
+            // 1. Veriyi hazırla
+            const dataToExport = filtered.map(r => ({
+                [COLUMNS[0].label]: r.created_at ? new Date(r.created_at).toLocaleString("tr-TR") : "", // OLUŞTURULMA TAR.
+                [COLUMNS[1].label]: r.gelir_gider, // PRİM/HAMALİYE
+                [COLUMNS[2].label]: r.sefer_no, // SEFER NO
+                [COLUMNS[3].label]: (r.plaka || "").toUpperCase(), // PLAKA
+                [COLUMNS[4].label]: r.treyler, // TREYLER
+                [COLUMNS[5].label]: r.tarih, // TARİH
+                [COLUMNS[6].label]: r.surucu, // SÜRÜCÜ
+                [COLUMNS[7].label]: r.yukleme_musteri, // YÜKLEME MÜŞTERİ
+                [COLUMNS[8].label]: r.fatura_musteri, // FATURA MÜŞTERİ
+                [COLUMNS[9].label]: r.bolge_palet_sayisi ?? 0, // BÖLGE PALET (Sayı olarak)
+                [COLUMNS[10].label]: r.odenen_tutar ?? 0, // ÖDENEN TUTAR (Sayı olarak)
+                [COLUMNS[11].label]: r.palet_sayisi ?? 0, // PALET SAYISI (Sayı olarak)
+                [COLUMNS[12].label]: r.donem, // DÖNEM
+                [COLUMNS[13].label]: r.kullanici_adi, // KULLANICI ADI
+            }));
+
+            // 2. Çalışma sayfası (Worksheet) oluştur
+            const ws = XLSX.utils.json_to_sheet(dataToExport);
+
+            // 3. (İsteğe bağlı) Sütun genişliklerini ayarla
+            ws["!cols"] = COLUMNS.map(c => ({
+                wch: Math.max(c.label.length, c.minWidth / 8)
+            }));
+
+            // Ödenen Tutar sütununu para birimi olarak formatla
+            const tutarColIndex = 10; // 'ÖDENEN TUTAR' COLUMNS dizisindeki 10. index
+            const tutarColLetter = XLSX.utils.encode_col(tutarColIndex);
+
+            for (let i = 2; i <= dataToExport.length + 1; i++) {
+                const cellRef = `${tutarColLetter}${i}`;
+                if (ws[cellRef]) {
+                    ws[cellRef].t = 'n'; // type: number
+                    ws[cellRef].z = '#,##0 ₺'; // format: 1.234 ₺
+                }
+            }
+
+            // 4. Çalışma kitabı (Workbook) oluştur ve sayfayı ekle
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Hamaliye Raporu"); // Sayfa adı
+
+            // 5. Dosyayı indir
+            const fileName = `hamaliye_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+
+        } catch (err) {
+            console.error("Excel dışa aktarma hatası:", err);
+            setActionErr(`Excel dosyası oluşturulurken bir hata oluştu: ${String(err.message || err)}`);
+        }
     }
+    // --- EXCEL DIŞA AKTARMA BİTİŞİ ---
+
+
+    // --- EXCEL İÇERİ AKTARMA FONKSİYONLARI ---
+
+    // Excel'den gelen tarihi (JS Date, string veya seri no) YYYY-MM-DD formatına çevirir
+    function formatImportDate(val) {
+        if (!val) return null;
+        try {
+            // Eğer xlsx kütüphanesi bunu zaten bir JS Date nesnesine çevirdiyse
+            if (val instanceof Date) {
+                return val.toISOString().slice(0, 10);
+            }
+            // Eğer "25.10.2025" veya "25/10/2025" formatında bir string ise
+            if (typeof val === 'string' && (val.includes('.') || val.includes('/'))) {
+                const parts = val.split(/[.\/]/);
+                if (parts.length === 3) {
+                    const day = parts[0].padStart(2, '0');
+                    const month = parts[1].padStart(2, '0');
+                    const year = parts[2];
+                    // DD.MM.YYYY formatı
+                    if (year.length === 4) return `${year}-${month}-${day}`;
+                    // YYYY.MM.DD formatı (ilk kısım yıl ise)
+                    if (parts[0].length === 4) return `${parts[0]}-${parts[1]}-${parts[2]}`;
+                }
+            }
+            // Eğer zaten "2025-10-25" formatında ise
+            if (typeof val === 'string' && val.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                return val;
+            }
+            // Eğer Excel seri numarası ise (1970-01-01 = 25569)
+            if (typeof val === 'number' && val > 25569) {
+                // Zaman dilimi sorunlarını önlemek için UTC olarak hesapla
+                const d = new Date((val - 25569) * 86400 * 1000 + (new Date().getTimezoneOffset() * 60 * 1000));
+                return d.toISOString().slice(0, 10);
+            }
+
+            console.warn("Tanınmayan tarih formatı, olduğu gibi alınıyor:", val);
+            return String(val).slice(0, 10); // Son çare
+        } catch (e) {
+            console.error("Tarih ayrıştırma hatası:", e);
+            return null;
+        }
+    }
+
+    // ... (Dosyanın geri kalanı aynı)
+
+    // --- handleFileUpload: tam, güncel (donem -> YYYY-MM dönüştürme dahil) ---
+    const handleFileUpload = async (e) => {
+        const file = e.target?.files?.[0];
+        if (!file) return;
+
+        setImportLoading(true);
+        setActionErr("");
+
+        const HEADER_MAP = {
+            'PRİM/HAMALİYE': 'gelir_gider',
+            'GELİR/GİDER': 'gelir_gider',
+            'SEFER NO': 'sefer_no',
+            'TARİH': 'tarih',
+            'PLAKA': 'plaka',
+            'TREYLER': 'treyler',
+            'AD/SOYAD': 'surucu',
+            'SÜRÜCÜ': 'surucu',
+            'YÜKLEME MÜŞTERİ': 'yukleme_musteri',
+            'FATURA MÜŞTERİ': 'fatura_musteri',
+            'BÖLGE VE PALET SAYISI': 'bolge_palet_sayisi',
+            'BÖLGE PALET': 'bolge_palet_sayisi',
+            'ÖDENEN TUTAR': 'odenen_tutar',
+            'PALET SAYISI': 'palet_sayisi',
+            'DÖNEM': 'donem',
+            'KULLANICI ADI': 'kullanici_adi',
+            'KULLANICI': 'kullanici_adi',
+            'SİSTEM GİRİŞİ YAPILDI': 'sistem_giris_yapildi',
+            'SISTEM GIRISI YAPILDI': 'sistem_giris_yapildi'
+        };
+
+        // normalize helper
+        const normalize = (s) => {
+            if (s == null) return "";
+            return String(s)
+                .replace(/\u00A0/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toUpperCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '');
+        };
+
+        // tarih çevirici
+        const formatImportDate = (raw) => {
+            if (raw == null || raw === "") return null;
+            if (!isNaN(raw) && Number(raw) > 0) {
+                const serial = Number(raw);
+                const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+                return new Date(excelEpoch.getTime() + serial * 24 * 60 * 60 * 1000).toISOString();
+            }
+            const s = String(raw).trim();
+            const dm = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})/);
+            if (dm) {
+                let dd = dm[1].padStart(2, '0'), mm = dm[2].padStart(2, '0'), yy = dm[3];
+                if (yy.length === 2) yy = '20' + yy;
+                const iso = `${yy}-${mm}-${dd}T00:00:00.000Z`;
+                const d = new Date(iso);
+                if (!isNaN(d.getTime())) return d.toISOString();
+            }
+            const d2 = new Date(s);
+            if (!isNaN(d2.getTime())) return d2.toISOString();
+            return null;
+        };
+
+        // Dönem formatlayıcı: "Apr-25" / "Nis.25" -> "2025-04"
+        const formatDonemCell = (raw) => {
+            if (!raw && raw !== 0) return "";
+            let s = String(raw).trim();
+            // normalize dots and spaces
+            s = s.replace(/\./g, '').replace(/\s+/g, ' ');
+            // month map (English short + Turkish variants)
+            const monthMap = {
+                JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6,
+                JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12,
+                OCA: 1, SUB: 2, ŞUB: 2, MAR: 3, NIS: 4, NİS: 4,
+                MAY: 5, HAZ: 6, TEM: 7, AGU: 8, AĞU: 8,
+                EYL: 9, EKI: 10, EKİ: 10, KAS: 11, ARA: 12
+            };
+            const m = s.match(/^([A-Za-zÇĞİÖŞÜçğıöşü]{3,4})[-\s\/]?'?(\d{2,4})$/i);
+            if (m) {
+                let mon = m[1].toUpperCase().replace(/\./g, '').replace('İ', 'I').replace('Ş', 'S').replace('Ğ', 'G').replace('Ç', 'C').replace('Ü', 'U').replace('Ö', 'O');
+                // also try to normalize Turkish uppercase with normalize if needed
+                mon = mon.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                let yy = m[2];
+                if (yy.length === 2) yy = '20' + yy;
+                const monthNum = monthMap[mon];
+                if (!monthNum) return s;
+                return `${yy}-${String(monthNum).padStart(2, '0')}`; // YYYY-MM
+            }
+            // already like "2025/04" or "2025-04"
+            if (/^\d{4}[-\/]\d{1,2}$/.test(s)) {
+                return s.replace('/', '-');
+            }
+            return s;
+        };
+
+        // parse para / sayı
+        const parseNumberSafe = (val) => {
+            if (val == null) return 0;
+            let s = String(val).trim();
+            if (s === "") return 0;
+            s = s.replace(/[^\d,.\-]/g, '');
+            const commaCount = (s.match(/,/g) || []).length;
+            const dotCount = (s.match(/\./g) || []).length;
+            if (commaCount === 1 && dotCount === 0) s = s.replace(',', '.');
+            else if (commaCount > 0 && dotCount > 0 && s.indexOf('.') < s.indexOf(',')) s = s.replace(/\./g, '').replace(',', '.');
+            else s = s.replace(/,/g, '');
+            const n = parseFloat(s);
+            return Number.isFinite(n) ? n : 0;
+        };
+
+        // palet parse (isteğe bağlı)
+        const parsePalet = (val) => {
+            if (val == null) return { raw: null };
+            const s = String(val).trim();
+            const range = s.match(/(\d+)\s*-\s*(\d+)/);
+            if (range) return { min: Number(range[1]), max: Number(range[2]), raw: s };
+            const single = s.match(/(\d+)/);
+            if (single) return { min: Number(single[1]), max: Number(single[1]), raw: s };
+            return { raw: s };
+        };
+
+        // heuristic: uzun açıklamalar veya belirli kelimeler sistem notu olabilir
+        const looksLikeSystemNote = (val) => {
+            if (val == null) return false;
+            const s = String(val).trim();
+            if (s.length > 40) return true;
+            const keywords = ['MÜŞTERİ', 'ALINMAMIŞ', 'ESKİ', 'ÖDENMEYECEK', 'NOT', 'AÇIKLAMA'];
+            const up = s.toUpperCase();
+            for (const k of keywords) if (up.includes(k)) return true;
+            const wordCount = s.split(/\s+/).length;
+            if (wordCount >= 4) return true;
+            return false;
+        };
+
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const data = evt.target.result;
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+                if (!jsonData || jsonData.length === 0) throw new Error("Excel dosyası boş veya okunamadı.");
+
+                // başlıkları al ve normalize et
+                const firstRow = jsonData[0] || {};
+                const fileHeaders = Object.keys(firstRow).map(h => ({ original: h, normalized: normalize(h) })).filter(h => h.normalized.length > 0);
+                console.info("Excel fileHeaders:", fileHeaders);
+                const normalizedToOriginal = {};
+                for (const fh of fileHeaders) normalizedToOriginal[fh.normalized] = fh.original;
+
+                // aliaslar ve eşleştirme
+                const ALIASES = {
+                    'BOLGE PALET': 'BÖLGE VE PALET SAYISI',
+                    'BÖLGE PALET': 'BÖLGE VE PALET SAYISI',
+                    'BOLGE VE PALET': 'BÖLGE VE PALET SAYISI',
+                    'ODENEN TUTAR': 'ÖDENEN TUTAR',
+                    'OEDENEN TUTAR': 'ÖDENEN TUTAR'
+                };
+
+                const optionalDbKeys = new Set(['surucu', 'kullanici_adi', 'sistem_giris_yapildi']);
+                const dbKeyToFileHeader = {};
+
+                for (const [rawHeader, dbKey] of Object.entries(HEADER_MAP)) {
+                    const targetNorm = normalize(rawHeader);
+                    let match = normalizedToOriginal[targetNorm];
+
+                    // alias kontrolü
+                    if (!match) {
+                        for (const [alias, target] of Object.entries(ALIASES)) {
+                            if (normalize(target) === targetNorm) {
+                                const aliasNorm = normalize(alias);
+                                if (normalizedToOriginal[aliasNorm]) { match = normalizedToOriginal[aliasNorm]; break; }
+                            }
+                        }
+                    }
+
+                    // token-overlap tolerant match
+                    if (!match) {
+                        const tokens = targetNorm.split(/\s+/).filter(Boolean);
+                        let best = null, bestScore = 0;
+                        for (const fh of fileHeaders) {
+                            let matched = 0;
+                            for (const t of tokens) if (fh.normalized.includes(t)) matched++;
+                            const score = tokens.length ? (matched / tokens.length) : 0;
+                            if (score > bestScore) { bestScore = score; best = fh; }
+                        }
+                        if (best && (bestScore >= 0.5 || (tokens.length === 1 && bestScore > 0))) {
+                            match = best.original;
+                        }
+                    }
+
+                    // özel: kullanici_adi iki ayrı sütunda gelebilir
+                    if (!match && dbKey === 'kullanici_adi') {
+                        const candUser = fileHeaders.find(fh => fh.normalized.includes(normalize('KULLANICI')));
+                        const candSystem = fileHeaders.find(fh => {
+                            const n = fh.normalized;
+                            return n.includes(normalize('SISTEM')) || n.includes(normalize('GIRIS')) || n.includes(normalize('GIRIŞ')) || n.includes(normalize('GİRİŞİ'));
+                        });
+                        const parts = [];
+                        if (candUser) parts.push(candUser.original);
+                        if (candSystem && candSystem.original !== candUser?.original) parts.push(candSystem.original);
+                        if (parts.length) { dbKeyToFileHeader[dbKey] = parts; continue; }
+                    }
+
+                    if (!match) {
+                        if (optionalDbKeys.has(dbKey)) continue;
+                        console.warn(`Beklenen başlık bulunamadı: ${rawHeader}`);
+                        continue;
+                    }
+
+                    dbKeyToFileHeader[dbKey] = match;
+                }
+
+                // hücre okuma
+                const getCell = (dbKey, row) => {
+                    const headerOrHeaders = dbKeyToFileHeader[dbKey];
+                    if (!headerOrHeaders) return undefined;
+                    if (typeof headerOrHeaders === 'string') return row[headerOrHeaders];
+                    for (const h of headerOrHeaders) {
+                        const v = row[h];
+                        if (v != null && String(v).trim() !== "") return v;
+                    }
+                    return undefined;
+                };
+
+                const payloads = [];
+                for (const row of jsonData) {
+                    // plaka/treyler: öncelik ayrı TREYLER sütunu, yoksa PLAKA içinden split
+                    const plakaCell = getCell('plaka', row);
+                    const treylerCell = getCell('treyler', row);
+
+                    let plakaVal = plakaCell != null ? String(plakaCell).trim().toUpperCase() : "";
+                    let treylerVal = treylerCell != null ? String(treylerCell).trim() : "";
+
+                    if ((!treylerVal || treylerVal === "") && plakaVal) {
+                        const parts = plakaVal.split(/\s*[-–—]\s*/);
+                        if (parts.length > 1) {
+                            plakaVal = (parts[0] || "").trim().toUpperCase();
+                            treylerVal = parts.slice(1).join(' - ').trim();
+                        }
+                    }
+
+                    const seferNo = String(getCell('sefer_no', row) ?? "").trim();
+                    if (!plakaVal && !seferNo) continue;
+
+                    const formattedDate = formatImportDate(getCell('tarih', row));
+                    const bolgePaletRaw = getCell('bolge_palet_sayisi', row);
+                    const odenenNum = parseNumberSafe(getCell('odenen_tutar', row));
+                    const paletRaw = getCell('palet_sayisi', row);
+                    const donemRaw = getCell('donem', row);
+
+                    // kullanıcı / sistem notu ayrımı
+                    let kullaniciVal = getCell('kullanici_adi', row);
+                    let sistemNoteVal = getCell('sistem_giris_yapildi', row);
+
+                    if (kullaniciVal != null) kullaniciVal = String(kullaniciVal).trim();
+                    if (sistemNoteVal != null) sistemNoteVal = String(sistemNoteVal).trim();
+
+                    if ((!sistemNoteVal || sistemNoteVal === "") && kullaniciVal && looksLikeSystemNote(kullaniciVal)) {
+                        sistemNoteVal = kullaniciVal;
+                        kullaniciVal = localUserName ?? "";
+                    }
+
+                    if ((!kullaniciVal || kullaniciVal === "") && sistemNoteVal && !looksLikeSystemNote(sistemNoteVal)) {
+                        kullaniciVal = sistemNoteVal;
+                        sistemNoteVal = "";
+                    }
+
+                    if (!kullaniciVal) kullaniciVal = localUserName ?? "";
+
+                    const newRow = {
+                        gelir_gider: String(getCell('gelir_gider', row) ?? "Prim"),
+                        sefer_no: seferNo,
+                        tarih: formattedDate,
+                        plaka: plakaVal,
+                        treyler: treylerVal,
+                        surucu: String(getCell('surucu', row) ?? ""),
+                        yukleme_musteri: String(getCell('yukleme_musteri', row) ?? ""),
+                        fatura_musteri: String(getCell('fatura_musteri', row) ?? ""),
+                        bolge_palet_sayisi: bolgePaletRaw != null ? String(bolgePaletRaw) : "",
+                        odenen_tutar: odenenNum,
+                        palet_sayisi: paletRaw != null ? String(paletRaw) : "",
+                        donem: formatDonemCell(donemRaw),
+                        kullanici_adi: String(kullaniciVal ?? localUserName ?? ""),
+                        sistem_giris_yapildi: String(sistemNoteVal ?? "")
+                    };
+
+                    payloads.push(newRow);
+                }
+
+                if (payloads.length === 0) throw new Error("Excel'den içe aktarılacak geçerli veri bulunamadı.");
+
+                // Supabase insert
+                const { data: insertedData, error } = await supabase.from("hamaliye").insert(payloads).select();
+                if (error) throw error;
+
+                setRows((cur) => [...insertedData, ...cur]);
+                setActionErr(`${insertedData.length} kayıt başarıyla içeri aktarıldı!`);
+            } catch (err) {
+                console.error("Excel import error:", err);
+                setActionErr(`İçe aktarma hatası: ${err?.message ?? err}`);
+            } finally {
+                setImportLoading(false);
+                if (e.target) e.target.value = null;
+            }
+        };
+
+        reader.readAsArrayBuffer(file);
+    };
+
 
     // Seçilen Plaka/Treyler nesnesi (Autocomplete için)
     const selectedPlateObj =
@@ -419,8 +827,8 @@ export default function Hamaliye() {
                 background: (t) =>
                     t.palette.mode === "dark"
                         ? `radial-gradient(1200px 600px at 10% -10%, rgba(120,119,198,0.18), transparent 60%),
-                           radial-gradient(900px 500px at 100% 0%, rgba(56,189,248,0.12), transparent 60%),
-                           ${t.palette.background.default}`
+                             radial-gradient(900px 500px at 100% 0%, rgba(56,189,248,0.12), transparent 60%),
+                             ${t.palette.background.default}`
                         : "linear-gradient(180deg, #f0f4f9 0%, #ffffff 60%)",
             }}
         >
@@ -444,13 +852,31 @@ export default function Hamaliye() {
                         </Typography>
                     </Box>
                     <Stack direction="row" spacing={1.5}>
+                        {/* --- YENİ İÇERİ AKTAR BUTONU --- */}
+                        <Button
+                            component="label" // input'u tetiklemesi için
+                            variant="outlined"
+                            color="secondary"
+                            startIcon={importLoading ? <CircularProgress size={20} color="inherit" /> : <UploadFileIcon />}
+                            disabled={importLoading}
+                            sx={{ textTransform: 'none', fontWeight: 600 }}
+                        >
+                            Excel İçeri Aktar
+                            <input
+                                type="file"
+                                hidden
+                                accept=".xlsx, .xls" // Sadece Excel dosyaları
+                                onChange={handleFileUpload} // Dosya seçildiğinde tetikle
+                            />
+                        </Button>
+                        {/* --- DÜZELTİLMİŞ EXCEL DIŞA AKTAR BUTONU --- */}
                         <Button
                             variant="outlined"
                             startIcon={<DownloadIcon />}
-                            onClick={exportCSV}
+                            onClick={exportExcel}
                             sx={{ textTransform: 'none', fontWeight: 600 }}
                         >
-                            CSV Dışa Aktar
+                            Excel Dışa Aktar
                         </Button>
                         <Button
                             variant="contained"
@@ -466,7 +892,9 @@ export default function Hamaliye() {
 
                 {/* Hata Mesajları */}
                 {rowsErr && <Alert severity="error" sx={{ mb: 2, whiteSpace: "pre-wrap" }}>{rowsErr}</Alert>}
-                {actionErr && <Alert severity="error" sx={{ mb: 2, whiteSpace: "pre-wrap" }}>{actionErr}</Alert>}
+                {/* --- GÜNCELLENMİŞ HATA/BAŞARI MESAJI --- */}
+                {actionErr && <Alert severity={actionErr.includes("başarıyla") ? "success" : "error"} sx={{ mb: 2, whiteSpace: "pre-wrap" }}>{actionErr}</Alert>}
+
 
                 <Paper elevation={16} sx={{ borderRadius: 4, overflow: "hidden" }}>
 
@@ -678,8 +1106,8 @@ export default function Hamaliye() {
                                                 {...params}
                                                 label="Plaka - Treyler"
                                                 placeholder="Örn: 34ABC123"
-                                                error={!!errors.plaka || !!errors.treyler}
-                                                helperText={plateErr || errors.plaka || errors.treyler || "Seçince sürücü otomatik dolar"}
+                                                error={!!errors.plaka} // 'treyler' hatasını kaldırdık
+                                                helperText={plateErr || errors.plaka || "Seçince sürücü otomatik dolar"}
                                             />
                                         )}
                                     />

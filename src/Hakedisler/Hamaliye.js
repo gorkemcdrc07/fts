@@ -32,6 +32,7 @@ const COLUMNS = [
     { key: "treyler", label: "TREYLER", minWidth: 100 },
     { key: "tarih", label: "TARİH", minWidth: 100 },
     { key: "surucu", label: "SÜRÜCÜ", minWidth: 120 },
+    { key: "telefon_numarasi", label: "TELEFON NO", minWidth: 120 },
     { key: "yukleme_musteri", label: "YÜKLEME MÜŞTERİ", minWidth: 180 },
     { key: "fatura_musteri", label: "FATURA MÜŞTERİ", minWidth: 180 },
     { key: "bolge_palet_sayisi", label: "BÖLGE PALET", numeric: true, minWidth: 100 },
@@ -398,6 +399,7 @@ export default function Hamaliye() {
                 [COLUMNS[4].label]: r.treyler, // TREYLER
                 [COLUMNS[5].label]: r.tarih, // TARİH
                 [COLUMNS[6].label]: r.surucu, // SÜRÜCÜ
+                [COLUMNS[7].label]: r.telefon_numarasi, // TELEFON NO
                 [COLUMNS[7].label]: r.yukleme_musteri, // YÜKLEME MÜŞTERİ
                 [COLUMNS[8].label]: r.fatura_musteri, // FATURA MÜŞTERİ
                 [COLUMNS[9].label]: r.bolge_palet_sayisi ?? 0, // BÖLGE PALET (Sayı olarak)
@@ -488,6 +490,9 @@ export default function Hamaliye() {
     // ... (Dosyanın geri kalanı aynı)
 
     // --- handleFileUpload: tam, güncel (donem -> YYYY-MM dönüştürme dahil) ---
+    // Eğer henüz eklemediysen (Supabase SQL):
+    // ALTER TABLE hamaliye ADD COLUMN telefon_numarasi text;
+
     const handleFileUpload = async (e) => {
         const file = e.target?.files?.[0];
         if (!file) return;
@@ -504,6 +509,7 @@ export default function Hamaliye() {
             'TREYLER': 'treyler',
             'AD/SOYAD': 'surucu',
             'SÜRÜCÜ': 'surucu',
+            'TELEFON NUMARASI': 'telefon_numarasi', // <-- eklendi
             'YÜKLEME MÜŞTERİ': 'yukleme_musteri',
             'FATURA MÜŞTERİ': 'fatura_musteri',
             'BÖLGE VE PALET SAYISI': 'bolge_palet_sayisi',
@@ -555,9 +561,7 @@ export default function Hamaliye() {
         const formatDonemCell = (raw) => {
             if (!raw && raw !== 0) return "";
             let s = String(raw).trim();
-            // normalize dots and spaces
             s = s.replace(/\./g, '').replace(/\s+/g, ' ');
-            // month map (English short + Turkish variants)
             const monthMap = {
                 JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6,
                 JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12,
@@ -568,7 +572,6 @@ export default function Hamaliye() {
             const m = s.match(/^([A-Za-zÇĞİÖŞÜçğıöşü]{3,4})[-\s\/]?'?(\d{2,4})$/i);
             if (m) {
                 let mon = m[1].toUpperCase().replace(/\./g, '').replace('İ', 'I').replace('Ş', 'S').replace('Ğ', 'G').replace('Ç', 'C').replace('Ü', 'U').replace('Ö', 'O');
-                // also try to normalize Turkish uppercase with normalize if needed
                 mon = mon.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                 let yy = m[2];
                 if (yy.length === 2) yy = '20' + yy;
@@ -576,7 +579,6 @@ export default function Hamaliye() {
                 if (!monthNum) return s;
                 return `${yy}-${String(monthNum).padStart(2, '0')}`; // YYYY-MM
             }
-            // already like "2025/04" or "2025-04"
             if (/^\d{4}[-\/]\d{1,2}$/.test(s)) {
                 return s.replace('/', '-');
             }
@@ -649,7 +651,7 @@ export default function Hamaliye() {
                     'OEDENEN TUTAR': 'ÖDENEN TUTAR'
                 };
 
-                const optionalDbKeys = new Set(['surucu', 'kullanici_adi', 'sistem_giris_yapildi']);
+                const optionalDbKeys = new Set(['surucu', 'kullanici_adi', 'sistem_giris_yapildi', 'telefon_numarasi']);
                 const dbKeyToFileHeader = {};
 
                 for (const [rawHeader, dbKey] of Object.entries(HEADER_MAP)) {
@@ -760,6 +762,10 @@ export default function Hamaliye() {
 
                     if (!kullaniciVal) kullaniciVal = localUserName ?? "";
 
+                    // TELEFON NUMARASI
+                    const telefonRaw = getCell('telefon_numarasi', row);
+                    const telefonNormalized = telefonRaw != null ? String(telefonRaw).trim() : "";
+
                     const newRow = {
                         gelir_gider: String(getCell('gelir_gider', row) ?? "Prim"),
                         sefer_no: seferNo,
@@ -767,6 +773,7 @@ export default function Hamaliye() {
                         plaka: plakaVal,
                         treyler: treylerVal,
                         surucu: String(getCell('surucu', row) ?? ""),
+                        telefon_numarasi: telefonNormalized, // <-- eklendi
                         yukleme_musteri: String(getCell('yukleme_musteri', row) ?? ""),
                         fatura_musteri: String(getCell('fatura_musteri', row) ?? ""),
                         bolge_palet_sayisi: bolgePaletRaw != null ? String(bolgePaletRaw) : "",
@@ -799,6 +806,7 @@ export default function Hamaliye() {
 
         reader.readAsArrayBuffer(file);
     };
+
 
 
     // Seçilen Plaka/Treyler nesnesi (Autocomplete için)
@@ -1010,6 +1018,7 @@ export default function Hamaliye() {
                                         <TableCell sx={{ fontSize: 12 }}>{r.treyler || "—"}</TableCell>
                                         <TableCell sx={{ fontSize: 12, whiteSpace: 'nowrap' }}>{r.tarih}</TableCell>
                                         <TableCell sx={{ fontSize: 12 }}>{r.surucu}</TableCell>
+                                        <TableCell sx={{ fontSize: 12, whiteSpace: 'nowrap' }}>{r.telefon_numarasi || "—"}</TableCell>
                                         <TableCell sx={{ fontSize: 12 }}>{r.yukleme_musteri}</TableCell>
                                         <TableCell sx={{ fontSize: 12 }}>{r.fatura_musteri}</TableCell>
                                         <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>{r.bolge_palet_sayisi}</TableCell>

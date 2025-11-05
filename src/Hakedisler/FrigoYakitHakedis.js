@@ -735,7 +735,7 @@ const downloadSeferTemplate = async () => {
 };
 
 // =========================================================================================
-// MEVCUT EXCEL İNDİRME FONKSİYONU: SEFER HAKEDİŞ DETAYLARI
+// GÜNCELLENMİŞ EXCEL İNDİRME: SEFER HAKEDİŞ DETAYLARI (KÜSURAT DÜZELTMELİ)
 // =========================================================================================
 const downloadSeferHakedisleri = async (kmMap, seferRows, setSnackbar) => {
     if (!ExcelJS || !saveAs) {
@@ -748,37 +748,88 @@ const downloadSeferHakedisleri = async (kmMap, seferRows, setSnackbar) => {
     }
 
     try {
-        setSnackbar({ open: true, message: "Sefer Hakedişleri Excel'i hazırlanıyor...", severity: "info" });
+        setSnackbar({ open: true, message: "Sefer Hakedişleri Excel'i hazırlanıyor (Küsurat düzeltmeli)...", severity: "info" });
 
-        // 1. Maliyet/KM değerlerini plakaya göre hazırla (4 ondalık basamağa yuvarlanmış)
-        const maliyetPerKmMap = Object.entries(kmMap)
+        // ADIM 1: Plaka bazlı verileri (Toplam Hakediş, Yüksek Hassasiyetli Oran) hazırla
+        const plakaDataMap = Object.entries(kmMap)
             .filter(([, data]) => data.DUZELTME_MALIYETI !== undefined && data.DUZELTME_MALIYETI !== 0)
             .reduce((acc, [plaka, data]) => {
-                const maliyet = data.TOPLAM_KM_VE_LITRE_FARKI < 0 ? -data.DUZELTME_MALIYETI : data.DUZELTME_MALIYETI;
-                const toplamKm = data.SFR_KM + data.BOS_KM;
-                const maliyetPerKm = toplamKm > 0 ? roundToDecimal(maliyet / toplamKm, 4) : 0;
-                acc[plaka] = maliyetPerKm;
+
+                // Bu "gerçek" toplamdır (işaretli, örn: -8000 veya +8825.5860)
+                const toplamHakedis = data.TOPLAM_KM_VE_LITRE_FARKI < 0
+                    ? -(data.DUZELTME_MALIYETI || 0)
+                    : (data.DUZELTME_MALIYETI || 0);
+
+                const toplamKm = (data.SFR_KM || 0) + (data.BOS_KM || 0);
+
+                // Yüksek hassasiyetli oran (yuvarlama YOK)
+                const maliyetPerKm = toplamKm > 0 ? (toplamHakedis / toplamKm) : 0;
+
+                acc[plaka.toUpperCase()] = {
+                    toplamHakedis: toplamHakedis, // Dağıtılacak ana tutar
+                    maliyetPerKm: maliyetPerKm, // Yüksek hassasiyetli oran
+                    _distributedTotal: 0, // Dağıtılan tutarı takip et
+                };
                 return acc;
             }, {});
 
-        // 2. Her bir sefere maliyet/km değerini dağıt ve nihai listeyi oluştur
-        const dataForExcel = seferRows.map(row => {
+        // ADIM 2: Seferleri plakaya göre sırala (Son kuruş dağıtımı için gerekli)
+        const sortedSeferRows = [...seferRows].sort((a, b) => {
+            const plakaA = a.plaka?.toUpperCase() || 'ZZZ';
+            const plakaB = b.plaka?.toUpperCase() || 'ZZZ';
+            if (plakaA < plakaB) return -1;
+            if (plakaA > plakaB) return 1;
+            // Plakalar aynıysa, sefer_no'ya göre sırala (veya herhangi bir tutarlı sıralama)
+            return (a.sefer_no || '').localeCompare(b.sefer_no || '');
+        });
+
+        // ADIM 3: Her bir sefere maliyet/km değerini "Son Kuruş" mantığıyla dağıt
+        const dataForExcel = [];
+
+        for (let i = 0; i < sortedSeferRows.length; i++) {
+            const row = sortedSeferRows[i];
             const plaka = row.plaka?.toUpperCase();
+
+            // Bir sonraki satıra bak
+            const nextRow = sortedSeferRows[i + 1];
+            const nextPlaka = nextRow ? nextRow.plaka?.toUpperCase() : null;
+
+            // Eğer mevcut plaka bir sonraki plakadan farklıysa, bu, o plakanın son seferidir.
+            const isLastTripForPlaka = (plaka !== nextPlaka);
+
+            const plakaData = plakaDataMap[plaka];
             const km = row.toplam_km || 0;
-            const maliyetPerKm = maliyetPerKmMap[plaka] || 0;
 
-            // Hesaplama: Sefer Maliyeti = Toplam KM * (Maliyet / KM)
-            const seferMaliyeti = roundToDecimal(km * maliyetPerKm, 4);
+            let seferMaliyeti = 0;
 
-            return {
+            if (plakaData) {
+                // Bu plaka için SON SEFER ise...
+                if (isLastTripForPlaka) {
+                    // Kalanı hesapla: Toplam Tutar - Şimdiye kadar dağıtılan
+                    seferMaliyeti = plakaData.toplamHakedis - plakaData._distributedTotal;
+                    // Son kalanı da 4 haneye yuvarla (Excel'e temiz gitsin)
+                    seferMaliyeti = roundToDecimal(seferMaliyeti, 4);
+                }
+                // Son sefer DEĞİLSE...
+                else {
+                    // Normal hesaplama: Yüksek hassasiyetli oranı kullan ve SADECE SONUCU yuvarla
+                    seferMaliyeti = roundToDecimal(km * plakaData.maliyetPerKm, 4);
+
+                    // Dağıtılan toplamı güncelle
+                    plakaData._distributedTotal += seferMaliyeti;
+                }
+            }
+
+            dataForExcel.push({
                 sefer_no: row.sefer_no,
                 tms_despatch_id: row.tms_despatch_id,
                 plaka: row.plaka,
                 toplam_km: row.toplam_km,
-                sefer_hakedisi_tl: seferMaliyeti, // YENİ SÜTUN: SEFER HAKEDİŞİ
-            };
-        });
+                sefer_hakedisi_tl: seferMaliyeti, // YENİ HESAPLANAN DEĞER
+            });
+        }
 
+        // ADIM 4: Excel'i oluştur
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Sefer Hakediş Detayları');
 
@@ -788,12 +839,12 @@ const downloadSeferHakedisleri = async (kmMap, seferRows, setSnackbar) => {
             { header: 'TMS DESPATCH ID', key: 'tms_despatch_id', width: 18 },
             { header: 'PLAKA', key: 'plaka', width: 12 },
             { header: 'TOPLAM KM', key: 'toplam_km', width: 15, style: { numFmt: '0' } },
+            // ÖNEMLİ: Hakediş negatif (ceza) veya pozitif (prim) olabilir.
             { header: 'SEFER HAKEDİŞİ (TL)', key: 'sefer_hakedisi_tl', width: 25, style: { numFmt: '₺#,##0.0000;[Red]-₺#,##0.0000' } },
         ];
 
         // Veri satırlarını ekle
         worksheet.addRows(dataForExcel);
-
 
         // İndirme işlemi
         const buffer = await workbook.xlsx.writeBuffer();
@@ -806,9 +857,8 @@ const downloadSeferHakedisleri = async (kmMap, seferRows, setSnackbar) => {
         setSnackbar({ open: true, message: error.message || "Excel dosyası oluşturulurken hata oluştu.", severity: "error" });
     }
 };
-
 // =========================================================================================
-// YENİ EXCEL İNDİRME FONKSİYONU: ÖZET DATA
+// GÜNCELLENMİŞ EXCEL İNDİRME: ÖZET DATA (TUTARLILIK DÜZELTMELİ)
 // =========================================================================================
 const downloadOzetData = async (kmMap, yakitRows, setSnackbar) => {
     if (!ExcelJS || !saveAs) {
@@ -821,9 +871,9 @@ const downloadOzetData = async (kmMap, yakitRows, setSnackbar) => {
     }
 
     try {
-        setSnackbar({ open: true, message: "Özet Data Excel'i hazırlanıyor...", severity: "info" });
+        setSnackbar({ open: true, message: "Özet Data Excel'i hazırlanıyor (Tutarlılık düzeltmeli)...", severity: "info" });
 
-        // 1) plaka bazında cari + FİYATLARIN ORTALAMASI (frigo_yakit_tmp eşleniği: yakitRows)
+        // 1) plaka bazında cari + FİYATLARIN ORTALAMASI (Bu kısım aynı kalır, fiyatları göstermek için lazım)
         const yakitOzetMap = yakitRows.reduce((acc, row) => {
             const plaka = row.plaka?.toUpperCase();
             if (!plaka) return acc;
@@ -832,7 +882,6 @@ const downloadOzetData = async (kmMap, yakitRows, setSnackbar) => {
                 acc[plaka] = {
                     cari_id: row.cari_id ?? null,
                     cari_adi: row.cari_adi ?? null,
-                    // fiyat ortalamaları için birikim
                     _sum_birim: 0,
                     _sum_iskontosuz: 0,
                     _cnt: 0,
@@ -848,35 +897,44 @@ const downloadOzetData = async (kmMap, yakitRows, setSnackbar) => {
             return acc;
         }, {});
 
-        // 2) Ortalama fiyatları finalize et
+        // 2) Ortalama fiyatları finalize et (Bu da aynı kalır)
         Object.keys(yakitOzetMap).forEach(plaka => {
             const o = yakitOzetMap[plaka];
             const cnt = o._cnt || 0;
             o.birim_fiyat = cnt > 0 ? o._sum_birim / cnt : 0;
             o.iskontosuz_birim_fiyat = cnt > 0 ? o._sum_iskontosuz / cnt : 0;
-            // clean temp
             delete o._sum_birim; delete o._sum_iskontosuz; delete o._cnt;
         });
 
-        // 3) Nihai veriyi oluştur (yeni sütunlar: birim_fiyat, iskontosuz_birim_fiyat, hakedis_tutar)
+        // 3) Nihai veriyi oluştur (DEĞİŞİKLİK BURADA)
         const dataForExcel = Object.entries(kmMap).map(([plaka, kmData]) => {
             const yakitOzet = yakitOzetMap[plaka] || {};
             const tahminiTuketimLitre = kmData.TOPLAM_TUKETIM || 0;
             const gercekYakitLitre = kmData.TOPLAM_YAKIT_LITRESI || 0;
             const yakitFarkLitre = kmData.TOPLAM_KM_VE_LITRE_FARKI || 0;
 
+            // Fiyatları sadece raporlama için alıyoruz, hesaplama için değil
             const birimFiyat = Number(yakitOzet.birim_fiyat) || 0;
             const iskontosuzBirimFiyat = Number(yakitOzet.iskontosuz_birim_fiyat) || 0;
 
-            // HAKEDİŞ TUTAR mantığı:
-            // fark < 0 => abs(fark) * iskontosuz_birim_fiyat
-            // fark > 0 => fark * birim_fiyat
+            // === DEĞİŞİKLİK BAŞLANGIÇ ===
+            // ESKİ HESAPLAMA (SİLİNDİ):
+            /*
             let hakedisTutar = 0;
             if (yakitFarkLitre < 0) {
                 hakedisTutar = Math.abs(yakitFarkLitre) * iskontosuzBirimFiyat;
             } else if (yakitFarkLitre > 0) {
                 hakedisTutar = yakitFarkLitre * birimFiyat;
             }
+            */
+
+            // YENİ: HAKEDİŞ TUTARI DOĞRUDAN ANA HESAPLAMADAN (kmMap) ALINIR.
+            // Ana hesaplama (handleHakedisStart) DUZELTME_MALIYETI'ni hep pozitif kaydeder.
+            // Bu raporun mantığı da (aşağıdaki stil bloğuna bakın) pozitif tutar
+            // ve yakit_fark_litre'ye göre renklendirme üzerine kuruludur.
+            const hakedisTutar = kmData.DUZELTME_MALIYETI || 0;
+
+            // === DEĞİŞİKLİK SONU ===
 
             return {
                 plaka: plaka,
@@ -885,10 +943,9 @@ const downloadOzetData = async (kmMap, yakitRows, setSnackbar) => {
                 hakedis_litresi: tahminiTuketimLitre,
                 yakit_alim_litresi: gercekYakitLitre,
                 yakit_fark_litre: yakitFarkLitre,
-                // YENİ SÜTUNLAR
                 birim_fiyat: birimFiyat,
                 iskontosuz_birim_fiyat: iskontosuzBirimFiyat,
-                hakedis_tutar: hakedisTutar,
+                hakedis_tutar: hakedisTutar, // Artık bu değer, kmMap'teki ile %100 aynı
             };
         }).filter(d =>
             d.hakedis_litresi !== 0 ||
@@ -900,9 +957,7 @@ const downloadOzetData = async (kmMap, yakitRows, setSnackbar) => {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Özet Plaka Analiz');
 
-        // 4) Başlıklar (3 yeni sütun eklendi)
-        // ... (downloadOzetData içinde üst kısım aynı)
-
+        // 4) Başlıklar (Aynı)
         worksheet.columns = [
             { header: 'PLAKA', key: 'plaka', width: 12 },
             { header: 'CARİ İD', key: 'cari_id', width: 10 },
@@ -912,23 +967,26 @@ const downloadOzetData = async (kmMap, yakitRows, setSnackbar) => {
             { header: 'YAKIT FARK LİTRE', key: 'yakit_fark_litre', width: 20, style: { numFmt: '0.0000;[Red]-0.0000' } },
             { header: 'BİRİM FİYAT', key: 'birim_fiyat', width: 16, style: { numFmt: '₺#,##0.0000' } },
             { header: 'İSKONTOSUZ BİRİM FİYAT', key: 'iskontosuz_birim_fiyat', width: 24, style: { numFmt: '₺#,##0.0000' } },
-            { header: 'HAKEDİŞ TUTAR (TL)', key: 'hakedis_tutar', width: 22, style: { numFmt: '₺#,##0.0000;[Red]-₺#,##0.0000' } },
+            // ÖNEMLİ: hakedis_tutar'ın negatif (ceza) veya pozitif (prim) olması
+            // 'yakit_fark_litre' sütununa bağlıdır. 
+            // numFmt'deki [Red] stilini aşağıdaki kod bloğu geçersiz kılar,
+            // ama aşağıdaki blok daha doğru bir renklendirme yapar.
+            { header: 'HAKEDİŞ TUTAR (TL)', key: 'hakedis_tutar', width: 22, style: { numFmt: '₺#,##0.0000' } },
         ];
 
         worksheet.addRows(dataForExcel);
 
-        /* === YENİ EKLENEN BLOK: fark negatifse HAKEDİŞ TUTAR hücresini kırmızı boya === */
+        // STİL BLOKU (Aynı - Fark negatifse Hakediş Tutar'ı kırmızı yap)
         {
-            const farkColIndex = worksheet.getColumn('yakit_fark_litre').number; // key: yakit_fark_litre
-            const tutarColIndex = worksheet.getColumn('hakedis_tutar').number;    // key: hakedis_tutar
+            const farkColIndex = worksheet.getColumn('yakit_fark_litre').number;
+            const tutarColIndex = worksheet.getColumn('hakedis_tutar').number;
 
             worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-                if (rowNumber === 1) return; // başlık satırını atla
+                if (rowNumber === 1) return;
 
                 const farkCell = row.getCell(farkColIndex);
                 const tutarCell = row.getCell(tutarColIndex);
 
-                // Formül olasılığına karşı güvenli okuma
                 const raw = farkCell.value;
                 const farkValue =
                     (raw && typeof raw === 'object' && raw.result != null)
@@ -936,14 +994,16 @@ const downloadOzetData = async (kmMap, yakitRows, setSnackbar) => {
                         : Number(raw);
 
                 if (Number.isFinite(farkValue) && farkValue < 0) {
-                    // fark kırmızı ise HAKEDİŞ TUTAR'ı da kırmızı yap
+                    // fark < 0 (Ceza durumu), HAKEDİŞ TUTAR'ı kırmızı yap
                     tutarCell.font = { ...(tutarCell.font || {}), color: { argb: 'FFFF0000' } };
-                    // (opsiyonel) hafif kırmızı arka plan
-                    // tutarCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE5E5' } };
+
+                    // Not: Bu durumda tutar pozitif gösterilir (örn: 500 TL ceza)
+                    // Eğer tutarın da negatif görünmesini isterseniz (örn: -500 TL)
+                    // 'dataForExcel' kısmında hakedisTutar'ı işaretli yapmanız gerekir.
+                    // Mevcut mantığınız (renk + pozitif rakam) devam ettirilmiştir.
                 }
             });
         }
-        /* === EK BLOK SONU === */
 
         const buffer = await workbook.xlsx.writeBuffer();
         saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'ozet_plaka_analiz.xlsx');

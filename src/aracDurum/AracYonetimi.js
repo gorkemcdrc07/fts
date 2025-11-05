@@ -1,5 +1,5 @@
 // src/pages/AracYonetimiMUI.jsx
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
@@ -157,18 +157,41 @@ function useScaleToFit(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = MAX_S
     }, [baseW, baseH, maxScale]);
     return scale;
 }
+/* ===================== Ölçekleme: Zoom'dan Bağımsız (GÜNCELLENDİ) ===================== */
+function useContainerScale(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = MAX_SCALE) {
+    const ref = useRef(null);
+    const [scale, setScale] = useState(1);
+
+    useLayoutEffect(() => { // 👈 Bu yüzden 1. adımda import ettik
+        const el = ref.current;
+        if (!el) return;
+        const ro = new ResizeObserver((entries) => {
+            const cr = entries[0].contentRect;
+            const availW = Math.max(0, cr.width);
+            const availH = Math.max(0, cr.height);
+            const s = Math.min(availW / baseW, availH / baseH, maxScale);
+            setScale(Number.isFinite(s) && s > 0 ? s : 1);
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [baseW, baseH, maxScale]);
+
+    return [ref, scale]; // 👈 Dizi döndürür: [ref, scale]
+}
 
 function ScaleToFit({ children }) {
-    const scale = useScaleToFit();
+    const [ref, scale] = useContainerScale(); // 👈 DEĞİŞTİ (useScaleToFit yerine)
 
     return (
         <Box
+            ref={ref} // 👈 EKLENDİ (Ref'i buraya bağlıyoruz)
             sx={{
                 width: "100dvw",
                 height: "100dvh",
                 overflow: "hidden",
                 display: "grid",
-                placeItems: "center",
+                justifyItems: "start", // 👈 Önceki adımdaki düzeltme
+                alignItems: "start",  // 👈 Önceki adımdaki düzeltme
                 background: GRADIENT_BG,
             }}
         >
@@ -187,9 +210,7 @@ function ScaleToFit({ children }) {
             </Box>
         </Box>
     );
-}
-
-/* ===================== Util Fonksiyonlar ===================== */
+}/* ===================== Util Fonksiyonlar ===================== */
 const BOS_FORM = {
     plaka: "",
     treyler: "",

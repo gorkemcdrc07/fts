@@ -53,6 +53,7 @@ import {
     Tune as TuneIcon,
     HomeOutlined as HomeIcon,
     ArrowBackIosNew as ArrowBackIcon,
+    UploadFile as UploadFileIcon, // 👈 EKLENDİ
 } from "@mui/icons-material";
 
 // 🛑 ESKİ XLSX IMPORT'U KALDIRILDI. YERİNE EXCELJS EKLENDİ.
@@ -144,6 +145,10 @@ export default function AracCariVeFiyat() {
     });
     const [addError, setAddError] = useState(null);
     const [adding, setAdding] = useState(false);
+
+    // 👇 YENİ EKLENEN STATE VE REF
+    const [isMatchingDays, setIsMatchingDays] = useState(false);
+    const fileInputRef = useRef(null);
 
     // Filtreler
     const [filters, setFilters] = useState({
@@ -600,6 +605,119 @@ export default function AracCariVeFiyat() {
         saveAs(blob, `arac_cari_fiyat_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
+
+    // 👇 =======================================================
+    // 👇 ================= YENİ GÜN EŞLEME BÖLÜMÜ ================
+    // 👇 =======================================================
+
+    const handleFileChange = (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            processExcelAndUpdate(file);
+        }
+        // Aynı dosyayı tekrar seçebilmek için inputu sıfırla
+        if (fileInputRef.current) {
+            fileInputRef.current.value = null;
+        }
+    };
+
+    const processExcelAndUpdate = async (file) => {
+        setIsMatchingDays(true);
+        try {
+            const workbook = new ExcelJS.Workbook();
+            const reader = new FileReader();
+
+            reader.readAsArrayBuffer(file);
+            reader.onload = async () => {
+                try {
+                    await workbook.xlsx.load(reader.result);
+                    const worksheet = workbook.worksheets[0]; // İlk çalışma sayfasını al
+
+                    // 1. Başlıkları bul (Plaka ve Gün)
+                    let plakaCol = -1;
+                    let gunCol = -1;
+                    const headerRow = worksheet.getRow(1);
+                    headerRow.eachCell((cell, colNumber) => {
+                        const val = cell.value?.toString().toLowerCase().trim();
+                        if (val === 'plaka') plakaCol = colNumber;
+                        if (val === 'gün') gunCol = colNumber;
+                    });
+
+                    if (plakaCol === -1 || gunCol === -1) {
+                        throw new Error("Excel dosyasında 'plaka' ve 'gün' başlıkları bulunamadı. Lütfen başlıkların tam olarak bu şekilde yazıldığından emin olun.");
+                    }
+
+                    // 2. Verileri topla
+                    const dataToUpdate = [];
+                    worksheet.eachRow((row, rowNumber) => {
+                        if (rowNumber > 1) { // Başlık satırını atla
+                            const plaka = row.getCell(plakaCol).value?.toString().trim();
+                            const gunValue = row.getCell(gunCol).value;
+
+                            // Gün değeri null veya sayı değilse atla, ama 0 geçerli bir değerdir.
+                            const calisma_gunu = (gunValue === null || gunValue === undefined || isNaN(Number(gunValue))) ? null : Number(gunValue);
+
+                            if (plaka && calisma_gunu !== null) {
+                                dataToUpdate.push({ plaka, calisma_gunu });
+                            }
+                        }
+                    });
+
+                    if (dataToUpdate.length === 0) {
+                        throw new Error("Excel'den güncellenecek geçerli veri (plaka ve sayısal gün) bulunamadı.");
+                    }
+
+                    // 3. Supabase güncelleme işlemleri
+                    let successfulUpdates = 0;
+                    let errorCount = 0;
+                    const user = localStorage.getItem("kullanici") || "Admin";
+                    const timestamp = new Date().toISOString();
+
+                    // Her bir plaka için veritabanını güncelle
+                    // Bu işlem plaka başına ÇOKLU kayıtları güncelleyecektir (eğer varsa)
+                    for (const item of dataToUpdate) {
+                        const { error } = await supabase
+                            .from("arac_cari_ve_fiyat")
+                            .update({
+                                calisma_gunu: item.calisma_gunu,
+                                duzenleme_yapan_kullanici: user,
+                                duzenleme_yapilan_tarih: timestamp,
+                            })
+                            .eq("plaka", item.plaka); // Plakaya göre eşle
+
+                        if (error) {
+                            console.error(`Hata [${item.plaka}]:`, error.message);
+                            errorCount++;
+                        } else {
+                            successfulUpdates++;
+                        }
+                    }
+
+                    alert(`Eşleştirme tamamlandı!\n${successfulUpdates} plaka için güncelleme denendi.\n${errorCount} plaka güncellenirken hata oluştu (Detaylar için konsolu kontrol edin).`);
+
+                    await refetch(); // Tabloyu yenile
+
+                } catch (e) {
+                    console.error("Excel okuma/işleme hatası:", e);
+                    alert("Hata: " + e.message);
+                } finally {
+                    setIsMatchingDays(false);
+                }
+            };
+
+            reader.onerror = () => {
+                alert('Dosya okunurken bir hata oluştu.');
+                setIsMatchingDays(false);
+            }
+
+        } catch (e) {
+            console.error("Dosya seçme hatası:", e);
+            alert("Dosya seçilirken bir hata oluştu: " + e.message);
+            setIsMatchingDays(false);
+        }
+    };
+
+
     /* ---------------------------------------------------- */
     /* ----------------- YENİLENEN UI BÖLÜMÜ ----------------- */
     /* ---------------------------------------------------- */
@@ -704,6 +822,38 @@ export default function AracCariVeFiyat() {
                 Excel
             </Button>
 
+            {/* 👇 GÜNCELLENMİŞ GÜN EŞLEME BUTONU (YETKİ KONTROLLÜ) */}
+            <Tooltip
+                title={
+                    permLoading ? "Yetkiler yükleniyor..." :
+                        !perms.fields.calisma_gunu ? "'Çalışma Günü' alanını düzenleme yetkiniz yok." :
+                            "Plaka/Gün Excel'i ile toplu çalışma günü güncelle."
+                }
+            >
+                <span>
+                    <Button
+                        variant="contained"
+                        color="warning"
+                        startIcon={isMatchingDays ? <CircularProgress size={16} color="inherit" /> : <UploadFileIcon />}
+                        onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                        size="small"
+                        // 👇 Yetki kontrolü eklendi
+                        disabled={isMatchingDays || loading || permLoading || !perms.fields.calisma_gunu}
+                        sx={{ textTransform: 'none', fontWeight: 600 }}
+                    >
+                        {isMatchingDays ? "İşleniyor..." : "Günleri Eşle"}
+                    </Button>
+                </span>
+            </Tooltip>            {/* Gizli dosya inputu */}
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept=".xlsx, .xls"
+                style={{ display: 'none' }}
+            />
+            {/* 👆 YENİ EKLENENLER BİTİŞİ */}
+
             <Tooltip title={perms.canCreate ? "" : "Yeni kayıt ekleme yetkiniz yok"}>
                 <span>
                     <Button
@@ -779,8 +929,8 @@ export default function AracCariVeFiyat() {
                 background: (t) =>
                     t.palette.mode === "dark"
                         ? `radial-gradient(1200px 600px at 10% -10%, rgba(120,119,198,0.18), transparent 60%),
-                            radial-gradient(900px 500px at 100% 0%, rgba(56,189,248,0.12), transparent 60%),
-                            ${t.palette.background.default}`
+                                radial-gradient(900px 500px at 100% 0%, rgba(56,189,248,0.12), transparent 60%),
+                                ${t.palette.background.default}`
                         : "linear-gradient(180deg, #f0f4f9 0%, #ffffff 60%)",
             }}
         >

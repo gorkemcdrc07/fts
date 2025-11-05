@@ -292,20 +292,49 @@ const hesaplaGun = (start, end) => {
     return fark >= 0 ? fark + 1 : 0; // Başlangıç ve bitiş dahil
 };
 
+// SADECE BU YENİ BLOK KALMALI:
 const safeDateValueGetter = (arg) => {
     const v = arg?.value ?? arg;
     if (!v) return null;
+
+    // Yalnızca YYYY-MM-DD kısmını al
     const s = String(v).slice(0, 10);
-    const d = dayjs(s);
-    return d.isValid() ? d.toDate() : null;
+
+    // Tarihi "-" ile ayır
+    const parts = s.split('-');
+
+    // Eğer format YYYY-MM-DD değilse (örn: bozuk veri), null dön
+    if (parts.length !== 3 || isNaN(parseInt(parts[0])) || isNaN(parseInt(parts[1])) || isNaN(parseInt(parts[2]))) {
+        // Veya eski dayjs metodunu fallback olarak kullanabilirsiniz
+        const d = dayjs(s);
+        return d.isValid() ? d.toDate() : null;
+    }
+
+    // Date.UTC(yıl, ayIndeksi (0-11), gün)
+    // Bu, tarihi YEREL SAATİNİZDE değil, doğrudan UTC 00:00:00 olarak oluşturur.
+    const utcDate = new Date(Date.UTC(
+        parseInt(parts[0], 10),
+        parseInt(parts[1], 10) - 1, // JavaScript'te aylar 0'dan başlar (Ocak=0)
+        parseInt(parts[2], 10)
+    ));
+
+    // Geçerlilik kontrolü
+    if (isNaN(utcDate.getTime())) {
+        return null;
+    }
+
+    // Artık bu Date nesnesi 2025-11-05T00:00:00Z'yi temsil ediyor.
+    // Excel bunu doğru (5 Kasım) olarak okuyacaktır.
+    return utcDate;
 };
+
+// 👇 EKLENMESİ GEREKEN EKSİK FONKSİYON:
 const safeDateValueFormatter = (arg) => {
     const v = arg?.value ?? arg;
     if (!v) return "-";
     const d = dayjs(v);
     return d.isValid() ? d.format("DD.MM.YYYY") : "-";
 };
-
 /* ===================== Toolbar ===================== */
 function CustomToolbar({ onFilters, onExport, onRefresh }) {
     return (

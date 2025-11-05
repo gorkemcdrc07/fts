@@ -72,6 +72,7 @@ const PERM_KEYS_BY_SCREEN = {
         { key: "acf_create", label: "Yeni Kayıt Oluştur" },
         { key: "acf_edit", label: "Kayıt Düzenle (Genel)" },
         { key: "acf_delete", label: "Kayıt Sil" },
+        { key: "acf_gun_esle", label: "Toplu Gün Eşle (Excel)" },
 
         // Alan-bazlı düzenleme yetkileri:
         { key: "acf_edit_cari_id", label: "Cari ID Düzenle" },
@@ -120,6 +121,7 @@ const USER_PERMISSIONS_COLUMNS = new Set([
 
     // Araç & Cari Fiyat
     "acf_create", "acf_edit", "acf_delete",
+    "acf_gun_esle", // 👈 EKSİK SATIR BURAYA EKLENDİ
     "acf_edit_cari_id",
     "acf_edit_cari_adi",
     "acf_edit_arac_sahibi",
@@ -128,6 +130,7 @@ const USER_PERMISSIONS_COLUMNS = new Set([
     "acf_edit_aylik_surucu",
     "acf_edit_calisma_gunu",
     "acf_edit_pasif",
+
 
     // Hakediş
     "hks_upload",

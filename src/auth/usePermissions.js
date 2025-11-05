@@ -22,6 +22,7 @@ const MAP_BY_SCREEN = {
     tedarikci_masraf: ["tdm_create", "tdm_edit", "tdm_delete", "tdm_may_open_edit"],
     arac_cari_fiyat: [
         "acf_create", "acf_edit", "acf_delete",
+        "acf_gun_esle", // 👈 EKLENDİ
         // alan-bazlı edit anahtarları:
         "acf_edit_cari_id",
         "acf_edit_cari_adi",
@@ -65,6 +66,7 @@ const CANDIDATES = {
     create: ["izin_create", "ayon_create", "adur_create", "kes_create", "tdm_create", "acf_create", "hks_upload"],
     edit: [
         "izin_edit", "ayon_edit", "adur_edit", "kes_edit", "tdm_edit", "acf_edit",
+        "acf_gun_esle", // 👈 EKLENDİ
         // arac_cari_fiyat alan-bazlı edit anahtarları da genel canEdit hesabına girsin:
         "acf_edit_cari_id",
         "acf_edit_cari_adi",
@@ -91,11 +93,11 @@ const CANDIDATES = {
 /**
  * usePermissions(screenKey)
  * {
- *   loading: boolean,
- *   canCreate: boolean,
- *   canEdit: boolean,
- *   canDelete: boolean,
- *   flags: { [permKey:boolean] }
+ * loading: boolean,
+ * canCreate: boolean,
+ * canEdit: boolean,
+ * canDelete: boolean,
+ * flags: { [permKey:boolean] }
  * }
  */
 export default function usePermissions(screenKey) {

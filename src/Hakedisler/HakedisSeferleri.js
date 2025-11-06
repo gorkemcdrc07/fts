@@ -33,6 +33,7 @@ import {
     Send as SendIcon,
     DeleteForever as DeleteForeverIcon,
 } from "@mui/icons-material";
+import * as XLSX from "xlsx";
 
 // 🛑 ESKİ XLSX IMPORT'U KALDIRILDI.
 // EXCELJS, OKUMA İŞLEMLERİNDE XLSX KADAR KOLAY DEĞİLDİR. Şimdilik sadece export için kullanacağız.
@@ -529,8 +530,7 @@ export default function HakedisSeferleri({ onFileReady }) {
             // xlsx'i tekrar kurmaktır. Şu anki durumda, derleyici 'xlsx' paketini
             // import etmeye çalıştığı için hata veriyor, bu yüzden bu kodu koruyup
             // import'u atlatmamız gerekiyor.
-            const mod = window.XLSX; // Eğer globalde mevcutsa kullan, yoksa hata verecek.
-            if (!mod) throw new Error("Dosya okuma kütüphanesi (XLSX) bulunamadı. Lütfen kütüphaneyi kurun.");
+            const mod = XLSX; // Doğrudan import edilen modülü kullan            if (!mod) throw new Error("Dosya okuma kütüphanesi (XLSX) bulunamadı. Lütfen kütüphaneyi kurun.");
 
             const isCsv = file.name.toLowerCase().endsWith(".csv");
 

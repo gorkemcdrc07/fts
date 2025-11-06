@@ -3,7 +3,6 @@ import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 
-
 /* MUI */
 import {
     Box,
@@ -59,26 +58,23 @@ import {
     normalizeISO,
 } from "./utils/datetime";
 import { formatPhone, ellipsize } from "./utils/format";
-import {
-    AVG_SPEED_KMPH,
-    parseMesafeKm,
-    ETA_STATUS,
-    ETA_MESSAGES,
-} from "./utils/eta";
+// ETA ile ilgili import'lar kaldırıldı
 import {
     fetchSeferler,
     fetchTamamlananNos,
     loadDetaylar,
     updateSefer,
     upsertDetaylar,
-    fetchMesafe,
+    // fetchMesafe kaldırıldı
 } from "./services";
 
 import usePermissions from "../auth/usePermissions";
 
+// YENİ EKLENDİ (Blok 1/4) - Diyalog Importları
 /* Diyaloglar */
 const EditorDialog = lazy(() => import("./dialogs/EditorDialog"));
-// const EtaDialog = lazy(() => import("./dialogs/EtaDialog")); // Artık render edilmiyor
+const ETAEditor = lazy(() => import("./dialogs/ETAEditor"));
+
 
 /* küçük inputlar */
 function DateTimeOneField(props) {
@@ -213,8 +209,8 @@ export default function ReelAtananSeferler() {
     const rawCanDelete = (
         aktif_can_delete ??
         aktif_seferler_can_delete ??
-        aktif_can_edit ??              // ← fallback: edit varsa delete de olsun (istiyorsan kaldırabilirsin)
-        aktif_seferler_can_edit ??     // ← fallback
+        aktif_can_edit ??
+        aktif_seferler_can_edit ??
         false
     );
 
@@ -229,7 +225,6 @@ export default function ReelAtananSeferler() {
         rawCanDelete, canDelete, isAdminBypass
     });
 
-
     // (isteğe bağlı) görünür debug
     useEffect(() => {
         console.debug("[perms]", {
@@ -242,13 +237,6 @@ export default function ReelAtananSeferler() {
         });
         window.__perms = { flags, isAdminBypass, canSync, canEdit, mayOpenEdit, canDelete };
     }, [flags, isAdminBypass, canSync, canEdit, mayOpenEdit, canDelete]);
-
-
-    // (isteğe bağlı) debug
-    // console.debug("[perms]", { flags, isAdminBypass, canSync, canEdit, mayOpenEdit, canDelete });
-    // ETA Kontrollerini UI'da kapatıyoruz (Arka plan odaklı çözüm)
-    const canETA = false;
-    const mayOpenETA = false;
 
     /* data */
     const [rows, setRows] = useState([]);
@@ -294,33 +282,18 @@ export default function ReelAtananSeferler() {
     const [editOpen, setEditOpen] = useState(false);
     const [editSefer, setEditSefer] = useState(null);
     const [detailRows, setDetailRows] = useState([]);
-    // detailRowsOrig: Orijinal değerleri tutar
     const [detailRowsOrig, setDetailRowsOrig] = useState([]);
     const [seferTarihiYeni, setSeferTarihiYeni] = useState("");
 
-    // ETA dialog state (Kullanım dışı bırakılan state'ler)
-    const [etaOpen, setEtaOpen] = useState(false);
-    const [etaRow, setEtaRow] = useState(null);
-    const [etaDetails, setEtaDetails] = useState([]);
-    const [etaDistanceKm, setEtaDistanceKm] = useState(null);
-    const [distanceInput, setDistanceInput] = useState(""); // Manuel mesafe
+    // YENİ EKLENDİ (Blok 2/4) - ETA Diyalog State'leri
+    const [etaEditorOpen, setEtaEditorOpen] = useState(false);
+    const [etaSefer, setEtaSefer] = useState(null);
 
-    // “Anlık ETA uymayan” kilidi
-    const [etaLocked, setEtaLocked] = useState(false);
-
-    /* === GECİKME SEBEBİ DİYALOĞU === */
-    const [reasonOpen, setReasonOpen] = useState(false);
-    const [reasonRow, setReasonRow] = useState(null);
-    const [reasonCat, setReasonCat] = useState("");
-    const [reasonNote, setReasonNote] = useState("");
-
-    /* === AÇIKLAMA ROZETİ İÇİN set === */
-    const [reasonNos, setReasonNos] = useState(() => new Set());
 
     const addLog = (entry) => {
         try {
             const all = JSON.parse(localStorage.getItem("aktifseferler.logs") || "[]");
-            const user = localStorage.getItem("kullanici") || "-"; // log için eski anahtar kullanılmaya devam
+            const user = localStorage.getItem("kullanici") || "-";
             all.unshift({ ts: new Date().toISOString(), user, ...entry });
             localStorage.setItem("aktifseferler.logs", JSON.stringify(all.slice(0, 200)));
             setViewBump(String(Date.now()));
@@ -368,13 +341,6 @@ export default function ReelAtananSeferler() {
         return `${h} saat ${r} dk`;
     };
 
-    const isAnlikEtaUyumsuz = (row) => {
-        const v = (row?.reel_durum || "")
-            .normalize("NFKC")
-            .toLocaleUpperCase("tr-TR");
-        return v.includes("ANLIK") && v.includes("ETA") && (v.includes("UYM") || v.includes("UYMUYOR") || v.includes("UYUMSUZ"));
-    };
-
     const getSeferIdByNo = async (row) => {
         let id = row?.id ?? null;
         if (!id && row?.sefer_no) {
@@ -382,17 +348,6 @@ export default function ReelAtananSeferler() {
             id = s?.id ?? null;
         }
         return id != null ? String(id) : null;
-    };
-
-    const getFirstLegStartISO = (arr = []) => normalizeISO(arr[0]?.yukleme_cikis) || null;
-
-    const pickFirstLegOD = (row, detay = []) => {
-        const first = (arr) => (arr.length ? arr[0] : "");
-        const yIl = first(splitCell(row.yukleme_ili || "")) || first(splitCell(detay[0]?.yukleme_ili || ""));
-        const yIlce = first(splitCell(row.yukleme_ilcesi || "")) || first(splitCell(detay[0]?.yukleme_ilcesi || ""));
-        const tIl = first(splitCell(row.teslim_ili || "")) || first(splitCell(detay[0]?.teslim_ili || ""));
-        const tIlce = first(splitCell(row.teslim_ilcesi || "")) || first(splitCell(detay[0]?.teslim_ilcesi || ""));
-        return { yIl, yIlce, tIl, tIlce };
     };
 
     /* listele */
@@ -425,30 +380,6 @@ export default function ReelAtananSeferler() {
     useEffect(() => {
         listData();
     }, [listData]);
-
-    /* Bu tarih aralığında açıklama girilmiş seferleri getir → rozet için */
-    const refreshReasonNos = useCallback(async () => {
-        try {
-            const rangeMin = `${startDate || ""}T00:00:00`;
-            const rangeMax = `${endDate || ""}T23:59:59`;
-            const { data, error } = await supabase
-                .from("eta_gecikme_nedenleri")
-                .select("sefer_no,kayit_zamani")
-                .gte("kayit_zamani", rangeMin)
-                .lte("kayit_zamani", rangeMax);
-
-            if (error) throw error;
-            const set = new Set((data || []).map((d) => (d?.sefer_no || "").toString().trim()).filter(Boolean));
-            setReasonNos(set);
-        } catch (e) {
-            console.warn("refreshReasonNos error:", e?.message || e);
-            setReasonNos(new Set());
-        }
-    }, [startDate, endDate]);
-
-    useEffect(() => {
-        refreshReasonNos();
-    }, [refreshReasonNos, rows.length]);
 
     const filtered = useMemo(() => {
         let r = [...rows].filter((x) => (x.reel_durum || "") !== "EŞLEŞME YOK");
@@ -503,7 +434,6 @@ export default function ReelAtananSeferler() {
                 yukleme_cikis: "",
                 teslim_varis: "",
                 teslim_cikis: "",
-                // Yeni kolonlar başlangıçta boş
                 yukleme_varis_guncelleyen: "",
                 yukleme_varis_guncelleme_tarihi: "",
                 yukleme_cikis_guncelleyen: "",
@@ -535,7 +465,7 @@ export default function ReelAtananSeferler() {
         setDetailRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
     }, []);
 
-    // GÜNCELLENMİŞ saveDetails: ARKA PLAN TETİKLEYİCİSİ EKLENDİ
+    // saveDetails: Arka plan ETA tetikleyicisi kaldırıldı
     const saveDetails = useCallback(async () => {
         if (!editSefer) return false;
         setSaving(true);
@@ -603,52 +533,7 @@ export default function ReelAtananSeferler() {
             setDetailRows(successfullyUpdatedRows);
             setDetailRowsOrig(successfullyUpdatedRows);
 
-            try {
-                // ETA Durum Kontrolü ve Arka Plan Tetiklemesi
-                const firstStart = getFirstLegStartISO(successfullyUpdatedRows);
-                if (editSefer?.id) {
-                    const { yIl, yIlce, tIl, tIlce } = pickFirstLegOD(editSefer || {}, successfullyUpdatedRows);
-
-                    // Sadece mesafe sorgusu yapılır (caching için)
-                    const mesafeRaw = await fetchMesafe({ yIl, yIlce, tIl, tIlce });
-                    const km = parseMesafeKm(mesafeRaw);
-                    const hasKm = km && km > 0;
-                    const hasYC = Boolean(firstStart);
-
-                    const shouldTriggerBackend = hasKm && hasYC; // BU MANTIĞIN TRUE OLMASI GEREKİR
-
-                    let newNote = null;
-                    if (!hasYC) {
-                        newNote = ETA_MESSAGES[ETA_STATUS.WAITING_FIRST_YC];
-                    } else if (!hasKm) {
-                        newNote = ETA_MESSAGES[ETA_STATUS.NEED_DISTANCE];
-                    }
-
-                    // 🔥 KRİTİK DÜZELTME YERİ
-                    // YENİ NOT: Sizin kodunuzdaki bu kısım zaten doğru görünüyordu,
-                    // ancak bir önceki dağıtımda kodun doğru çalışmasını garanti edelim:
-                    await updateSefer(editSefer.id, {
-                        mesafe: km,
-                        eta_varis: null,
-                        eta_note: newNote,
-                        eta_gerekli_mi: shouldTriggerBackend, // 🔥 BU DEĞER ARTIK KESİNLİKLE TRUE OLMALI
-                        kayit_zamani: new Date().toISOString(),
-                    });
-
-                    // Frontend listesini güncelle
-                    setRows((prev) =>
-                        prev.map((r) =>
-                            r.id === editSefer.id ? { ...r, mesafe: km, eta_varis: null, eta_note: newNote, eta_gerekli_mi: shouldTriggerBackend } : r
-                        )
-                    );
-                }
-            } catch (e) {
-                console.error("Detay kaydetme sonrası ETA durum güncelleme hatası:", e);
-                // Hata durumunda bile bayrağı TRUE olarak güncellemeye zorlamak için (opsiyonel ama güvenli)
-                await updateSefer(editSefer.id, { eta_gerekli_mi: true });
-            }
-
-            setSnack({ open: true, msg: "Detaylar kaydedildi. ETA arka planda güncelleniyor.", severity: "success" });
+            setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
         } catch (e) {
             errorOccurred = true;
             console.error(e);
@@ -693,9 +578,6 @@ export default function ReelAtananSeferler() {
                 kayit_zamani: new Date().toISOString(),
                 atama_yapan_kullanici: seferAna.atama_yapan_kullanici ?? null,
                 atama_tarihi: seferAna.atama_tarihi ?? null,
-                eta_varis: seferAna.eta_varis ?? null,
-                kalan_surus_dk: seferAna.kalan_surus_dk ?? null,
-                eta_mola_dk: seferAna.eta_mola_dk ?? null,
             };
 
             const detPayload = detailRows.map((d, i) => ({
@@ -789,7 +671,6 @@ export default function ReelAtananSeferler() {
     }, [canDelete, flags, isAdminBypass, setSaving, setRows]);
 
 
-    /* ===== ETA PANELİ FONKSİYONLARI: DEVRE DIŞI BIRAKILDI (Ancak varlığı korunuyor) ===== */
     const openEditor = useCallback(
         async (row, aktarModu = false) => {
             if (!mayOpenEdit) {
@@ -866,97 +747,16 @@ export default function ReelAtananSeferler() {
         [mayOpenEdit]
     );
 
-    // KULLANICI İNTERAKSİYONUNU KESEN BOŞ FONKSİYON
-    const openETA = useCallback(
-        async (row) => {
-            setSnack({ open: true, msg: "ETA hesaplaması otomatiktir.", severity: "info" });
-        },
-        []
-    );
-
-    // DİĞER KULLANIM DIŞI FONKSİYONLAR BOŞ BIRAKILDI
-    const copyETA = useCallback(async () => {
-        setSnack({ open: true, msg: "ETA paneli devre dışı.", severity: "warning" });
-    }, []);
-    const saveETA = useCallback(async () => {
-        setSnack({ open: true, msg: "ETA kaydetme devre dışı.", severity: "warning" });
+    // YENİ EKLENDİ (Blok 3/4) - ETA Diyalog Fonksiyonları
+    const openEtaEditor = useCallback((row) => {
+        setEtaSefer(row);
+        setEtaEditorOpen(true);
     }, []);
 
-    const saveManualDistanceAndETA = useCallback(
-        async ({ distance, yukleme_il, yukleme_ilce, teslim_il, teslim_ilce }) => {
-            if (!etaRow || !etaRow.id) return;
-            if (distance <= 0 || !yukleme_il || !teslim_il) {
-                setSnack({ open: true, msg: "Geçerli bir mesafe (km) girmelisiniz.", severity: "error" });
-                return;
-            }
-
-            setSaving(true);
-
-            try {
-                const mesafePayload = {
-                    yukleme_il,
-                    yukleme_ilce,
-                    teslim_il,
-                    teslim_ilce,
-                    mesafe: distance,
-                    kaydeden: USERKEY,
-                    kayit_zamani: new Date().toISOString(),
-                };
-
-                // 1. Mesafeyi mesafeler tablosuna kaydet
-                const { error: upsertError } = await supabase
-                    .from("mesafeler")
-                    .upsert([mesafePayload], { onConflict: "yukleme_il,yukleme_ilce,teslim_il,teslim_ilce" });
-
-                if (upsertError) throw upsertError;
-
-                const newNote = null; // Mesafe artık bulundu
-                // 2. Sefer kaydındaki mesafe alanını ve arka plan tetikleme bayrağını güncelle
-                await updateSefer(etaRow.id, {
-                    mesafe: distance,
-                    eta_varis: null,
-                    eta_note: newNote,
-                    eta_gerekli_mi: true, // ARKA PLAN TETİKLEME BAYRAĞI
-                    kayit_zamani: new Date().toISOString(),
-                });
-
-                // 3. Frontend listesini güncelle
-                setRows((prev) =>
-                    prev.map((r) =>
-                        r.id === etaRow.id ? { ...r, mesafe: distance, eta_varis: null, eta_note: newNote, eta_gerekli_mi: true } : r
-                    )
-                );
-
-                setEtaDistanceKm(distance);
-                setDistanceInput("");
-
-                setSnack({ open: true, msg: "Mesafe kaydedildi. ETA arka planda hesaplanıyor.", severity: "success" });
-                setEtaOpen(false); // Diyalogu kapat
-
-            } catch (e) {
-                console.error("saveManualDistanceAndETA FAILED:", e);
-                setSnack({ open: true, msg: `Mesafe kaydedilemedi: ${e?.message || e}`, severity: "error" });
-            } finally {
-                setSaving(false);
-            }
-        },
-        [etaRow, USERKEY]
-    );
-
-    // KULLANIM DIŞI KALAN ANCAK MEVCUT OLMASI GEREKEN DEĞİŞKENLER
-    const computedETAISO = '';
-    const firstLegStartISO = ''; // Değerler burada tanımlanmadığı için boş bırakıldı
-
-    // UI Propları (render edilmeseler bile)
-    const etaStartISO = '';
-    const driveHM = '';
-    const breakSel = 0;
-    const etaDistanceInfo = '';
-    const originText = '';
-    const destinationText = '';
-    const driverText = '';
-    const vehicleText = '';
-    const jobText = '';
+    const closeEtaEditor = useCallback(() => {
+        setEtaEditorOpen(false);
+        setEtaSefer(null);
+    }, []);
 
 
     /* grid columns (+ açıklama ikonu) */
@@ -975,29 +775,25 @@ export default function ReelAtananSeferler() {
 
         // Kolon oluşturma fonksiyonunu çağır ve tüm ayarları ilet
         let cols = buildColumns({
-            openETA,
             openEditor,
-            onDeleteRow: deleteSefer, // ✅ eklendi
+            openEtaEditor: openEtaEditor, // YENİ EKLENDİ
+            onDeleteRow: deleteSefer,
             COLORS,
-            perms: { loading: permsLoading, mayOpenETA, canETA, mayOpenEdit, canEdit, canDelete }, // ✅ eklendi
+            perms: { loading: permsLoading, mayOpenEdit, canEdit, canDelete },
             userOrder: userOrder,
             hasUserOrder: hasUserOrder,
-            reasonNos: reasonNos,
         });
 
         return cols;
     }, [
         permsLoading,
-        mayOpenETA,
-        canETA,
         mayOpenEdit,
         canEdit,
         canDelete,
-        openETA,
         openEditor,
+        openEtaEditor, // YENİ EKLENDİ
         deleteSefer,
         viewBump,
-        reasonNos,
     ]);
 
     /* sabit UI config */
@@ -1012,97 +808,6 @@ export default function ReelAtananSeferler() {
         "& .MuiInputBase-input": { py: 1.05 },
         "& .MuiInputLabel-root": { color: COLORS.textMuted },
         "& .MuiFormLabel-root.Mui-focused": { color: COLORS.textMuted },
-    };
-
-    /* === GECİKME SEBEBİ KAYDET === */
-    const saveLateReason = async () => {
-        if (!reasonRow) return;
-        const kategori = reasonCat || "";
-        if (!kategori) {
-            setSnack({ open: true, msg: "Lütfen bir sebep seçin.", severity: "warning" });
-            return;
-        }
-        const aciklama = reasonNote || "";
-        setSaving(true);
-        try {
-            const sefer_id_raw = await getSeferIdByNo(reasonRow);
-            const sefer_id = isUUID(sefer_id_raw) ? sefer_id_raw : null;
-
-            const sefer_no = (reasonRow?.sefer_no || "").toString().trim() || null;
-            const kaydeden = localStorage.getItem("kullanici") || "-";
-
-            const sefer_tarihi = reasonRow?.sefer_tarihi || null;
-            const eta_varis = reasonRow?.eta_varis || reasonRow?.eta || null;
-
-            let gecikme_suresi_dk = null;
-            if (eta_varis) {
-                const etaMs = new Date(eta_varis).getTime();
-                if (!Number.isNaN(etaMs)) {
-                    const diff = Date.now() - etaMs;
-                    gecikme_suresi_dk = Math.max(0, Math.round(diff / 60000));
-                }
-            }
-
-            const today = new Date();
-            const pad = (n) => String(n).padStart(2, "0");
-            const y = today.getFullYear();
-            const m = pad(today.getMonth() + 1);
-            const d = pad(today.getDate());
-            const tMin = `${y}-${m}-${d}T00:00:00`;
-            const tMax = `${y}-${m}-${d}T23:59:59`;
-
-            const { data: existing, error: exErr } = await supabase
-                .from("eta_gecikme_nedenleri")
-                .select("id")
-                .eq("sefer_no", sefer_no)
-                .gte("kayit_zamani", tMin)
-                .lte("kayit_zamani", tMax)
-                .limit(1);
-
-            if (exErr) throw exErr;
-            if ((existing || []).length > 0) {
-                setSnack({ open: true, msg: "Bu sefere bugün zaten açıklama girilmiş.", severity: "warning" });
-                return;
-            }
-
-            const payload = {
-                ...(sefer_id ? { sefer_id } : {}),
-                sefer_no,
-                plaka: reasonRow?.plaka || null,
-                surucu_ad_soyad: reasonRow?.surucu_ad_soyad || null,
-                kategori,
-                aciklama,
-                kaydeden,
-                kayit_zamani: new Date().toISOString(),
-                sefer_tarihi,
-                eta_varis,
-                gecikme_suresi_dk,
-            };
-
-            const { error } = await supabase.from("eta_gecikme_nedenleri").insert(payload);
-            if (error) throw error;
-
-            addLog({ action: "Gecikme sebebi kaydedildi", sefer_no, fields: [kategori] });
-
-            if (sefer_no) {
-                setReasonNos((prev) => {
-                    const n = new Set(prev);
-                    n.add(sefer_no);
-                    return n;
-                });
-            }
-
-            setSnack({ open: true, msg: "Gecikme sebebi kaydedildi.", severity: "success" });
-            setReasonOpen(false);
-            setReasonRow(null);
-            setReasonCat("");
-            setReasonNote("");
-        } catch (e) {
-            console.error("saveLateReason error:", e?.message || e);
-            setSnack({ open: true, msg: `Kaydedilemedi: ${e?.message || e}`, severity: "error" });
-        } finally {
-            setSaving(false);
-        }
     };
 
     /* --------------- RENDER --------------- */
@@ -1340,13 +1045,14 @@ export default function ReelAtananSeferler() {
                         editSefer={editSefer}
                         detailRows={detailRows}
                         computeAracStatu={computeAracStatu}
+                        section-separator
                         fromISOToCombined={fromISOToCombined}
                         DateTimeOneField={DateTimeOneField}
                         seferTarihiYeni={seferTarihiYeni}
                         setSeferTarihiYeni={setSeferTarihiYeni}
                         addDetailRow={addDetailRow}
                         copyDetailRow={copyDetailRow}
-                        removeDetailRow={removeDetailRow}
+                        _ removeDetailRow={removeDetailRow}
                         onDetailChange={onDetailChange}
                         onSaveClick={async () => {
                             try {
@@ -1391,7 +1097,7 @@ export default function ReelAtananSeferler() {
 
                                 if (tarihDegisti) {
                                     changedFields.push("sefer_tarihi");
-                                    detailedChanges["sefer_tarihi"] = { old: eskiST || "-", new: yeniST || "-" };
+                                	 detailedChanges["sefer_tarihi"] = { old: eskiST || "-", new: yeniST || "-" };
                                 }
 
                                 if (changedFields.length) {
@@ -1400,7 +1106,7 @@ export default function ReelAtananSeferler() {
                                     addLog({ action: "Düzenleme (değişiklik yok)", sefer_no: editSefer?.sefer_no || "-", fields: [] });
                                 }
 
-                                setSnack({ open: true, msg: "Kaydedildi. ETA arka planda güncelleniyor.", severity: "success" });
+                                setSnack({ open: true, msg: "Kaydedildi.", severity: "success" });
                             } catch (e) {
                                 console.error(e);
                                 setSnack({ open: true, msg: "Kaydetme sırasında hata oluştu.", severity: "error" });
@@ -1411,67 +1117,17 @@ export default function ReelAtananSeferler() {
                 </Suspense>
             )}
 
-            {/* GECİKME SEBEBİ DİYALOĞU */}
-            <Dialog open={reasonOpen} onClose={() => setReasonOpen(false)} fullWidth maxWidth="sm">
-                <DialogTitle>Gecikme nedeni</DialogTitle>
-                <DialogContent sx={{ pt: 1.5 }}>
-                    <Stack spacing={1.5}>
-                        <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                            Sefer: <b>{reasonRow?.sefer_no || "-"}</b>
-                        </Typography>
+            {/* YENİ EKLENDİ (Blok 4/4) - ETA Editör Render */}
+            {etaEditorOpen && (
+                <Suspense fallback={null}>
+                    <ETAEditor
+                        open={etaEditorOpen}
+                        onClose={closeEtaEditor}
+                        sefer={etaSefer}
+                    />
+                </Suspense>
+            )}
 
-                        <FormControl fullWidth size="small">
-                            <InputLabel id="gecikme-kategori-label">Sebep</InputLabel>
-                            <Select
-                                labelId="gecikme-kategori-label"
-                                label="Sebep"
-                                value={reasonCat}
-                                onChange={(e) => setReasonCat(e.target.value)}
-                            >
-                                <MenuItem value="müşteriden dolayı">müşteriden dolayı</MenuItem>
-                                <MenuItem value="şoförden dolayı">şoförden dolayı</MenuItem>
-                                <MenuItem value="odaktan dolayı">odaktan dolayı</MenuItem>
-                            </Select>
-                        </FormControl>
-
-                        <TextField
-                            label="Açıklama"
-                            fullWidth
-                            size="small"
-                            multiline
-                            minRows={2}
-                            value={reasonNote}
-                            onChange={(e) => setReasonNote(e.target.value)}
-                        />
-
-                        <Stack spacing={0.5} sx={{ mt: 0.5 }}>
-                            <Typography variant="caption" sx={{ opacity: 0.75 }}>
-                                Sefer tarihi: <b>{reasonRow?.sefer_tarihi ? fromISOToCombined(reasonRow.sefer_tarihi) : "-"}</b>
-                            </Typography>
-                            <Typography variant="caption" sx={{ opacity: 0.75 }}>
-                                Kayıtlı ETA: <b>{reasonRow?.eta_varis ? fromISOToCombined(reasonRow.eta_varis) : (reasonRow?.eta ? fromISOToCombined(reasonRow.eta) : "-")}</b>
-                            </Typography>
-                            <Typography variant="caption" sx={{ opacity: 0.75 }}>
-                                Tahmini gecikme:{" "}
-                                <b>{
-                                    (() => {
-                                        const iso = reasonRow?.eta_varis || reasonRow?.eta;
-                                        if (!iso) return "-";
-                                        const ms = new Date(iso).getTime();
-                                        if (Number.isNaN(ms)) return "-";
-                                        const diffMin = Math.max(0, Math.round((Date.now() - ms) / 60000));
-                                        return formatDuration(diffMin);
-                                    })()
-                                }</b>
-                            </Typography>
-                        </Stack>
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setReasonOpen(false)}>Vazgeç</Button>
-                    <Button onClick={saveLateReason} variant="contained">Kaydet</Button>
-                </DialogActions>
-            </Dialog>
         </Box>
     );
 }

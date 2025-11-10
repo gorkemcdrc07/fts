@@ -1,5 +1,5 @@
 // src/aktifseferler/dialogs/ETAEditor.jsx
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import {
     Dialog,
     DialogContent,
@@ -340,8 +340,8 @@ export default function ETAEditor({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectiveIlkNokta, sefer, open]);
 
-    // distance getir
-    async function ensureDistanceLocal({ timeoutMs = 8000, retries = 1 } = {}) {
+    // distance getir (useCallback ile sabit)
+    const ensureDistanceLocal = useCallback(async ({ timeoutMs = 8000, retries = 1 } = {}) => {
         const cached = cacheGet(yuklemeIl, yuklemeIlce, teslimIl, teslimIlce);
         if (cached?.km != null) {
             setMesafeKm(Number(cached.km));
@@ -385,7 +385,7 @@ export default function ETAEditor({
         }
         console.warn("ensureDistanceLocal fail:", lastErr);
         return { status: "fail", error: lastErr };
-    }
+    }, [yuklemeIl, yuklemeIlce, teslimIl, teslimIlce, fetchDistance]);
 
     useEffect(() => {
         if (!open) return;
@@ -409,8 +409,7 @@ export default function ETAEditor({
         return () => {
             alive = false;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, yuklemeIl, yuklemeIlce, teslimIl, teslimIlce]);
+    }, [open, yuklemeIl, yuklemeIlce, teslimIl, teslimIlce, ensureDistanceLocal]);
 
     const sureStr = useMemo(() => formatDuration(mesafeKm, speedKmh), [mesafeKm, speedKmh]);
     const hasDistance = distanceStatus === "ok";
@@ -608,7 +607,7 @@ export default function ETAEditor({
         run();
         return () => { cancelled = true; };
         // plan?.eta'ya bağımlılık veriyoruz ki hesap hazır olur olmaz çalışsın
-    }, [open, yuklemeCikisRaw, distanceStatus, plan?.eta, sefer?.id, sefer?.sefer_no]);
+    }, [open, yuklemeCikisRaw, distanceStatus, plan?.eta, sefer?.id, sefer?.sefer_no, ensureDistanceLocal]);
 
     // Sefer veya çıkış tarihi değişirse otomatik-kayıt kilidini sıfırla
     useEffect(() => { autoSavedRef.current = false; }, [sefer?.id, sefer?.sefer_no, yuklemeCikisRaw]);

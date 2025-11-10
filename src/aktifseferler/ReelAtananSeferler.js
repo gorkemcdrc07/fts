@@ -40,11 +40,6 @@ function DateTimeOneField(props) {
     return <TextField type="datetime-local" size="small" InputLabelProps={{ shrink: true }} {...props} />;
 }
 
-/* ---- yardımcı: UUID kontrolü ---- */
-const isUUID = (v) =>
-    typeof v === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
-
 export default function ReelAtananSeferler() {
     /* DataGrid apiRef + kullanıcı anahtarları */
     const apiRef = useGridApiRef();
@@ -254,7 +249,7 @@ export default function ReelAtananSeferler() {
         }
     }, []);
 
-    const addLog = (entry) => {
+    const addLog = useCallback((entry) => {
         try {
             const all = JSON.parse(localStorage.getItem("aktifseferler.logs") || "[]");
             const user = localStorage.getItem("kullanici") || "-";
@@ -262,7 +257,7 @@ export default function ReelAtananSeferler() {
             localStorage.setItem("aktifseferler.logs", JSON.stringify(all.slice(0, 200)));
             setViewBump(String(Date.now()));
         } catch { /* ignore */ }
-    };
+    }, []);
 
     /* options */
     const options = useMemo(() => {
@@ -603,7 +598,7 @@ export default function ReelAtananSeferler() {
         } finally {
             setSaving(false);
         }
-    }, [canDelete]);
+    }, [canDelete, addLog]);
 
     const openEditor = useCallback(
         async (row, aktarModu = false) => {
@@ -714,7 +709,7 @@ export default function ReelAtananSeferler() {
         });
 
         return cols;
-    }, [permsLoading, mayOpenEdit, canEdit, canDelete, openEditor, openEtaEditor, deleteSefer, viewBump]);
+    }, [permsLoading, mayOpenEdit, canEdit, canDelete, openEditor, openEtaEditor, deleteSefer, viewBump, ORDER_KEY, GENERIC_ORDER_KEY]);
 
     /* --------------- RENDER --------------- */
     return (

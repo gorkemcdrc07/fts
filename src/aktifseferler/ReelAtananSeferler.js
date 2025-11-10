@@ -5,29 +5,8 @@ import { useNavigate } from "react-router-dom";
 
 /* MUI */
 import {
-    Box,
-    Paper,
-    Stack,
-    Button,
-    Typography,
-    TextField,
-    Snackbar,
-    Alert,
-    Backdrop,
-    CircularProgress,
-    Chip,
-    Switch,
-    FormControlLabel,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    MenuItem,
-    Select,
-    InputLabel,
-    FormControl,
-    Tooltip,
-    Grid,
+    Box, Paper, Stack, Button, Typography, TextField, Snackbar, Alert,
+    Backdrop, CircularProgress, Chip, Switch, FormControlLabel
 } from "@mui/material";
 import { DataGrid, useGridApiRef } from "@mui/x-data-grid";
 
@@ -43,45 +22,22 @@ import { COLORS } from "./constants/colors";
 
 /* sefer utils */
 import {
-    isExcludedPlate,
-    splitCell,
-    clean,
-    detailFields,
-    computeAracStatu,
+    isExcludedPlate, splitCell, clean, detailFields, computeAracStatu
 } from "./utils/sefer";
 
 /* yardımcılar */
 import buildColumns from "./columns";
-import {
-    nowLocalISO,
-    fromISOToCombined,
-    normalizeISO,
-} from "./utils/datetime";
-import { formatPhone, ellipsize } from "./utils/format";
-// ETA ile ilgili import'lar kaldırıldı
-import {
-    fetchSeferler,
-    fetchTamamlananNos,
-    loadDetaylar,
-    updateSefer,
-    upsertDetaylar,
-    // fetchMesafe kaldırıldı
-} from "./services";
-
+import { fromISOToCombined } from "./utils/datetime";
+import { fetchSeferler, fetchTamamlananNos, loadDetaylar, updateSefer, upsertDetaylar } from "./services";
 import usePermissions from "../auth/usePermissions";
 
-// YENİ EKLENDİ (Blok 1/4) - Diyalog Importları
 /* Diyaloglar */
 const EditorDialog = lazy(() => import("./dialogs/EditorDialog"));
 const ETAEditor = lazy(() => import("./dialogs/ETAEditor"));
 
-
 /* küçük inputlar */
 function DateTimeOneField(props) {
     return <TextField type="datetime-local" size="small" InputLabelProps={{ shrink: true }} {...props} />;
-}
-function TimeHMField(props) {
-    return <TextField type="time" size="small" inputProps={{ step: 60 }} InputLabelProps={{ shrink: true }} {...props} />;
 }
 
 /* ---- yardımcı: UUID kontrolü ---- */
@@ -109,9 +65,7 @@ export default function ReelAtananSeferler() {
                 "[]"
             );
             const m = {};
-            (hiddenList || []).forEach((f) => {
-                m[f] = false;
-            });
+            (hiddenList || []).forEach((f) => { m[f] = false; });
             return m;
         } catch {
             return {};
@@ -129,15 +83,15 @@ export default function ReelAtananSeferler() {
             }
         };
         const onFocus = () => setViewBump(String(Date.now()));
-        const onCustom = () => setViewBump(String(Date.now())); // yeni
+        const onCustom = () => setViewBump(String(Date.now()));
 
         window.addEventListener("storage", onStorage);
         window.addEventListener("focus", onFocus);
-        window.addEventListener("aktifseferler:view:changed", onCustom); // yeni
+        window.addEventListener("aktifseferler:view:changed", onCustom);
         return () => {
             window.removeEventListener("storage", onStorage);
             window.removeEventListener("focus", onFocus);
-            window.removeEventListener("aktifseferler:view:changed", onCustom); // yeni
+            window.removeEventListener("aktifseferler:view:changed", onCustom);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -151,13 +105,9 @@ export default function ReelAtananSeferler() {
                 "[]"
             ) || [];
             const m = {};
-            hiddenList.forEach((f) => {
-                m[f] = false;
-            });
+            hiddenList.forEach((f) => { m[f] = false; });
             setColumnVisibilityModel(m);
-        } catch {
-            /* ignore */
-        }
+        } catch { /* ignore */ }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [viewBump]);
 
@@ -165,27 +115,13 @@ export default function ReelAtananSeferler() {
     // Yetkiler
     const { loading: permsLoading, flags = {} } = usePermissions("aktif_seferler");
 
-    // FLAGS: olası alternatif anahtar isimlerini de destekle
+    // FLAGS
     const {
-        // birincil isimler
-        aktif_can_sync = false,
-        aktif_can_edit = false,
-        aktif_may_open_edit = false,
-        aktif_can_delete = false,
-
-        // muhtemel alternatif isimler (backend farklı isimle gönderiyorsa)
-        aktif_seferler_can_sync = false,
-        aktif_seferler_can_edit = false,
-        aktif_seferler_may_open_edit = false,
-        aktif_seferler_can_delete = false,
-
-        // admin sinyalleri
-        admin = false,
-        is_admin = false,
-        role = "",
+        aktif_can_sync = false, aktif_can_edit = false, aktif_may_open_edit = false, aktif_can_delete = false,
+        aktif_seferler_can_sync = false, aktif_seferler_can_edit = false, aktif_seferler_may_open_edit = false, aktif_seferler_can_delete = false,
+        admin = false, is_admin = false, role = "",
     } = flags;
 
-    // string/number → bool
     const toBool = (v) => {
         if (typeof v === "boolean") return v;
         if (typeof v === "number") return v === 1;
@@ -194,7 +130,6 @@ export default function ReelAtananSeferler() {
         return s === "true" || s === "1" || s === "yes" || s === "y" || s === "on";
     };
 
-    // admin bypass
     const isAdminBypass =
         toBool(admin) ||
         toBool(is_admin) ||
@@ -202,41 +137,15 @@ export default function ReelAtananSeferler() {
         toBool(localStorage.getItem("isAdmin")) ||
         toBool(localStorage.getItem("admin"));
 
-    // önce birincil, yoksa alternatif → yoksa edit yetkisine düş
     const rawCanSync = (aktif_can_sync ?? aktif_seferler_can_sync ?? false);
     const rawCanEdit = (aktif_can_edit ?? aktif_seferler_can_edit ?? false);
     const rawMayOpen = (aktif_may_open_edit ?? aktif_seferler_may_open_edit ?? false);
-    const rawCanDelete = (
-        aktif_can_delete ??
-        aktif_seferler_can_delete ??
-        aktif_can_edit ??
-        aktif_seferler_can_edit ??
-        false
-    );
+    const rawCanDelete = (aktif_can_delete ?? aktif_seferler_can_delete ?? aktif_can_edit ?? aktif_seferler_can_edit ?? false);
 
     const canSync = isAdminBypass || toBool(rawCanSync);
     const canEdit = isAdminBypass || toBool(rawCanEdit);
     const mayOpenEdit = isAdminBypass || toBool(rawMayOpen);
     const canDelete = isAdminBypass || toBool(rawCanDelete);
-
-    console.debug("[perms:raw]", {
-        aktif_can_delete, aktif_seferler_can_delete,
-        aktif_can_edit, aktif_seferler_can_edit,
-        rawCanDelete, canDelete, isAdminBypass
-    });
-
-    // (isteğe bağlı) görünür debug
-    useEffect(() => {
-        console.debug("[perms]", {
-            flags,
-            isAdminBypass,
-            canSync,
-            canEdit,
-            mayOpenEdit,
-            canDelete,
-        });
-        window.__perms = { flags, isAdminBypass, canSync, canEdit, mayOpenEdit, canDelete };
-    }, [flags, isAdminBypass, canSync, canEdit, mayOpenEdit, canDelete]);
 
     /* data */
     const [rows, setRows] = useState([]);
@@ -244,8 +153,7 @@ export default function ReelAtananSeferler() {
 
     /* filters */
     const [startDate, setStartDate] = useState(() => {
-        const d = new Date();
-        d.setDate(d.getDate() - 6);
+        const d = new Date(); d.setDate(d.getDate() - 6);
         const pad = (n) => String(n).padStart(2, "0");
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     });
@@ -272,12 +180,6 @@ export default function ReelAtananSeferler() {
     const [showSuccess, setShowSuccess] = useState(false);
     const [dense, setDense] = useState(false);
 
-    /* Dashboard visible (persisted) */
-    const [dashOpen, setDashOpen] = useState(false);
-    useEffect(() => {
-        localStorage.setItem("aktifseferler.dash.open", dashOpen ? "1" : "0");
-    }, [dashOpen]);
-
     /* dialog (Edit) */
     const [editOpen, setEditOpen] = useState(false);
     const [editSefer, setEditSefer] = useState(null);
@@ -285,10 +187,72 @@ export default function ReelAtananSeferler() {
     const [detailRowsOrig, setDetailRowsOrig] = useState([]);
     const [seferTarihiYeni, setSeferTarihiYeni] = useState("");
 
-    // YENİ EKLENDİ (Blok 2/4) - ETA Diyalog State'leri
+    // ETA Dialog
     const [etaEditorOpen, setEtaEditorOpen] = useState(false);
     const [etaSefer, setEtaSefer] = useState(null);
 
+    // --- MESAFE: Supabase 'mesafeler' tablosundan km çek ---
+    const fetchDistance = useCallback(async ({ from, to, timeoutMs = 8000 }) => {
+        const first = (v) => {
+            if (v == null) return null;
+            const s = String(v).trim();
+            const p = s.split(";").map((x) => x.trim()).filter(Boolean);
+            return p.length ? p[0] : (s || null);
+        };
+        const normU = (v) => v == null ? null : String(v).trim().toLocaleUpperCase("tr-TR");
+
+        const yIl = normU(first(from?.il));
+        const yIlce = normU(first(from?.ilce));
+        const tIl = normU(first(to?.il));
+        const tIlce = normU(first(to?.ilce));
+
+        const withTimeout = (promise, ms) =>
+            new Promise((resolve, reject) => {
+                const id = setTimeout(() => reject(new Error("timeout")), ms);
+                promise.then((v) => { clearTimeout(id); resolve(v); })
+                    .catch((e) => { clearTimeout(id); reject(e); });
+            });
+
+        try {
+            let q = supabase
+                .from("mesafeler")
+                .select("mesafe")
+                .eq("yukleme_il", yIl || "")
+                .eq("teslim_il", tIl || "")
+                .limit(1);
+
+            // ilçe verilmişse birebir filtrele; verilmemişse hiç filtreleme (tüm ilçelerden biri eşleşebilir)
+            if (yIlce) q = q.eq("yukleme_ilce", yIlce);
+            if (tIlce) q = q.eq("teslim_ilce", tIlce);
+
+            const { data, error } = await withTimeout(q, timeoutMs);
+            if (error) {
+                console.warn("mesafeler sorgu hatası:", error);
+                return { km: 0 };
+            }
+
+            const row = data?.[0] || null;
+            if (!row) {
+                console.warn("mesafeler: kayıt bulunamadı", { yIl, yIlce, tIl, tIlce });
+                return { km: 0 };
+            }
+
+            // güvenli parse: "532", "532.4", "532,4", "532 km"
+            const raw = row.mesafe;
+            let km = 0;
+            if (typeof raw === "number") km = raw;
+            else if (raw != null) {
+                const cleaned = String(raw).replace(/[^\d.,-]/g, "").replace(",", ".");
+                const parsed = parseFloat(cleaned);
+                km = Number.isFinite(parsed) ? parsed : 0;
+            }
+
+            return { km };
+        } catch (e) {
+            console.warn("mesafeler timeout/err:", e);
+            return { km: 0 };
+        }
+    }, []);
 
     const addLog = (entry) => {
         try {
@@ -297,9 +261,7 @@ export default function ReelAtananSeferler() {
             all.unshift({ ts: new Date().toISOString(), user, ...entry });
             localStorage.setItem("aktifseferler.logs", JSON.stringify(all.slice(0, 200)));
             setViewBump(String(Date.now()));
-        } catch {
-            /* ignore */
-        }
+        } catch { /* ignore */ }
     };
 
     /* options */
@@ -320,7 +282,7 @@ export default function ReelAtananSeferler() {
         };
     }, [rows]);
 
-    /* ------- helpers ------- */
+    /* helpers */
     const enrichRows = (list) =>
         list.map((s, idx) => {
             const maxLen = Math.max(0, ...detailFields.map((k) => splitCell(s[k]).length));
@@ -331,15 +293,6 @@ export default function ReelAtananSeferler() {
                 reel_durum: s.reel_durum || "-",
             };
         });
-    const formatDuration = (minutes) => {
-        if (minutes == null) return "-";
-        const m = Math.max(0, Math.round(minutes));
-        const h = Math.floor(m / 60);
-        const r = m % 60;
-        if (h === 0) return `${r} dk`;
-        if (r === 0) return `${h} saat`;
-        return `${h} saat ${r} dk`;
-    };
 
     const getSeferIdByNo = async (row) => {
         let id = row?.id ?? null;
@@ -377,9 +330,7 @@ export default function ReelAtananSeferler() {
         }
     }, [startDate, endDate]);
 
-    useEffect(() => {
-        listData();
-    }, [listData]);
+    useEffect(() => { listData(); }, [listData]);
 
     const filtered = useMemo(() => {
         let r = [...rows].filter((x) => (x.reel_durum || "") !== "EŞLEŞME YOK");
@@ -465,7 +416,6 @@ export default function ReelAtananSeferler() {
         setDetailRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
     }, []);
 
-    // saveDetails: Arka plan ETA tetikleyicisi kaldırıldı
     const saveDetails = useCallback(async () => {
         if (!editSefer) return false;
         setSaving(true);
@@ -482,9 +432,7 @@ export default function ReelAtananSeferler() {
                 const original = detailRowsOrig[i] || {};
 
                 const cleaned_d = {};
-                for (const key in d) {
-                    cleaned_d[key] = clean(d[key]) || null;
-                }
+                for (const key in d) cleaned_d[key] = clean(d[key]) || null;
 
                 const updatedRow = {
                     sefer_id: cleaned_d.sefer_id,
@@ -500,7 +448,6 @@ export default function ReelAtananSeferler() {
                     yukleme_cikis: cleaned_d.yukleme_cikis,
                     teslim_varis: cleaned_d.teslim_varis,
                     teslim_cikis: cleaned_d.teslim_cikis,
-
                     arac_statu: computeAracStatu(detailRows) || null,
                     kayit_zamani: new Date().toISOString(),
                 };
@@ -515,7 +462,6 @@ export default function ReelAtananSeferler() {
                     } else {
                         const originalUser = original[`${field}_guncelleyen`] ?? null;
                         const originalDate = clean(original[`${field}_guncelleme_tarihi`]) || null;
-
                         updatedRow[`${field}_guncelleyen`] = originalUser;
                         updatedRow[`${field}_guncelleme_tarihi`] = originalDate;
                     }
@@ -526,13 +472,10 @@ export default function ReelAtananSeferler() {
             });
 
             const upsertResult = await upsertDetaylar(upserts);
-            if (upsertResult && upsertResult.error) {
-                throw upsertResult.error;
-            }
+            if (upsertResult && upsertResult.error) throw upsertResult.error;
 
             setDetailRows(successfullyUpdatedRows);
             setDetailRowsOrig(successfullyUpdatedRows);
-
             setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
         } catch (e) {
             errorOccurred = true;
@@ -544,7 +487,6 @@ export default function ReelAtananSeferler() {
 
         return !errorOccurred;
     }, [editSefer, detailRows, detailRowsOrig]);
-
 
     const moveToCompleted = useCallback(async () => {
         if (!editSefer) return;
@@ -596,7 +538,6 @@ export default function ReelAtananSeferler() {
                 teslim_cikis: clean(d.teslim_cikis) || null,
                 kayit_zamani: new Date().toISOString(),
                 arac_statu: seferAna.arac_statu ?? null,
-
                 yukleme_varis_guncelleyen: d.yukleme_varis_guncelleyen || null,
                 yukleme_varis_guncelleme_tarihi: clean(d.yukleme_varis_guncelleme_tarihi) || null,
                 yukleme_cikis_guncelleyen: d.yukleme_cikis_guncelleyen || null,
@@ -637,12 +578,6 @@ export default function ReelAtananSeferler() {
 
     const deleteSefer = useCallback(async (row) => {
         if (!canDelete) {
-            console.debug("[delete] blocked", {
-                flags,
-                isAdminBypass,
-                rawCanDelete: flags?.aktif_can_delete ?? flags?.aktif_seferler_can_delete,
-                canDelete
-            });
             setSnack({ open: true, msg: "Silme yetkiniz yok.", severity: "warning" });
             return;
         }
@@ -668,8 +603,7 @@ export default function ReelAtananSeferler() {
         } finally {
             setSaving(false);
         }
-    }, [canDelete, flags, isAdminBypass, setSaving, setRows]);
-
+    }, [canDelete]);
 
     const openEditor = useCallback(
         async (row, aktarModu = false) => {
@@ -720,7 +654,6 @@ export default function ReelAtananSeferler() {
                 yukleme_cikis: d.yukleme_cikis ?? "",
                 teslim_varis: d.teslim_varis ?? "",
                 teslim_cikis: d.teslim_cikis ?? "",
-
                 yukleme_varis_guncelleyen: d.yukleme_varis_guncelleyen ?? "",
                 yukleme_varis_guncelleme_tarihi: d.yukleme_varis_guncelleme_tarihi ?? "",
                 yukleme_cikis_guncelleyen: d.yukleme_cikis_guncelleyen ?? "",
@@ -747,7 +680,6 @@ export default function ReelAtananSeferler() {
         [mayOpenEdit]
     );
 
-    // YENİ EKLENDİ (Blok 3/4) - ETA Diyalog Fonksiyonları
     const openEtaEditor = useCallback((row) => {
         setEtaSefer(row);
         setEtaEditorOpen(true);
@@ -758,10 +690,8 @@ export default function ReelAtananSeferler() {
         setEtaSefer(null);
     }, []);
 
-
-    /* grid columns (+ açıklama ikonu) */
+    /* grid columns */
     const columns = useMemo(() => {
-        // Kolon sıralaması için kullanıcı ayarlarını oku
         let userOrder = [];
         let hasUserOrder = false;
         try {
@@ -773,42 +703,18 @@ export default function ReelAtananSeferler() {
             hasUserOrder = userOrder.length > 0;
         } catch { }
 
-        // Kolon oluşturma fonksiyonunu çağır ve tüm ayarları ilet
         let cols = buildColumns({
             openEditor,
-            openEtaEditor: openEtaEditor, // YENİ EKLENDİ
+            openEtaEditor, // ETA butonu buradan çağrılır
             onDeleteRow: deleteSefer,
             COLORS,
             perms: { loading: permsLoading, mayOpenEdit, canEdit, canDelete },
-            userOrder: userOrder,
-            hasUserOrder: hasUserOrder,
+            userOrder,
+            hasUserOrder,
         });
 
         return cols;
-    }, [
-        permsLoading,
-        mayOpenEdit,
-        canEdit,
-        canDelete,
-        openEditor,
-        openEtaEditor, // YENİ EKLENDİ
-        deleteSefer,
-        viewBump,
-    ]);
-
-    /* sabit UI config */
-    const baseInputSX = {
-        "& .MuiInputBase-root": {
-            backgroundColor: COLORS.surface2,
-            color: COLORS.text,
-            borderRadius: 1.2,
-            border: `1px solid ${COLORS.border}`,
-            fontSize: 14,
-        },
-        "& .MuiInputBase-input": { py: 1.05 },
-        "& .MuiInputLabel-root": { color: COLORS.textMuted },
-        "& .MuiFormLabel-root.Mui-focused": { color: COLORS.textMuted },
-    };
+    }, [permsLoading, mayOpenEdit, canEdit, canDelete, openEditor, openEtaEditor, deleteSefer, viewBump]);
 
     /* --------------- RENDER --------------- */
     return (
@@ -817,7 +723,7 @@ export default function ReelAtananSeferler() {
                 height: "100dvh",
                 overflow: "hidden",
                 display: "grid",
-                gridTemplateRows: "auto auto auto 1fr", // Ana Box düzeni
+                gridTemplateRows: "auto auto auto 1fr",
                 gap: 1.5,
                 p: 2,
                 background: COLORS.pageBg,
@@ -855,20 +761,11 @@ export default function ReelAtananSeferler() {
                 </Stack>
 
                 <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
-                    <Button size="small" variant="text" startIcon={<ArrowBackIosNewIcon />} onClick={() => navigate(-1)}>
-                        Geri
-                    </Button>
-                    <Button size="small" variant="text" startIcon={<HomeOutlinedIcon />} onClick={() => navigate("/anasayfa")}>
-                        Anasayfa
-                    </Button>
-
+                    <Button size="small" variant="text" startIcon={<ArrowBackIosNewIcon />} onClick={() => navigate(-1)}>Geri</Button>
+                    <Button size="small" variant="text" startIcon={<HomeOutlinedIcon />} onClick={() => navigate("/anasayfa")}>Anasayfa</Button>
                     <FormControlLabel control={<Switch checked={dense} onChange={() => setDense((v) => !v)} size="small" />} label="Sıkı satırlar" sx={{ color: COLORS.textMuted }} />
-
                     <Chip label={`SFR: ${sfrCount}`} size="small" color="info" sx={{ fontWeight: 800 }} />
-
-                    <Button size="small" variant="outlined" onClick={() => navigate("/aktifseferler/gorunum")}>
-                        Görünümü Düzenle
-                    </Button>
+                    <Button size="small" variant="outlined" onClick={() => navigate("/aktifseferler/gorunum")}>Görünümü Düzenle</Button>
 
                     <ListeleButton
                         startDate={startDate}
@@ -898,7 +795,18 @@ export default function ReelAtananSeferler() {
             {/* Filtreler */}
             <Filtreler
                 COLORS={COLORS}
-                baseInputSX={baseInputSX}
+                baseInputSX={{
+                    "& .MuiInputBase-root": {
+                        backgroundColor: COLORS.surface2,
+                        color: COLORS.text,
+                        borderRadius: 1.2,
+                        border: `1px solid ${COLORS.border}`,
+                        fontSize: 14,
+                    },
+                    "& .MuiInputBase-input": { py: 1.05 },
+                    "& .MuiInputLabel-root": { color: COLORS.textMuted },
+                    "& .MuiFormLabel-root.Mui-focused": { color: COLORS.textMuted },
+                }}
                 options={options}
                 startDate={startDate} setStartDate={setStartDate}
                 endDate={endDate} setEndDate={setEndDate}
@@ -915,18 +823,8 @@ export default function ReelAtananSeferler() {
             />
 
             {/* Liste */}
-            <Paper
-                sx={{
-                    borderRadius: 3,
-                    border: `1px solid ${COLORS.border}`,
-                    background: COLORS.surface,
-                    flexGrow: 1, // Kalan alanı kaplaması için
-                    height: '1000px', // Kalan alanı doldurması için
-                    overflow: "hidden",
-                }}
-            >
+            <Paper sx={{ borderRadius: 3, border: `1px solid ${COLORS.border}`, background: COLORS.surface, flexGrow: 1, height: "1000px", overflow: "hidden" }}>
                 <DataGrid
-                    /* Sürükle-bırak & görünürlük kaydı */
                     apiRef={apiRef}
                     disableColumnReorder={false}
                     columnVisibilityModel={columnVisibilityModel}
@@ -940,10 +838,8 @@ export default function ReelAtananSeferler() {
                     }}
                     onColumnOrderChange={() => {
                         try {
-                            const ordered =
-                                apiRef.current.exportState?.().columns?.orderedFields
-                                || apiRef.current?.state?.columns?.orderedFields
-                                || [];
+                            const ordered = apiRef.current.exportState?.().columns?.orderedFields
+                                || apiRef.current?.state?.columns?.orderedFields || [];
                             localStorage.setItem(ORDER_KEY, JSON.stringify(ordered));
                             localStorage.setItem("aktifseferler.view.bump", String(Date.now()));
                         } catch { }
@@ -957,7 +853,6 @@ export default function ReelAtananSeferler() {
                             }
                         } catch { }
                     }}
-
                     rows={filtered}
                     columns={columns}
                     getRowId={(r) => r._rid}
@@ -986,9 +881,6 @@ export default function ReelAtananSeferler() {
                             fontSize: 14.5,
                         },
                         "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": { backgroundColor: COLORS.zebra },
-                        "& .MuiDataGrid-row:hover": {
-                            // Hover stilini buraya ekleyin
-                        },
                     }}
                 />
             </Paper>
@@ -1001,21 +893,10 @@ export default function ReelAtananSeferler() {
 
             {/* Sync success toast */}
             {showSuccess && (
-                <Box
-                    sx={{
-                        position: "fixed",
-                        top: 16,
-                        right: 16,
-                        bgcolor: "success.main",
-                        color: "#fff",
-                        px: 2,
-                        py: 1,
-                        borderRadius: 2,
-                        boxShadow: 3,
-                        fontWeight: 700,
-                        zIndex: 1300,
-                    }}
-                >
+                <Box sx={{
+                    position: "fixed", top: 16, right: 16, bgcolor: "success.main", color: "#fff",
+                    px: 2, py: 1, borderRadius: 2, boxShadow: 3, fontWeight: 700, zIndex: 1300
+                }}>
                     {successCount} kayıt güncellendi.
                 </Box>
             )}
@@ -1041,18 +922,28 @@ export default function ReelAtananSeferler() {
                         canEdit={canEdit}
                         mayOpenEdit={mayOpenEdit}
                         COLORS={COLORS}
-                        baseInputSX={baseInputSX}
+                        baseInputSX={{
+                            "& .MuiInputBase-root": {
+                                backgroundColor: COLORS.surface2,
+                                color: COLORS.text,
+                                borderRadius: 1.2,
+                                border: `1px solid ${COLORS.border}`,
+                                fontSize: 14,
+                            },
+                            "& .MuiInputBase-input": { py: 1.05 },
+                            "& .MuiInputLabel-root": { color: COLORS.textMuted },
+                            "& .MuiFormLabel-root.Mui-focused": { color: COLORS.textMuted },
+                        }}
                         editSefer={editSefer}
                         detailRows={detailRows}
                         computeAracStatu={computeAracStatu}
-                        section-separator
                         fromISOToCombined={fromISOToCombined}
                         DateTimeOneField={DateTimeOneField}
                         seferTarihiYeni={seferTarihiYeni}
                         setSeferTarihiYeni={setSeferTarihiYeni}
                         addDetailRow={addDetailRow}
                         copyDetailRow={copyDetailRow}
-                        _ removeDetailRow={removeDetailRow}
+                        removeDetailRow={removeDetailRow}
                         onDetailChange={onDetailChange}
                         onSaveClick={async () => {
                             try {
@@ -1066,15 +957,11 @@ export default function ReelAtananSeferler() {
                                 }
 
                                 const success = await saveDetails();
-                                if (!success) {
-                                    return;
-                                }
+                                if (!success) return;
 
                                 setRows((prev) =>
                                     prev.map((r) =>
-                                        r.id === editSefer?.id
-                                            ? { ...r, sefer_tarihi: yeniST || r.sefer_tarihi }
-                                            : r
+                                        r.id === editSefer?.id ? { ...r, sefer_tarihi: yeniST || r.sefer_tarihi } : r
                                     )
                                 );
 
@@ -1097,7 +984,7 @@ export default function ReelAtananSeferler() {
 
                                 if (tarihDegisti) {
                                     changedFields.push("sefer_tarihi");
-                                	 detailedChanges["sefer_tarihi"] = { old: eskiST || "-", new: yeniST || "-" };
+                                    detailedChanges["sefer_tarihi"] = { old: eskiST || "-", new: yeniST || "-" };
                                 }
 
                                 if (changedFields.length) {
@@ -1117,17 +1004,24 @@ export default function ReelAtananSeferler() {
                 </Suspense>
             )}
 
-            {/* YENİ EKLENDİ (Blok 4/4) - ETA Editör Render */}
+            {/* ETA Editör (sadece o sefer için mesafe hesaplar) */}
             {etaEditorOpen && (
-                <Suspense fallback={null}>
+                <Suspense
+                    fallback={
+                        <Box sx={{ p: 3, display: "flex", justifyContent: "center" }}>
+                            <CircularProgress />
+                        </Box>
+                    }
+                >
                     <ETAEditor
                         open={etaEditorOpen}
                         onClose={closeEtaEditor}
                         sefer={etaSefer}
+                        loading={loading}
+                        fetchDistance={fetchDistance}
                     />
                 </Suspense>
             )}
-
         </Box>
     );
 }

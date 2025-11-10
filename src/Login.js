@@ -247,8 +247,7 @@ function Login() {
             localStorage.setItem("girisYapanKullanici", JSON.stringify(data));
             localStorage.setItem("profilFotograf", data.profil_fotograf || "");
             localStorage.setItem("Reel-kullanici", reelUserToSave);
-            sessionStorage.setItem("Reel-sifre", reelPassToUse);
-
+            localStorage.setItem("Reel-sifre", reelPassToUse);
             navigate("/anasayfa");
         } catch (err) {
             setHata("Beklenmeyen bir hata oluştu.");

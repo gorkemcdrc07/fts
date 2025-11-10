@@ -41,7 +41,6 @@ export default function buildColumns({
                         <IconButton
                             size="small"
                             onClick={() => {
-                                // debug: hangi row geldiğini görmek için
                                 console.log("openEtaEditor çağrılıyor, row:", p.row);
                                 openEtaEditor && openEtaEditor(p.row);
                             }}
@@ -130,7 +129,6 @@ export default function buildColumns({
                         }}
                     >
                         {noktalar.map((n, i) => {
-                            // burada nokta objesinin tarih alan isimleri projeye göre farklı olabilir
                             const enter = Boolean(n.teslim_varis ?? n.yukleme_varis ?? n.varis);
                             const exit = Boolean(n.teslim_cikis ?? n.yukleme_cikis ?? n.cikis);
                             const { borderColor, hint } = calcStatus(enter, exit);
@@ -204,6 +202,7 @@ export default function buildColumns({
         { field: "nokta_sayisi", headerName: "NOKTA", width: 100, align: "center", headerAlign: "center" },
         noktaKayitBilgisiCol,
         ilkNoktaKmCol,
+        actionsCol,
         txt("sefer_no", "Sefer No", 160),
         txt("statu", "Statü", 160),
         txt("plaka", "Plaka", 130),
@@ -220,6 +219,22 @@ export default function buildColumns({
         txt("arac_statu", "Araç Statü", 210),
         txt("yukleme_ili", "Yükleme İl", 160),
         txt("yukleme_ilcesi", "Yükleme İlçe", 160),
+
+        // >>> ETA VARIŞ SÜTUNU
+        {
+            field: "eta_varis",
+            headerName: "ETA Varış",
+            width: 210,
+            renderCell: (p) => {
+                const v = p.row.eta_varis;
+                if (typeof v === "string" && v.toLowerCase().includes("yükleme çıkış")) {
+                    return <Chip color="warning" size="small" label={v} sx={{ fontWeight: 700 }} />;
+                }
+                return fromISOToCombined(v || "") || "—";
+            },
+            sortComparator: (a, b) => new Date(a) - new Date(b),
+        },
+
         txt("teslim_ili", "Teslim İl", 160),
         txt("teslim_ilcesi", "Teslim İlçe", 160),
         txt("treyler", "Treyler", 160),
@@ -262,8 +277,8 @@ export default function buildColumns({
         noteCol,
     ];
 
-    let all = [actionsCol, ...baseCols];
-
+    // Kullanıcı özel sıralaması varsa uygula
+    let all = [...baseCols];
     if (Array.isArray(userOrder) && userOrder.length) {
         const byId = new Map(all.map((c) => [c.field, c]));
         const picked = [];

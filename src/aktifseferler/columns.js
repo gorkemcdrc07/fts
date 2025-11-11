@@ -9,6 +9,7 @@ import {
 import EditIcon from "@mui/icons-material/EditNote";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle"; // <<< EKLENDİ
 import { fromISOToCombined } from "./utils/datetime";
 
 export default function buildColumns({
@@ -31,57 +32,71 @@ export default function buildColumns({
     const actionsCol = {
         field: "actions",
         headerName: "İşlem",
-        width: 210,
+        width: 230, // biraz genişlettim (ikon eklendi)
         sortable: false,
         filterable: false,
-        renderCell: (p) => (
-            <Stack direction="row" spacing={0.5} alignItems="center">
-                <Tooltip title="ETA Düzenle">
-                    <span>
-                        <IconButton
-                            size="small"
-                            onClick={() => {
-                                console.log("openEtaEditor çağrılıyor, row:", p.row);
-                                openEtaEditor && openEtaEditor(p.row);
-                            }}
-                            disabled={loading || !canEdit}
-                        >
-                            <AccessTimeIcon fontSize="small" />
-                        </IconButton>
-                    </span>
-                </Tooltip>
+        renderCell: (p) => {
+            const etaKalan = p.row?.eta_kalan_surus;
+            const hasEtaKalan =
+                etaKalan !== null &&
+                etaKalan !== undefined &&
+                !Number.isNaN(Number(etaKalan));
 
-                {(mayOpenEdit || canEdit || loading) && (
-                    <Tooltip
-                        title={
-                            loading ? "Yükleniyor..." : canEdit ? "Detayları Düzenle" : "Düzenleme yetkiniz yok"
-                        }
-                    >
+            return (
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                    {/* ETA girildi rozeti */}
+                    {hasEtaKalan && (
+                        <Tooltip title={`ETA girildi • Kalan sürüş: ${Number(etaKalan).toFixed(2)} saat`}>
+                            <CheckCircleIcon fontSize="small" color="success" />
+                        </Tooltip>
+                    )}
+
+                    <Tooltip title="ETA Düzenle">
                         <span>
                             <IconButton
                                 size="small"
-                                onClick={() => openEditor && openEditor(p.row)}
+                                onClick={() => {
+                                    openEtaEditor && openEtaEditor(p.row);
+                                }}
                                 disabled={loading || !canEdit}
                             >
-                                <EditIcon fontSize="small" />
+                                <AccessTimeIcon fontSize="small" />
                             </IconButton>
                         </span>
                     </Tooltip>
-                )}
 
-                <Tooltip title={loading ? "Yükleniyor..." : canDelete ? "Kaydı Sil" : "Silme yetkiniz yok"}>
-                    <span>
-                        <IconButton
-                            size="small"
-                            onClick={() => onDeleteRow && onDeleteRow(p.row)}
-                            disabled={loading || !canDelete}
+                    {(mayOpenEdit || canEdit || loading) && (
+                        <Tooltip
+                            title={
+                                loading ? "Yükleniyor..." : canEdit ? "Detayları Düzenle" : "Düzenleme yetkiniz yok"
+                            }
                         >
-                            <DeleteOutlineOutlinedIcon fontSize="small" />
-                        </IconButton>
-                    </span>
-                </Tooltip>
-            </Stack>
-        ),
+                            <span>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => openEditor && openEditor(p.row)}
+                                    disabled={loading || !canEdit}
+                                >
+                                    <EditIcon fontSize="small" />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                    )}
+
+                    <Tooltip title={loading ? "Yükleniyor..." : canDelete ? "Kaydı Sil" : "Silme yetkiniz yok"}>
+                        <span>
+                            <IconButton
+                                size="small"
+                                onClick={() => onDeleteRow && onDeleteRow(p.row)}
+                                disabled={loading || !canDelete}
+                            >
+                                <DeleteOutlineOutlinedIcon fontSize="small" />
+                            </IconButton>
+                        </span>
+                    </Tooltip>
+                </Stack>
+            );
+        },
     };
 
     const calcStatus = (enter, exit) => {

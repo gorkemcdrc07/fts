@@ -73,10 +73,7 @@ const InfoRow = ({ icon: Icon, label, value }) => (
 const firstToken = (v) => {
     if (v == null) return null;
     if (typeof v !== "string") return String(v);
-    const parts = v
-        .split(";")
-        .map((s) => s.trim())
-        .filter(Boolean);
+    const parts = v.split(";").map((s) => s.trim()).filter(Boolean);
     return parts.length ? parts[0] : v.trim() === "" ? null : v;
 };
 
@@ -85,8 +82,7 @@ const firstLocation = (raw) => {
     if (typeof raw !== "string") return firstToken(raw);
     if (raw.includes("/")) {
         const [l, r] = raw.split("/").map((s) => s.trim());
-        const lf = firstToken(l),
-            rf = firstToken(r);
+        const lf = firstToken(l), rf = firstToken(r);
         if (lf && rf) return `${lf} / ${rf}`;
         return lf || rf || null;
     }
@@ -96,8 +92,7 @@ const firstLocation = (raw) => {
 const formatDuration = (km, kmh = 65) => {
     if (km == null || isNaN(km)) return null;
     const total = Math.round((km / kmh) * 60);
-    const h = Math.floor(total / 60),
-        m = total % 60;
+    const h = Math.floor(total / 60), m = total % 60;
     if (h <= 0) return `${m} dk`;
     if (m === 0) return `${h} saat`;
     return `${h} saat ${m} dk`;
@@ -139,87 +134,60 @@ const toLocalOffsetISO = (d) => {
     const hh = pad(d.getHours());
     const mm = pad(d.getMinutes());
     const ss = pad(d.getSeconds());
-    const tz = -d.getTimezoneOffset(); // minutes
+    const tz = -d.getTimezoneOffset();
     const sign = tz >= 0 ? "+" : "-";
     const tzh = pad(Math.floor(Math.abs(tz) / 60));
     const tzm = pad(Math.abs(tz) % 60);
     return `${yyyy}-${MM}-${dd}T${hh}:${mm}:${ss}${sign}${tzh}:${tzm}`;
 };
 
-/* === Mesai bandı 08:30–17:00: band dışındaysa yakın 08:30’a sabitle === */
+/* === Mesai bandı 08:30–17:00 === */
 const adjustForWorkHours = (eta) => {
     if (!(eta instanceof Date)) return eta;
-
     const d = new Date(eta);
-    const h = d.getHours();
-    const m = d.getMinutes();
-
-    // 08:30–17:00 içindeyse (17:00 dahil) dokunma
-    const inBand =
-        (h > 8 && h < 17) ||
-        (h === 8 && m >= 30) ||
-        (h === 17 && m === 0);
+    const h = d.getHours(), m = d.getMinutes();
+    const inBand = (h > 8 && h < 17) || (h === 8 && m >= 30) || (h === 17 && m === 0);
     if (inBand) return d;
-
-    const set0830 = (base) => {
-        const t = new Date(base);
-        t.setHours(8, 30, 0, 0);
-        return t;
-    };
-
-    // 17:00 ve sonrası → ertesi gün 08:30
+    const set0830 = (base) => { const t = new Date(base); t.setHours(8, 30, 0, 0); return t; };
     if (h > 17 || (h === 17 && m > 0)) {
         const nextDay = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
         return set0830(nextDay);
     }
-
-    // 08:30’dan önce → bugün 08:30
     return set0830(d);
 };
 
 /* === Cumartesi yardımcıları === */
-const isSaturday = (d) => d instanceof Date && d.getDay() === 6; // 6 = Cumartesi
+const isSaturday = (d) => d instanceof Date && d.getDay() === 6;
 const isAfterOrEqual = (d, hh, mm = 0) => {
     if (!(d instanceof Date)) return false;
-    const h = d.getHours();
-    const m = d.getMinutes();
+    const h = d.getHours(), m = d.getMinutes();
     return h > hh || (h === hh && m >= mm);
 };
 const isBefore = (d, hh, mm = 0) => {
     if (!(d instanceof Date)) return false;
-    const h = d.getHours();
-    const m = d.getMinutes();
+    const h = d.getHours(), m = d.getMinutes();
     return h < hh || (h === hh && m < mm);
 };
 
-/* === İlçe normalize: İkitelli -> Başakşehir (sadece mesafe hesap/önbellek için) === */
+/* === İlçe normalize === */
 const normalizeIlceForDistance = (ilce) => {
     if (ilce == null) return ilce;
     const s = String(ilce).trim();
     if (!s) return ilce;
     const up = s.toLocaleUpperCase("tr-TR");
-    // "İKİTELLİ" tam veya geçtiği her durumda
-    if (up === "İKİTELLİ" || up.includes("İKİTELLİ")) {
-        return "Başakşehir";
-    }
+    if (up === "İKİTELLİ" || up.includes("İKİTELLİ")) return "Başakşehir";
     return ilce;
 };
 
-/* -------------------- görselleştirme yardımcıları -------------------- */
+/* -------------------- görselleştirme -------------------- */
 const stepStyle = (kind) => {
     switch (kind) {
-        case "Sürüş":
-            return { borderLeftColor: "#60a5fa", icon: <RouteIcon fontSize="small" />, chip: { label: "Sürüş", color: "primary" } };
-        case "Mola":
-            return { borderLeftColor: "#f59e0b", icon: <LocalCafeIcon fontSize="small" />, chip: { label: "45 dk mola", color: "warning" } };
-        case "Günlük Dinlenme":
-            return { borderLeftColor: "#22c55e", icon: <HotelIcon fontSize="small" />, chip: { label: "11 saat dinlenme", color: "success" } };
-        case "Hafta Sonu Bekleme":
-            return { borderLeftColor: "#a855f7", icon: <HotelIcon fontSize="small" />, chip: { label: "Hafta Sonu Bekleme", color: "secondary" } };
-        case "Mesai Dışı Bekleme":
-            return { borderLeftColor: "#64748b", icon: <HotelIcon fontSize="small" />, chip: { label: "Mesai Dışı Bekleme", color: "default" } };
-        default:
-            return { borderLeftColor: "#94a3b8", icon: null, chip: { label: kind, color: "default" } };
+        case "Sürüş": return { borderLeftColor: "#60a5fa", icon: <RouteIcon fontSize="small" />, chip: { label: "Sürüş", color: "primary" } };
+        case "Mola": return { borderLeftColor: "#f59e0b", icon: <LocalCafeIcon fontSize="small" />, chip: { label: "45 dk mola", color: "warning" } };
+        case "Günlük Dinlenme": return { borderLeftColor: "#22c55e", icon: <HotelIcon fontSize="small" />, chip: { label: "11 saat dinlenme", color: "success" } };
+        case "Hafta Sonu Bekleme": return { borderLeftColor: "#a855f7", icon: <HotelIcon fontSize="small" />, chip: { label: "Hafta Sonu Bekleme", color: "secondary" } };
+        case "Mesai Dışı Bekleme": return { borderLeftColor: "#64748b", icon: <HotelIcon fontSize="small" />, chip: { label: "Mesai Dışı Bekleme", color: "default" } };
+        default: return { borderLeftColor: "#94a3b8", icon: null, chip: { label: kind, color: "default" } };
     }
 };
 
@@ -229,23 +197,12 @@ const StepCard = ({ step }) => {
     const hh = Math.floor(totalMin / 60);
     const mm = totalMin % 60;
     const durTxt = hh <= 0 ? `${mm} dk` : mm === 0 ? `${hh} saat` : `${hh} saat ${mm} dk`;
-
     return (
-        <Paper
-            variant="outlined"
-            sx={{
-                p: 1.25,
-                borderRadius: 2,
-                borderLeft: `4px solid ${s.borderLeftColor}`,
-                background: "linear-gradient(90deg, rgba(99,102,241,0.06), rgba(59,130,246,0.06))",
-            }}
-        >
+        <Paper variant="outlined" sx={{ p: 1.25, borderRadius: 2, borderLeft: `4px solid ${s.borderLeftColor}`, background: "linear-gradient(90deg, rgba(99,102,241,0.06), rgba(59,130,246,0.06))" }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.25 }}>
                 {s.icon}
                 <Chip size="small" label={s.chip.label} color={s.chip.color} />
-                <Typography variant="body2" sx={{ fontWeight: 700, ml: 0.5 }}>
-                    {durTxt}
-                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700, ml: 0.5 }}>{durTxt}</Typography>
             </Stack>
             <Typography variant="caption" sx={{ color: "text.secondary" }}>
                 {fmtDT(step.from)} → {fmtDT(step.to)}
@@ -271,6 +228,11 @@ export default function ETAEditor({
     const [distanceStatus, setDistanceStatus] = useState("idle"); // idle|loading|ok|fail
     const [kalanSurusStr, setKalanSurusStr] = useState(""); // HH:MM veya sayı (saat)
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
+
+    // Kalan sürüş persist/lock
+    const [kalanSaved, setKalanSaved] = useState(false);
+    const [initialKalanHours, setInitialKalanHours] = useState(null);
+    const [kalanColumnMissing, setKalanColumnMissing] = useState(false);
 
     const effectiveIlkNokta = useMemo(
         () => ilkNokta ?? (Array.isArray(sefer?.noktalar) ? sefer.noktalar[0] : null) ?? null,
@@ -353,12 +315,10 @@ export default function ETAEditor({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectiveIlkNokta, sefer, open]);
 
-    // distance getir (useCallback ile sabit)
+    /* -------------------- MESAFE -------------------- */
     const ensureDistanceLocal = useCallback(async ({ timeoutMs = 8000, retries = 1 } = {}) => {
-        // İlçe normalize → İkitelli => Başakşehir
         const yIlceEff = normalizeIlceForDistance(yuklemeIlce);
         const tIlceEff = normalizeIlceForDistance(teslimIlce);
-
         const cached = cacheGet(yuklemeIl, yIlceEff, teslimIl, tIlceEff);
         if (cached?.km != null) {
             setMesafeKm(Number(cached.km));
@@ -369,24 +329,15 @@ export default function ETAEditor({
         const withTimeout = (p, ms) =>
             new Promise((resolve, reject) => {
                 const id = setTimeout(() => reject(new Error("timeout")), ms);
-                p.then((v) => {
-                    clearTimeout(id);
-                    resolve(v);
-                }).catch((e) => {
-                    clearTimeout(id);
-                    reject(e);
-                });
+                p.then((v) => { clearTimeout(id); resolve(v); })
+                    .catch((e) => { clearTimeout(id); reject(e); });
             });
 
         let lastErr = null;
         for (let i = 0; i < 1 + (retries ?? 0); i++) {
             try {
                 const res = await withTimeout(
-                    fetchDistance({
-                        from: { il: yuklemeIl, ilce: yIlceEff },
-                        to: { il: teslimIl, ilce: tIlceEff },
-                        timeoutMs,
-                    }),
+                    fetchDistance({ from: { il: yuklemeIl, ilce: yIlceEff }, to: { il: teslimIl, ilce: tIlceEff }, timeoutMs }),
                     timeoutMs
                 );
                 const km = res?.km ?? res?.mesafe_km;
@@ -396,9 +347,7 @@ export default function ETAEditor({
                     return { km: Number(km), ts: Date.now(), source: "live", status: "ok" };
                 }
                 lastErr = new Error("invalid distance response");
-            } catch (e) {
-                lastErr = e;
-            }
+            } catch (e) { lastErr = e; }
         }
         console.warn("ensureDistanceLocal fail:", lastErr);
         return { status: "fail", error: lastErr };
@@ -406,8 +355,6 @@ export default function ETAEditor({
 
     useEffect(() => {
         if (!open) return;
-
-        // normalize edilmiş ilçe ile cache’e bak
         const yIlceEff = normalizeIlceForDistance(yuklemeIlce);
         const tIlceEff = normalizeIlceForDistance(teslimIlce);
         const cached = cacheGet(yuklemeIl, yIlceEff, teslimIl, tIlceEff);
@@ -416,7 +363,6 @@ export default function ETAEditor({
             setDistanceStatus("ok");
             return;
         }
-
         let alive = true;
         (async () => {
             setDistanceStatus("loading");
@@ -425,43 +371,82 @@ export default function ETAEditor({
             if (val.status === "ok" && val.km != null) setDistanceStatus("ok");
             else setDistanceStatus("fail");
         })();
-
-        return () => {
-            alive = false;
-        };
+        return () => { alive = false; };
     }, [open, yuklemeIl, yuklemeIlce, teslimIl, teslimIlce, ensureDistanceLocal]);
 
-    const sureStr = useMemo(() => formatDuration(mesafeKm, speedKmh), [mesafeKm, speedKmh]);
-    const hasDistance = distanceStatus === "ok";
-    const blocked = loading || !hasDistance;
+    /* -------------------- KALAN SÜRÜŞÜ YÜKLE -------------------- */
+    useEffect(() => {
+        let cancelled = false;
+        const load = async () => {
+            if (!open) return;
+            try {
+                const hasId = !!sefer?.id;
+                const hasSeferNo = !!sefer?.sefer_no;
+                if (!hasId && !hasSeferNo) return;
 
-    /* -------------------- SÜRÜŞ PLANI HESABI -------------------- */
+                let q = supabase.from("seferler").select("eta_kalan_surus");
+                if (hasId) q = q.eq("id", String(sefer.id)).maybeSingle();
+                else q = q.eq("sefer_no", sefer.sefer_no).maybeSingle();
+
+                const { data, error } = await q;
+
+                if (error) {
+                    if (error.code === "42703") { // column does not exist
+                        setKalanColumnMissing(true);
+                        setInitialKalanHours(null);
+                        setKalanSurusStr("");
+                        setKalanSaved(false);
+                        return;
+                    }
+                    throw error;
+                }
+
+                const hours = data?.eta_kalan_surus;
+                if (!cancelled && hours != null && Number.isFinite(Number(hours))) {
+                    const val = Number(hours);
+                    setInitialKalanHours(val);
+                    const mmTotal = Math.round(val * 60);
+                    const hh = Math.floor(mmTotal / 60);
+                    const mm = mmTotal % 60;
+                    setKalanSurusStr(`${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+                    setKalanSaved(true);
+                } else if (!cancelled) {
+                    setInitialKalanHours(null);
+                    setKalanSurusStr("");
+                    setKalanSaved(false);
+                }
+            } catch (e) {
+                console.error("eta_kalan_surus load error:", e);
+                setInitialKalanHours(null);
+                setKalanSurusStr("");
+                setKalanSaved(false);
+            }
+        };
+        load();
+        return () => { cancelled = true; };
+    }, [open, sefer?.id, sefer?.sefer_no]);
+
+    /* -------------------- SÜRÜŞ PLANI -------------------- */
+    const hasDistance = distanceStatus === "ok";
     const plan = useMemo(() => {
         if (!hasDistance || !mesafeKm || !Number.isFinite(Number(mesafeKm))) return null;
 
-        const requiredDriveHours = mesafeKm / speedKmh; // saf sürüş
+        const requiredDriveHours = mesafeKm / speedKmh;
         const userRemaining = Math.min(9, Math.max(0, parseHoursInput(kalanSurusStr) ?? 0));
 
-        // başlangıç zamanı: yükleme çıkış -> yoksa yükleme varış -> yoksa "şimdi"
         const rawStart =
             (yuklemeCikisRaw && new Date(yuklemeCikisRaw)) ||
             (yuklemeVarisRaw && new Date(yuklemeVarisRaw)) ||
             new Date();
 
         let startBase = new Date(rawStart.getTime());
-
-        // Adımlar
         const steps = [];
 
-        // Cumartesi başlama kuralı
-        if (isSaturday(startBase)) {
-            if (isAfterOrEqual(startBase, 12, 0)) {
-                // Cumartesi 12:00 ve sonrası → +24 saat bekleme
-                const from = new Date(startBase);
-                const to = addHours(startBase, 24);
-                steps.push({ kind: "Hafta Sonu Bekleme", hours: 24, from, to: new Date(to) });
-                startBase = to;
-            }
+        if (isSaturday(startBase) && isAfterOrEqual(startBase, 12, 0)) {
+            const from = new Date(startBase);
+            const to = addHours(startBase, 24);
+            steps.push({ kind: "Hafta Sonu Bekleme", hours: 24, from, to: new Date(to) });
+            startBase = to;
         }
 
         let t = new Date(startBase.getTime());
@@ -470,21 +455,12 @@ export default function ETAEditor({
         const pushStep = (kind, hours) => {
             const before = new Date(t.getTime());
             t = addHours(t, hours);
-            steps.push({
-                kind,
-                hours,
-                from: before,
-                to: new Date(t.getTime()),
-            });
+            steps.push({ kind, hours, from: before, to: new Date(t.getTime()) });
         };
 
-        // Kullanıcının kalan hakkı yeterliyse tek günde bitir
         if (remaining <= userRemaining + 1e-9) {
             pushStep("Sürüş", remaining);
-            // Mesai bandı ayarı
             let eta = adjustForWorkHours(new Date(t.getTime()));
-
-            // Cumartesi < 12:00 başlangıç olup ETA 22:00'ı aştıysa → +24 bekleme
             if (isSaturday(rawStart) && isBefore(rawStart, 12, 0)) {
                 const eh = eta.getHours() + eta.getMinutes() / 60;
                 if (eh > 22) {
@@ -494,18 +470,10 @@ export default function ETAEditor({
                     eta = waitTo;
                 }
             }
-
-            return {
-                steps,
-                eta,
-                requiredDriveHours,
-                usedFirstDay: remaining,
-                startBase,
-            };
+            return { steps, eta, requiredDriveHours, usedFirstDay: remaining, startBase };
         }
 
-        // Aksi halde bloklar halinde sürüş + molalar + günlük dinlenmeler
-        let dayRemainingDrive = userRemaining; // ilk gün
+        let dayRemainingDrive = userRemaining;
         let dayAccum = 0;
 
         const driveChunk = (maxHours) => {
@@ -516,57 +484,36 @@ export default function ETAEditor({
             return chunk;
         };
 
-        // İlk gün: kullanıcının kalan sürüşünü tüket
         while (remaining > 1e-9 && dayRemainingDrive > 1e-9) {
             const went = driveChunk(dayRemainingDrive);
             dayRemainingDrive -= went;
 
             if (remaining <= 1e-9) break;
 
-            // 4.5 saat tamamlandıysa ve aynı gün devam edeceksen 45 dk mola
             const blocks = Math.round(dayAccum / 4.5);
             const reached45Block = Math.abs(dayAccum - blocks * 4.5) < 1e-9 && blocks > 0;
-            if (reached45Block && dayRemainingDrive > 1e-9) {
-                pushStep("Mola", 0.75);
-            }
+            if (reached45Block && dayRemainingDrive > 1e-9) pushStep("Mola", 0.75);
 
-            // 9 saat dolduysa veya kalan sıfırlandıysa günlük dinlenme
             if (dayAccum >= 9 - 1e-9 || dayRemainingDrive <= 1e-9) {
                 pushStep("Günlük Dinlenme", 11);
                 dayAccum = 0;
-                dayRemainingDrive = 9; // sonraki gün tam hak
+                dayRemainingDrive = 9;
             }
         }
 
-        // Sonraki günler
         while (remaining > 1e-9) {
-            // 1. 4.5 sürüş
-            if (remaining <= 4.5 + 1e-9) {
-                pushStep("Sürüş", remaining);
-                break;
-            } else {
-                pushStep("Sürüş", 4.5);
-                remaining -= 4.5;
-            }
+            if (remaining <= 4.5 + 1e-9) { pushStep("Sürüş", remaining); break; }
+            pushStep("Sürüş", 4.5); remaining -= 4.5;
 
             if (remaining > 1e-9) pushStep("Mola", 0.75);
 
-            // 2. 4.5 sürüş
-            if (remaining <= 4.5 + 1e-9) {
-                pushStep("Sürüş", remaining);
-                break;
-            } else {
-                pushStep("Sürüş", 4.5);
-                remaining -= 4.5;
-            }
+            if (remaining <= 4.5 + 1e-9) { pushStep("Sürüş", remaining); break; }
+            pushStep("Sürüş", 4.5); remaining -= 4.5;
 
             if (remaining > 1e-9) pushStep("Günlük Dinlenme", 11);
         }
 
-        // Mesai bandı ayarı
         let eta = adjustForWorkHours(new Date(t.getTime()));
-
-        // Cumartesi < 12:00 başlangıç olup ETA 22:00'ı aştıysa → +24 bekleme
         if (isSaturday(rawStart) && isBefore(rawStart, 12, 0)) {
             const eh = eta.getHours() + eta.getMinutes() / 60;
             if (eh > 22) {
@@ -577,41 +524,31 @@ export default function ETAEditor({
             }
         }
 
-        return {
-            steps,
-            eta,
-            requiredDriveHours,
-            usedFirstDay: userRemaining,
-            startBase,
-        };
+        return { steps, eta, requiredDriveHours, usedFirstDay: userRemaining, startBase };
     }, [hasDistance, mesafeKm, speedKmh, kalanSurusStr, yuklemeCikisRaw, yuklemeVarisRaw]);
 
-    /* -------------------- AUTO-SAVE: yükleme çıkışı gelince otomatik ETA kaydı -------------------- */
+    /* -------------------- AUTO-SAVE ETA (opsiyonel) -------------------- */
     useEffect(() => {
         let cancelled = false;
         const run = async () => {
-            if (!open || autoSavedRef.current) return;      // dialog kapalıysa veya daha önce kaydedildiyse bırak
-            if (!yuklemeCikisRaw) return;                   // çıkış yoksa bekle
-            // mesafe hazır değilse bir dene
+            if (!open || autoSavedRef.current) return;
+            if (!yuklemeCikisRaw) return;
             if (distanceStatus !== "ok") {
                 const res = await ensureDistanceLocal({ timeoutMs: 8000, retries: 1 });
                 if (cancelled) return;
-                if (res?.status !== "ok") return;           // mesafe yoksa vazgeç
+                if (res?.status !== "ok") return;
             }
-            if (!plan?.eta) return;                         // plan henüz hazır değilse çık
+            if (!plan?.eta) return;
 
             try {
-                const id = sefer?.id;
-                const keyFilter = id ? { by: "id", value: id } : { by: "sefer_no", value: sefer?.sefer_no };
-                if (!keyFilter.value) return;
+                const hasId = !!sefer?.id;
+                const hasSeferNo = !!sefer?.sefer_no;
+                if (!hasId && !hasSeferNo) return;
 
                 const etaLocal = toLocalOffsetISO(plan.eta);
-                const q = supabase.from("seferler").update({
-                    eta_varis: etaLocal,
-                    eta_note: null, // tarih geldiyse notu temizle
-                });
-                if (keyFilter.by === "id") q.eq("id", keyFilter.value);
-                else q.eq("sefer_no", keyFilter.value);
+                let q = supabase.from("seferler").update({ eta_varis: etaLocal, eta_note: null });
+                if (hasId) q = q.eq("id", String(sefer.id));
+                else q = q.eq("sefer_no", sefer.sefer_no);
 
                 const { error } = await q;
                 if (!cancelled && !error) {
@@ -626,46 +563,71 @@ export default function ETAEditor({
         };
         run();
         return () => { cancelled = true; };
-        // plan?.eta'ya bağımlılık veriyoruz ki hesap hazır olur olmaz çalışsın
     }, [open, yuklemeCikisRaw, distanceStatus, plan?.eta, sefer?.id, sefer?.sefer_no, ensureDistanceLocal]);
 
-    // Sefer veya çıkış tarihi değişirse otomatik-kayıt kilidini sıfırla
     useEffect(() => { autoSavedRef.current = false; }, [sefer?.id, sefer?.sefer_no, yuklemeCikisRaw]);
 
-    /* -------------------- save (eta_varis / eta_note) -------------------- */
-    const handleSave = async () => {
-        if (blocked) return;
-
+    /* -------------------- TEK "KAYDET" (HEPSİ BİR ARADA) -------------------- */
+    const handleSaveAll = async () => {
         try {
-            const id = sefer?.id;
-            const keyFilter = id ? { by: "id", value: id } : { by: "sefer_no", value: sefer?.sefer_no };
-            if (!keyFilter.value) throw new Error("Sefer kimliği bulunamadı.");
+            const hasId = !!sefer?.id;
+            const hasSeferNo = !!sefer?.sefer_no;
+            if (!hasId && !hasSeferNo) throw new Error("Sefer kimliği bulunamadı.");
 
-            let payload;
-            if (!yuklemeCikisRaw) {
-                // Çıkış tarihi yok -> sadece notu yaz, tarih alanını boş bırak
-                payload = {
-                    eta_varis: null,
-                    eta_note: "Yükleme çıkış tarihi bekleniyor",
-                };
-            } else {
-                if (!plan?.eta) throw new Error("ETA hesaplanamadı.");
-                const etaLocal = toLocalOffsetISO(plan.eta);
-                payload = {
-                    eta_varis: etaLocal,
-                    eta_note: null,
-                };
+            // Ne kaydedilebilir?
+            const parsedKalan = parseHoursInput(kalanSurusStr);
+            const canSaveKalan =
+                !kalanColumnMissing &&
+                !kalanSaved &&
+                parsedKalan != null &&
+                parsedKalan >= 0 &&
+                parsedKalan <= 9;
+
+            // ETA: çıkış yoksa sadece not; çıkış varsa mesafe+plan şart
+            const canSaveEtaNote = !yuklemeCikisRaw; // not yazar
+            const canSaveEtaVaris = Boolean(yuklemeCikisRaw && hasDistance && plan?.eta);
+
+            if (!canSaveKalan && !canSaveEtaNote && !canSaveEtaVaris) {
+                setSnack({ open: true, severity: "info", msg: "Kaydedilecek bir değişiklik yok." });
+                return;
             }
 
-            const q = supabase.from("seferler").update(payload);
-            if (keyFilter.by === "id") q.eq("id", keyFilter.value);
-            else q.eq("sefer_no", keyFilter.value);
+            const payload = {};
+            if (canSaveKalan) payload.eta_kalan_surus = parsedKalan;
+            if (canSaveEtaNote) {
+                payload.eta_varis = null;
+                payload.eta_note = "Yükleme çıkış tarihi bekleniyor";
+            } else if (canSaveEtaVaris) {
+                payload.eta_varis = toLocalOffsetISO(plan.eta);
+                payload.eta_note = null;
+            }
+
+            let q = supabase.from("seferler").update(payload);
+            if (hasId) q = q.eq("id", String(sefer.id));
+            else q = q.eq("sefer_no", sefer.sefer_no);
 
             const { error } = await q;
-            if (error) throw error;
-
-            setSnack({ open: true, severity: "success", msg: "ETA kaydedildi." });
-            onClose && onClose();
+            if (error) {
+                // Kolon yoksa kullanıcıya net mesaj
+                if (error.code === "42703") {
+                    setKalanColumnMissing(true);
+                    setSnack({ open: true, severity: "warning", msg: "eta_kalan_surus kolonu mevcut değil. Migration uygulayın." });
+                } else {
+                    throw error;
+                }
+            } else {
+                if (canSaveKalan) {
+                    setInitialKalanHours(parsedKalan);
+                    setKalanSaved(true);
+                }
+                const pieces = [
+                    canSaveKalan ? "Kalan sürüş" : null,
+                    canSaveEtaNote ? "ETA notu" : null,
+                    canSaveEtaVaris ? "ETA varış tarihi" : null,
+                ].filter(Boolean).join(", ");
+                setSnack({ open: true, severity: "success", msg: `${pieces} kaydedildi.` });
+                onClose && onClose();
+            }
         } catch (e) {
             setSnack({ open: true, severity: "error", msg: `Kaydetme hatası: ${e.message || e}` });
         }
@@ -674,26 +636,15 @@ export default function ETAEditor({
     /* -------------------- RENDER -------------------- */
     const renderPlan = () => {
         if (!plan) return null;
-
         return (
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 800 }}>
                     Planlanan Adımlar
                 </Typography>
                 <Stack spacing={1}>
-                    {plan.steps.map((s, i) => (
-                        <StepCard key={i} step={s} />
-                    ))}
+                    {plan.steps.map((s, i) => (<StepCard key={i} step={s} />))}
                     <Divider sx={{ my: 0.5 }} />
-                    <Paper
-                        elevation={0}
-                        sx={{
-                            p: 1.25,
-                            borderRadius: 2,
-                            background: "linear-gradient(90deg,#22c55e22,#16a34a22)",
-                            border: "1px solid #16a34a55",
-                        }}
-                    >
+                    <Paper elevation={0} sx={{ p: 1.25, borderRadius: 2, background: "linear-gradient(90deg,#22c55e22,#16a34a22)", border: "1px solid #16a34a55" }}>
                         <Stack direction="row" spacing={1} alignItems="center">
                             <DriveEtaIcon fontSize="small" />
                             <Typography variant="body2" sx={{ fontWeight: 900 }}>
@@ -705,7 +656,6 @@ export default function ETAEditor({
                                 <Chip size="small" color="warning" label="Yükleme çıkış eksik" />
                             )}
                         </Stack>
-                        {/* eta_note varsa bilgi olarak göster */}
                         {sefer?.eta_note && (
                             <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5 }}>
                                 {sefer.eta_note}
@@ -716,6 +666,25 @@ export default function ETAEditor({
             </Paper>
         );
     };
+
+    // Alttaki tek “Kaydet” için dinamik enable/tooltip
+    const parsedKalan = parseHoursInput(kalanSurusStr);
+    const canSaveKalan =
+        !kalanColumnMissing &&
+        !kalanSaved &&
+        parsedKalan != null &&
+        parsedKalan >= 0 &&
+        parsedKalan <= 9;
+
+    const canSaveEtaNote = !yuklemeCikisRaw; // çıkış yoksa not yazabiliriz
+    const canSaveEtaVaris = Boolean(yuklemeCikisRaw && hasDistance && plan?.eta);
+
+    const bottomSaveEnabled = canSaveKalan || canSaveEtaNote || canSaveEtaVaris;
+    const bottomTooltip = bottomSaveEnabled
+        ? ""
+        : (yuklemeCikisRaw && !hasDistance)
+            ? "Mesafe hazır değil; ETA varışı için mesafe gerekli."
+            : "Kaydedilecek bir değişiklik yok.";
 
     const renderContent = () => {
         if (loading) {
@@ -728,15 +697,7 @@ export default function ETAEditor({
 
         return (
             <Stack spacing={2} sx={{ mt: 1 }}>
-                <Paper
-                    elevation={0}
-                    sx={{
-                        px: 2,
-                        py: 1.25,
-                        borderRadius: 2,
-                        background: "linear-gradient(90deg,#F472B633,#38BDF833)",
-                    }}
-                >
+                <Paper elevation={0} sx={{ px: 2, py: 1.25, borderRadius: 2, background: "linear-gradient(90deg,#F472B633,#38BDF833)" }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
                         <Stack spacing={0}>
                             <Typography variant="h6" sx={{ fontWeight: 900 }}>
@@ -812,22 +773,12 @@ export default function ETAEditor({
                 </Grid>
 
                 {!hasDistance && (
-                    <Box
-                        sx={{
-                            p: 1.5,
-                            borderRadius: 1.5,
-                            bgcolor: "warning.light",
-                            color: "warning.contrastText",
-                            border: (t) => `1px solid ${t.palette.warning.main}`,
-                        }}
-                    >
+                    <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "warning.light", color: "warning.contrastText", border: (t) => `1px solid ${t.palette.warning.main}` }}>
                         <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.25 }}>
-                            Mesafe bulunmadan işlem yapılamaz.
+                            Mesafe bulunmadan ETA varış kaydı yapılamaz. (Not kaydı yapılabilir.)
                         </Typography>
                         <Typography variant="caption">
-                            {distanceStatus === "loading"
-                                ? "Mesafe hesaplanıyor…"
-                                : "Hesaplama başarısız. Tekrar deneyin veya konumları kontrol edin."}
+                            {distanceStatus === "loading" ? "Mesafe hesaplanıyor…" : "Hesaplama başarısız. Tekrar deneyin veya konumları kontrol edin."}
                         </Typography>
                         <Button
                             size="small"
@@ -850,14 +801,21 @@ export default function ETAEditor({
                     <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 800 }}>
                         Kalan Sürüş
                     </Typography>
-                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="lex-end">
+
+                    {kalanColumnMissing && (
+                        <Alert severity="warning" sx={{ mb: 1 }}>
+                            Bu özellik için <strong>seferler.eta_kalan_surus</strong> kolonu gerekiyor (migration gerekli).
+                        </Alert>
+                    )}
+
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="flex-end">
                         <TextField
                             label="Kalan Sürüş (saat:dakika)"
                             placeholder="örn: 2:00 veya 2.5"
                             size="small"
                             value={kalanSurusStr}
                             onChange={(e) => setKalanSurusStr(e.target.value)}
-                            disabled={blocked}
+                            disabled={kalanSaved || kalanColumnMissing}
                             helperText="Maksimum 9 saat. Örn: 1:45, 4.5, 03:00"
                             error={
                                 Boolean(kalanSurusStr) &&
@@ -869,6 +827,12 @@ export default function ETAEditor({
                             }
                         />
                     </Stack>
+
+                    {kalanSaved && (
+                        <Typography variant="caption" sx={{ mt: 1, color: "text.secondary", display: "block" }}>
+                            Bu sefer için kalan sürüş değeri kaydedildi ve kilitlendi.
+                        </Typography>
+                    )}
                 </Paper>
 
                 {kalanSurusStr && plan && renderPlan()}
@@ -881,12 +845,14 @@ export default function ETAEditor({
             <Dialog open={Boolean(open)} onClose={onClose} maxWidth="lg" fullWidth>
                 <DialogContent>{renderContent()}</DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={onClose} variant="text">
-                        Vazgeç
-                    </Button>
-                    <Tooltip title={blocked ? "Mesafe hesaplanmadan kaydedemezsiniz." : ""}>
+                    <Button onClick={onClose} variant="text">Vazgeç</Button>
+                    <Tooltip title={bottomTooltip}>
                         <span>
-                            <Button variant="contained" onClick={handleSave} disabled={blocked}>
+                            <Button
+                                variant="contained"
+                                onClick={handleSaveAll}
+                                disabled={!bottomSaveEnabled}
+                            >
                                 Kaydet
                             </Button>
                         </span>

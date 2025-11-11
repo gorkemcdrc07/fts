@@ -192,6 +192,19 @@ const isBefore = (d, hh, mm = 0) => {
     return h < hh || (h === hh && m < mm);
 };
 
+/* === İlçe normalize: İkitelli -> Başakşehir (sadece mesafe hesap/önbellek için) === */
+const normalizeIlceForDistance = (ilce) => {
+    if (ilce == null) return ilce;
+    const s = String(ilce).trim();
+    if (!s) return ilce;
+    const up = s.toLocaleUpperCase("tr-TR");
+    // "İKİTELLİ" tam veya geçtiği her durumda
+    if (up === "İKİTELLİ" || up.includes("İKİTELLİ")) {
+        return "Başakşehir";
+    }
+    return ilce;
+};
+
 /* -------------------- görselleştirme yardımcıları -------------------- */
 const stepStyle = (kind) => {
     switch (kind) {
@@ -342,7 +355,11 @@ export default function ETAEditor({
 
     // distance getir (useCallback ile sabit)
     const ensureDistanceLocal = useCallback(async ({ timeoutMs = 8000, retries = 1 } = {}) => {
-        const cached = cacheGet(yuklemeIl, yuklemeIlce, teslimIl, teslimIlce);
+        // İlçe normalize → İkitelli => Başakşehir
+        const yIlceEff = normalizeIlceForDistance(yuklemeIlce);
+        const tIlceEff = normalizeIlceForDistance(teslimIlce);
+
+        const cached = cacheGet(yuklemeIl, yIlceEff, teslimIl, tIlceEff);
         if (cached?.km != null) {
             setMesafeKm(Number(cached.km));
             return { ...cached, status: "ok" };
@@ -366,15 +383,15 @@ export default function ETAEditor({
             try {
                 const res = await withTimeout(
                     fetchDistance({
-                        from: { il: yuklemeIl, ilce: yuklemeIlce },
-                        to: { il: teslimIl, ilce: teslimIlce },
+                        from: { il: yuklemeIl, ilce: yIlceEff },
+                        to: { il: teslimIl, ilce: tIlceEff },
                         timeoutMs,
                     }),
                     timeoutMs
                 );
                 const km = res?.km ?? res?.mesafe_km;
                 if (km != null && !Number.isNaN(Number(km))) {
-                    cacheSet(yuklemeIl, yuklemeIlce, teslimIl, teslimIlce, Number(km));
+                    cacheSet(yuklemeIl, yIlceEff, teslimIl, tIlceEff, Number(km));
                     setMesafeKm(Number(km));
                     return { km: Number(km), ts: Date.now(), source: "live", status: "ok" };
                 }
@@ -390,7 +407,10 @@ export default function ETAEditor({
     useEffect(() => {
         if (!open) return;
 
-        const cached = cacheGet(yuklemeIl, yuklemeIlce, teslimIl, teslimIlce);
+        // normalize edilmiş ilçe ile cache’e bak
+        const yIlceEff = normalizeIlceForDistance(yuklemeIlce);
+        const tIlceEff = normalizeIlceForDistance(teslimIlce);
+        const cached = cacheGet(yuklemeIl, yIlceEff, teslimIl, tIlceEff);
         if (cached?.km != null) {
             setMesafeKm(Number(cached.km));
             setDistanceStatus("ok");
@@ -763,7 +783,7 @@ export default function ETAEditor({
                                     distanceStatus === "loading"
                                         ? "Hesaplanıyor…"
                                         : hasDistance
-                                            ? `${mesafeKm} km — Tahmini sürüş: ${sureStr} (≥ ${speedKmh} km/s)`
+                                            ? `${mesafeKm} km — Tahmini sürüş: ${formatDuration(mesafeKm, speedKmh)} (≥ ${speedKmh} km/s)`
                                             : "Mesafe bulunamadı"
                                 }
                             />

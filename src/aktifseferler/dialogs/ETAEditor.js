@@ -432,7 +432,14 @@ export default function ETAEditor({
         if (!hasDistance || !mesafeKm || !Number.isFinite(Number(mesafeKm))) return null;
 
         const requiredDriveHours = mesafeKm / speedKmh;
-        const userRemaining = Math.min(9, Math.max(0, parseHoursInput(kalanSurusStr) ?? 0));
+
+        // >>> YENİ: 0 girilirse önce 11 saat dinlen, sonra 9 saat hakla başla
+        const parsedKalan = parseHoursInput(kalanSurusStr);
+        const zeroStartRest = (parsedKalan ?? 0) === 0;
+        const userRemaining = zeroStartRest
+            ? 9
+            : Math.min(9, Math.max(0, parsedKalan ?? 0));
+        // <<< YENİ
 
         const rawStart =
             (yuklemeCikisRaw && new Date(yuklemeCikisRaw)) ||
@@ -442,24 +449,34 @@ export default function ETAEditor({
         let startBase = new Date(rawStart.getTime());
         const steps = [];
 
-        if (isSaturday(startBase) && isAfterOrEqual(startBase, 12, 0)) {
-            const from = new Date(startBase);
-            const to = addHours(startBase, 24);
-            steps.push({ kind: "Hafta Sonu Bekleme", hours: 24, from, to: new Date(to) });
-            startBase = to;
-        }
-
+        // Zamanı ve step eklemeyi kontrol eden yardımcılar
         let t = new Date(startBase.getTime());
-        let remaining = requiredDriveHours;
-
         const pushStep = (kind, hours) => {
             const before = new Date(t.getTime());
             t = addHours(t, hours);
             steps.push({ kind, hours, from: before, to: new Date(t.getTime()) });
         };
 
+        // >>> YENİ: başlangıçta kalan=0 ise 11 saat günlük dinlenme uygula
+        if (zeroStartRest) {
+            pushStep("Günlük Dinlenme", 11);
+            startBase = new Date(t.getTime());
+        }
+        // <<< YENİ
+
+        // Cumartesi 12:00 sonrası başlıyorsa önce 24 saat hafta sonu bekleme
+        if (isSaturday(startBase) && isAfterOrEqual(startBase, 12, 0)) {
+            pushStep("Hafta Sonu Bekleme", 24);
+            startBase = new Date(t.getTime());
+        }
+
+        let remaining = requiredDriveHours;
+
         if (remaining <= userRemaining + 1e-9) {
+            // Tek günde bitebilir
+            const preT = new Date(t.getTime());
             pushStep("Sürüş", remaining);
+
             let eta = adjustForWorkHours(new Date(t.getTime()));
             if (isSaturday(rawStart) && isBefore(rawStart, 12, 0)) {
                 const eh = eta.getHours() + eta.getMinutes() / 60;
@@ -470,7 +487,7 @@ export default function ETAEditor({
                     eta = waitTo;
                 }
             }
-            return { steps, eta, requiredDriveHours, usedFirstDay: remaining, startBase };
+            return { steps, eta, requiredDriveHours, usedFirstDay: remaining, startBase: preT };
         }
 
         let dayRemainingDrive = userRemaining;

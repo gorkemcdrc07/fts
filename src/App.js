@@ -56,6 +56,9 @@ const FrigoYakitHakedis = lazy(() => import("./Hakedisler/FrigoYakitHakedis"));
 // Yeni: Sefer Tamamlayan Raporu
 const SeferTamamlayan = lazy(() => import("./raporlar/SeferTamamlayan"));
 
+// Yeni: Bölgesel Analiz Raporu
+const BolgeselAnaliz = lazy(() => import("./raporlar/BolgeselAnaliz"));
+
 // TEST VERİSİ
 const TEST_VERILERI = {
     "Sefer Performansı": [
@@ -121,6 +124,7 @@ function App() {
                                 <Route path="raporlar/eta-uyumsuz" element={<Suspense fallback={<div>ETA Uyumsuzluğu yükleniyor...</div>}><ETAUyumsuzlugu /></Suspense>} />
                                 <Route path="raporlar/tools" element={<Suspense fallback={<div>Pivot Rapor Yükleniyor...</div>}><PivotTool datasets={TEST_VERILERI} defaultDataset="Sefer Performansı" /></Suspense>} />
                                 <Route path="raporlar/sefer-tamamlayan" element={<Suspense fallback={<div>Sefer Tamamlayan yükleniyor...</div>}><SeferTamamlayan /></Suspense>} />
+                                <Route path="raporlar/bolgesel-analiz" element={<Suspense fallback={<div>Bölgesel Analiz yükleniyor...</div>}><BolgeselAnaliz /></Suspense>} />
 
                                 {/* KOCAELİ kartı */}
                                 <Route path="siparis-analiz" element={<Suspense fallback={<div>Yükleniyor...</div>}><SiparisAnaliz /></Suspense>} />

@@ -403,81 +403,107 @@ export default function TamamlananlarPage() {
     const { loading: permLoading, canEdit, flags } = usePermissions("tamamlanan_seferler");
     const canEditCompleted = !!(flags?.tmam_can_edit_details || canEdit);
 
-    const fetchPage = useCallback(async () => {
-        setLoading(true);
+    // === ORTAK SORGU KURUCUSU (filtre + sıralama + tarih) ===
+    const buildBaseQuery = useCallback(() => {
+        let q = supabase.from("tamamlanan_seferler").select("*", { count: "exact" });
 
-        // Sorgu 1: Ana veriyi 'tamamlanan_seferler' tablosundan çek
-        let query = supabase.from("tamamlanan_seferler").select("*", { count: "exact" });
-
-        if (dateStart) query = query.gte("sefer_tarihi", new Date(dateStart).toISOString());
+        if (dateStart) q = q.gte("sefer_tarihi", new Date(dateStart).toISOString());
         if (dateEnd) {
             const endIso = new Date(new Date(dateEnd).setHours(23, 59, 59, 999)).toISOString();
-            query = query.lte("sefer_tarihi", endIso);
+            q = q.lte("sefer_tarihi", endIso);
         }
 
+        // Quick filter
         const qVals = filterModel?.quickFilterValues ?? [];
         if (qVals.length) {
-            const q = qVals.join(" ").replace(/%/g, "");
-            query = query.or(
-                [
-                    `sefer_no.ilike.%${q}%`,
-                    `plaka.ilike.%${q}%`,
-                    `surucu_ad_soyad.ilike.%${q}%`,
-                    `musteri_adi.ilike.%${q}%`,
-                    `hizmet_adi.ilike.%${q}%`,
-                    `proje_adi.ilike.%${q}%`,
-                    `yukleme_noktasi.ilike.%${q}%`,
-                    `teslim_noktasi.ilike.%${q}%`,
-                    `yukleme_ili.ilike.%${q}%`,
-                    `yukleme_ilcesi.ilike.%${q}%`,
-                    `teslim_ili.ilike.%${q}%`,
-                    `teslim_ilcesi.ilike.%${q}%`,
-                ].join(",")
-            );
+            const qStr = qVals.join(" ").replace(/%/g, "");
+            q = q.or([
+                `sefer_no.ilike.%${qStr}%`,
+                `plaka.ilike.%${qStr}%`,
+                `surucu_ad_soyad.ilike.%${qStr}%`,
+                `musteri_adi.ilike.%${qStr}%`,
+                `hizmet_adi.ilike.%${qStr}%`,
+                `proje_adi.ilike.%${qStr}%`,
+                `yukleme_noktasi.ilike.%${qStr}%`,
+                `teslim_noktasi.ilike.%${qStr}%`,
+                `yukleme_ili.ilike.%${qStr}%`,
+                `yukleme_ilcesi.ilike.%${qStr}%`,
+                `teslim_ili.ilike.%${qStr}%`,
+                `teslim_ilcesi.ilike.%${qStr}%`,
+            ].join(","));
         }
 
+        // Grid filtreleri
         for (const f of filterModel?.items || []) {
             const field = f.field, value = f.value;
-            if (!field || value == null || value === "") continue;
+            if (!field || value == null || value === "" || field === "status_display") continue;
             const op = f.operator ?? f.operatorValue ?? "contains";
-            if (op === "is" || op === "equals") query = query.eq(field, value);
-            else if (op === "startsWith") query = query.ilike(field, `${value}%`);
-            else if (op === "endsWith") query = query.ilike(field, `%${value}`);
-            else if (op === "isAnyOf" && Array.isArray(value) && value.length) query = query.in(field, value);
-            else if (field === 'status_display') continue;
-            else query = query.ilike(field, `%${value}%`);
+            if (op === "is" || op === "equals") q = q.eq(field, value);
+            else if (op === "startsWith") q = q.ilike(field, `${value}%`);
+            else if (op === "endsWith") q = q.ilike(field, `%${value}`);
+            else if (op === "isAnyOf" && Array.isArray(value) && value.length) q = q.in(field, value);
+            else q = q.ilike(field, `%${value}%`);
         }
 
         if (sortModel?.length) {
             const s = sortModel[0];
-            query = query.order(s.field, { ascending: s.sort !== "desc" });
+            q = q.order(s.field, { ascending: s.sort !== "desc", nullsFirst: false });
         } else {
-            query = query.order("sefer_tarihi", { ascending: false });
+            q = q.order("sefer_tarihi", { ascending: false, nullsFirst: false });
         }
 
-        const from = paginationModel.page * paginationModel.pageSize;
-        const to = from + paginationModel.pageSize - 1;
+        return q;
+    }, [dateStart, dateEnd, filterModel, sortModel]);
 
-        const { data, count, error } = await query.range(from, to);
+    // === TÜM KAYITLARI batch batch çeken helper ===
+    const fetchAllMatchingRows = useCallback(async (batchSize = 1000) => {
+        let all = [];
+        let from = 0;
 
-        if (!error) {
+        while (true) {
+            const base = buildBaseQuery(); // her turda yeniden kur
+            const { data, error } = await base.range(from, from + batchSize - 1);
+            if (error) throw error;
+
+            const chunk = data || [];
+            all = all.concat(chunk);
+
+            if (chunk.length < batchSize) break; // bitti
+            from += batchSize;
+        }
+        return all;
+    }, [buildBaseQuery]);
+
+    const fetchPage = useCallback(async () => {
+        setLoading(true);
+
+        try {
+            // Tek merkezden aynı filtre/sıralama
+            let query = buildBaseQuery();
+
+            // Pagination aralığı
+            const from = paginationModel.page * paginationModel.pageSize;
+            const to = from + paginationModel.pageSize - 1;
+
+            // Sadece 1 kez range çağrısı
+            const { data, count, error } = await query.range(from, to);
+            if (error) throw error;
+
             const currentRows = data || [];
             setRows(currentRows);
             setRowCount(count || 0);
 
+            // ------- ETA analizi -------
             const seferNos = currentRows.map((r) => r.sefer_no);
             let maxTeslim = {};
 
             if (seferNos.length) {
-                // Sorgu 2: ETA analizi için 'tamamlanan_detaylar' tablosundan son teslimat verisini çek
                 const { data: detailsData, error: detailsError } = await supabase
                     .from("tamamlanan_detaylar")
                     .select("sefer_no, teslim_varis, teslim_cikis")
                     .in("sefer_no", seferNos);
 
-                if (detailsError) {
-                    console.error("Error fetching detail data for ETA analysis:", detailsError);
-                } else {
+                if (!detailsError) {
                     (detailsData || []).forEach(d => {
                         let currentTeslim = null;
                         if (d.teslim_varis && !Number.isNaN(new Date(d.teslim_varis).getTime())) {
@@ -489,7 +515,6 @@ export default function TamamlananlarPage() {
                                 currentTeslim = tCikis;
                             }
                         }
-
                         if (currentTeslim) {
                             if (!maxTeslim[d.sefer_no] || currentTeslim > maxTeslim[d.sefer_no]) {
                                 maxTeslim[d.sefer_no] = currentTeslim;
@@ -497,79 +522,75 @@ export default function TamamlananlarPage() {
                         }
                     });
                 }
+            }
 
-                const bySefer = {};
-                let early = 0, ontime = 0, late = 0;
-                let delayAcc = 0, delayCnt = 0;
-                let earlyAcc = 0, earlyCnt = 0;
+            const bySefer = {};
+            let early = 0, ontime = 0, late = 0;
+            let delayAcc = 0, delayCnt = 0;
+            let earlyAcc = 0, earlyCnt = 0;
 
-                const lateBuckets = [
-                    { name: "0-30", value: 0 },
-                    { name: "31-60", value: 0 },
-                    { name: "61-120", value: 0 },
-                    { name: "121-240", value: 0 },
-                    { name: "241-480", value: 0 },
-                    { name: "480+", value: 0 },
-                ];
+            const lateBuckets = [
+                { name: "0-30", value: 0 },
+                { name: "31-60", value: 0 },
+                { name: "61-120", value: 0 },
+                { name: "121-240", value: 0 },
+                { name: "241-480", value: 0 },
+                { name: "480+", value: 0 },
+            ];
 
-                for (const r of currentRows) {
-                    const tETA = r?.eta_varis ? new Date(r.eta_varis) : null;
-                    const tReal = maxTeslim[r.sefer_no] || null;
+            for (const r of currentRows) {
+                const tETA = r?.eta_varis ? new Date(r.eta_varis) : null;
+                const tReal = maxTeslim[r.sefer_no] || null;
 
-                    let status = "ONTIME";
-                    let diffMin = 0;
+                let status = "ONTIME";
+                let diffMin = 0;
 
-                    if (tETA && tReal) {
-                        diffMin = Math.round((tReal - tETA) / 60000);
-                        if (diffMin > 5) {
-                            status = "LATE"; late++;
-                            delayAcc += diffMin; delayCnt++;
-                            const abs = diffMin;
-                            if (abs <= 30) lateBuckets[0].value++;
-                            else if (abs <= 60) lateBuckets[1].value++;
-                            else if (abs <= 120) lateBuckets[2].value++;
-                            else if (abs <= 240) lateBuckets[3].value++;
-                            else if (abs <= 480) lateBuckets[4].value++;
-                            else lateBuckets[5].value++;
-                        } else if (diffMin < -5) {
-                            status = "EARLY"; early++;
-                            earlyAcc += Math.abs(diffMin); earlyCnt++;
-                        } else {
-                            status = "ONTIME"; ontime++;
-                        }
+                if (tETA && tReal) {
+                    diffMin = Math.round((tReal - tETA) / 60000);
+                    if (diffMin > 5) {
+                        status = "LATE"; late++;
+                        delayAcc += diffMin; delayCnt++;
+                        const abs = diffMin;
+                        if (abs <= 30) lateBuckets[0].value++;
+                        else if (abs <= 60) lateBuckets[1].value++;
+                        else if (abs <= 120) lateBuckets[2].value++;
+                        else if (abs <= 240) lateBuckets[3].value++;
+                        else if (abs <= 480) lateBuckets[4].value++;
+                        else lateBuckets[5].value++;
+                    } else if (diffMin < -5) {
+                        status = "EARLY"; early++;
+                        earlyAcc += Math.abs(diffMin); earlyCnt++;
                     } else {
                         status = "ONTIME"; ontime++;
                     }
-
-                    bySefer[r.sefer_no] = {
-                        etaISO: tETA ? tETA.toISOString() : null,
-                        maxTeslimISO: tReal ? tReal.toISOString() : null,
-                        status,
-                        diffMin,
-                    };
+                } else {
+                    status = "ONTIME"; ontime++;
                 }
 
-                setAnalysis({
-                    bySefer,
-                    summary: {
-                        early, ontime, late,
-                        avgDelayMin: delayCnt ? delayAcc / delayCnt : 0,
-                        avgEarlyMin: earlyCnt ? earlyAcc / earlyCnt : 0,
-                    },
-                    lateBuckets,
-                });
-            } else {
-                setAnalysis({
-                    bySefer: {},
-                    summary: { early: 0, ontime: 0, late: 0, avgDelayMin: 0, avgEarlyMin: 0 },
-                    lateBuckets: [],
-                });
+                bySefer[r.sefer_no] = {
+                    etaISO: tETA ? tETA.toISOString() : null,
+                    maxTeslimISO: tReal ? tReal.toISOString() : null,
+                    status,
+                    diffMin,
+                };
+                // Not: İstersen satıra status_display yazmak için burada currentRows üzerinde map de yapabilirsin.
             }
-        } else {
-            console.error(error);
+
+            setAnalysis({
+                bySefer,
+                summary: {
+                    early, ontime, late,
+                    avgDelayMin: delayCnt ? delayAcc / delayCnt : 0,
+                    avgEarlyMin: earlyCnt ? earlyAcc / earlyCnt : 0,
+                },
+                lateBuckets,
+            });
+        } catch (err) {
+            console.error(err);
         }
+
         setLoading(false);
-    }, [dateStart, dateEnd, paginationModel, sortModel, filterModel]);
+    }, [buildBaseQuery, paginationModel]);
 
     useEffect(() => { fetchPage(); }, [fetchPage]);
 
@@ -821,30 +842,29 @@ export default function TamamlananlarPage() {
 
     // Export functions with ExcelJS
     const exportExcel = async () => {
-        if (!rows.length) return;
+        const allRows = await fetchAllMatchingRows();
+        if (!allRows.length) return;
 
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet("Tamamlanan Seferler");
 
         const cols = columns.filter(c => c.field !== 'status_display');
-
         worksheet.columns = cols.map(c => ({
             header: c.headerName,
             key: c.field,
-            width: c.width / 8,
-            style: { numFmt: c.field.includes('tarih') || c.field.includes('zamani') ? 'dd.mm.yyyy hh:mm' : undefined }
+            width: Math.max(12, Math.round((c.width || 140) / 8)),
+            style: { numFmt: (c.field.includes('tarih') || c.field.includes('zamani')) ? 'dd.mm.yyyy hh:mm' : undefined }
         }));
 
-        const dataToExport = rows.map(r => {
+        const dataToExport = allRows.map(r => {
             const row = {};
             cols.forEach(c => {
-                let value = r[c.field];
                 if (c.field === 'sefer_tarihi' || c.field === 'eta_varis' || c.field === 'kayit_zamani') {
-                    row[c.field] = value ? new Date(value) : null;
+                    row[c.field] = r[c.field] ? new Date(r[c.field]) : null;
                 } else if (c.valueGetter) {
                     row[c.field] = c.valueGetter(null, r);
                 } else {
-                    row[c.field] = value;
+                    row[c.field] = r[c.field];
                 }
             });
             return row;
@@ -854,37 +874,90 @@ export default function TamamlananlarPage() {
 
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-        saveAs(blob, `tamamlanan_seferler_${fmtDate(dateStart).toISOString().slice(0, 10)}.xlsx`);
+        const startStr = (fmtDate(dateStart)?.toISOString()?.slice(0, 10)) || "baslangic";
+        const endStr = (fmtDate(dateEnd)?.toISOString()?.slice(0, 10)) || "bitis";
+        saveAs(blob, `tamamlanan_seferler_${startStr}__${endStr}.xlsx`);
     };
 
+    // YENİ: Tüm filtreye uyan ana kayıtları ve detayları export eder
     const exportExcelWithDetails = async () => {
-        if (!rows.length) return;
+        // 1) Filtre + sıralama + tarih aralığına uyan TÜM kayıtları çek
+        const mainRows = await fetchAllMatchingRows();
+        if (!mainRows.length) return;
 
         const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet("Ana Seferler");
 
+        // === Sayfa 1: Ana Seferler ===
+        const wsMain = workbook.addWorksheet("Ana Seferler");
         const mainCols = columns.filter(c => c.field !== 'status_display');
-        worksheet.columns = mainCols.map(c => ({ header: c.headerName, key: c.field, width: 18 }));
+        wsMain.columns = mainCols.map(c => ({
+            header: c.headerName,
+            key: c.field,
+            width: 18
+        }));
 
-        const mainData = rows.map(r => {
+        const mainData = mainRows.map(r => {
             const row = {};
             mainCols.forEach(c => {
-                row[c.field] = r[c.field];
-                if (c.field.includes('tarih') || c.field.includes('zamani')) {
-                    row[c.field] = r[c.field] ? new Date(r[c.field]) : null;
-                } else if (c.valueGetter) {
+                if (c.valueGetter) {
                     row[c.field] = c.valueGetter(null, r);
+                } else if (c.field.includes('tarih') || c.field.includes('zamani')) {
+                    row[c.field] = r[c.field] ? new Date(r[c.field]) : null;
+                } else {
+                    row[c.field] = r[c.field];
                 }
             });
             return row;
         });
-        worksheet.addRows(mainData);
+        wsMain.addRows(mainData);
+
+        // === Sayfa 2: Detaylar (tamamlanan_detaylar) ===
+        const wsDetay = workbook.addWorksheet("Detaylar");
+        wsDetay.columns = [
+            { header: "sefer_no", key: "sefer_no", width: 18 },
+            { header: "nokta_sirasi", key: "nokta_sirasi", width: 12 },
+            { header: "proje_adi", key: "proje_adi", width: 24 },
+            { header: "yukleme_noktasi", key: "yukleme_noktasi", width: 24 },
+            { header: "yukleme_varis", key: "yukleme_varis", width: 20 },
+            { header: "yukleme_cikis", key: "yukleme_cikis", width: 20 },
+            { header: "teslim_noktasi", key: "teslim_noktasi", width: 24 },
+            { header: "teslim_varis", key: "teslim_varis", width: 20 },
+            { header: "teslim_cikis", key: "teslim_cikis", width: 20 },
+        ];
+
+        const seferNos = mainRows.map(r => r.sefer_no).filter(Boolean);
+        const chunkSize = 1000;
+        let allDetails = [];
+
+        for (let i = 0; i < seferNos.length; i += chunkSize) {
+            const chunk = seferNos.slice(i, i + chunkSize);
+            const { data, error } = await supabase
+                .from("tamamlanan_detaylar")
+                .select("sefer_no, nokta_sirasi, proje_adi, yukleme_noktasi, yukleme_varis, yukleme_cikis, teslim_noktasi, teslim_varis, teslim_cikis")
+                .in("sefer_no", chunk)
+                .order("sefer_no", { ascending: true })
+                .order("nokta_sirasi", { ascending: true });
+
+            if (error) throw error;
+            allDetails = allDetails.concat(data || []);
+        }
+
+        wsDetay.addRows(allDetails.map(d => ({
+            ...d,
+            yukleme_varis: d.yukleme_varis ? new Date(d.yukleme_varis) : null,
+            yukleme_cikis: d.yukleme_cikis ? new Date(d.yukleme_cikis) : null,
+            teslim_varis: d.teslim_varis ? new Date(d.teslim_varis) : null,
+            teslim_cikis: d.teslim_cikis ? new Date(d.teslim_cikis) : null,
+        })));
 
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-        saveAs(blob, `tamamlanan_seferler_detayli_${fmtDate(dateStart).toISOString().slice(0, 10)}.xlsx`);
+        const startStr = (fmtDate(dateStart)?.toISOString()?.slice(0, 10)) || "baslangic";
+        const endStr = (fmtDate(dateEnd)?.toISOString()?.slice(0, 10)) || "bitis";
+        saveAs(blob, `tamamlanan_seferler_detayli_${startStr}__${endStr}.xlsx`);
     };
 
+    // --------- EKLENDİ: statText ve handleDashboardFilter ----------
     const statText = useMemo(() => {
         const pageStart = paginationModel.page * paginationModel.pageSize + 1;
         const pageEnd = Math.min(rowCount, pageStart + paginationModel.pageSize - 1);
@@ -896,8 +969,10 @@ export default function TamamlananlarPage() {
     }, [rowCount, paginationModel, loading]);
 
     const handleDashboardFilter = (type) => {
-        console.warn(`Dashboard filtresi (${type}) API seviyesinde desteklenmemektedir. Görsel gösterim için kullanılacaktır.`);
+        // İleride API seviyesinde filtreleme / ek sorgular buraya eklenebilir
+        console.warn(`Dashboard filtresi (${type}) API seviyesinde desteklenmiyor. Görsel amaçlı.`);
     };
+    // ---------------------------------------------------------------
 
     return (
         <Box

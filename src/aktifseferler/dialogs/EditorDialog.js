@@ -86,6 +86,9 @@ export const fromISOToCombined = (raw) => {
 // =================================================================
 // DateTimeSingleField
 // =================================================================
+// =================================================================
+// DateTimeSingleField
+// =================================================================
 function DateTimeSingleField({
     label,
     value,
@@ -131,6 +134,32 @@ function DateTimeSingleField({
         onChange(masked);
     }
 
+    // >>> YENİ: Boşken tıklandığında / focus olduğunda o anki tarih-saatle doldur
+    function handleAutoFillNow() {
+        if (disabled) return;
+
+        const digs = normalizeFormattedToDigits(text);
+        // İçerikte zaten bir şey varsa dokunma
+        if (digs.length > 0) return;
+
+        const now = new Date();
+        const iso = toLocalISOString(now);
+
+        const pad = (n) => String(n).padStart(2, "0");
+        const dd = pad(now.getDate());
+        const MM = pad(now.getMonth() + 1);
+        const yyyy = now.getFullYear();
+        const HH = pad(now.getHours());
+        const mm = pad(now.getMinutes());
+
+        const masked = `${dd}.${MM}.${yyyy} ${HH}:${mm}`;
+
+        setText(masked);
+        // Parent state de güncellensin
+        onChange(iso);
+    }
+    // <<< YENİ
+
     const digs = normalizeFormattedToDigits(text);
     const complete = digs.length === 12;
     const { dd, MM, yyyy, HH, mm } = validateParts(
@@ -146,6 +175,9 @@ function DateTimeSingleField({
             value={text}
             onChange={handleChange}
             onBlur={() => setTouched(true)}
+            // YENİ: focus veya tıklamada otomatik doldur
+            onFocus={handleAutoFillNow}
+            onClick={handleAutoFillNow}
             placeholder="gg.aa.yyyy ss:dd"
             InputLabelProps={{ shrink: true }}
             inputProps={{ inputMode: "numeric", pattern: "\\d*", maxLength: 16 }}

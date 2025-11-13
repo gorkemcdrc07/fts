@@ -43,8 +43,7 @@ import {
 } from "@mui/icons-material";
 
 // Modal Component
-import { TripDetailModal } from "./TripDetailModal";
-
+import TripDetailModal from "./TripDetailModal";
 // ===================== Dayjs Setup =====================
 dayjs.extend(duration);
 dayjs.locale("tr");

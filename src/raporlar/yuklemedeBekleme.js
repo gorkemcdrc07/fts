@@ -24,8 +24,10 @@ import {
     Typography,
     Alert,
     CircularProgress,
-    LinearProgress, // Yeni: Yükleme çubuğu
+    LinearProgress,
+    Grid,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
 // DataGrid
 import {
@@ -39,63 +41,42 @@ import {
     Refresh as RefreshIcon,
     InfoOutlined as InfoOutlinedIcon,
     Download as DownloadIcon,
-    HourglassTop as HourglassTopIcon, // Yeni: Bekleme ikonu
+    Summarize as SummarizeIcon,
+    AvTimer as AvTimerIcon,
+    WarningAmber as WarningIcon,
+    AccessAlarm as AccessAlarmIcon,
 } from "@mui/icons-material";
 
-// Modal Component
-import { TripDetailModal } from "./TripDetailModal";
+// Modal Component (default export)
+import TripDetailModal from "./TripDetailModal";
 
 // ===================== Dayjs Setup =====================
 dayjs.extend(duration);
 dayjs.locale("tr");
 
-/* ===================== Sabitler / Şemalar (Değişmedi) ===================== */
+/* ===================== Sabitler / Şemalar ===================== */
 const DETAIL_TABLE = "tamamlanan_detaylar";
 const SUMMARY_TABLE = "tamamlanan_seferler";
 const TARGET_WAIT_MINUTES = 240;
 const TODAY_DATE_ISO = dayjs().format("YYYY-MM-DD");
 
 const SUMMARY_COLS = [
-    "id",
-    "sefer_no",
-    "plaka",
-    "treyler",
-    "surucu_ad_soyad",
-    "surucu_tckn",
-    "surucu_telefon",
-    "sefer_tarihi",
-    "yukleme_ili",
-    "yukleme_ilcesi",
-    "teslim_ili",
-    "teslim_ilcesi",
-    "musteri_adi",
-    "yukleme_noktasi",
-    "teslim_noktasi",
-    "proje_adi",
+    "id", "sefer_no", "plaka", "treyler", "surucu_ad_soyad", "surucu_tckn",
+    "surucu_telefon", "sefer_tarihi", "yukleme_ili", "yukleme_ilcesi",
+    "teslim_ili", "teslim_ilcesi", "musteri_adi", "yukleme_noktasi",
+    "teslim_noktasi", "proje_adi",
 ].join(",");
 
 const DETAIL_COLS = [
-    "sefer_no",
-    "nokta_sirasi",
-    "yukleme_noktasi",
-    "teslim_noktasi",
-    "yukleme_varis",
-    "yukleme_cikis",
-    "teslim_varis",
-    "teslim_cikis",
-    "yukleme_varis_guncelleyen",
-    "yukleme_varis_guncelleme_tarihi",
-    "yukleme_cikis_guncelleyen",
-    "yukleme_cikis_guncelleme_tarihi",
-    "teslim_varis_guncelleyen",
-    "teslim_varis_guncelleme_tarihi",
-    "teslim_cikis_guncelleyen",
-    "teslim_cikis_guncelleme_tarihi",
+    "sefer_no", "nokta_sirasi", "yukleme_noktasi", "teslim_noktasi",
+    "yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis",
+    "yukleme_varis_guncelleyen", "yukleme_varis_guncelleme_tarihi",
+    "yukleme_cikis_guncelleyen", "yukleme_cikis_guncelleme_tarihi",
+    "teslim_varis_guncelleyen", "teslim_varis_guncelleme_tarihi",
+    "teslim_cikis_guncelleyen", "teslim_cikis_guncelleme_tarihi",
 ].join(",");
 
-/* ===================== Yardımcılar (Kısmen Güncellendi) ===================== */
-const safeVF = (fn) => (p) => (fn ? fn(p.value) : p.value);
-
+/* ===================== Yardımcılar ===================== */
 const parseDT = (v) => {
     if (!v && v !== 0) return null;
     const d = dayjs(v);
@@ -131,24 +112,15 @@ const fmtMinutes = (min) => {
     return minToHM(n);
 };
 
-// Yenilenmiş WaitChip
+// WaitChip
 const WaitChip = ({ minutes }) => {
     if (minutes === null) return <Chip label="—" size="small" variant="outlined" />;
-
     let color = "success";
     let label = fmtMinutes(minutes);
-
-    if (minutes >= TARGET_WAIT_MINUTES) {
-        color = "error";
-    } else if (minutes >= TARGET_WAIT_MINUTES * 0.75) { // Örn: 180 dk
-        color = "warning";
-    } else if (minutes >= TARGET_WAIT_MINUTES * 0.5) { // Örn: 120 dk
-        color = "info";
-    }
-
-    // Yüksek bekleme sürelerini daha belirgin yap
+    if (minutes >= TARGET_WAIT_MINUTES) { color = "error"; }
+    else if (minutes >= TARGET_WAIT_MINUTES * 0.75) { color = "warning"; }
+    else if (minutes >= TARGET_WAIT_MINUTES * 0.5) { color = "info"; }
     const isHigh = minutes >= TARGET_WAIT_MINUTES * 0.75;
-
     return (
         <Tooltip title={`${minutes} dakika bekleme`}>
             <Chip
@@ -156,15 +128,13 @@ const WaitChip = ({ minutes }) => {
                 label={label}
                 variant={isHigh ? "filled" : "outlined"}
                 size="small"
-                sx={{
-                    fontWeight: isHigh ? 700 : 500,
-                }}
+                sx={{ fontWeight: isHigh ? 700 : 500 }}
             />
         </Tooltip>
     );
 };
 
-/* ==== Excel Toolbar (Güncellendi) ==== */
+// ExcelToolbar
 const ExcelToolbar = ({ onExport, onRefresh, disabled }) => (
     <GridToolbarContainer sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
         <GridToolbarQuickFilter
@@ -199,6 +169,38 @@ const ExcelToolbar = ({ onExport, onRefresh, disabled }) => (
     </GridToolbarContainer>
 );
 
+// StatCard
+const StatCard = ({ title, value, icon, color = "primary.main" }) => (
+    <Paper
+        elevation={0}
+        variant="outlined"
+        sx={{ p: 2.5, display: 'flex', alignItems: 'center', gap: 2, borderRadius: 2 }}
+    >
+        <Box sx={(theme) => {
+            const [paletteKey, shade] = color.split('.');
+            const resolvedColor =
+                theme.palette[paletteKey] && theme.palette[paletteKey][shade]
+                    ? theme.palette[paletteKey][shade]
+                    : color;
+            return {
+                p: 1.5,
+                bgcolor: alpha(resolvedColor, 0.1),
+                color: color,
+                borderRadius: '50%',
+                display: 'grid',
+                placeItems: 'center'
+            };
+        }}>
+            {icon}
+        </Box>
+        <Box>
+            <Typography variant="h6" fontWeight={700} noWrap>{value}</Typography>
+            <Typography variant="body2" color="text.secondary" noWrap>{title}</Typography>
+        </Box>
+    </Paper>
+);
+
+
 /* ===================== Ana Bileşen ===================== */
 export default function YuklemedeBekleme() {
     const [rows, setRows] = useState([]);
@@ -219,7 +221,7 @@ export default function YuklemedeBekleme() {
         setSelectedRow(null);
     };
 
-    // Veri çekme ve hesaplama mantığı (Değişmedi)
+    // fetchAll (Lokasyon bazlı gruplama + aynı nokta/varış/çıkış tekilleştirme)
     const fetchAll = useCallback(async () => {
         setLoading(true);
         setFetchError(null);
@@ -227,7 +229,6 @@ export default function YuklemedeBekleme() {
         const startDate = dayjs(dateFilter).startOf("day").toISOString();
         const endDate = dayjs(dateFilter).add(1, "day").startOf("day").toISOString();
 
-        // 1) Özet verileri çek
         const { data: summaryData, error: summaryError } = await supabase
             .from(SUMMARY_TABLE)
             .select(SUMMARY_COLS)
@@ -248,9 +249,7 @@ export default function YuklemedeBekleme() {
             return;
         }
 
-        // 2) Detayları sefer_no'ya göre çek
         const seferNos = summaryResult.map((r) => r.sefer_no).filter(Boolean);
-
         const { data: detailData, error: detailError } = await supabase
             .from(DETAIL_TABLE)
             .select(DETAIL_COLS)
@@ -263,52 +262,71 @@ export default function YuklemedeBekleme() {
 
         const detailResult = detailData || [];
         const byNo = new Map();
+        const finalGridRows = [];
 
-        // 3) Verileri eşleştir ve bekleme hesapla
-        const computed = summaryResult.map((r, i) => {
-            const sefer_no = r.sefer_no || `NO-${r.id ?? i}`;
+        for (const summaryRow of summaryResult) {
+            const sefer_no = summaryRow.sefer_no;
 
             const detailsForSefer = detailResult
-                .filter((d) => d.sefer_no === r.sefer_no)
-                .sort(
-                    (a, b) => (a.nokta_sirasi ?? 999) - (b.nokta_sirasi ?? 999)
-                );
+                .filter((d) => d.sefer_no === sefer_no)
+                .sort((a, b) => (a.nokta_sirasi ?? 999) - (b.nokta_sirasi ?? 999));
+
             byNo.set(sefer_no, detailsForSefer);
 
-            const firstValidLoad =
-                detailsForSefer.find((d) => d.yukleme_varis && d.yukleme_cikis) || null;
+            // 1) Önce geçerli yükleme kayıtlarını al
+            const validLoadsRaw = detailsForSefer.filter(
+                (d) => d.yukleme_varis && d.yukleme_cikis && d.yukleme_noktasi
+            );
 
-            const yukleme_varis = firstValidLoad ? firstValidLoad.yukleme_varis : null;
-            const yukleme_cikis = firstValidLoad ? firstValidLoad.yukleme_cikis : null;
-            const bekleme_dk = diffMinutes(yukleme_varis, yukleme_cikis);
+            if (validLoadsRaw.length === 0) continue;
 
-            return {
-                id: `${SUMMARY_TABLE}-${r.id ?? i}`,
-                sefer_no,
-                ...r,
-                yukleme_varis,
-                yukleme_cikis,
-                bekleme_dk,
-            };
-        });
+            // 2) Aynı nokta + aynı varış + aynı çıkış kombinasyonlarını tekilleştir
+            const seenKeys = new Set();
+            const validLoads = validLoadsRaw.filter((d) => {
+                const key = [
+                    d.yukleme_noktasi ?? "",
+                    d.yukleme_varis ?? "",
+                    d.yukleme_cikis ?? "",
+                ].join("|");
+                if (seenKeys.has(key)) return false;
+                seenKeys.add(key);
+                return true;
+            });
 
-        // 4) Sadece geçerli bekleme süresi olanları ve duplicate kontrolü
-        const cleaned = computed.filter((x) => x.bekleme_dk !== null);
-        const dedup = Object.values(
-            cleaned.reduce((acc, r) => {
-                const key = r.sefer_no || r.id;
-                if (
-                    !acc[key] ||
-                    (acc[key].bekleme_dk ?? 0) < (r.bekleme_dk ?? 0)
-                ) {
-                    acc[key] = r;
-                }
+            // 3) Lokasyona göre grupla
+            const groupedByLocation = validLoads.reduce((acc, stop) => {
+                const location = stop.yukleme_noktasi;
+                if (!acc[location]) acc[location] = [];
+                acc[location].push(stop);
                 return acc;
-            }, {})
-        );
+            }, {});
+
+            // 4) Her lokasyon için toplam beklemeyi hesapla
+            for (const locationName in groupedByLocation) {
+                const stopsForLocation = groupedByLocation[locationName];
+
+                const totalWaitAtLocation_dk = stopsForLocation.reduce((sum, stop) => {
+                    const wait = diffMinutes(stop.yukleme_varis, stop.yukleme_cikis);
+                    return sum + (wait || 0);
+                }, 0);
+
+                if (totalWaitAtLocation_dk === 0) continue;
+
+                const firstStopAtLocation = stopsForLocation[0];
+
+                finalGridRows.push({
+                    ...summaryRow,
+                    id: `${sefer_no}-${locationName}`,
+                    yukleme_noktasi: locationName,
+                    yukleme_varis: firstStopAtLocation.yukleme_varis,
+                    yukleme_cikis: firstStopAtLocation.yukleme_cikis,
+                    bekleme_dk: totalWaitAtLocation_dk,
+                });
+            }
+        }
 
         setDetailByNo(byNo);
-        setRows(dedup);
+        setRows(finalGridRows);
         setLoading(false);
     }, [dateFilter]);
 
@@ -323,13 +341,33 @@ export default function YuklemedeBekleme() {
             .sort((a, b) => (b.bekleme_dk ?? 0) - (a.bekleme_dk ?? 0));
     }, [rows, minDakika]);
 
-    // EXCEL EXPORT (Değişmedi)
+    const stats = useMemo(() => {
+        if (!filtered.length) {
+            return { total: 0, avg: 0, problematic: 0, totalExcess: 0 };
+        }
+        const total = filtered.length;
+        const sum = filtered.reduce((acc, r) => acc + (r.bekleme_dk ?? 0), 0);
+        const avg = total > 0 ? Math.round(sum / total) : 0;
+        const problematic = filtered.filter(
+            (r) => (r.bekleme_dk ?? 0) >= TARGET_WAIT_MINUTES
+        ).length;
+        const totalExcess = filtered.reduce((acc, r) => {
+            const excess = (r.bekleme_dk ?? 0) - TARGET_WAIT_MINUTES;
+            return excess > 0 ? acc + excess : acc;
+        }, 0);
+        return {
+            total,
+            avg: minToHM(avg),
+            problematic,
+            totalExcess: minToHM(totalExcess),
+        };
+    }, [filtered]);
+
+    // EXCEL EXPORT
     const handleExport = async () => {
         if (!filtered.length) return;
-
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet("Bekleme Analiz Raporu");
-
         const dataToExport = filtered.map((r) => ({
             "Sefer No": r.sefer_no,
             Plaka: r.plaka,
@@ -337,219 +375,267 @@ export default function YuklemedeBekleme() {
             "Şoför": r.surucu_ad_soyad,
             "Proje Adı": r.proje_adi,
             "Yükleme Noktası": r.yukleme_noktasi,
-            "Yükleme İli": r.yukleme_ili,
-            "Teslim Noktası": r.teslim_noktasi,
-            "Teslim İli": r.teslim_ili,
-            "Varış Zamanı": r.yukleme_varis ? dayjs(r.yukleme_varis).toDate() : null,
-            "Çıkış Zamanı": r.yukleme_cikis ? dayjs(r.yukleme_cikis).toDate() : null,
-            "Bekleme (dk)": r.bekleme_dk,
-            "Bekleme Süresi": minToHM(r.bekleme_dk),
+            "Lokasyon Bekleme (dk)": r.bekleme_dk,
+            "Lokasyon Bekleme Süresi": minToHM(r.bekleme_dk),
         }));
-
         worksheet.columns = [
             { header: "Sefer No", key: "Sefer No", width: 14 },
             { header: "Plaka", key: "Plaka", width: 10 },
             { header: "Treyler", key: "Treyler", width: 10 },
             { header: "Şoför", key: "Şoför", width: 20 },
             { header: "Proje Adı", key: "Proje Adı", width: 20 },
-            { header: "Yükleme Noktası", key: "Yükleme Noktası", width: 25 },
-            { header: "Yükleme İli", key: "Yükleme İli", width: 15 },
-            { header: "Teslim Noktası", key: "Teslim Noktası", width: 25 },
-            { header: "Teslim İli", key: "Teslim İli", width: 15 },
-            {
-                header: "Varış Zamanı",
-                key: "Varış Zamanı",
-                width: 20,
-                style: { numFmt: "dd.mm.yyyy hh:mm" },
-            },
-            {
-                header: "Çıkış Zamanı",
-                key: "Çıkış Zamanı",
-                width: 20,
-                style: { numFmt: "dd.mm.yyyy hh:mm" },
-            },
-            { header: "Bekleme (dk)", key: "Bekleme (dk)", width: 12 },
-            { header: "Bekleme Süresi", key: "Bekleme Süresi", width: 18 },
+            { header: "Yükleme Noktası", key: "Yükleme Noktası", width: 30 },
+            { header: "Lokasyon Bekleme (dk)", key: "Lokasyon Bekleme (dk)", width: 18 },
+            { header: "Lokasyon Bekleme Süresi", key: "Lokasyon Bekleme Süresi", width: 18 },
         ];
-
         worksheet.addRows(dataToExport);
-
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], {
-            type:
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         });
-        const filename = `yuklemede_bekleme_${dayjs(dateFilter).format(
+        const filename = `yuklemede_bekleme_gruplu_${dayjs(dateFilter).format(
             "YYYYMMDD"
         )}.xlsx`;
         saveAs(blob, filename);
     };
 
-    // Detay satırları (Değişmedi)
+    // stopRows (aynı nokta+varış+çıkış burada da tekilleştiriliyor)
     const stopRows = useMemo(() => {
         if (!selectedRow) return [];
         const det = detailByNo.get(selectedRow.sefer_no) || [];
-        return det.map((rec, idx) => ({
-            id: `${selectedRow.sefer_no}-durak-${idx}`,
-            sira: rec.nokta_sirasi,
-            yukleme_noktasi: rec.yukleme_noktasi,
-            yukleme_ili: selectedRow.yukleme_ili,
-            yukleme_ilcesi: selectedRow.yukleme_ilcesi,
-            yukleme_varis: rec.yukleme_varis,
-            yukleme_cikis: rec.yukleme_cikis,
-            yukleme_bekleme_dk: diffMinutes(rec.yukleme_varis, rec.yukleme_cikis),
-            yukleme_varis_guncelleyen: rec.yukleme_varis_guncelleyen,
-            yukleme_varis_guncelleme_tarihi: rec.yukleme_varis_guncelleme_tarihi,
-            yukleme_cikis_guncelleyen: rec.yukleme_cikis_guncelleyen,
-            yukleme_cikis_guncelleme_tarihi: rec.yukleme_cikis_guncelleme_tarihi,
-            teslim_noktasi: rec.teslim_noktasi,
-            teslim_ili: selectedRow.teslim_ili,
-            teslim_ilcesi: selectedRow.teslim_ilcesi,
-            teslim_varis: rec.teslim_varis,
-            teslim_cikis: rec.teslim_cikis,
-            teslim_bekleme_dk: diffMinutes(rec.teslim_varis, rec.teslim_cikis),
-            teslim_varis_guncelleyen: rec.teslim_varis_guncelleyen,
-            teslim_varis_guncelleme_tarihi: rec.teslim_varis_guncelleme_tarihi,
-            teslim_cikis_guncelleyen: rec.teslim_cikis_guncelleyen,
-            teslim_cikis_guncelleme_tarihi: rec.teslim_cikis_guncelleme_tarihi,
-        }));
+
+        const seen = new Set();
+        const result = [];
+
+        det.forEach((rec, idx) => {
+            const key = [
+                rec.yukleme_noktasi ?? "",
+                rec.yukleme_varis ?? "",
+                rec.yukleme_cikis ?? "",
+            ].join("|");
+            if (seen.has(key)) return;
+            seen.add(key);
+
+            result.push({
+                id: `${selectedRow.sefer_no}-durak-${idx}`,
+                sira: rec.nokta_sirasi,
+                yukleme_noktasi: rec.yukleme_noktasi,
+                yukleme_ili: selectedRow.yukleme_ili,
+                yukleme_ilcesi: selectedRow.yukleme_ilcesi,
+                yukleme_varis: rec.yukleme_varis,
+                yukleme_cikis: rec.yukleme_cikis,
+                yukleme_bekleme_dk: diffMinutes(rec.yukleme_varis, rec.yukleme_cikis),
+                yukleme_varis_guncelleyen: rec.yukleme_varis_guncelleyen,
+                yukleme_varis_guncelleme_tarihi: rec.yukleme_varis_guncelleme_tarihi,
+                yukleme_cikis_guncelleyen: rec.yukleme_cikis_guncelleyen,
+                yukleme_cikis_guncelleme_tarihi: rec.yukleme_cikis_guncelleme_tarihi,
+                teslim_noktasi: rec.teslim_noktasi,
+                teslim_ili: selectedRow.teslim_ili,
+                teslim_ilcesi: selectedRow.teslim_ilcesi,
+                teslim_varis: rec.teslim_varis,
+                teslim_cikis: rec.teslim_cikis,
+                teslim_bekleme_dk: diffMinutes(rec.teslim_varis, rec.teslim_cikis),
+                teslim_varis_guncelleyen: rec.teslim_varis_guncelleyen,
+                teslim_varis_guncelleme_tarihi: rec.teslim_varis_guncelleme_tarihi,
+                teslim_cikis_guncelleyen: rec.teslim_cikis_guncelleyen,
+                teslim_cikis_guncelleme_tarihi: rec.teslim_cikis_guncelleme_tarihi,
+            });
+        });
+
+        return result;
     }, [selectedRow, detailByNo]);
 
-    /* ===== DataGrid Sütunları (Güncellendi) ===== */
-    const columns = useMemo(() => [
-        {
-            field: "sefer_no",
-            headerName: "Sefer No",
-            width: 150,
-            renderCell: (p) => (
-                <Button
-                    size="small"
-                    startIcon={<InfoOutlinedIcon />}
-                    onClick={() => openDetail(p.row)}
-                    sx={{ fontWeight: 600, textTransform: 'none', px: 1, py: 0.5 }}
-                >
-                    {p.value || "—"}
-                </Button>
-            ),
-        },
-        { field: "plaka", headerName: "Plaka", width: 100 },
-        { field: "treyler", headerName: "Treyler", width: 100, hide: true },
-        { field: "surucu_ad_soyad", headerName: "Şoför", width: 180 },
-        { field: "proje_adi", headerName: "Proje Adı", width: 150 },
-        {
-            field: "yukleme_varis",
-            headerName: "Varış Zm.",
-            width: 180,
-            valueFormatter: safeVF(fmtDateTR),
-        },
-        {
-            field: "yukleme_cikis",
-            headerName: "Çıkış Zm.",
-            width: 180,
-            valueFormatter: safeVF(fmtDateTR),
-        },
-        {
-            field: "bekleme_dk",
-            headerName: "Bekleme Süresi",
-            width: 160,
-            renderCell: (p) => <WaitChip minutes={p.value} />,
-            sortComparator: (a, b) => (a ?? 0) - (b ?? 0),
-        },
-    ], []);
+    // columns
+    const columns = useMemo(
+        () => [
+            {
+                field: "sefer_no",
+                headerName: "Sefer No",
+                width: 150,
+                renderCell: (p) => (
+                    <Button
+                        size="small"
+                        startIcon={<InfoOutlinedIcon />}
+                        onClick={() => openDetail(p.row)}
+                        sx={{
+                            fontWeight: 600,
+                            textTransform: "none",
+                            px: 1,
+                            py: 0.5,
+                        }}
+                    >
+                        {p.value || "—"}
+                    </Button>
+                ),
+            },
+            { field: "plaka", headerName: "Plaka", width: 100 },
+            {
+                field: "yukleme_noktasi",
+                headerName: "Yükleme Noktası",
+                width: 250,
+                renderCell: (p) => (
+                    <Tooltip title={p.value}>
+                        <span
+                            style={{
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                            }}
+                        >
+                            {p.value}
+                        </span>
+                    </Tooltip>
+                ),
+            },
+            { field: "surucu_ad_soyad", headerName: "Şoför", width: 180 },
+            { field: "proje_adi", headerName: "Proje Adı", width: 150 },
+            {
+                field: "bekleme_dk",
+                headerName: "Konumdaki Toplam Bekleme",
+                width: 220,
+                renderCell: (p) => <WaitChip minutes={p.value} />,
+                sortComparator: (a, b) => (a ?? 0) - (b ?? 0),
+            },
+        ],
+        []
+    );
 
+    // Return
     return (
         <Box
             sx={{
-                minHeight: "100dvh",
+                width: "100%",
                 py: { xs: 2, md: 4 },
-                bgcolor: (t) => (t.palette.mode === "dark" ? "#121212" : "grey.50"),
+                bgcolor: (t) =>
+                    t.palette.mode === "dark" ? "#121212" : "grey.50",
             }}
         >
             <Container
                 maxWidth={false}
                 sx={{ maxWidth: "1680px", px: { xs: 2, md: 4 } }}
             >
-                <Paper elevation={6} sx={{ borderRadius: 3, overflow: "hidden", p: 0 }}>
-                    {/* Başlık ve Filtre Alanı */}
-                    <Box
+                <Stack spacing={3}>
+                    <Stack>
+                        <Typography variant="h4" fontWeight={700}>
+                            Yüklemede Bekleme Analizi ⏳
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary">
+                            **{dayjs(dateFilter).format("DD MMMM YYYY")}**
+                            tarihli seferlerdeki **yükleme konumlarına** göre
+                            toplam beklemeler.
+                        </Typography>
+                    </Stack>
+
+                    <Paper
+                        variant="outlined"
                         sx={{
-                            p: 3,
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: { xs: 'flex-start', md: 'center' },
-                            flexWrap: "wrap",
-                            gap: 2,
-                            bgcolor: 'secondary.main', // Yükleme raporu için farklı bir vurgu rengi
-                            color: 'secondary.contrastText',
+                            p: { xs: 2, md: 3 },
+                            borderRadius: 3,
+                            borderColor: "divider",
                         }}
                     >
-                        <Stack>
-                            <Typography variant="h5" fontWeight={700}>
-                                Yüklemede Bekleme Analizi ⏳
-                            </Typography>
-                            <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                                **{dayjs(dateFilter).format("DD MMMM YYYY")}** tarihli seferlerdeki ilk yükleme noktasındaki bekleme süreleri
-                            </Typography>
-                        </Stack>
-
-                        {/* ==== Üst Aksiyonlar ==== */}
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="center">
-                            <TextField
-                                label="Tarih Seçin"
-                                type="date"
-                                InputLabelProps={{ shrink: true, sx: { color: 'secondary.contrastText' } }}
-                                InputProps={{ sx: { color: 'secondary.contrastText' } }}
-                                value={dateFilter}
-                                onChange={(e) => setDateFilter(e.target.value)}
-                                size="small"
-                                variant="outlined"
-                                sx={{
-                                    minWidth: 150,
-                                    '& .MuiOutlinedInput-root': {
-                                        '& fieldset': { borderColor: 'secondary.light' },
-                                        '&:hover fieldset': { borderColor: 'white' },
-                                        '&.Mui-focused fieldset': { borderColor: 'white' },
-                                    }
-                                }}
-                            />
-                            <TextField
-                                label="Min. Bekleme (dk)"
-                                type="number"
-                                value={minDakika}
-                                onChange={(e) => setMinDakika(e.target.value)}
-                                size="small"
-                                variant="outlined"
-                                sx={{
-                                    minWidth: 150,
-                                    '& .MuiOutlinedInput-root': {
-                                        '& fieldset': { borderColor: 'secondary.light' },
-                                        '&:hover fieldset': { borderColor: 'white' },
-                                        '&.Mui-focused fieldset': { borderColor: 'white' },
-                                    },
-                                    '& .MuiInputLabel-root': { color: 'secondary.contrastText' },
-                                    '& .MuiInputBase-input': { color: 'secondary.contrastText' },
-                                }}
-                            />
-                            <Tooltip title="Verileri Güncelle">
-                                <span>
+                        <Grid container spacing={3} alignItems="flex-end">
+                            <Grid item xs={12} md={4} lg={3}>
+                                <Stack spacing={2}>
+                                    <TextField
+                                        label="Tarih Seçin"
+                                        type="date"
+                                        InputLabelProps={{ shrink: true }}
+                                        value={dateFilter}
+                                        onChange={(e) =>
+                                            setDateFilter(e.target.value)
+                                        }
+                                        size="small"
+                                        fullWidth
+                                    />
+                                    <TextField
+                                        label="Min. Bekleme (dk)"
+                                        type="number"
+                                        value={minDakika}
+                                        onChange={(e) =>
+                                            setMinDakika(e.target.value)
+                                        }
+                                        size="small"
+                                        fullWidth
+                                    />
                                     <Button
                                         onClick={fetchAll}
-                                        variant="outlined"
+                                        variant="contained"
+                                        color="primary"
                                         disabled={loading}
-                                        startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
-                                        sx={{ height: '40px', color: 'secondary.contrastText', borderColor: 'secondary.light', '&:hover': { borderColor: 'white' } }}
+                                        startIcon={
+                                            loading ? (
+                                                <CircularProgress
+                                                    size={16}
+                                                    color="inherit"
+                                                />
+                                            ) : (
+                                                <RefreshIcon />
+                                            )
+                                        }
                                     >
-                                        Yenile
+                                        Filtrele & Yenile
                                     </Button>
-                                </span>
-                            </Tooltip>
-                        </Stack>
-                    </Box>
+                                </Stack>
+                            </Grid>
 
-                    {/* Veri Alanı */}
-                    <Box sx={{ height: "70vh", position: 'relative' }}>
+                            <Grid item xs={12} md={8} lg={9}>
+                                <Grid container spacing={2}>
+                                    <Grid item xs={12} sm={6} lg={3}>
+                                        <StatCard
+                                            title="Toplam Bekleme Konumu"
+                                            value={stats.total.toLocaleString()}
+                                            icon={<SummarizeIcon />}
+                                            color="primary.main"
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12} sm={6} lg={3}>
+                                        <StatCard
+                                            title="Ortalama Bekleme"
+                                            value={stats.avg}
+                                            icon={<AvTimerIcon />}
+                                            color="info.main"
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12} sm={6} lg={3}>
+                                        <StatCard
+                                            title="Limit Aşan Konum"
+                                            value={stats.problematic.toLocaleString()}
+                                            icon={<WarningIcon />}
+                                            color="warning.main"
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12} sm={6} lg={3}>
+                                        <StatCard
+                                            title="Toplam Aşım Süresi"
+                                            value={stats.totalExcess}
+                                            icon={<AccessAlarmIcon />}
+                                            color="error.main"
+                                        />
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+                        </Grid>
+                    </Paper>
+
+                    <Paper
+                        elevation={3}
+                        sx={{
+                            borderRadius: 3,
+                            overflow: "hidden",
+                            height: "70vh",
+                            position: "relative",
+                        }}
+                    >
                         {loading && (
-                            <LinearProgress sx={{ position: 'absolute', top: 0, width: '100%', zIndex: 1 }} color="secondary" />
+                            <LinearProgress
+                                sx={{
+                                    position: "absolute",
+                                    top: 0,
+                                    width: "100%",
+                                    zIndex: 1,
+                                }}
+                                color="primary"
+                            />
                         )}
                         <DataGrid
                             rows={filtered}
@@ -569,24 +655,23 @@ export default function YuklemedeBekleme() {
                             }}
                             pageSizeOptions={[10, 25, 50]}
                             sx={{
-                                '& .MuiDataGrid-columnHeaders': {
-                                    bgcolor: 'grey.100',
+                                border: "none",
+                                "& .MuiDataGrid-columnHeaders": {
+                                    bgcolor: "grey.100",
                                     fontWeight: 700,
                                 },
                             }}
                         />
-                    </Box>
+                    </Paper>
 
-                    {/* Hata Bildirimi */}
                     {fetchError && (
-                        <Alert severity="error" sx={{ m: 2 }}>
+                        <Alert severity="error" sx={{ m: 0 }}>
                             **Veri Yükleme Hatası:** {fetchError}
                         </Alert>
                     )}
-                </Paper>
+                </Stack>
             </Container>
 
-            {/* Detay Modal Bileşeni */}
             <TripDetailModal
                 open={isDetailModalOpen}
                 onClose={closeDetail}

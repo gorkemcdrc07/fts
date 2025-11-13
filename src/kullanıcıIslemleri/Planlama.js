@@ -1488,7 +1488,7 @@ export default function PlanlamaDeluxe() {
                             textShadow: '0 0 8px rgba(232, 121, 249, 0.4)', // Başlığa neon parlaklık
                         }}
                     >
-                        PLANLAMA DELUXE
+                        PLANLAMA 
                     </Typography>
                 </Stack>
 

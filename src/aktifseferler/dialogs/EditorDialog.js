@@ -143,20 +143,20 @@ function DateTimeSingleField({
         if (digs.length > 0) return;
 
         const now = new Date();
-        const iso = toLocalISOString(now);
 
         const pad = (n) => String(n).padStart(2, "0");
         const dd = pad(now.getDate());
         const MM = pad(now.getMonth() + 1);
         const yyyy = now.getFullYear();
-        const HH = pad(now.getHours());
-        const mm = pad(now.getMinutes());
 
-        const masked = `${dd}.${MM}.${yyyy} ${HH}:${mm}`;
+        // SADECE TARİH (kullanıcı saati kendisi girecek)
+        const masked = `${dd}.${MM}.${yyyy}`;
 
+        // Inputta sadece tarihi göster
         setText(masked);
-        // Parent state de güncellensin
-        onChange(iso);
+
+        // Parent'a da sadece tarihi gönder (ISO DEĞİL!)
+        onChange(masked);
     }
     // <<< YENİ
 
@@ -473,6 +473,38 @@ export default function EditorDialog(props) {
 
         return [...seferTarihiErrors, ...getValidationErrors(detailRows)];
     }, [seferTarihiYeni, detailRows]);
+    const handleDetailChange = (rowIndex, field, newValue) => {
+        // Önce asıl değişikliği yap
+        onDetailChange(rowIndex, field, newValue);
+
+        const firstRow = detailRows[0];
+        if (!firstRow) return;
+
+        // 1) İlk satırın yukleme_varis / yukleme_cikis'i değişirse,
+        //    aynı yukleme_noktasi'na sahip tüm satırlara yay
+        if (rowIndex === 0 && (field === "yukleme_varis" || field === "yukleme_cikis")) {
+            detailRows.forEach((row, idx) => {
+                if (idx === 0) return; // ilk satırı tekrar güncelleme
+                if (row.yukleme_noktasi && row.yukleme_noktasi === firstRow.yukleme_noktasi) {
+                    onDetailChange(idx, field, newValue);
+                }
+            });
+        }
+
+        // 2) Başka bir satırın yukleme_noktasi değeri,
+        //    ilk satırın noktasına eşit olursa: ilk satırdaki saatleri kopyala
+        if (field === "yukleme_noktasi" && rowIndex > 0) {
+            if (newValue && newValue === firstRow.yukleme_noktasi) {
+                if (firstRow.yukleme_varis) {
+                    onDetailChange(rowIndex, "yukleme_varis", firstRow.yukleme_varis);
+                }
+                if (firstRow.yukleme_cikis) {
+                    onDetailChange(rowIndex, "yukleme_cikis", firstRow.yukleme_cikis);
+                }
+            }
+        }
+    };
+
 
     const hasValidationError = errors.length > 0;
 
@@ -624,9 +656,17 @@ export default function EditorDialog(props) {
                                                 ["yukleme_ilcesi", "Yükleme İlçe"], ["teslim_noktasi", "Teslim Noktası"], ["teslim_ili", "Teslim İl"],
                                                 ["teslim_ilcesi", "Teslim İlçe"],
                                             ].map(([k, l]) => (
-                                                <TextField key={k} label={l} size="small" value={r[k] ?? ""} onChange={(e) => onDetailChange(i, k, e.target.value)}
-                                                    InputLabelProps={{ shrink: true }} sx={baseInputSX} InputProps={{ readOnly: !canEdit }}
+                                                <TextField
+                                                    key={k}
+                                                    label={l}
+                                                    size="small"
+                                                    value={r[k] ?? ""}
+                                                    onChange={(e) => handleDetailChange(i, k, e.target.value)}
+                                                    InputLabelProps={{ shrink: true }}
+                                                    sx={baseInputSX}
+                                                    InputProps={{ readOnly: !canEdit }}
                                                 />
+
                                             ))}
 
                                             {/* Tarih/Saat Alanları ve Sürekli Görünür Güncelleme Bilgisi */}
@@ -643,11 +683,12 @@ export default function EditorDialog(props) {
                                                         <DateTimeSingleField
                                                             label={l}
                                                             value={r[k] || ""}
-                                                            onChange={(v) => onDetailChange(i, k, v)}
+                                                            onChange={(v) => handleDetailChange(i, k, v)}
                                                             baseInputSX={baseInputSX}
                                                             disabled={!canEdit}
                                                             EndAdornment={Adornment}
                                                         />
+
                                                     </Box>
                                                 );
                                             })}

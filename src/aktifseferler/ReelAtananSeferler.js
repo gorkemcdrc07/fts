@@ -818,7 +818,16 @@ export default function ReelAtananSeferler() {
             />
 
             {/* Liste */}
-            <Paper sx={{ borderRadius: 3, border: `1px solid ${COLORS.border}`, background: COLORS.surface, flexGrow: 1, height: "1000px", overflow: "hidden" }}>
+            <Paper
+                sx={{
+                    borderRadius: 3,
+                    border: `1px solid ${COLORS.border}`,
+                    background: COLORS.surface,
+                    flexGrow: 1,
+                    height: "1000px",
+                    overflow: "hidden",
+                }}
+            >
                 <DataGrid
                     apiRef={apiRef}
                     disableColumnReorder={false}
@@ -833,8 +842,10 @@ export default function ReelAtananSeferler() {
                     }}
                     onColumnOrderChange={() => {
                         try {
-                            const ordered = apiRef.current.exportState?.().columns?.orderedFields
-                                || apiRef.current?.state?.columns?.orderedFields || [];
+                            const ordered =
+                                apiRef.current.exportState?.().columns?.orderedFields ||
+                                apiRef.current?.state?.columns?.orderedFields ||
+                                [];
                             localStorage.setItem(ORDER_KEY, JSON.stringify(ordered));
                             localStorage.setItem("aktifseferler.view.bump", String(Date.now()));
                         } catch { }
@@ -860,7 +871,46 @@ export default function ReelAtananSeferler() {
                     sx={{
                         border: "none",
                         color: COLORS.text,
-                        "& .MuiDataGrid-virtualScroller": { backgroundColor: COLORS.surface },
+
+                        /* ===== SUPER THICK ULTRA MODERN SCROLLBAR ===== */
+                        "& .MuiDataGrid-virtualScroller": {
+                            backgroundColor: COLORS.surface,
+
+                            // Scrollbar boyutu
+                            "&::-webkit-scrollbar": {
+                                width: 20,
+                                height: 20,
+                            },
+
+                            "&::-webkit-scrollbar-track": {
+                                background: "rgba(255,255,255,0.05)",
+                                borderRadius: 30,
+                                margin: "4px", // track ile kenar arasında boşluk
+                            },
+
+                            "&::-webkit-scrollbar-thumb": {
+                                background: "linear-gradient(135deg, #6b8cff, #3a53e3)",
+                                borderRadius: 30,
+                                border: "5px solid rgba(255,255,255,0.15)", // iç boşluk / cam efekti
+                                backgroundClip: "padding-box",
+                                boxShadow: "0 0 12px rgba(82,110,255,0.7)",
+                                transition: "0.25s",
+                            },
+
+                            "&::-webkit-scrollbar-thumb:hover": {
+                                background: "linear-gradient(135deg, #8aa0ff, #5f76ff)",
+                                border: "5px solid rgba(255,255,255,0.25)",
+                                boxShadow: "0 0 18px rgba(82,110,255,1)",
+                            },
+
+                            "&::-webkit-scrollbar-corner": { background: "transparent" },
+
+                            // Firefox
+                            scrollbarWidth: "auto",
+                            scrollbarColor: "#6b8cff rgba(255,255,255,0.05)",
+                        },
+                        /* ================================================== */
+
                         "& .MuiDataGrid-columnHeaders": {
                             background: COLORS.surface2,
                             color: COLORS.text,
@@ -875,7 +925,9 @@ export default function ReelAtananSeferler() {
                             overflow: "hidden",
                             fontSize: 14.5,
                         },
-                        "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": { backgroundColor: COLORS.zebra },
+                        "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": {
+                            backgroundColor: COLORS.zebra,
+                        },
                     }}
                 />
             </Paper>

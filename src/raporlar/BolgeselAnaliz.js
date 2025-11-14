@@ -26,11 +26,12 @@ import {
     Grid,
     Paper,
     LinearProgress,
-    Collapse, // YENİ: Satır içi genişletme için
-    IconButton, // YENİ: Satır içi buton için
+    Collapse,
+    IconButton,
 } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import SearchIcon from "@mui/icons-material/Search";
+import ExcelJS from "exceljs";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import AcUnitIcon from "@mui/icons-material/AcUnit";
@@ -40,8 +41,8 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import NumbersIcon from "@mui/icons-material/Numbers";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown"; // YENİ
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp"; // YENİ
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import { DataGrid } from "@mui/x-data-grid";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -50,7 +51,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import { supabase } from "../supabaseClient";
 
-// helpers (Değişiklik yok)
+// helpers
 const fmt = (d) => (d ? dayjs(d).format("YYYY-MM-DD") : "");
 const toPgTs = (d) => (d ? dayjs(d).format("YYYY-MM-DD HH:mm:ss") : "");
 const getUyumRengi = (oran) => {
@@ -60,10 +61,9 @@ const getUyumRengi = (oran) => {
 };
 
 // ----------------------------------------------------------------------
-// Mevcut Sezon Bilgisi (Değişiklik yok)
+// Mevcut Sezon Bilgisi
 // ----------------------------------------------------------------------
 const getMevcutSezonInfo = () => {
-    // ... (kodunuzdaki gibi)
     const currentMonth = dayjs().month();
     const kisAylari = [8, 9, 10, 11, 0, 1, 2];
     if (kisAylari.includes(currentMonth)) {
@@ -73,7 +73,7 @@ const getMevcutSezonInfo = () => {
 };
 
 // ----------------------------------------------------------------------
-// SABİT BÖLGE HEDEFLERİ (Değişiklik yok)
+// SABİT BÖLGE HEDEFLERİ
 // ----------------------------------------------------------------------
 const KIS_SEZONU_HEDEFLER = [
     { bolge: "EGE", beklenen: 6 },
@@ -91,40 +91,89 @@ const YAZ_SEZONU_HEDEFLER = [
 ];
 
 // ----------------------------------------------------------------------
-// BİLEŞEN: KpiKarti (Değişiklik yok)
+// BİLEŞEN: KpiKarti
 // ----------------------------------------------------------------------
 const KpiKarti = ({ title, value, icon, color = "primary.main" }) => (
-    <Paper elevation={4} sx={{ p: 2.5, borderRadius: 4, display: "flex", flexDirection: "row", alignItems: "center", height: "100%", bgcolor: "background.paper" }}>
+    <Paper
+        elevation={4}
+        sx={{
+            p: 2.5,
+            borderRadius: 4,
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            height: "100%",
+            bgcolor: "background.paper",
+        }}
+    >
         <Avatar sx={{ bgcolor: color, width: 48, height: 48, mr: 2 }}>{icon}</Avatar>
         <Box>
-            <Typography variant="body2" color="text.secondary" noWrap>{title}</Typography>
-            <Typography variant="h5" fontWeight={700} color="text.primary" noWrap>{value}</Typography>
+            <Typography variant="body2" color="text.secondary" noWrap>
+                {title}
+            </Typography>
+            <Typography variant="h5" fontWeight={700} color="text.primary" noWrap>
+                {value}
+            </Typography>
         </Box>
     </Paper>
 );
 
 // ----------------------------------------------------------------------
-// BİLEŞEN: GenelUyumKarti (Değişiklik yok)
+// BİLEŞEN: GenelUyumKarti
 // ----------------------------------------------------------------------
-const GenelUyumKarti = ({ title, subheader, value, color }) => {
+const GenelUyumKarti = ({ title, subheader, value }) => {
     const renk = getUyumRengi(value);
     return (
         <Card elevation={4} sx={{ borderRadius: 4, height: "100%", p: 1, bgcolor: "background.paper" }}>
-            <CardHeader title={<Typography variant="h6" fontWeight={700}>{title}</Typography>} subheader={subheader} sx={{ pb: 0 }} />
+            <CardHeader
+                title={
+                    <Typography variant="h6" fontWeight={700}>
+                        {title}
+                    </Typography>
+                }
+                subheader={subheader}
+                sx={{ pb: 0 }}
+            />
             <CardContent sx={{ display: "flex", alignItems: "center", justifyContent: "center", pt: 2 }}>
                 <Box sx={{ position: "relative", display: "inline-flex" }}>
-                    <CircularProgress variant="determinate" value={100} size={120} thickness={2} sx={{ color: "action.disabledBackground" }} />
+                    <CircularProgress
+                        variant="determinate"
+                        value={100}
+                        size={120}
+                        thickness={2}
+                        sx={{ color: "action.disabledBackground" }}
+                    />
                     <CircularProgress
                         variant="determinate"
                         value={value}
                         size={120}
                         thickness={4}
                         color={renk}
-                        sx={{ position: "absolute", left: 0, [`& .MuiCircularProgress-circle`]: { strokeLinecap: "round" } }}
+                        sx={{
+                            position: "absolute",
+                            left: 0,
+                            ["& .MuiCircularProgress-circle"]: { strokeLinecap: "round" },
+                        }}
                     />
-                    <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: "absolute", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
-                        <Typography variant="h4" fontWeight={800} color={`${renk}.main`}>{value.toFixed(1)}%</Typography>
-                        <Typography variant="body2" color="text.secondary">Genel Uyum</Typography>
+                    <Box
+                        sx={{
+                            top: 0,
+                            left: 0,
+                            bottom: 0,
+                            right: 0,
+                            position: "absolute",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexDirection: "column",
+                        }}
+                    >
+                        <Typography variant="h4" fontWeight={800} color={`${renk}.main`}>
+                            {value.toFixed(1)}%
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            Genel Uyum
+                        </Typography>
                     </Box>
                 </Box>
             </CardContent>
@@ -155,16 +204,26 @@ function BolgeDetayRow(props) {
                     </IconButton>
                 </TableCell>
                 <TableCell sx={{ pl: 1 }}>
-                    <Typography variant="body1" fontWeight={600}>{row.bolge}</Typography>
+                    <Typography variant="body1" fontWeight={600}>
+                        {row.bolge}
+                    </Typography>
                 </TableCell>
                 <TableCell align="right">
-                    <Typography variant="body1" color="text.secondary">{row.beklenen}</Typography>
+                    <Typography variant="body1" color="text.secondary">
+                        {row.beklenen}
+                    </Typography>
                 </TableCell>
                 <TableCell align="right">
-                    <Typography variant="body1" fontWeight={600}>{row.planlanan_toplam}</Typography>
+                    <Typography variant="body1" fontWeight={600}>
+                        {row.planlanan_toplam}
+                    </Typography>
                 </TableCell>
                 <TableCell align="right">
-                    <Typography variant="body1" fontWeight={700} color={farkToplam >= 0 ? "success.main" : "error.main"}>
+                    <Typography
+                        variant="body1"
+                        fontWeight={700}
+                        color={farkToplam >= 0 ? "success.main" : "error.main"}
+                    >
                         {farkToplam > 0 ? `+${farkToplam.toFixed(0)}` : farkToplam.toFixed(0)}
                     </Typography>
                 </TableCell>
@@ -205,12 +264,14 @@ function BolgeDetayRow(props) {
                                     disableRowSelectionOnClick
                                     density="compact"
                                     pageSizeOptions={[10, 25, 50]}
-                                    initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
+                                    initialState={{
+                                        pagination: { paginationModel: { pageSize: 10 } },
+                                    }}
                                     localeText={{
                                         noRowsLabel: "Bu bölge için sefer bulunamadı",
                                         MuiTablePagination: { labelRowsPerPage: "Satır:" },
                                     }}
-                                    sx={{ bgcolor: "background.paper" }} // Koyu temada bile beyaz arka plan
+                                    sx={{ bgcolor: "background.paper" }}
                                 />
                             </Box>
                         </Box>
@@ -222,16 +283,29 @@ function BolgeDetayRow(props) {
 }
 
 // ----------------------------------------------------------------------
-// BİLEŞEN: BolgeDetayTablosu (GÜNCELLENDİ: Genişletilebilir satırları kullanır)
+// BİLEŞEN: BolgeDetayTablosu
 // ----------------------------------------------------------------------
-const BolgeDetayTablosu = ({ title, subheader, icon, data, color = "primary", gunSayisi, allColumns, groupedTrips }) => {
+const BolgeDetayTablosu = ({
+    title,
+    subheader,
+    icon,
+    data,
+    color = "primary",
+    gunSayisi,
+    allColumns,
+    groupedTrips,
+}) => {
     const list = Array.isArray(data) ? data : [];
 
     return (
         <Card elevation={4} sx={{ borderRadius: 4, height: "100%", bgcolor: "background.paper" }}>
             <CardHeader
                 avatar={<Avatar sx={{ bgcolor: `${color}.main` }}>{icon}</Avatar>}
-                title={<Typography variant="h6" fontWeight={700}>{title}</Typography>}
+                title={
+                    <Typography variant="h6" fontWeight={700}>
+                        {title}
+                    </Typography>
+                }
                 subheader={subheader}
                 sx={{ pb: 1 }}
             />
@@ -253,12 +327,14 @@ const BolgeDetayTablosu = ({ title, subheader, icon, data, color = "primary", gu
                                 },
                             }}
                         >
-                            <TableCell sx={{ width: "50px", pl: 1 }} /> {/* Genişletme butonu için boşluk */}
+                            <TableCell sx={{ width: "50px", pl: 1 }} />
                             <TableCell sx={{ pl: 1 }}>Bölge</TableCell>
                             <TableCell align="right">İstenen (Günlük)</TableCell>
                             <TableCell align="right">Gerçekleşen (Toplam)</TableCell>
                             <TableCell align="right">Fark (Toplam)</TableCell>
-                            <TableCell align="left" sx={{ minWidth: 200, pl: 3 }}>Uyum Oranı (Dönem)</TableCell>
+                            <TableCell align="left" sx={{ minWidth: 200, pl: 3 }}>
+                                Uyum Oranı (Dönem)
+                            </TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -266,7 +342,7 @@ const BolgeDetayTablosu = ({ title, subheader, icon, data, color = "primary", gu
                             <BolgeDetayRow
                                 key={row.bolge}
                                 row={row}
-                                regionTrips={groupedTrips[row.bolge] || []} // Filtrelenmiş seferleri yolla
+                                regionTrips={groupedTrips[row.bolge] || []}
                                 allColumns={allColumns}
                                 gunSayisi={gunSayisi}
                             />
@@ -277,7 +353,6 @@ const BolgeDetayTablosu = ({ title, subheader, icon, data, color = "primary", gu
         </Card>
     );
 };
-
 
 // ----------------------------------------------------------------------
 // ANA BİLEŞEN: BolgeselAnaliz
@@ -294,7 +369,7 @@ export default function BolgeselAnaliz() {
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "info" });
     const [selectedDate, setSelectedDate] = useState(dayjs());
 
-    // DataGrid Sütunları (Değişiklik yok)
+    // DataGrid Sütunları
     const columns = useMemo(
         () => [
             { field: "id", headerName: "ID", width: 100 },
@@ -313,7 +388,8 @@ export default function BolgeselAnaliz() {
                 field: "sefer_tarihi",
                 headerName: "Sefer Tarihi",
                 width: 170,
-                valueFormatter: (p) => (p && p.value ? dayjs(p.value).format("YYYY-MM-DD HH:mm") : ""),
+                valueFormatter: (p) =>
+                    p && p.value ? dayjs(p.value).format("YYYY-MM-DD HH:mm") : "",
             },
             { field: "arac_statu", headerName: "Durum", width: 120 },
             { field: "kaynak", headerName: "Kaynak", width: 140 },
@@ -321,50 +397,144 @@ export default function BolgeselAnaliz() {
         []
     );
 
-    // ==================================================================
-    // === ANALİZ MANTIĞI (GÜNCELLENDİ: Seferleri Gruplar) ===
-    // ==================================================================
+    // İl → Bölge map'i
     const ilToBolgeMap = {
-        ADANA: "Doğu Bölgesi", ADIYAMAN: "Doğu Bölgesi", AFYON: "İç Anadolu Bölgesi", AĞRI: "Doğu Bölgesi", AMASYA: "Karadeniz Bölgesi",
-        ANKARA: "İç Anadolu Bölgesi", ANTALYA: "Ege Bölgesi", ARTVİN: "Karadeniz Bölgesi", AYDIN: "Ege Bölgesi", BALIKESİR: "Ege Bölgesi",
-        BARTIN: "Karadeniz Bölgesi", BATMAN: "Doğu Bölgesi", BAYBURT: "Karadeniz Bölgesi", BİLECİK: "İç Anadolu Bölgesi", BİNGÖL: "Doğu Bölgesi",
-        BİTLİS: "Doğu Bölgesi", BOLU: "Karadeniz Bölgesi", BURDUR: "Ege Bölgesi", BURSA: "Ege Bölgesi", ÇANAKKALE: "Trakya Bölgesi",
-        ÇANKIRI: "İç Anadolu Bölgesi", ÇORUM: "İç Anadolu Bölgesi", DENİZLİ: "Ege Bölgesi", DİYARBAKIR: "Doğu Bölgesi", DÜZCE: "Karadeniz Bölgesi",
-        EDİRNE: "Trakya Bölgesi", ELAZIĞ: "Doğu Bölgesi", ERZİNCAN: "Doğu Bölgesi", ERZURUM: "Doğu Bölgesi", ESKİŞEHİR: "İç Anadolu Bölgesi",
-        GAZİANTEP: "Doğu Bölgesi", GİRESUN: "Karadeniz Bölgesi", GÜMÜŞHANE: "Karadeniz Bölgesi", HAKKARİ: "Doğu Bölgesi", HATAY: "Doğu Bölgesi",
-        ISPARTA: "Ege Bölgesi", MERSİN: "Doğu Bölgesi", İSTANBUL: "Marmara Bölgesi", İZMİR: "Ege Bölgesi", KAHRAMANMARAŞ: "Doğu Bölgesi",
-        KARABÜK: "Karadeniz Bölgesi", KARAMAN: "İç Anadolu Bölgesi", KARS: "Doğu Bölgesi", KASTAMONU: "Karadeniz Bölgesi", KAYSERİ: "İç Anadolu Bölgesi",
-        KİLİS: "Doğu Bölgesi", KIRIKKALE: "İç Anadolu Bölgesi", KIRKLARELİ: "Trakya Bölgesi", KIRŞEHİR: "İç Anadolu Bölgesi",
-        KOCAELİ: "Kocaeli Bölgesi", KONYA: "İç Anadolu Bölgesi", KÜTAHYA: "İç Anadolu Bölgesi", MALATYA: "Doğu Bölgesi", MANİSA: "Ege Bölgesi",
-        MARDİN: "Doğu Bölgesi", MUĞLA: "Ege Bölgesi", MUŞ: "Doğu Bölgesi", NEVŞEHİR: "İç Anadolu Bölgesi", NİĞDE: "İç Anadolu Bölgesi",
-        ORDU: "Karadeniz Bölgesi", OSMANİYE: "Doğu Bölgesi", RİZE: "Karadeniz Bölgesi", SAKARYA: "Kocaeli Bölgesi", SAMSUN: "Karadeniz Bölgesi",
-        SİİRT: "Doğu Bölgesi", SİNOP: "Karadeniz Bölgesi", SİVAS: "İç Anadolu Bölgesi", ŞANLIURFA: "Doğu Bölgesi", ŞIRNAK: "Doğu Bölgesi",
-        TEKİRDAĞ: "Trakya Bölgesi", TOKAT: "Karadeniz Bölgesi", TRABZON: "Karadeniz Bölgesi", TUNCELİ: "Doğu Bölgesi", UŞAK: "Ege Bölgesi",
-        VAN: "Doğu Bölgesi", YALOVA: "Ege Bölgesi", YOZGAT: "İç Anadolu Bölgesi", ZONGULDAK: "Karadeniz Bölgesi", AKSARAY: "İç Anadolu Bölgesi",
-        ADALAR: "Kocaeli Bölgesi", ATAŞEHİR: "Kocaeli Bölgesi", BEYKOZ: "Kocaeli Bölgesi", ÖMERLİ: "Kocaeli Bölgesi", KADIKÖY: "Kocaeli Bölgesi",
-        KARTAL: "Kocaeli Bölgesi", MALTEPE: "Kocaeli Bölgesi", PENDİK: "Kocaeli Bölgesi", SANCAKTEPE: "Kocaeli Bölgesi", SULTANBEYLİ: "Kocaeli Bölgesi",
-        ŞİLE: "Kocaeli Bölgesi", TUZLA: "Kocaeli Bölgesi", ÜMRANİYE: "Kocaeli Bölgesi", ÜSKÜDAR: "Kocaeli Bölgesi", ÇEKMEKÖY: "Kocaeli Bölgesi",
-        ARNAVUTKÖY: "Marmara Bölgesi", AVCILAR: "Marmara Bölgesi", BAĞCILAR: "Marmara Bölgesi", BAHÇELİEVLER: "Marmara Bölgesi",
-        BAKIRKÖY: "Marmara Bölgesi", BAŞAKŞEHİR: "Marmara Bölgesi", BAYRAMPAŞA: "Marmara Bölgesi", BEŞİKTAŞ: "Marmara Bölgesi",
-        BEYLİKDÜZÜ: "Marmara Bölgesi", BEYOĞLU: "Marmara Bölgesi", BÜYÜKÇEKMECE: "Marmara Bölgesi", ÇATALCA: "Marmara Bölgesi",
-        ESENLER: "Marmara Bölgesi", ESENYURT: "Marmara Bölgesi", EYÜP: "Marmara Bölgesi", FATİH: "Marmara Bölgesi",
-        GAZİOSMANPAŞA: "Marmara Bölgesi", GÜNGÖREN: "Marmara Bölgesi", KAĞITHANE: "Marmara Bölgesi", KÜÇÜKÇEKMECE: "Marmara Bölgesi",
-        SARIYER: "Marmara Bölgesi", SİLİVRİ: "Marmara Bölgesi", SULTANGAZİ: "Marmara Bölgesi", ŞİŞLİ: "Marmara Bölgesi",
+        ADANA: "Doğu Bölgesi",
+        ADIYAMAN: "Doğu Bölgesi",
+        AFYON: "İç Anadolu Bölgesi",
+        AĞRI: "Doğu Bölgesi",
+        AMASYA: "Karadeniz Bölgesi",
+        ANKARA: "İç Anadolu Bölgesi",
+        ANTALYA: "Ege Bölgesi",
+        ARTVİN: "Karadeniz Bölgesi",
+        AYDIN: "Ege Bölgesi",
+        BALIKESİR: "Ege Bölgesi",
+        BARTIN: "Karadeniz Bölgesi",
+        BATMAN: "Doğu Bölgesi",
+        BAYBURT: "Karadeniz Bölgesi",
+        BİLECİK: "İç Anadolu Bölgesi",
+        BİNGÖL: "Doğu Bölgesi",
+        BİTLİS: "Doğu Bölgesi",
+        BOLU: "Karadeniz Bölgesi",
+        BURDUR: "Ege Bölgesi",
+        BURSA: "Ege Bölgesi",
+        ÇANAKKALE: "Trakya Bölgesi",
+        ÇANKIRI: "İç Anadolu Bölgesi",
+        ÇORUM: "İç Anadolu Bölgesi",
+        DENİZLİ: "Ege Bölgesi",
+        DİYARBAKIR: "Doğu Bölgesi",
+        DÜZCE: "Karadeniz Bölgesi",
+        EDİRNE: "Trakya Bölgesi",
+        ELAZIĞ: "Doğu Bölgesi",
+        ERZİNCAN: "Doğu Bölgesi",
+        ERZURUM: "Doğu Bölgesi",
+        ESKİŞEHİR: "İç Anadolu Bölgesi",
+        GAZİANTEP: "Doğu Bölgesi",
+        GİRESUN: "Karadeniz Bölgesi",
+        GÜMÜŞHANE: "Karadeniz Bölgesi",
+        HAKKARİ: "Doğu Bölgesi",
+        HATAY: "Doğu Bölgesi",
+        ISPARTA: "Ege Bölgesi",
+        MERSİN: "Doğu Bölgesi",
+        İSTANBUL: "Marmara Bölgesi",
+        İZMİR: "Ege Bölgesi",
+        KAHRAMANMARAŞ: "Doğu Bölgesi",
+        KARABÜK: "Karadeniz Bölgesi",
+        KARAMAN: "İç Anadolu Bölgesi",
+        KARS: "Doğu Bölgesi",
+        KASTAMONU: "Karadeniz Bölgesi",
+        KAYSERİ: "İç Anadolu Bölgesi",
+        KİLİS: "Doğu Bölgesi",
+        KIRIKKALE: "İç Anadolu Bölgesi",
+        KIRKLARELİ: "Trakya Bölgesi",
+        KIRŞEHİR: "İç Anadolu Bölgesi",
+        KOCAELİ: "Kocaeli Bölgesi",
+        KONYA: "İç Anadolu Bölgesi",
+        KÜTAHYA: "İç Anadolu Bölgesi",
+        MALATYA: "Doğu Bölgesi",
+        MANİSA: "Ege Bölgesi",
+        MARDİN: "Doğu Bölgesi",
+        MUĞLA: "Ege Bölgesi",
+        MUŞ: "Doğu Bölgesi",
+        NEVŞEHİR: "İç Anadolu Bölgesi",
+        NİĞDE: "İç Anadolu Bölgesi",
+        ORDU: "Karadeniz Bölgesi",
+        OSMANİYE: "Doğu Bölgesi",
+        RİZE: "Karadeniz Bölgesi",
+        SAKARYA: "Kocaeli Bölgesi",
+        SAMSUN: "Karadeniz Bölgesi",
+        SİİRT: "Doğu Bölgesi",
+        SİNOP: "Karadeniz Bölgesi",
+        SİVAS: "İç Anadolu Bölgesi",
+        ŞANLIURFA: "Doğu Bölgesi",
+        ŞIRNAK: "Doğu Bölgesi",
+        TEKİRDAĞ: "Trakya Bölgesi",
+        TOKAT: "Karadeniz Bölgesi",
+        TRABZON: "Karadeniz Bölgesi",
+        TUNCELİ: "Doğu Bölgesi",
+        UŞAK: "Ege Bölgesi",
+        VAN: "Doğu Bölgesi",
+        YALOVA: "Ege Bölgesi",
+        YOZGAT: "İç Anadolu Bölgesi",
+        ZONGULDAK: "Karadeniz Bölgesi",
+        AKSARAY: "İç Anadolu Bölgesi",
+        ADALAR: "Kocaeli Bölgesi",
+        ATAŞEHİR: "Kocaeli Bölgesi",
+        BEYKOZ: "Kocaeli Bölgesi",
+        ÖMERLİ: "Kocaeli Bölgesi",
+        KADIKÖY: "Kocaeli Bölgesi",
+        KARTAL: "Kocaeli Bölgesi",
+        MALTEPE: "Kocaeli Bölgesi",
+        PENDİK: "Kocaeli Bölgesi",
+        SANCAKTEPE: "Kocaeli Bölgesi",
+        SULTANBEYLİ: "Kocaeli Bölgesi",
+        ŞİLE: "Kocaeli Bölgesi",
+        TUZLA: "Kocaeli Bölgesi",
+        ÜMRANİYE: "Kocaeli Bölgesi",
+        ÜSKÜDAR: "Kocaeli Bölgesi",
+        ÇEKMEKÖY: "Kocaeli Bölgesi",
+        ARNAVUTKÖY: "Marmara Bölgesi",
+        AVCILAR: "Marmara Bölgesi",
+        BAĞCILAR: "Marmara Bölgesi",
+        BAHÇELİEVLER: "Marmara Bölgesi",
+        BAKIRKÖY: "Marmara Bölgesi",
+        BAŞAKŞEHİR: "Marmara Bölgesi",
+        BAYRAMPAŞA: "Marmara Bölgesi",
+        BEŞİKTAŞ: "Marmara Bölgesi",
+        BEYLİKDÜZÜ: "Marmara Bölgesi",
+        BEYOĞLU: "Marmara Bölgesi",
+        BÜYÜKÇEKMECE: "Marmara Bölgesi",
+        ÇATALCA: "Marmara Bölgesi",
+        ESENLER: "Marmara Bölgesi",
+        ESENYURT: "Marmara Bölgesi",
+        EYÜP: "Marmara Bölgesi",
+        FATİH: "Marmara Bölgesi",
+        GAZİOSMANPAŞA: "Marmara Bölgesi",
+        GÜNGÖREN: "Marmara Bölgesi",
+        KAĞITHANE: "Marmara Bölgesi",
+        KÜÇÜKÇEKMECE: "Marmara Bölgesi",
+        SARIYER: "Marmara Bölgesi",
+        SİLİVRİ: "Marmara Bölgesi",
+        SULTANGAZİ: "Marmara Bölgesi",
+        ŞİŞLİ: "Marmara Bölgesi",
         ZEYTİNBURNU: "Marmara Bölgesi",
     };
 
     const getBolgeFromSefer = (sefer) => {
-        const il = sefer.yukleme_ili ? String(sefer.yukleme_ili).split(";")[0].toLocaleUpperCase("tr").trim() : "";
-        const ilce = sefer.yukleme_ilcesi ? String(sefer.yukleme_ilcesi).split(";")[0].toLocaleUpperCase("tr").trim() : "";
+        const il = sefer.yukleme_ili
+            ? String(sefer.yukleme_ili).split(";")[0].toLocaleUpperCase("tr").trim()
+            : "";
+        const ilce = sefer.yukleme_ilcesi
+            ? String(sefer.yukleme_ilcesi).split(";")[0].toLocaleUpperCase("tr").trim()
+            : "";
         if (ilce && ilToBolgeMap[ilce]) return ilToBolgeMap[ilce];
         if (il && ilToBolgeMap[il]) return ilToBolgeMap[il];
         return "Bilinmeyen";
     };
 
-    // GÜNCELLENDİ: Fonksiyon artık seferleri de grupluyor
+    // Analiz + sefer gruplama
     const calculateAnalysisAndGroupTrips = (fetchedData, selectedSeasonInfo, gunSayisi) => {
         const rawBolgeCounts = {};
-        // YENİ: Seferleri ham bölgeye göre gruplamak için
         const rawGroupedTrips = {
             "Ege Bölgesi": [],
             "Doğu Bölgesi": [],
@@ -378,27 +548,26 @@ export default function BolgeselAnaliz() {
 
         for (const sefer of fetchedData) {
             const rawBolge = getBolgeFromSefer(sefer);
-            // 1. Sayımı yap
+
             rawBolgeCounts[rawBolge] = (rawBolgeCounts[rawBolge] || 0) + 1;
 
-            // 2. Gruplamayı yap
             if (rawGroupedTrips[rawBolge]) {
                 rawGroupedTrips[rawBolge].push(sefer);
             } else {
-                rawGroupedTrips["Bilinmeyen"].push(sefer); // Bilinmeyenleri de ekle
+                rawGroupedTrips["Bilinmeyen"].push(sefer);
             }
         }
 
-        // Toplam sayıları hesapla (Değişiklik yok)
         const planlananToplamSayilar = {
             EGE: rawBolgeCounts["Ege Bölgesi"] || 0,
             "ÇUKUROVA+DOĞU": rawBolgeCounts["Doğu Bölgesi"] || 0,
             "İÇ ANADOLU": rawBolgeCounts["İç Anadolu Bölgesi"] || 0,
-            "TRAKYA+AVRUPA": (rawBolgeCounts["Trakya Bölgesi"] || 0) + (rawBolgeCounts["Marmara Bölgesi"] || 0),
+            "TRAKYA+AVRUPA":
+                (rawBolgeCounts["Trakya Bölgesi"] || 0) +
+                (rawBolgeCounts["Marmara Bölgesi"] || 0),
             "GEBZE+DERİNCE": rawBolgeCounts["Kocaeli Bölgesi"] || 0,
         };
 
-        // YENİ: Sefer gruplarını nihai analiz bölgelerine göre birleştir
         const finalGroupedTrips = {
             EGE: rawGroupedTrips["Ege Bölgesi"] || [],
             "ÇUKUROVA+DOĞU": rawGroupedTrips["Doğu Bölgesi"] || [],
@@ -410,28 +579,43 @@ export default function BolgeselAnaliz() {
             "GEBZE+DERİNCE": rawGroupedTrips["Kocaeli Bölgesi"] || [],
         };
 
-        // Analiz sonucunu oluştur (Değişiklik yok)
-        const hedefSet = selectedSeasonInfo.season === "kış" ? KIS_SEZONU_HEDEFLER : YAZ_SEZONU_HEDEFLER;
+        const hedefSet =
+            selectedSeasonInfo.season === "kış" ? KIS_SEZONU_HEDEFLER : YAZ_SEZONU_HEDEFLER;
+
         const analizSonucu = hedefSet.map((hedef) => {
             const bolgeAdi = hedef.bolge;
             const toplamPlanlananSefer = planlananToplamSayilar[bolgeAdi] || 0;
             const beklenenDonem = hedef.beklenen * (gunSayisi > 0 ? gunSayisi : 1);
-            const uyumOrani = beklenenDonem > 0 ? (toplamPlanlananSefer / beklenenDonem) * 100 : 0;
-            return { bolge: bolgeAdi, beklenen: hedef.beklenen, planlanan_toplam: toplamPlanlananSefer, uyum_orani: uyumOrani };
+            const uyumOraniHam =
+                beklenenDonem > 0 ? (toplamPlanlananSefer / beklenenDonem) * 100 : 0;
+            const uyumOrani = Math.min(uyumOraniHam, 100); // 100'ü geçmesin
+
+            return {
+                bolge: bolgeAdi,
+                beklenen: hedef.beklenen,
+                planlanan_toplam: toplamPlanlananSefer,
+                uyum_orani: uyumOrani,
+            };
         });
 
-        // YENİ: İki veriyi de döndür
         return { analizSonucu, groupedTrips: finalGroupedTrips };
     };
 
-    // Supabase veri çekme (Değişiklik yok)
+    // Supabase veri çekme
     const fetchSupabaseData = useCallback(async (start, end) => {
-        // ... (kodunuzdaki gibi)
         const startStr = toPgTs(dayjs(start).startOf("day"));
         const endStr = toPgTs(dayjs(end).endOf("day"));
         const selectQuery = "*, yukleme_ili, yukleme_ilcesi";
-        const { data: seferler, error: err1 } = await supabase.from("seferler").select(selectQuery).gte("sefer_tarihi", startStr).lte("sefer_tarihi", endStr);
-        const { data: tamamlanan, error: err2 } = await supabase.from("tamamlanan_seferler").select(selectQuery).gte("sefer_tarihi", startStr).lte("sefer_tarihi", endStr);
+        const { data: seferler, error: err1 } = await supabase
+            .from("seferler")
+            .select(selectQuery)
+            .gte("sefer_tarihi", startStr)
+            .lte("sefer_tarihi", endStr);
+        const { data: tamamlanan, error: err2 } = await supabase
+            .from("tamamlanan_seferler")
+            .select(selectQuery)
+            .gte("sefer_tarihi", startStr)
+            .lte("sefer_tarihi", endStr);
         if (err1 || err2) throw new Error(err1?.message || err2?.message || "Bilinmeyen Supabase hatası");
         return {
             seferler: (seferler || []).map((x) => ({ ...x, kaynak: "seferler" })),
@@ -439,10 +623,7 @@ export default function BolgeselAnaliz() {
         };
     }, []);
 
-    // ==================================================================
-    // === *** GÜNCELLENMİŞ getData FONKSİYONU *** ===
-    // ==================================================================
-    // GÜNCELLENDİ: getData (KPI mantığı isteğinize göre değişti)
+    // getData
     const getData = async () => {
         const start = selectedDate.startOf("day");
         const end = selectedDate.endOf("day");
@@ -454,59 +635,64 @@ export default function BolgeselAnaliz() {
         setRows([]);
         try {
             const { seferler, tamamlanan } = await fetchSupabaseData(start, end);
-            const all = [...seferler, ...tamamlanan].filter(Boolean).sort((a, b) => new Date(b.sefer_tarihi) - new Date(a.sefer_tarihi));
-            setRows(all); // Tüm seferleri hala DataGrid (alttaki) için saklıyoruz
+            const all = [...seferler, ...tamamlanan]
+                .filter(Boolean)
+                .sort((a, b) => new Date(b.sefer_tarihi) - new Date(a.sefer_tarihi));
+            setRows(all);
 
-            // Hem analiz hem de gruplanmış veriyi al
-            const { analizSonucu, groupedTrips } = calculateAnalysisAndGroupTrips(all, mevcutSezon, gunSayisi);
+            const { analizSonucu, groupedTrips } = calculateAnalysisAndGroupTrips(
+                all,
+                mevcutSezon,
+                gunSayisi
+            );
 
-            const toplamBeklenenDonem = analizSonucu.reduce((acc, r) => acc + r.beklenen * gunSayisi, 0);
-            const toplamPlanlananDonem = analizSonucu.reduce((acc, r) => acc + r.planlanan_toplam, 0);
-            const genelUyum = toplamBeklenenDonem > 0 ? (toplamPlanlananDonem / toplamBeklenenDonem) * 100 : 0;
+            const toplamBeklenenDonem = analizSonucu.reduce(
+                (acc, r) => acc + r.beklenen * gunSayisi,
+                0
+            );
+            const toplamPlanlananDonem = analizSonucu.reduce(
+                (acc, r) => acc + r.planlanan_toplam,
+                0
+            );
+            let genelUyum =
+                toplamBeklenenDonem > 0
+                    ? (toplamPlanlananDonem / toplamBeklenenDonem) * 100
+                    : 0;
 
-            // --- YENİ LOGİKA BAŞLANGICI (İsteğinize göre güncellendi) ---
+            genelUyum = Math.min(genelUyum, 100); // max 100
 
-            // 1. Her bölge için "istenen" (beklenen_donem) ve "gerçekleşen" (planlanan_toplam) 
-            //    arasındaki MUTLAK farkı (Math.abs) hesaplayın.
-            const analizWithFark = analizSonucu.map(r => {
+            const analizWithFark = analizSonucu.map((r) => {
                 const beklenenDonem = r.beklenen * (gunSayisi > 0 ? gunSayisi : 1);
                 const mutlakFark = Math.abs(r.planlanan_toplam - beklenenDonem);
-
-                return {
-                    ...r,
-                    mutlak_fark: mutlakFark // Hesaplanan mutlak farkı objeye ekle
-                };
+                return { ...r, mutlak_fark: mutlakFark };
             });
 
-            // 2. Bu mutlak farka göre sıralayın (küçükten büyüğe: a.mutlak_fark - b.mutlak_fark)
-            //    Böylece en küçük fark listenin başına (en başarılı), 
-            //    en büyük fark listenin sonuna (dikkat gereken) gelecek.
-            const siraliAnalizYeni = [...analizWithFark].sort((a, b) => a.mutlak_fark - b.mutlak_fark);
+            const siraliAnalizYeni = [...analizWithFark].sort(
+                (a, b) => a.mutlak_fark - b.mutlak_fark
+            );
 
-            // 3. KPI'ları bu yeni sıralı listeye göre atayın
-            const enBasarili = siraliAnalizYeni[0]; // En az fark (en başarılı)
-            const enZayif = siraliAnalizYeni[siraliAnalizYeni.length - 1]; // En çok fark (dikkat gereken)
-
-            // --- YENİ LOGİKA SONU ---
+            const enBasarili = siraliAnalizYeni[0];
+            const enZayif = siraliAnalizYeni[siraliAnalizYeni.length - 1];
 
             setKpiData({
                 toplamSefer: all.length,
                 genelUyum: genelUyum,
-                enBasarili: enBasarili.bolge, // Yeni mantığa göre atandı
-                enZayif: enZayif.bolge,       // Yeni mantığa göre atandı
+                enBasarili: enBasarili.bolge,
+                enZayif: enZayif.bolge,
             });
 
-            // GÜNCELLENDİ: Gruplanmış seferleri state'e ekle
             setAnalizData({
                 gunSayisi,
-                satirlar: analizSonucu, // Orijinal, sırasız analiz sonucunu tabloya yolla
+                satirlar: analizSonucu,
                 analizTarihi: selectedDate,
                 groupedTrips: groupedTrips,
             });
 
             setSnack({
                 open: true,
-                msg: `${all.length} kayıt yüklendi. ${selectedDate.format("DD.MM.YYYY")} tarihi için ${mevcutSezon.title} analizi yapıldı.`,
+                msg: `${all.length} kayıt yüklendi. ${selectedDate.format(
+                    "DD.MM.YYYY"
+                )} tarihi için ${mevcutSezon.title} analizi yapıldı.`,
                 severity: "success",
             });
         } catch (e) {
@@ -517,7 +703,7 @@ export default function BolgeselAnaliz() {
         }
     };
 
-    // clearAll (Değişiklik yok)
+    // clearAll
     const clearAll = () => {
         setRows([]);
         setAnalizData(null);
@@ -525,16 +711,17 @@ export default function BolgeselAnaliz() {
         setSelectedDate(dayjs());
     };
 
-    // CSV Export (Değişiklik yok)
+    // Detay DataGrid için CSV Export
     const exportCsv = () => {
-        // ... (kodunuzdaki gibi)
         const csvEscape = (val) => {
             if (val === null || val === undefined) return "";
             const s = String(val).replace(/"/g, '""');
             return `"${s}"`;
         };
         const headers = columns.map((c) => `"${c.field}"`).join(",");
-        const body = rows.map((r) => columns.map((c) => csvEscape(r[c.field])).join(",")).join("\n");
+        const body = rows
+            .map((r) => columns.map((c) => csvEscape(r[c.field])).join(","))
+            .join("\n");
         const csv = `${headers}\n${body}`;
         const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
@@ -545,13 +732,84 @@ export default function BolgeselAnaliz() {
         URL.revokeObjectURL(url);
     };
 
+    // Bölgesel analiz (üst tablo) için gerçek Excel (.xlsx) export - exceljs ile
+    const exportBolgeAnalizExcel = async () => {
+        if (!analizData || !analizData.satirlar || !analizData.satirlar.length) return;
+
+        const gunSayisi =
+            analizData.gunSayisi && analizData.gunSayisi > 0 ? analizData.gunSayisi : 1;
+
+        try {
+            const workbook = new ExcelJS.Workbook();
+            const sheet = workbook.addWorksheet("Bölgesel Analiz");
+
+            sheet.columns = [
+                { header: "Bölge", key: "bolge", width: 20 },
+                { header: "İstenen (Günlük)", key: "istenen_gunluk", width: 18 },
+                { header: "Gerçekleşen (Toplam)", key: "gerceklesen", width: 22 },
+                { header: "Fark (Toplam)", key: "fark_toplam", width: 16 },
+                { header: "Uyum Oranı (%)", key: "uyum_orani", width: 18 },
+            ];
+
+            analizData.satirlar.forEach((r) => {
+                const beklenenDonem = r.beklenen * gunSayisi;
+                const farkToplam = r.planlanan_toplam - beklenenDonem;
+
+                sheet.addRow({
+                    bolge: r.bolge,
+                    istenen_gunluk: r.beklenen,
+                    gerceklesen: r.planlanan_toplam,
+                    beklenen_donem: beklenenDonem,
+                    fark_toplam: farkToplam,
+                    uyum_orani: Number(r.uyum_orani?.toFixed(2) ?? 0),
+                });
+            });
+
+            const headerRow = sheet.getRow(1);
+            headerRow.font = { bold: true };
+            headerRow.alignment = { vertical: "middle", horizontal: "center" };
+            headerRow.eachCell((cell) => {
+                cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFE5E5E5" },
+                };
+                cell.border = {
+                    top: { style: "thin" },
+                    left: { style: "thin" },
+                    bottom: { style: "thin" },
+                    right: { style: "thin" },
+                };
+            });
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            });
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `bolgesel_analiz_ozet_${fmt(selectedDate)}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error("Excel export error:", err);
+            setSnack({
+                open: true,
+                severity: "error",
+                msg: "Excel dosyası oluşturulurken hata oluştu: " + err.message,
+            });
+        }
+    };
+
     // -----------------------------------------------------------------
-    // ----- EKRAN YERLEŞİMİ (RENDER) (GÜNCELLENDİ: Prop'lar eklendi) ---
+    // EKRAN YERLEŞİMİ (RENDER)
     // -----------------------------------------------------------------
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="tr">
             <Stack spacing={3} sx={{ p: { xs: 1, md: 3 } }}>
-                {/* KONTROL PANELİ (Değişiklik yok) */}
+                {/* KONTROL PANELİ */}
                 <Card elevation={3} sx={{ borderRadius: 4, bgcolor: "background.paper" }}>
                     <CardHeader
                         title={<Typography variant="h6" fontWeight={700}>Bölgesel Analiz Raporu</Typography>}
@@ -559,38 +817,92 @@ export default function BolgeselAnaliz() {
                     />
                     <Divider />
                     <CardContent>
-                        <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "center" }} justifyContent="space-between">
+                        <Stack
+                            direction={{ xs: "column", md: "row" }}
+                            spacing={2}
+                            alignItems={{ xs: "stretch", md: "center" }}
+                            justifyContent="space-between"
+                        >
                             <DatePicker
                                 label="Analiz Tarihi"
                                 value={selectedDate}
                                 onChange={(newValue) => setSelectedDate(newValue)}
                                 format="DD.MM.YYYY"
-                                slotProps={{ textField: { variant: 'outlined', size: 'small' } }}
+                                slotProps={{ textField: { variant: "outlined", size: "small" } }}
                                 sx={{ width: { xs: "100%", md: 240 } }}
                             />
-                            <Stack direction="row" spacing={1.5} sx={{ width: { xs: '100%', md: 'auto' } }}>
-                                <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={clearAll} disabled={loading} sx={{ flexGrow: { xs: 1, md: 0 } }}>
+                            <Stack
+                                direction="row"
+                                spacing={1.5}
+                                sx={{ width: { xs: "100%", md: "auto" } }}
+                            >
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<RestartAltIcon />}
+                                    onClick={clearAll}
+                                    disabled={loading}
+                                    sx={{ flexGrow: { xs: 1, md: 0 } }}
+                                >
                                     Temizle
                                 </Button>
-                                <Button variant="contained" startIcon={<SearchIcon />} onClick={getData} disabled={loading || !selectedDate} sx={{ minWidth: 180, flexGrow: { xs: 1, md: 0 } }}>
-                                    {loading ? <CircularProgress size={24} color="inherit" /> : "Analiz Raporu Oluştur"}
+                                <Button
+                                    variant="contained"
+                                    startIcon={<SearchIcon />}
+                                    onClick={getData}
+                                    disabled={loading || !selectedDate}
+                                    sx={{ minWidth: 180, flexGrow: { xs: 1, md: 0 } }}
+                                >
+                                    {loading ? (
+                                        <CircularProgress size={24} color="inherit" />
+                                    ) : (
+                                        "Analiz Raporu Oluştur"
+                                    )}
                                 </Button>
                             </Stack>
                         </Stack>
                     </CardContent>
                 </Card>
 
-                {/* YÜKLENİYOR... (Değişiklik yok) */}
+                {/* YÜKLENİYOR... */}
                 {loading && (
-                    <Card sx={{ p: 4, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, borderRadius: 3, minHeight: 300, justifyContent: "center", bgcolor: "background.paper" }}>
+                    <Card
+                        sx={{
+                            p: 4,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: 2,
+                            borderRadius: 3,
+                            minHeight: 300,
+                            justifyContent: "center",
+                            bgcolor: "background.paper",
+                        }}
+                    >
                         <CircularProgress size={40} />
-                        <Typography variant="h6" color="text.secondary">Rapor Oluşturuluyor...</Typography>
+                        <Typography variant="h6" color="text.secondary">
+                            Rapor Oluşturuluyor...
+                        </Typography>
                     </Card>
                 )}
 
-                {/* BAŞLANGIÇ EKRANI (Değişiklik yok) */}
+                {/* BAŞLANGIÇ EKRANI */}
                 {!loading && !analizData && (
-                    <Card sx={{ p: 4, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, borderRadius: 3, minHeight: 300, justifyContent: "center", bgcolor: "background.default", boxShadow: 'none', border: '2px dashed', borderColor: 'divider' }}>
+                    <Card
+                        sx={{
+                            p: 4,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: 2,
+                            borderRadius: 3,
+                            minHeight: 300,
+                            justifyContent: "center",
+                            bgcolor: "background.default",
+                            boxShadow: "none",
+                            border: "2px dashed",
+                            borderColor: "divider",
+                        }}
+                    >
                         <InfoOutlinedIcon sx={{ fontSize: 40, color: "text.disabled" }} />
                         <Typography variant="h6" color="text.secondary" textAlign="center">
                             Analiz sonuçlarını görmek için <br />
@@ -602,62 +914,129 @@ export default function BolgeselAnaliz() {
                 {/* SONUÇ EKRANI */}
                 {!loading && analizData && kpiData && (
                     <Stack spacing={3}>
-                        {/* 1. Hamsi Paneli (KPI Kartları) (Değişiklik yok) */}
+                        {/* KPI Paneli */}
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={5}>
                                 <GenelUyumKarti
                                     title="Analiz Raporu"
-                                    subheader={`Genel Durum (${analizData.analizTarihi.format("DD.MM.YYYY")} / ${mevcutSezon.season} sezonu)`}
+                                    subheader={`Genel Durum (${analizData.analizTarihi.format(
+                                        "DD.MM.YYYY"
+                                    )} / ${mevcutSezon.season} sezonu)`}
                                     value={kpiData.genelUyum}
-                                    color={mevcutSezon.color}
                                 />
                             </Grid>
                             <Grid item xs={12} md={7}>
-                                <Stack spacing={3} height="100%" justifyContent="space-between">
+                                <Stack
+                                    spacing={3}
+                                    height="100%"
+                                    justifyContent="space-between"
+                                >
                                     <KpiKarti
-                                        title={`Toplam Sefer (${analizData.analizTarihi.format("DD.MM.YYYY")})`}
+                                        title={`Toplam Sefer (${analizData.analizTarihi.format(
+                                            "DD.MM.YYYY"
+                                        )})`}
                                         value={kpiData.toplamSefer}
                                         icon={<NumbersIcon />}
                                         color="primary.main"
                                     />
                                     <Grid container spacing={3}>
                                         <Grid item xs={12} sm={6}>
-                                            <KpiKarti title="En Başarılı Bölge" value={kpiData.enBasarili} icon={<TrendingUpIcon />} color="success.main" />
+                                            <KpiKarti
+                                                title="En Başarılı Bölge"
+                                                value={kpiData.enBasarili}
+                                                icon={<TrendingUpIcon />}
+                                                color="success.main"
+                                            />
                                         </Grid>
                                         <Grid item xs={12} sm={6}>
-                                            <KpiKarti title="Dikkat Gereken Bölge" value={kpiData.enZayif} icon={<TrendingDownIcon />} color="error.main" />
+                                            <KpiKarti
+                                                title="Dikkat Gereken Bölge"
+                                                value={kpiData.enZayif}
+                                                icon={<TrendingDownIcon />}
+                                                color="error.main"
+                                            />
                                         </Grid>
                                     </Grid>
                                 </Stack>
                             </Grid>
                         </Grid>
 
-                        {/* 2. Bölge Detay Tablosu (GÜNCELLENDİ: Yeni prop'lar eklendi) */}
-                        <BolgeDetayTablosu
-                            title={mevcutSezon.title}
-                            subheader={`Bölge bazlı ${analizData.analizTarihi.format("DD.MM.YYYY")} hedef ve gerçekleşenleri (Detay için [+]'ya basın)`}
-                            icon={mevcutSezon.icon}
-                            data={analizData.satirlar}
-                            color={mevcutSezon.color}
-                            gunSayisi={analizData.gunSayisi}
-                            allColumns={columns} // YENİ: Sütun tanımını yolla
-                            groupedTrips={analizData.groupedTrips || {}} // YENİ: Gruplanmış seferleri yolla
-                        />
+                        {/* Bölge Detay Tablosu + Excel Aktarım Butonu */}
+                        <Box>
+                            <Box
+                                sx={{
+                                    display: "flex",
+                                    justifyContent: "flex-end",
+                                    mb: 1,
+                                }}
+                            >
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<DownloadIcon />}
+                                    onClick={exportBolgeAnalizExcel}
+                                    disabled={!analizData?.satirlar?.length}
+                                >
+                                    Bölge Analizini Excel&apos;e Aktar
+                                </Button>
+                            </Box>
 
-                        {/* 3. Tüm Seferler DataGrid (Akordiyon) (Değişiklik yok) */}
-                        <Accordion elevation={3} sx={{ borderRadius: 3, "&:before": { display: "none" }, bgcolor: "background.paper" }}>
+                            <BolgeDetayTablosu
+                                title={mevcutSezon.title}
+                                subheader={`Bölge bazlı ${analizData.analizTarihi.format(
+                                    "DD.MM.YYYY"
+                                )} hedef ve gerçekleşenleri (Detay için [+]'ya basın)`}
+                                icon={mevcutSezon.icon}
+                                data={analizData.satirlar}
+                                color={mevcutSezon.color}
+                                gunSayisi={analizData.gunSayisi}
+                                allColumns={columns}
+                                groupedTrips={analizData.groupedTrips || {}}
+                            />
+                        </Box>
+
+                        {/* Tüm Seferler DataGrid (Akordiyon) */}
+                        <Accordion
+                            elevation={3}
+                            sx={{
+                                borderRadius: 3,
+                                "&:before": { display: "none" },
+                                bgcolor: "background.paper",
+                            }}
+                        >
                             <AccordionSummary
                                 expandIcon={<ExpandMoreIcon />}
-                                sx={{ borderRadius: 3, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, bgcolor: "action.hover", "&.Mui-expanded": { borderBottom: "1px solid", borderColor: "divider" } }}
+                                sx={{
+                                    borderRadius: 3,
+                                    borderBottomLeftRadius: 0,
+                                    borderBottomRightRadius: 0,
+                                    bgcolor: "action.hover",
+                                    "&.Mui-expanded": {
+                                        borderBottom: "1px solid",
+                                        borderColor: "divider",
+                                    },
+                                }}
                             >
                                 <Stack direction="row" spacing={1.5} alignItems="center">
                                     <AssessmentIcon color="action" />
-                                    <Typography fontWeight={600}>Tüm Sefer Detaylarını Göster/Gizle (Toplam)</Typography>
-                                    <Chip size="small" label={`${rows.length} Kayıt Bulundu`} color="primary" variant="outlined" />
+                                    <Typography fontWeight={600}>
+                                        Tüm Sefer Detaylarını Göster/Gizle (Toplam)
+                                    </Typography>
+                                    <Chip
+                                        size="small"
+                                        label={`${rows.length} Kayıt Bulundu`}
+                                        color="primary"
+                                        variant="outlined"
+                                    />
                                 </Stack>
                             </AccordionSummary>
                             <AccordionDetails sx={{ p: 2 }}>
-                                <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportCsv} disabled={!rows.length} sx={{ mb: 2 }}>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<DownloadIcon />}
+                                    onClick={exportCsv}
+                                    disabled={!rows.length}
+                                    sx={{ mb: 2 }}
+                                >
                                     Detaylı CSV İndir
                                 </Button>
                                 <Box sx={{ height: 500, width: "100%" }}>
@@ -668,10 +1047,16 @@ export default function BolgeselAnaliz() {
                                         disableRowSelectionOnClick
                                         density="compact"
                                         pageSizeOptions={[25, 50, 100]}
-                                        initialState={{ pagination: { paginationModel: { pageSize: 25 } } }}
+                                        initialState={{
+                                            pagination: {
+                                                paginationModel: { pageSize: 25 },
+                                            },
+                                        }}
                                         localeText={{
                                             noRowsLabel: "Kayıt bulunamadı",
-                                            MuiTablePagination: { labelRowsPerPage: "Sayfa başına satır:" },
+                                            MuiTablePagination: {
+                                                labelRowsPerPage: "Sayfa başına satır:",
+                                            },
                                         }}
                                     />
                                 </Box>
@@ -680,7 +1065,7 @@ export default function BolgeselAnaliz() {
                     </Stack>
                 )}
 
-                {/* Snackbar (Değişiklik yok) */}
+                {/* Snackbar */}
                 <Snackbar
                     open={snack.open}
                     autoHideDuration={4000}
@@ -696,7 +1081,7 @@ export default function BolgeselAnaliz() {
     );
 }
 
-// Supabase RPC Yedek Fonksiyonu (Değişiklik yok)
+// Supabase RPC Yedek Fonksiyonu
 /*
 const getData_RPC_Yedek = async () => { ... };
 */

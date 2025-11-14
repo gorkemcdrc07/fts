@@ -368,6 +368,7 @@ export default function YuklemedeBekleme() {
         if (!filtered.length) return;
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet("Bekleme Analiz Raporu");
+
         const dataToExport = filtered.map((r) => ({
             "Sefer No": r.sefer_no,
             Plaka: r.plaka,
@@ -375,9 +376,15 @@ export default function YuklemedeBekleme() {
             "Şoför": r.surucu_ad_soyad,
             "Proje Adı": r.proje_adi,
             "Yükleme Noktası": r.yukleme_noktasi,
+            "Yükleme İl": r.yukleme_ili,
+            "Yükleme İlçe": r.yukleme_ilcesi,
+            "Teslim Noktası": r.teslim_noktasi,   // 🆕
+            "Teslim İl": r.teslim_ili,            // 🆕
+            "Teslim İlçe": r.teslim_ilcesi,       // 🆕
             "Lokasyon Bekleme (dk)": r.bekleme_dk,
             "Lokasyon Bekleme Süresi": minToHM(r.bekleme_dk),
         }));
+
         worksheet.columns = [
             { header: "Sefer No", key: "Sefer No", width: 14 },
             { header: "Plaka", key: "Plaka", width: 10 },
@@ -385,17 +392,22 @@ export default function YuklemedeBekleme() {
             { header: "Şoför", key: "Şoför", width: 20 },
             { header: "Proje Adı", key: "Proje Adı", width: 20 },
             { header: "Yükleme Noktası", key: "Yükleme Noktası", width: 30 },
+            { header: "Yükleme İl", key: "Yükleme İl", width: 30 },
+            { header: "Yükleme İlçe", key: "Yükleme İlçe", width: 30 },
+            { header: "Teslim Noktası", key: "Teslim Noktası", width: 30 }, // 🆕
+            { header: "Teslim İl", key: "Teslim İl", width: 18 },           // 🆕
+            { header: "Teslim İlçe", key: "Teslim İlçe", width: 18 },       // 🆕
             { header: "Lokasyon Bekleme (dk)", key: "Lokasyon Bekleme (dk)", width: 18 },
             { header: "Lokasyon Bekleme Süresi", key: "Lokasyon Bekleme Süresi", width: 18 },
         ];
+
         worksheet.addRows(dataToExport);
+
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], {
             type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         });
-        const filename = `yuklemede_bekleme_gruplu_${dayjs(dateFilter).format(
-            "YYYYMMDD"
-        )}.xlsx`;
+        const filename = `yuklemede_bekleme_gruplu_${dayjs(dateFilter).format("YYYYMMDD")}.xlsx`;
         saveAs(blob, filename);
     };
 

@@ -36,9 +36,12 @@ const PERM_KEYS_BY_SCREEN = {
         { key: "aktif_can_eta", label: "ETA Gör" },
         { key: "aktif_may_open_edit", label: "Editörü Aç" },
         { key: "aktif_may_open_eta", label: "ETA Paneli Aç" },
-        { key: "aktif_can_delete", label: "Sefer Sil" }, // silme yetkisi
-    ],
-    tamamlanan_seferler: [
+        { key: "aktif_can_delete", label: "Sefer Sil" },
+
+        // 🆕 Otomatik tarih yetkileri:
+        { key: "auto_fill_dates", label: "Tarih Alanında Otomatik Bugün" },
+        { key: "auto_sync_load_times", label: "Yükleme Saatlerini Otomatik Yay" },
+    ],    tamamlanan_seferler: [
         { key: "tmam_can_edit_details", label: "Detayları Düzenle" }, // yalnızca edit butonu için
     ],
     planlama: [
@@ -101,6 +104,10 @@ const USER_PERMISSIONS_COLUMNS = new Set([
     "aktif_may_open_edit", "aktif_may_open_eta",
     "aktif_can_delete",
 
+    // 🆕 Otomatik tarih yetkileri
+    "auto_fill_dates",
+    "auto_sync_load_times",
+
     // Tamamlanan seferler
     "tmam_can_edit_details",
 
@@ -121,7 +128,7 @@ const USER_PERMISSIONS_COLUMNS = new Set([
 
     // Araç & Cari Fiyat
     "acf_create", "acf_edit", "acf_delete",
-    "acf_gun_esle", // 👈 EKSİK SATIR BURAYA EKLENDİ
+    "acf_gun_esle",
     "acf_edit_cari_id",
     "acf_edit_cari_adi",
     "acf_edit_arac_sahibi",
@@ -130,7 +137,6 @@ const USER_PERMISSIONS_COLUMNS = new Set([
     "acf_edit_aylik_surucu",
     "acf_edit_calisma_gunu",
     "acf_edit_pasif",
-
 
     // Hakediş
     "hks_upload",

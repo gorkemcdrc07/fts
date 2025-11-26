@@ -81,6 +81,7 @@ const KIS_SEZONU_HEDEFLER = [
     { bolge: "İÇ ANADOLU", beklenen: 2 },
     { bolge: "TRAKYA+AVRUPA", beklenen: 6 },
     { bolge: "GEBZE+DERİNCE", beklenen: 10 },
+    { bolge: "ZONGULDAK", beklenen: 5 },  // 🔥 YENİ
 ];
 const YAZ_SEZONU_HEDEFLER = [
     { bolge: "EGE", beklenen: 9 },
@@ -88,6 +89,7 @@ const YAZ_SEZONU_HEDEFLER = [
     { bolge: "İÇ ANADOLU", beklenen: 2 },
     { bolge: "TRAKYA+AVRUPA", beklenen: 8 },
     { bolge: "GEBZE+DERİNCE", beklenen: 13 },
+    { bolge: "ZONGULDAK", beklenen: 5 },  // 🔥 YENİ
 ];
 
 // ----------------------------------------------------------------------
@@ -476,7 +478,7 @@ export default function BolgeselAnaliz() {
         VAN: "Doğu Bölgesi",
         YALOVA: "Ege Bölgesi",
         YOZGAT: "İç Anadolu Bölgesi",
-        ZONGULDAK: "Karadeniz Bölgesi",
+        ZONGULDAK: "Zonguldak Bölgesi",
         AKSARAY: "İç Anadolu Bölgesi",
         ADALAR: "Kocaeli Bölgesi",
         ATAŞEHİR: "Kocaeli Bölgesi",
@@ -543,6 +545,7 @@ export default function BolgeselAnaliz() {
             "Marmara Bölgesi": [],
             "Kocaeli Bölgesi": [],
             "Karadeniz Bölgesi": [],
+            "Zonguldak Bölgesi": [],   // 🔥 YENİ
             "Bilinmeyen": [],
         };
 
@@ -566,6 +569,8 @@ export default function BolgeselAnaliz() {
                 (rawBolgeCounts["Trakya Bölgesi"] || 0) +
                 (rawBolgeCounts["Marmara Bölgesi"] || 0),
             "GEBZE+DERİNCE": rawBolgeCounts["Kocaeli Bölgesi"] || 0,
+
+            "ZONGULDAK": rawBolgeCounts["Zonguldak Bölgesi"] || 0,  // 🔥 YENİ
         };
 
         const finalGroupedTrips = {
@@ -577,6 +582,8 @@ export default function BolgeselAnaliz() {
                 ...(rawGroupedTrips["Marmara Bölgesi"] || []),
             ],
             "GEBZE+DERİNCE": rawGroupedTrips["Kocaeli Bölgesi"] || [],
+
+            "ZONGULDAK": rawGroupedTrips["Zonguldak Bölgesi"] || [], // 🔥 YENİ
         };
 
         const hedefSet =

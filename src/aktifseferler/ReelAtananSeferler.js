@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState, Suspense, lazy } from
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
+import ExcelAktarim from "./butonlar/ExcelAktarım";
+
 
 /* MUI */
 import {
@@ -784,6 +786,10 @@ export default function ReelAtananSeferler() {
                             enrichRows={enrichRows}
                         />
                     )}
+
+                    {/* 🔥 Excel Aktarım Butonu — eklenmesi gereken yer burası */}
+                    <ExcelAktarim rows={filtered} filename="aktif_seferler.xlsx" />
+
                 </Stack>
             </Stack>
 

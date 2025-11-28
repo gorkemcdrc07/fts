@@ -336,7 +336,7 @@ const safeDateValueFormatter = (arg) => {
     return d.isValid() ? d.format("DD.MM.YYYY") : "-";
 };
 /* ===================== Toolbar ===================== */
-function CustomToolbar({ onFilters, onExport, onRefresh }) {
+function CustomToolbar({ onFilters, onExport, onRefresh, onReport }) {
     return (
         <GridToolbarContainer
             sx={{
@@ -366,6 +366,10 @@ function CustomToolbar({ onFilters, onExport, onRefresh }) {
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={onRefresh}>
                 Yenile
             </Button>
+            <Button variant="outlined" startIcon={<WarningIcon />} onClick={onReport}>
+                Rapor
+            </Button>
+
         </GridToolbarContainer>
     );
 }
@@ -379,6 +383,19 @@ export default function KesintiGirisi() {
     const [plakalar, setPlakalar] = useState([]);
     const [formOpen, setFormOpen] = useState(false);
     const [filtreDrawer, setFiltreDrawer] = useState(false);
+    const [raporOpen, setRaporOpen] = useState(false);
+
+    const [raporForm, setRaporForm] = useState({
+        ay: "",
+        plaka_treyler: "",
+    });
+
+    const [raporSonuc, setRaporSonuc] = useState({
+        toplamGun: 0,
+        kesintiliGunler: [],
+        tumGunler: []
+    });
+
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
 
     // form modu ve düzenlenen id
@@ -854,6 +871,75 @@ export default function KesintiGirisi() {
         },
     ];
 
+    const handleRaporExcel = async () => {
+        if (!raporForm.ay || !raporForm.plaka_treyler) {
+            openSnack("Lütfen ay ve plaka seçin.", "warning");
+            return;
+        }
+
+        const hedefAy = raporForm.ay;
+        const hedefPlaka = raporForm.plaka_treyler;
+
+        const liste = kesintiler.filter((k) => {
+            const kayitAy = String(k.baslangic_tarihi).substring(0, 7);
+            return kayitAy === hedefAy && k.plaka_treyler === hedefPlaka;
+        });
+
+        if (liste.length === 0) {
+            openSnack("Bu ay için kayıt bulunamadı.", "info");
+            return;
+        }
+
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet("Aylık Rapor");
+
+        sheet.columns = [
+            { header: "Plaka", key: "plaka", width: 25 },
+            { header: "Tür", key: "tur", width: 18 },
+            { header: "Neden", key: "neden", width: 20 },
+            { header: "Gün", key: "gun", width: 10 },
+            { header: "Açıklama", key: "aciklama", width: 45 },
+            { header: "Ekleyen", key: "ekleyen", width: 20 },
+            { header: "Başlangıç", key: "bas", width: 15, style: { numFmt: "dd.mm.yyyy" } },
+            { header: "Bitiş", key: "bit", width: 15, style: { numFmt: "dd.mm.yyyy" } },
+        ];
+
+        liste.forEach((k) =>
+            sheet.addRow({
+                plaka: k.plaka_treyler,
+                tur: k.kesinti_turu,
+                neden: k.neden,
+                gun: k.gun_sayisi,
+                aciklama: k.aciklama,
+                ekleyen: k.ekleyen_kullanici,
+                bas: safeDateValueGetter(k.baslangic_tarihi),
+                bit: safeDateValueGetter(k.bitis_tarihi),
+            })
+        );
+
+        sheet.getRow(1).eachCell((c) => {
+            c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+            c.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FF8B5CF6" },
+            };
+            c.alignment = { horizontal: "center" };
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `Rapor_${hedefPlaka}_${hedefAy}.xlsx`;
+        a.click();
+
+        openSnack("Rapor başarıyla oluşturuldu.", "success");
+    };
+
     /* ===================== Render ===================== */
     return (
         <ThemeProvider theme={theme}>
@@ -992,6 +1078,7 @@ export default function KesintiGirisi() {
                                                             verileriGetir();
                                                             loadPermissions().catch(() => { });
                                                         }}
+                                                        onReport={() => setRaporOpen(true)}   // ✔ DOĞRU OLAN
                                                     />
                                                 ),
                                             }}
@@ -1147,6 +1234,97 @@ export default function KesintiGirisi() {
                                     </Button>
                                 </Stack>
                             </Stack>
+                        </Drawer>
+                        {/* Rapor Drawer */}
+                        <Drawer
+                            anchor="right"
+                            open={raporOpen}
+                            onClose={() => setRaporOpen(false)}
+                            slotProps={{
+                                paper: {
+                                    sx: {
+                                        width: 500,
+                                        backgroundColor: "#171E2D",
+                                        color: "text.primary",
+                                        p: 3
+                                    }
+                                }
+                            }}
+                        >
+                            <Typography variant="h5" fontWeight={700} color="secondary.main">
+                                Kesinti Raporu
+                            </Typography>
+
+                            <Divider sx={{ my: 2 }} />
+
+                            <DatePicker
+                                label="Ay Seç"
+                                views={["month", "year"]}
+                                value={raporForm.ay ? dayjs(raporForm.ay) : null}
+                                onChange={(d) =>
+                                    setRaporForm(p => ({ ...p, ay: d ? d.format("YYYY-MM") : "" }))
+                                }
+                                slotProps={{ textField: { fullWidth: true, size: "small" } }}
+                            />
+
+                            <Autocomplete
+                                options={plakaOptions}
+                                value={raporForm.plaka_treyler ? { label: raporForm.plaka_treyler } : null}
+                                onChange={(_, v) =>
+                                    setRaporForm(p => ({ ...p, plaka_treyler: v?.label || "" }))
+                                }
+                                renderInput={(params) => <TextField {...params} label="Plaka - Treyler" fullWidth />}
+                                sx={{ mt: 2 }}
+                            />
+
+                            <Button
+                                fullWidth
+                                variant="contained"
+                                sx={{ mt: 3 }}
+                                onClick={handleRaporExcel}
+                            >
+                                Rapor Oluştur
+                            </Button>
+
+                            {raporSonuc.tumGunler.length > 0 && (
+                                <>
+                                    <Divider sx={{ my: 3 }} />
+
+                                    <Typography variant="h6" color="primary.main">
+                                        Toplam Kesintili Gün: {raporSonuc.toplamGun}
+                                    </Typography>
+
+                                    <Typography variant="subtitle2" sx={{ mt: 2 }}>
+                                        Gün Listesi:
+                                    </Typography>
+
+                                    <Box sx={{ mt: 1, maxHeight: 400, overflowY: "auto" }}>
+                                        {raporSonuc.tumGunler.map((g) => {
+                                            const kesintiVar = raporSonuc.kesintiliGunler.includes(g);
+
+                                            return (
+                                                <Box
+                                                    key={g}
+                                                    sx={{
+                                                        p: 1,
+                                                        borderRadius: 2,
+                                                        my: 0.5,
+                                                        backgroundColor: kesintiVar ? "#8B5CF633" : "#1E293B",
+                                                        border: kesintiVar
+                                                            ? "1px solid #8B5CF6"
+                                                            : "1px solid transparent"
+                                                    }}
+                                                >
+                                                    <Typography>
+                                                        {dayjs(g).format("DD.MM.YYYY")} —{" "}
+                                                        {kesintiVar ? "🟥 Kesintili Gün" : "🟩 Normal Gün"}
+                                                    </Typography>
+                                                </Box>
+                                            );
+                                        })}
+                                    </Box>
+                                </>
+                            )}
                         </Drawer>
 
                         {/* Form Dialog */}

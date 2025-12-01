@@ -317,14 +317,14 @@ export default function TeslimdeBekleme() {
             "Deadline": r.deadline ? dayjs(r.deadline).toDate() : null,
             "Gecikme (dk)": r.gecikme_dk ?? 0,
             "Gecikme Süresi": minToHM(r.gecikme_dk ?? 0),
-            "Kural": r.teslim_varis &&
-                (dayjs(r.teslim_varis).hour() < 12 ||
-                    (dayjs(r.teslim_varis).hour() === 12 &&
-                        dayjs(r.teslim_varis).minute() === 0))
-                ? "Varış < 12:00 ⇒ aynı gün 17:00"
-                : "Varış ≥ 12:00 ⇒ ertesi gün 12:00",
+            "Kural":
+                r.teslim_varis &&
+                    (dayjs(r.teslim_varis).hour() < 12 ||
+                        (dayjs(r.teslim_varis).hour() === 12 &&
+                            dayjs(r.teslim_varis).minute() === 0))
+                    ? "Varış < 12:00 ⇒ aynı gün 17:00"
+                    : "Varış ≥ 12:00 ⇒ ertesi gün 12:00",
         }));
-
         worksheet.columns = [
             { header: "Sefer No", key: "Sefer No", width: 14 },
             { header: "Plaka", key: "Plaka", width: 12 },
@@ -332,8 +332,11 @@ export default function TeslimdeBekleme() {
             { header: "Teslim Noktası", key: "Teslim Noktası", width: 26 },
             { header: "Teslim İli", key: "Teslim İli", width: 16 },
             { header: "Teslim İlçesi", key: "Teslim İlçesi", width: 16 },
+
+            // ⭐ EKLEMEN GEREKENLER
             { header: "Teslim Varış", key: "Teslim Varış", width: 20, style: { numFmt: "dd.mm.yyyy hh:mm" } },
             { header: "Teslim Çıkış", key: "Teslim Çıkış", width: 20, style: { numFmt: "dd.mm.yyyy hh:mm" } },
+
             { header: "Deadline", key: "Deadline", width: 20, style: { numFmt: "dd.mm.yyyy hh:mm" } },
             { header: "Gecikme (dk)", key: "Gecikme (dk)", width: 14 },
             { header: "Gecikme Süresi", key: "Gecikme Süresi", width: 18 },
@@ -396,59 +399,58 @@ export default function TeslimdeBekleme() {
                     size="small"
                     startIcon={<InfoOutlinedIcon />}
                     onClick={() => openDetail(p.row)}
-                    sx={{ fontWeight: 600, textTransform: 'none', px: 1, py: 0.5 }} // Daha şık buton
+                    sx={{ fontWeight: 600, textTransform: 'none', px: 1, py: 0.5 }}
                 >
                     {p.value || "—"}
                 </Button>
             ),
         },
+
         { field: "plaka", headerName: "Plaka", width: 120 },
         { field: "proje_adi", headerName: "Proje Adı", width: 160 },
+
+        // ⭐ TESLİM VARIŞ SÜTUNU — DOĞRU FORMAT
         {
             field: "teslim_varis",
             headerName: "Teslim Varış",
             width: 180,
-            valueFormatter: safeVF(fmtDateTR),
+            renderCell: (p) => fmtDateTR(p.row?.teslim_varis),
         },
+
+        // ⭐ TESLİM ÇIKIŞ SÜTUNU — DOĞRU FORMAT
         {
             field: "teslim_cikis",
             headerName: "Teslim Çıkış",
             width: 180,
-            valueFormatter: safeVF(fmtDateTR),
+            renderCell: (p) => fmtDateTR(p.row?.teslim_cikis),
         },
+
+        // DEADLINE
         {
             field: "deadline",
             headerName: "Deadline",
             width: 180,
-            valueFormatter: safeVF(fmtDateTR),
-            cellClassName: 'deadline-column', // Görsel vurgu için yeni class
+            renderCell: (p) => fmtDateTR(p.row?.deadline),
         },
+
+        // GECİKME
         {
             field: "gecikme_dk",
             headerName: "Gecikme Süresi",
             width: 180,
             renderCell: (p) => {
                 const gecikme = p.value ?? 0;
-                const { color, label } = getStatusProps(gecikme);
+                const { color } = getStatusProps(gecikme);
                 const isLate = gecikme > 0;
 
                 return (
-                    <Tooltip title={isLate ? `${minToHM(gecikme)} Gecikme` : "Zamanında/Erken Çıkış"}>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                            {isLate && (
-                                <AccessTimeFilledIcon color={color} sx={{ fontSize: 16 }} />
-                            )}
-                            <Chip
-                                color={color}
-                                variant={isLate ? "filled" : "outlined"} // Gecikme varsa daha dikkat çekici
-                                size="small"
-                                label={isLate ? minToHM(gecikme) : "Zamanında"}
-                                sx={{
-                                    fontWeight: isLate ? 700 : 500,
-                                }}
-                            />
-                        </Stack>
-                    </Tooltip>
+                    <Chip
+                        color={color}
+                        variant={isLate ? "filled" : "outlined"}
+                        size="small"
+                        label={isLate ? minToHM(gecikme) : "Zamanında"}
+                        sx={{ fontWeight: isLate ? 700 : 500 }}
+                    />
                 );
             },
             sortComparator: (a, b) => (a ?? 0) - (b ?? 0),

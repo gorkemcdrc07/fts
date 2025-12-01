@@ -378,9 +378,11 @@ export default function YuklemedeBekleme() {
             "Yükleme Noktası": r.yukleme_noktasi,
             "Yükleme İl": r.yukleme_ili,
             "Yükleme İlçe": r.yukleme_ilcesi,
-            "Teslim Noktası": r.teslim_noktasi,   // 🆕
-            "Teslim İl": r.teslim_ili,            // 🆕
-            "Teslim İlçe": r.teslim_ilcesi,       // 🆕
+            "Yükleme Varış": fmtDateTR(r.yukleme_varis),
+            "Yükleme Çıkış": fmtDateTR(r.yukleme_cikis),
+            "Teslim Noktası": r.teslim_noktasi,
+            "Teslim İl": r.teslim_ili,
+            "Teslim İlçe": r.teslim_ilcesi,
             "Lokasyon Bekleme (dk)": r.bekleme_dk,
             "Lokasyon Bekleme Süresi": minToHM(r.bekleme_dk),
         }));
@@ -394,9 +396,14 @@ export default function YuklemedeBekleme() {
             { header: "Yükleme Noktası", key: "Yükleme Noktası", width: 30 },
             { header: "Yükleme İl", key: "Yükleme İl", width: 30 },
             { header: "Yükleme İlçe", key: "Yükleme İlçe", width: 30 },
-            { header: "Teslim Noktası", key: "Teslim Noktası", width: 30 }, // 🆕
-            { header: "Teslim İl", key: "Teslim İl", width: 18 },           // 🆕
-            { header: "Teslim İlçe", key: "Teslim İlçe", width: 18 },       // 🆕
+
+            // ⭐ ZORUNLU EKLENECEK ALANLAR ⭐
+            { header: "Yükleme Varış", key: "Yükleme Varış", width: 22 },
+            { header: "Yükleme Çıkış", key: "Yükleme Çıkış", width: 22 },
+
+            { header: "Teslim Noktası", key: "Teslim Noktası", width: 30 },
+            { header: "Teslim İl", key: "Teslim İl", width: 18 },
+            { header: "Teslim İlçe", key: "Teslim İlçe", width: 18 },
             { header: "Lokasyon Bekleme (dk)", key: "Lokasyon Bekleme (dk)", width: 18 },
             { header: "Lokasyon Bekleme Süresi", key: "Lokasyon Bekleme Süresi", width: 18 },
         ];
@@ -457,7 +464,6 @@ export default function YuklemedeBekleme() {
         return result;
     }, [selectedRow, detailByNo]);
 
-    // columns
     const columns = useMemo(
         () => [
             {
@@ -481,6 +487,7 @@ export default function YuklemedeBekleme() {
                 ),
             },
             { field: "plaka", headerName: "Plaka", width: 100 },
+
             {
                 field: "yukleme_noktasi",
                 headerName: "Yükleme Noktası",
@@ -498,8 +505,24 @@ export default function YuklemedeBekleme() {
                     </Tooltip>
                 ),
             },
+
+            // 🔥 YENİ KOLONLAR — NULL SAFE
+            {
+                field: "yukleme_varis",
+                headerName: "Varış (Yükleme)",
+                width: 180,
+                valueGetter: (p) => fmtDateTR(p.row?.yukleme_varis),
+            },
+            {
+                field: "yukleme_cikis",
+                headerName: "Çıkış (Yükleme)",
+                width: 180,
+                valueGetter: (p) => fmtDateTR(p.row?.yukleme_cikis),
+            },
+
             { field: "surucu_ad_soyad", headerName: "Şoför", width: 180 },
             { field: "proje_adi", headerName: "Proje Adı", width: 150 },
+
             {
                 field: "bekleme_dk",
                 headerName: "Konumdaki Toplam Bekleme",

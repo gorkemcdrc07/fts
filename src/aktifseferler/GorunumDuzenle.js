@@ -28,7 +28,7 @@ const GENERIC_HIDDEN_KEY = `aktifseferler.hiddenColumns.GENERIC`;
 
 /* columns.js ile uyumlu envanter */
 const ALL_COLUMNS = [
-    { id: "actions", label: "İşlem", lock: true },
+    { id: "actions", label: "İşlem" },
     { id: "reel_durum", label: "Reel Durum" },
     { id: "nokta_sayisi", label: "Nokta" },
     { id: "nokta_kayit_bilgisi", label: "Nokta Kayıt Bilgisi" },

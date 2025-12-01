@@ -33,6 +33,66 @@ import { fromISOToCombined } from "./utils/datetime";
 import { fetchSeferler, fetchTamamlananNos, loadDetaylar, updateSefer, upsertDetaylar } from "./services";
 import usePermissions from "../auth/usePermissions";
 
+// -------------- BÖLGE HARİTASI ----------------
+const ilToBolgeMap = {
+    ADANA: "Doğu Bölgesi", ADIYAMAN: "Doğu Bölgesi", AFYON: "İç Anadolu Bölgesi", AĞRI: "Doğu Bölgesi",
+    AMASYA: "Karadeniz Bölgesi", ANKARA: "İç Anadolu Bölgesi", ANTALYA: "Ege Bölgesi", ARTVİN: "Karadeniz Bölgesi",
+    AYDIN: "Ege Bölgesi", BALIKESİR: "Ege Bölgesi", BARTIN: "Karadeniz Bölgesi", BATMAN: "Doğu Bölgesi",
+    BAYBURT: "Karadeniz Bölgesi", BİLECİK: "İç Anadolu Bölgesi", BİNGÖL: "Doğu Bölgesi", BİTLİS: "Doğu Bölgesi",
+    BOLU: "Karadeniz Bölgesi", BURDUR: "Ege Bölgesi", BURSA: "Ege Bölgesi", ÇANAKKALE: "Trakya Bölgesi",
+    ÇANKIRI: "İç Anadolu Bölgesi", ÇORUM: "İç Anadolu Bölgesi", DENİZLİ: "Ege Bölgesi", DİYARBAKIR: "Doğu Bölgesi",
+    DÜZCE: "Karadeniz Bölgesi", EDİRNE: "Trakya Bölgesi", ELAZIĞ: "Doğu Bölgesi", ERZİNCAN: "Doğu Bölgesi",
+    ERZURUM: "Doğu Bölgesi", ESKİŞEHİR: "İç Anadolu Bölgesi", GAZİANTEP: "Doğu Bölgesi", GİRESUN: "Karadeniz Bölgesi",
+    GÜMÜŞHANE: "Karadeniz Bölgesi", HAKKARİ: "Doğu Bölgesi", HATAY: "Doğu Bölgesi", ISPARTA: "Ege Bölgesi",
+    MERSİN: "Doğu Bölgesi", İSTANBUL: "Marmara Bölgesi", İZMİR: "Ege Bölgesi", KAHRAMANMARAŞ: "Doğu Bölgesi",
+    KARABÜK: "Karadeniz Bölgesi", KARAMAN: "İç Anadolu Bölgesi", KARS: "Doğu Bölgesi", KASTAMONU: "Karadeniz Bölgesi",
+    KAYSERİ: "İç Anadolu Bölgesi", KİLİS: "Doğu Bölgesi", KIRIKKALE: "İç Anadolu Bölgesi",
+    KIRKLARELİ: "Trakya Bölgesi", KIRŞEHİR: "İç Anadolu Bölgesi", KOCAELİ: "Kocaeli Bölgesi",
+    KONYA: "İç Anadolu Bölgesi", KÜTAHYA: "İç Anadolu Bölgesi", MALATYA: "Doğu Bölgesi", MANİSA: "Ege Bölgesi",
+    MARDİN: "Doğu Bölgesi", MUĞLA: "Ege Bölgesi", MUŞ: "Doğu Bölgesi", NEVŞEHİR: "İç Anadolu Bölgesi",
+    NİĞDE: "İç Anadolu Bölgesi", ORDU: "Karadeniz Bölgesi", OSMANİYE: "Doğu Bölgesi", RİZE: "Karadeniz Bölgesi",
+    SAKARYA: "Kocaeli Bölgesi", SAMSUN: "Karadeniz Bölgesi", SİİRT: "Doğu Bölgesi", SİNOP: "Karadeniz Bölgesi",
+    SİVAS: "İç Anadolu Bölgesi", ŞANLIURFA: "Doğu Bölgesi", ŞIRNAK: "Doğu Bölgesi", TEKİRDAĞ: "Trakya Bölgesi",
+    TOKAT: "Karadeniz Bölgesi", TRABZON: "Karadeniz Bölgesi", TUNCELİ: "Doğu Bölgesi", UŞAK: "Ege Bölgesi",
+    VAN: "Doğu Bölgesi", YALOVA: "Ege Bölgesi", YOZGAT: "İç Anadolu Bölgesi", ZONGULDAK: "Karadeniz Bölgesi",
+    AKSARAY: "İç Anadolu Bölgesi",
+
+    // İSTANBUL özel
+    ADALAR: "Kocaeli Bölgesi", ATAŞEHİR: "Kocaeli Bölgesi", BEYKOZ: "Kocaeli Bölgesi",
+    KADIKÖY: "Kocaeli Bölgesi", KARTAL: "Kocaeli Bölgesi", MALTEPE: "Kocaeli Bölgesi",
+    PENDİK: "Kocaeli Bölgesi", SANCAKTEPE: "Kocaeli Bölgesi", SULTANBEYLİ: "Kocaeli Bölgesi",
+    TUZLA: "Kocaeli Bölgesi", ÜMRANİYE: "Kocaeli Bölgesi", ÜSKÜDAR: "Kocaeli Bölgesi",
+
+    ARNAVUTKÖY: "Marmara Bölgesi", AVCILAR: "Marmara Bölgesi", BAĞCILAR: "Marmara Bölgesi",
+    BAHÇELİEVLER: "Marmara Bölgesi", BAKIRKÖY: "Marmara Bölgesi", BAŞAKŞEHİR: "Marmara Bölgesi",
+    BAYRAMPAŞA: "Marmara Bölgesi", BEYLİKDÜZÜ: "Marmara Bölgesi", BEYOĞLU: "Marmara Bölgesi",
+    BÜYÜKÇEKMECE: "Marmara Bölgesi", ÇATALCA: "Marmara Bölgesi", ESENLER: "Marmara Bölgesi",
+    ESENYURT: "Marmara Bölgesi", EYÜPSULTAN: "Marmara Bölgesi", FATİH: "Marmara Bölgesi",
+    SARIYER: "Marmara Bölgesi", ŞİŞLİ: "Marmara Bölgesi", ZEYTİNBURNU: "Marmara Bölgesi",
+};
+
+function getBolge(il, ilce) {
+    if (!il) return "—";
+
+    // İlk parçayı al (örn: "GAZİANTEP; GAZİANTEP")
+    const parsePart = (v) => {
+        if (!v) return null;
+        return String(v).split(";")[0].trim().toLocaleUpperCase("tr-TR");
+    };
+
+    const normIl = parsePart(il);
+    const normIlce = parsePart(ilce);
+
+    // Önce ilçe eşleşmesi önemli
+    if (normIlce && ilToBolgeMap[normIlce]) {
+        return ilToBolgeMap[normIlce];
+    }
+
+    // İl üzerinden bölgeyi bul
+    return ilToBolgeMap[normIl] || "—";
+}
+
+
 /* Diyaloglar */
 const EditorDialog = lazy(() => import("./dialogs/EditorDialog"));
 const ETAEditor = lazy(() => import("./dialogs/ETAEditor"));
@@ -288,6 +348,7 @@ export default function ReelAtananSeferler() {
                 _rid: s.id ?? s.sefer_no ?? `tmp-${Date.now()}-${idx}`,
                 nokta_sayisi: maxLen || 0,
                 reel_durum: s.reel_durum || "-",
+                bolge: getBolge(s.yukleme_ili, s.yukleme_ilcesi),
             };
         });
 
@@ -425,48 +486,52 @@ export default function ReelAtananSeferler() {
         let errorOccurred = false;
 
         try {
-            const upserts = detailRows.map((d, i) => {
-                const original = detailRowsOrig[i] || {};
+            const upserts = await Promise.all(
+                detailRows.map(async (d, i) => {
+                    const original = detailRowsOrig[i] || {};
 
-                const cleaned_d = {};
-                for (const key in d) cleaned_d[key] = clean(d[key]) || null;
+                    const cleaned_d = {};
+                    for (const key in d) cleaned_d[key] = clean(d[key]) || null;
 
-                const updatedRow = {
-                    sefer_id: cleaned_d.sefer_id,
-                    nokta_sirasi: cleaned_d.nokta_sirasi,
-                    proje_adi: cleaned_d.proje_adi,
-                    yukleme_noktasi: cleaned_d.yukleme_noktasi,
-                    yukleme_ili: cleaned_d.yukleme_ili,
-                    yukleme_ilcesi: cleaned_d.yukleme_ilcesi,
-                    teslim_noktasi: cleaned_d.teslim_noktasi,
-                    teslim_ili: cleaned_d.teslim_ili,
-                    teslim_ilcesi: cleaned_d.teslim_ilcesi,
-                    yukleme_varis: cleaned_d.yukleme_varis,
-                    yukleme_cikis: cleaned_d.yukleme_cikis,
-                    teslim_varis: cleaned_d.teslim_varis,
-                    teslim_cikis: cleaned_d.teslim_cikis,
-                    arac_statu: computeAracStatu(detailRows) || null,
-                    kayit_zamani: new Date().toISOString(),
-                };
+                    const updatedRow = {
+                        sefer_id: cleaned_d.sefer_id,
+                        nokta_sirasi: cleaned_d.nokta_sirasi,
+                        proje_adi: cleaned_d.proje_adi,
+                        yukleme_noktasi: cleaned_d.yukleme_noktasi,
+                        yukleme_ili: cleaned_d.yukleme_ili,
+                        yukleme_ilcesi: cleaned_d.yukleme_ilcesi,
+                        teslim_noktasi: cleaned_d.teslim_noktasi,
+                        teslim_ili: cleaned_d.teslim_ili,
+                        teslim_ilcesi: cleaned_d.teslim_ilcesi,
+                        yukleme_varis: cleaned_d.yukleme_varis,
+                        yukleme_cikis: cleaned_d.yukleme_cikis,
+                        teslim_varis: cleaned_d.teslim_varis,
+                        teslim_cikis: cleaned_d.teslim_cikis,
+                        arac_statu: computeAracStatu(detailRows) || null,
+                        kayit_zamani: new Date().toISOString(),
+                    };
 
-                timeFields.forEach((field) => {
-                    const currentValue = cleaned_d[field];
-                    const originalValue = clean(original[field]) || null;
+                    /* ***********************
+                       🆕 ETA OTOMATİK HESAP
+                       *********************** */
+                    if (cleaned_d.yukleme_cikis && cleaned_d.eta) {
+                        const { km } = await fetchDistance({
+                            from: { il: cleaned_d.yukleme_ili, ilce: cleaned_d.yukleme_ilcesi },
+                            to: { il: cleaned_d.teslim_ili, ilce: cleaned_d.teslim_ilcesi }
+                        });
 
-                    if (currentValue !== originalValue) {
-                        updatedRow[`${field}_guncelleyen`] = currentUserName;
-                        updatedRow[`${field}_guncelleme_tarihi`] = currentTimestamp;
-                    } else {
-                        const originalUser = original[`${field}_guncelleyen`] ?? null;
-                        const originalDate = clean(original[`${field}_guncelleme_tarihi`]) || null;
-                        updatedRow[`${field}_guncelleyen`] = originalUser;
-                        updatedRow[`${field}_guncelleme_tarihi`] = originalDate;
+                        if (km > 0) {
+                            const start = new Date(cleaned_d.yukleme_cikis);
+                            const hours = km / 70;
+                            start.setHours(start.getHours() + hours);
+                            updatedRow.eta = start.toISOString();
+                        }
                     }
-                });
 
-                successfullyUpdatedRows.push({ ...d, ...updatedRow });
-                return updatedRow;
-            });
+                    return updatedRow;
+                })
+            );
+
 
             const upsertResult = await upsertDetaylar(upserts);
             if (upsertResult && upsertResult.error) throw upsertResult.error;

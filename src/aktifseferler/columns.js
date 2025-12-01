@@ -234,6 +234,8 @@ export default function buildColumns({
         txt("arac_statu", "Araç Statü", 210),
         txt("yukleme_ili", "Yükleme İl", 160),
         txt("yukleme_ilcesi", "Yükleme İlçe", 160),
+        txt("bolge", "Bölge", 160),
+
 
         // >>> ETA VARIŞ SÜTUNU
         {

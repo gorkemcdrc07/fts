@@ -398,23 +398,23 @@ export default function YuklemedeBekleme() {
 
         const data = filtered.map((r) => ({
             "Sefer No": r.sefer_no,
-            Plaka: r.plaka,
-            Treyler: r.treyler,
-            Şoför: r.surucu_ad_soyad,
+            "Plaka": r.plaka,
+            "Treyler": r.treyler,
+            "Şoför": r.surucu_ad_soyad,
             "Proje Adı": r.proje_adi,
             "Yükleme Noktası": r.yukleme_noktasi,
-            "Yükleme İl": r.yukleme_ili,
-            "Yükleme İlçe": r.yukleme_ilcesi,
-            "Yükleme Varış": fmtDateTR(r.yukleme_varis),
-            "Yükleme Çıkış": fmtDateTR(r.yukleme_cikis),
-            "Bekleme (dk)": r.bekleme_dk,
+            "Yükleme İli": r.yukleme_ili,
+            "Teslim Noktası": r.teslim_noktasi,
+            "Teslim İli": r.teslim_ili,
+            "Varış Zamanı": fmtDateTR(r.yukleme_varis),
+            "Çıkış Zamanı": fmtDateTR(r.yukleme_cikis),
             "Bekleme Süresi": minToHM(r.bekleme_dk),
         }));
 
         sheet.columns = Object.keys(data[0]).map((k) => ({
             header: k,
             key: k,
-            width: 22,
+            width: 25,
         }));
 
         sheet.addRows(data);

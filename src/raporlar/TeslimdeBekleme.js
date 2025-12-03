@@ -313,60 +313,56 @@ export default function TeslimdeBekleme() {
         if (!filtered.length) return;
 
         const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet("Teslimde Bekleme Raporu");
+        const worksheet = workbook.addWorksheet("Teslimde Bekleme");
 
-        // ==========================
-        // VERİ HARİTALAMA
-        // ==========================
+        // ================================
+        // EXCEL VERİ MAP
+        // ================================
         const dataToExport = filtered.map((r) => ({
             "Sefer No": r.sefer_no,
-            Plaka: r.plaka,
+            "Plaka": r.plaka,
+            "Treyler": r.treyler,
+            "Şoför": r.surucu_ad_soyad,
             "Proje Adı": r.proje_adi,
+            "Yükleme Noktası": r.yukleme_noktasi,
+            "Yükleme İli": r.yukleme_ili,
             "Teslim Noktası": r.teslim_noktasi,
             "Teslim İli": r.teslim_ili,
-            "Teslim İlçesi": r.teslim_ilcesi,
-            "Teslim Varış": r.teslim_varis ? dayjs(r.teslim_varis).toDate() : null,
-            "Teslim Çıkış": r.teslim_cikis ? dayjs(r.teslim_cikis).toDate() : null,
-            Deadline: r.deadline ? dayjs(r.deadline).toDate() : null,
-            "Gecikme (dk)": r.gecikme_dk ?? 0,
-            "Gecikme Süresi": minToHM(r.gecikme_dk ?? 0),
-            Kural:
-                r.teslim_varis &&
-                    (dayjs(r.teslim_varis).hour() < 12 ||
-                        (dayjs(r.teslim_varis).hour() === 12 &&
-                            dayjs(r.teslim_varis).minute() === 0))
-                    ? "Varış < 12:00 ⇒ Aynı Gün 17:00"
-                    : "Varış ≥ 12:00 ⇒ Ertesi Gün 12:00",
+            "Varış Zamanı": r.teslim_varis
+                ? dayjs(r.teslim_varis).format("DD.MM.YYYY HH:mm")
+                : "—",
+            "Çıkış Zamanı": r.teslim_cikis
+                ? dayjs(r.teslim_cikis).format("DD.MM.YYYY HH:mm")
+                : "—",
+            "Bekleme Süresi": minToHM(r.gecikme_dk ?? 0),
         }));
 
-        // ==========================
+        // ================================
         // SÜTUN BAŞLIKLARI
-        // ==========================
+        // ================================
         worksheet.columns = [
             { header: "Sefer No", key: "Sefer No", width: 14 },
-            { header: "Plaka", key: "Plaka", width: 12 },
+            { header: "Plaka", key: "Plaka", width: 14 },
+            { header: "Treyler", key: "Treyler", width: 18 },
+            { header: "Şoför", key: "Şoför", width: 22 },
             { header: "Proje Adı", key: "Proje Adı", width: 22 },
-            { header: "Teslim Noktası", key: "Teslim Noktası", width: 26 },
-            { header: "Teslim İli", key: "Teslim İli", width: 16 },
-            { header: "Teslim İlçesi", key: "Teslim İlçesi", width: 16 },
-
-            { header: "Teslim Varış", key: "Teslim Varış", width: 20, style: { numFmt: "dd.mm.yyyy hh:mm" } },
-            { header: "Teslim Çıkış", key: "Teslim Çıkış", width: 20, style: { numFmt: "dd.mm.yyyy hh:mm" } },
-
-            { header: "Deadline", key: "Deadline", width: 20, style: { numFmt: "dd.mm.yyyy hh:mm" } },
-            { header: "Gecikme (dk)", key: "Gecikme (dk)", width: 14 },
-            { header: "Gecikme Süresi", key: "Gecikme Süresi", width: 18 },
-            { header: "Kural", key: "Kural", width: 28 },
+            { header: "Yükleme Noktası", key: "Yükleme Noktası", width: 28 },
+            { header: "Yükleme İli", key: "Yükleme İli", width: 18 },
+            { header: "Teslim Noktası", key: "Teslim Noktası", width: 28 },
+            { header: "Teslim İli", key: "Teslim İli", width: 18 },
+            { header: "Varış Zamanı", key: "Varış Zamanı", width: 20 },
+            { header: "Çıkış Zamanı", key: "Çıkış Zamanı", width: 20 },
+            { header: "Bekleme Süresi", key: "Bekleme Süresi", width: 16 },
         ];
 
-        // ==========================
-        // SATIRLARI EKLE
-        // ==========================
+        // ================================
+        // VERİYİ EXCEL’E EKLE
+        // ================================
         worksheet.addRows(dataToExport);
 
-        // ==========================
-        // DOSYA ÇIKTI
-        // ==========================
+        // ================================
+        // DOSYA KAYDET
+        // ================================
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], {
             type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

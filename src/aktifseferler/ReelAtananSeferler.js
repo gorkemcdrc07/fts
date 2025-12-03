@@ -314,7 +314,7 @@ export default function ReelAtananSeferler() {
     const addLog = useCallback((entry) => {
         try {
             const all = JSON.parse(localStorage.getItem("aktifseferler.logs") || "[]");
-            const user = localStorage.getItem("kullanici") || "-";
+            const user = localStorage.getItem("kullaniciAdi") || "-";   // ✅ DOĞRUSU BU
             all.unshift({ ts: new Date().toISOString(), user, ...entry });
             localStorage.setItem("aktifseferler.logs", JSON.stringify(all.slice(0, 200)));
             setViewBump(String(Date.now()));
@@ -474,11 +474,20 @@ export default function ReelAtananSeferler() {
         setDetailRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
     }, []);
 
+    function normalizeISO(v) {
+        if (!v) return null;
+        const d = new Date(v);
+        if (isNaN(d)) return null;
+        return d.getTime(); // sadece milisaniye karşılaştırması yapıyoruz
+    }
+
+
     const saveDetails = useCallback(async () => {
         if (!editSefer) return false;
         setSaving(true);
 
-        const currentUserName = (localStorage.getItem("kullanici") || "GENERIC").toUpperCase();
+        // 🔥 DOĞRU ANAHTAR
+        const currentUserName = (localStorage.getItem("kullaniciAdi") || "GENERIC").toUpperCase();
         const currentTimestamp = new Date().toISOString();
         const timeFields = ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"];
 
@@ -491,8 +500,10 @@ export default function ReelAtananSeferler() {
                     const original = detailRowsOrig[i] || {};
 
                     const cleaned_d = {};
-                    for (const key in d) cleaned_d[key] = clean(d[key]) || null;
-
+                    for (const key in d) {
+                        const v = clean(d[key]);
+                        cleaned_d[key] = (v === "" ? null : v);
+                    }
                     const updatedRow = {
                         sefer_id: cleaned_d.sefer_id,
                         nokta_sirasi: cleaned_d.nokta_sirasi,
@@ -509,6 +520,52 @@ export default function ReelAtananSeferler() {
                         teslim_cikis: cleaned_d.teslim_cikis,
                         arac_statu: computeAracStatu(detailRows) || null,
                         kayit_zamani: new Date().toISOString(),
+
+                        /* 🔥 BURASI EKLENDİ — KİM NE ZAMAN GÜNCELLEDİ? */
+
+                        yukleme_varis_guncelleyen:
+                            normalizeISO(cleaned_d.yukleme_varis) !== normalizeISO(original.yukleme_varis)
+                                ? currentUserName
+                                : original.yukleme_varis_guncelleyen,
+
+                        yukleme_varis_guncelleme_tarihi:
+                            normalizeISO(cleaned_d.yukleme_varis) !== normalizeISO(original.yukleme_varis)
+                                ? currentTimestamp
+                                : original.yukleme_varis_guncelleme_tarihi,
+
+
+                        yukleme_cikis_guncelleyen:
+                            normalizeISO(cleaned_d.yukleme_cikis) !== normalizeISO(original.yukleme_cikis)
+                                ? currentUserName
+                                : original.yukleme_cikis_guncelleyen,
+
+                        yukleme_cikis_guncelleme_tarihi:
+                            normalizeISO(cleaned_d.yukleme_cikis) !== normalizeISO(original.yukleme_cikis)
+                                ? currentTimestamp
+                                : original.yukleme_cikis_guncelleme_tarihi,
+
+
+                        teslim_varis_guncelleyen:
+                            normalizeISO(cleaned_d.teslim_varis) !== normalizeISO(original.teslim_varis)
+                                ? currentUserName
+                                : original.teslim_varis_guncelleyen,
+
+                        teslim_varis_guncelleme_tarihi:
+                            normalizeISO(cleaned_d.teslim_varis) !== normalizeISO(original.teslim_varis)
+                                ? currentTimestamp
+                                : original.teslim_varis_guncelleme_tarihi,
+
+
+                        teslim_cikis_guncelleyen:
+                            normalizeISO(cleaned_d.teslim_cikis) !== normalizeISO(original.teslim_cikis)
+                                ? currentUserName
+                                : original.teslim_cikis_guncelleyen,
+
+                        teslim_cikis_guncelleme_tarihi:
+                            normalizeISO(cleaned_d.teslim_cikis) !== normalizeISO(original.teslim_cikis)
+                                ? currentTimestamp
+                                : original.teslim_cikis_guncelleme_tarihi,
+
                     };
 
                     /* ***********************
@@ -536,8 +593,9 @@ export default function ReelAtananSeferler() {
             const upsertResult = await upsertDetaylar(upserts);
             if (upsertResult && upsertResult.error) throw upsertResult.error;
 
-            setDetailRows(successfullyUpdatedRows);
-            setDetailRowsOrig(successfullyUpdatedRows);
+            // Başarıyla kaydedilen detaylar bunlar
+            setDetailRows(detailRows);
+            setDetailRowsOrig(detailRows);
             setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
         } catch (e) {
             errorOccurred = true;
@@ -703,28 +761,39 @@ export default function ReelAtananSeferler() {
                 }));
             }
 
-            const mapDetay = (d) => ({
-                ...d,
-                proje_adi: d.proje_adi ?? "",
-                yukleme_noktasi: d.yukleme_noktasi ?? "",
-                yukleme_ili: d.yukleme_ili ?? "",
-                yukleme_ilcesi: d.yukleme_ilcesi ?? "",
-                teslim_noktasi: d.teslim_noktasi ?? "",
-                teslim_ili: d.teslim_ili ?? "",
-                teslim_ilcesi: d.teslim_ilcesi ?? "",
-                yukleme_varis: d.yukleme_varis ?? "",
-                yukleme_cikis: d.yukleme_cikis ?? "",
-                teslim_varis: d.teslim_varis ?? "",
-                teslim_cikis: d.teslim_cikis ?? "",
-                yukleme_varis_guncelleyen: d.yukleme_varis_guncelleyen ?? "",
-                yukleme_varis_guncelleme_tarihi: d.yukleme_varis_guncelleme_tarihi ?? "",
-                yukleme_cikis_guncelleyen: d.yukleme_cikis_guncelleyen ?? "",
-                yukleme_cikis_guncelleme_tarihi: d.yukleme_cikis_guncelleme_tarihi ?? "",
-                teslim_varis_guncelleyen: d.teslim_varis_guncelleyen ?? "",
-                teslim_varis_guncelleme_tarihi: d.teslim_varis_guncelleme_tarihi ?? "",
-                teslim_cikis_guncelleyen: d.teslim_cikis_guncelleyen ?? "",
-                teslim_cikis_guncelleme_tarihi: d.teslim_cikis_guncelleme_tarihi ?? "",
-            });
+            const mapDetay = (d) => {
+                const fix = (v) => {
+                    if (v === "" || v === null || v === undefined) return null;
+                    return v;
+                };
+                return {
+                    ...d,
+                    proje_adi: d.proje_adi ?? "",
+                    yukleme_noktasi: d.yukleme_noktasi ?? "",
+                    yukleme_ili: d.yukleme_ili ?? "",
+                    yukleme_ilcesi: d.yukleme_ilcesi ?? "",
+                    teslim_noktasi: d.teslim_noktasi ?? "",
+                    teslim_ili: d.teslim_ili ?? "",
+                    teslim_ilcesi: d.teslim_ilcesi ?? "",
+
+                    yukleme_varis: d.yukleme_varis ?? "",
+                    yukleme_cikis: d.yukleme_cikis ?? "",
+                    teslim_varis: d.teslim_varis ?? "",
+                    teslim_cikis: d.teslim_cikis ?? "",
+
+                    yukleme_varis_guncelleyen: fix(d.yukleme_varis_guncelleyen),
+                    yukleme_varis_guncelleme_tarihi: fix(d.yukleme_varis_guncelleme_tarihi),
+
+                    yukleme_cikis_guncelleyen: fix(d.yukleme_cikis_guncelleyen),
+                    yukleme_cikis_guncelleme_tarihi: fix(d.yukleme_cikis_guncelleme_tarihi),
+
+                    teslim_varis_guncelleyen: fix(d.teslim_varis_guncelleyen),
+                    teslim_varis_guncelleme_tarihi: fix(d.teslim_varis_guncelleme_tarihi),
+
+                    teslim_cikis_guncelleyen: fix(d.teslim_cikis_guncelleyen),
+                    teslim_cikis_guncelleme_tarihi: fix(d.teslim_cikis_guncelleme_tarihi),
+                };
+            };
 
             const initialDetails = detay.map(mapDetay);
             setDetailRows(initialDetails);

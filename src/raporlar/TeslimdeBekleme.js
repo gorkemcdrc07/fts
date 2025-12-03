@@ -1,3 +1,7 @@
+// ===========================
+// TeslimdeBekleme.jsx — FINAL
+// ===========================
+
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 
@@ -23,8 +27,9 @@ import {
     Tooltip,
     Typography,
     Alert,
-    CircularProgress, // Yeni: Yüklenme göstergesi
-    LinearProgress, // Yeni: Yüklenme çubuğu
+    CircularProgress,
+    LinearProgress,
+    MenuItem,
 } from "@mui/material";
 
 // DataGrid
@@ -34,24 +39,22 @@ import {
     GridToolbarQuickFilter,
 } from "@mui/x-data-grid";
 
-// ICONS
+// Icons
 import {
     Refresh as RefreshIcon,
     InfoOutlined as InfoOutlinedIcon,
     Download as DownloadIcon,
-    AccessTimeFilled as AccessTimeFilledIcon, // Yeni: Gecikme ikonu
 } from "@mui/icons-material";
 
-// Modal Component
+// Modal
 import TripDetailModal from "./TripDetailModal";
-// ===================== Dayjs Setup =====================
+
+// ===========================
 dayjs.extend(duration);
 dayjs.locale("tr");
 
-/* ===================== Sabitler (Değişmedi) ===================== */
 const DETAIL_TABLE = "tamamlanan_detaylar";
 const SUMMARY_TABLE = "tamamlanan_seferler";
-const TODAY_DATE_ISO = dayjs().format("YYYY-MM-DD");
 
 const SUMMARY_COLS = [
     "id",
@@ -81,21 +84,13 @@ const DETAIL_COLS = [
     "yukleme_cikis",
     "teslim_varis",
     "teslim_cikis",
-    "yukleme_varis_guncelleyen",
-    "yukleme_varis_guncelleme_tarihi",
-    "yukleme_cikis_guncelleyen",
-    "yukleme_cikis_guncelleme_tarihi",
-    "teslim_varis_guncelleyen",
-    "teslim_varis_guncelleme_tarihi",
-    "teslim_cikis_guncelleyen",
-    "teslim_cikis_guncelleme_tarihi",
 ].join(",");
 
-/* ===================== Yardımcılar (Kısmen Güncellendi) ===================== */
-const safeVF = (fn) => (p) => (fn ? fn(p.value) : p.value);
-
+// ===========================
+// Helper functions
+// ===========================
 const parseDT = (v) => {
-    if (!v && v !== 0) return null;
+    if (!v) return null;
     const d = dayjs(v);
     return d.isValid() ? d : null;
 };
@@ -119,80 +114,69 @@ const diffMinutes = (start, end) => {
     const s = parseDT(start);
     const e = parseDT(end);
     if (!s || !e) return null;
-    const m = e.diff(s, "minute");
-    return Number.isFinite(m) ? m : null;
+    return e.diff(s, "minute");
 };
 
-/** Teslim deadline kuralı: */
 const deliveryDeadline = (teslim_varis) => {
     const v = parseDT(teslim_varis);
     if (!v) return null;
-    const noon = v.hour(12).minute(0).second(0).millisecond(0);
+
+    const noon = v.hour(12).minute(0).second(0);
     if (v.isBefore(noon)) {
-        return v.hour(17).minute(0).second(0).millisecond(0); // aynı gün 17:00
+        return v.hour(17).minute(0).second(0);
     }
-    return v.add(1, "day").hour(12).minute(0).second(0).millisecond(0); // ertesi gün 12:00
+    return v.add(1, "day").hour(12).minute(0).second(0);
 };
 
-// Renk kodlaması daha modern bir yaklaşımla güncellendi
 const getStatusProps = (lateMin) => {
-    if (lateMin === null || lateMin <= 0) {
-        return { label: "Zamanında", color: "success" };
-    }
-    if (lateMin <= 60) {
-        return { label: "1 Saat Altı", color: "info" };
-    }
-    if (lateMin <= 4 * 60) {
-        return { label: "Hafif Gecikme", color: "warning" };
-    }
+    if (lateMin === null || lateMin <= 0) return { label: "Zamanında", color: "success" };
+    if (lateMin <= 60) return { label: "1 Saat Altı", color: "info" };
+    if (lateMin <= 4 * 60) return { label: "Hafif Gecikme", color: "warning" };
     return { label: "Önemli Gecikme", color: "error" };
 };
 
-
-/* ==== Toolbar (Küçük Kozmetik Dokunuş) ==== */
+// Toolbar
 const ExcelToolbar = ({ onExport, onRefresh, disabled }) => (
-    <GridToolbarContainer sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+    <GridToolbarContainer sx={{ p: 1, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
         <GridToolbarQuickFilter
-            quickFilterParser={(v) => v.split(/\s+/).filter(Boolean)}
             debounceMs={300}
             placeholder="Tabloda Ara..."
-            sx={{ flexGrow: 1, minWidth: { xs: '100%', sm: 'auto' } }}
+            sx={{ flexGrow: 1 }}
         />
-        <Box sx={{ flexGrow: 1, display: { xs: 'none', sm: 'block' } }} /> {/* Küçük ekranlarda yer açmak */}
+
         <Stack direction="row" spacing={1}>
-            <Tooltip title="Excel Raporu İndir">
-                <span>
-                    <Button
-                        size="small"
-                        startIcon={<DownloadIcon />}
-                        variant="contained" // Daha belirgin
-                        onClick={onExport}
-                        disabled={disabled}
-                    >
-                        Excel İndir
-                    </Button>
-                </span>
-            </Tooltip>
-            <Tooltip title="Yenile">
-                <span>
-                    <IconButton onClick={onRefresh} disabled={disabled} color="primary">
-                        <RefreshIcon />
-                    </IconButton>
-                </span>
-            </Tooltip>
+            <Button
+                size="small"
+                startIcon={<DownloadIcon />}
+                variant="contained"
+                onClick={onExport}
+                disabled={disabled}
+            >
+                Excel İndir
+            </Button>
+
+            <IconButton onClick={onRefresh} disabled={disabled} color="primary">
+                <RefreshIcon />
+            </IconButton>
         </Stack>
     </GridToolbarContainer>
 );
 
-/* ===================== Ana Bileşen ===================== */
+// ===========================
+// Main Component
+// ===========================
 export default function TeslimdeBekleme() {
     const [rows, setRows] = useState([]);
     const [detailByNo, setDetailByNo] = useState(new Map());
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState(null);
-    const [dateFilter, setDateFilter] = useState(TODAY_DATE_ISO);
-    const [minLateMin, setMinLateMin] = useState(""); // boş string ile tümünü gösterme
 
+    const [filterMode, setFilterMode] = useState("gun");
+    const [baseDate, setBaseDate] = useState(dayjs().format("YYYY-MM-DD"));
+    const [rangeStart, setRangeStart] = useState(dayjs().format("YYYY-MM-DD"));
+    const [rangeEnd, setRangeEnd] = useState(dayjs().format("YYYY-MM-DD"));
+
+    const [minLateMin, setMinLateMin] = useState("");
     const [selectedRow, setSelectedRow] = useState(null);
     const [isDetailModalOpen, setDetailModalOpen] = useState(false);
 
@@ -205,63 +189,82 @@ export default function TeslimdeBekleme() {
         setSelectedRow(null);
     };
 
-
+    // ===========================
+    // Fetch Function — teslim_varis'e göre filtreleme
+    // ===========================
     const fetchAll = useCallback(async () => {
         setLoading(true);
         setFetchError(null);
 
-        const startDate = dayjs(dateFilter).startOf("day").toISOString();
-        const endDate = dayjs(dateFilter).add(1, "day").startOf("day").toISOString();
+        let startDate, endDate;
 
-        // Veri çekme ve hesaplama mantığı aynı kalır.
-        // ... (Kodun bu kısmı orijinal haliyle korunmuştur) ...
-        const { data: summaryData, error: summaryError } = await supabase
-            .from(SUMMARY_TABLE)
-            .select(SUMMARY_COLS)
-            .gte("sefer_tarihi", startDate)
-            .lt("sefer_tarihi", endDate);
+        if (filterMode === "gun") {
+            startDate = dayjs(baseDate).startOf("day").toISOString();
+            endDate = dayjs(baseDate).endOf("day").toISOString();
+        }
+        if (filterMode === "hafta") {
+            startDate = dayjs(baseDate).startOf("week").toISOString();
+            endDate = dayjs(baseDate).endOf("week").toISOString();
+        }
+        if (filterMode === "ay") {
+            startDate = dayjs(baseDate).startOf("month").toISOString();
+            endDate = dayjs(baseDate).endOf("month").toISOString();
+        }
+        if (filterMode === "aralik") {
+            startDate = dayjs(rangeStart).startOf("day").toISOString();
+            endDate = dayjs(rangeEnd).endOf("day").toISOString();
+        }
 
-        if (summaryError) {
-            setFetchError(`Veritabanı Hatası: ${summaryError.message}`);
+        // 1) DETAY TABLOSUNDAN teslim_varis'e göre filtrele
+        const { data: detailData, error: detailError } = await supabase
+            .from(DETAIL_TABLE)
+            .select(DETAIL_COLS)
+            .gte("teslim_varis", startDate)
+            .lte("teslim_varis", endDate);
+
+        if (detailError) {
+            setFetchError("Detay sorgu hatası: " + detailError.message);
             setLoading(false);
             return;
         }
 
-        const summary = summaryData || [];
-        if (summary.length === 0) {
+        const details = detailData || [];
+
+        if (details.length === 0) {
             setRows([]);
             setDetailByNo(new Map());
             setLoading(false);
             return;
         }
 
-        const seferNos = summary.map((r) => r.sefer_no).filter(Boolean);
+        const seferNos = [...new Set(details.map((x) => x.sefer_no))];
 
-        const { data: detailData, error: detailError } = await supabase
-            .from(DETAIL_TABLE)
-            .select(DETAIL_COLS)
+        // 2) SUMMARY tablosundan bu sefer_no'ları çek
+        const { data: summaryData, error: summaryError } = await supabase
+            .from(SUMMARY_TABLE)
+            .select(SUMMARY_COLS)
             .in("sefer_no", seferNos);
 
-        if (detailError) {
-            setFetchError(`Detay verisi alınamadı: ${detailError.message}`);
+        if (summaryError) {
+            setFetchError("Summary sorgu hatası: " + summaryError.message);
+            setLoading(false);
+            return;
         }
 
-        const details = detailData || [];
-        const byNo = new Map();
+        const summary = summaryData || [];
 
-        summary.forEach((s) => {
-            const detList = details
-                .filter((d) => d.sefer_no === s.sefer_no)
-                .sort((a, b) => (a.nokta_sirasi ?? 999) - (b.nokta_sirasi ?? 999));
-            byNo.set(s.sefer_no, detList);
+        // eşleştirme
+        const byNo = new Map();
+        seferNos.forEach((no) => {
+            byNo.set(no, details.filter((d) => d.sefer_no === no));
         });
 
         const computed = summary.map((r, i) => {
             const detList = byNo.get(r.sefer_no) || [];
-            const firstValid = detList.find((d) => d.teslim_varis && d.teslim_cikis) || null;
+            const d = detList.find((x) => x.teslim_varis && x.teslim_cikis);
 
-            const teslim_varis = firstValid?.teslim_varis ?? null;
-            const teslim_cikis = firstValid?.teslim_cikis ?? null;
+            const teslim_varis = d?.teslim_varis ?? null;
+            const teslim_cikis = d?.teslim_cikis ?? null;
             const deadline = teslim_varis ? deliveryDeadline(teslim_varis) : null;
 
             let gecikme_dk = null;
@@ -271,7 +274,7 @@ export default function TeslimdeBekleme() {
             }
 
             return {
-                id: `${SUMMARY_TABLE}-${r.id ?? i}`,
+                id: `${r.id}-${i}`,
                 ...r,
                 teslim_varis,
                 teslim_cikis,
@@ -280,17 +283,22 @@ export default function TeslimdeBekleme() {
             };
         });
 
-        const cleaned = computed.filter((x) => x.deadline !== null && x.teslim_cikis !== null);
+        const cleaned = computed.filter(
+            (x) => x.teslim_varis !== null && x.teslim_cikis !== null
+        );
 
         setDetailByNo(byNo);
         setRows(cleaned);
         setLoading(false);
-    }, [dateFilter]);
+    }, [filterMode, baseDate, rangeStart, rangeEnd]);
 
     useEffect(() => {
         fetchAll();
     }, [fetchAll]);
 
+    // ===========================
+    // Filtrelenmiş tablo
+    // ===========================
     const filtered = useMemo(() => {
         const minLate = Number(minLateMin) || 0;
         return rows
@@ -298,13 +306,18 @@ export default function TeslimdeBekleme() {
             .sort((a, b) => (b.gecikme_dk ?? 0) - (a.gecikme_dk ?? 0));
     }, [rows, minLateMin]);
 
-    /* ===== Excel Export (Değişmedi) ===== */
+    // ===========================
+    // Excel Export
+    // ===========================
     const handleExport = async () => {
         if (!filtered.length) return;
 
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet("Teslimde Bekleme Raporu");
 
+        // ==========================
+        // VERİ HARİTALAMA
+        // ==========================
         const dataToExport = filtered.map((r) => ({
             "Sefer No": r.sefer_no,
             Plaka: r.plaka,
@@ -314,17 +327,21 @@ export default function TeslimdeBekleme() {
             "Teslim İlçesi": r.teslim_ilcesi,
             "Teslim Varış": r.teslim_varis ? dayjs(r.teslim_varis).toDate() : null,
             "Teslim Çıkış": r.teslim_cikis ? dayjs(r.teslim_cikis).toDate() : null,
-            "Deadline": r.deadline ? dayjs(r.deadline).toDate() : null,
+            Deadline: r.deadline ? dayjs(r.deadline).toDate() : null,
             "Gecikme (dk)": r.gecikme_dk ?? 0,
             "Gecikme Süresi": minToHM(r.gecikme_dk ?? 0),
-            "Kural":
+            Kural:
                 r.teslim_varis &&
                     (dayjs(r.teslim_varis).hour() < 12 ||
                         (dayjs(r.teslim_varis).hour() === 12 &&
                             dayjs(r.teslim_varis).minute() === 0))
-                    ? "Varış < 12:00 ⇒ aynı gün 17:00"
-                    : "Varış ≥ 12:00 ⇒ ertesi gün 12:00",
+                    ? "Varış < 12:00 ⇒ Aynı Gün 17:00"
+                    : "Varış ≥ 12:00 ⇒ Ertesi Gün 12:00",
         }));
+
+        // ==========================
+        // SÜTUN BAŞLIKLARI
+        // ==========================
         worksheet.columns = [
             { header: "Sefer No", key: "Sefer No", width: 14 },
             { header: "Plaka", key: "Plaka", width: 12 },
@@ -333,7 +350,6 @@ export default function TeslimdeBekleme() {
             { header: "Teslim İli", key: "Teslim İli", width: 16 },
             { header: "Teslim İlçesi", key: "Teslim İlçesi", width: 16 },
 
-            // ⭐ EKLEMEN GEREKENLER
             { header: "Teslim Varış", key: "Teslim Varış", width: 20, style: { numFmt: "dd.mm.yyyy hh:mm" } },
             { header: "Teslim Çıkış", key: "Teslim Çıkış", width: 20, style: { numFmt: "dd.mm.yyyy hh:mm" } },
 
@@ -343,215 +359,199 @@ export default function TeslimdeBekleme() {
             { header: "Kural", key: "Kural", width: 28 },
         ];
 
+        // ==========================
+        // SATIRLARI EKLE
+        // ==========================
         worksheet.addRows(dataToExport);
 
+        // ==========================
+        // DOSYA ÇIKTI
+        // ==========================
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], {
-            type:
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         });
-        const filename = `teslimde_bekleme_${dayjs(dateFilter).format(
-            "YYYYMMDD"
-        )}.xlsx`;
+
+        const filename = `teslimde_bekleme_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`;
         saveAs(blob, filename);
     };
 
-    // Detay modalı için durak verisi hazırlama (Değişmedi)
+    // ===========================
+    // StopRows (modal için)
+    // ===========================
     const stopRows = useMemo(() => {
         if (!selectedRow) return [];
         const det = detailByNo.get(selectedRow.sefer_no) || [];
+
         return det.map((rec, idx) => ({
-            id: `${selectedRow.sefer_no}-durak-${idx}`,
-            sira: rec.nokta_sirasi,
-            // Yükleme Bilgileri
-            yukleme_noktasi: rec.yukleme_noktasi,
-            yukleme_ili: selectedRow.yukleme_ili,
-            yukleme_ilcesi: selectedRow.yukleme_ilcesi,
-            yukleme_varis: rec.yukleme_varis,
-            yukleme_cikis: rec.yukleme_cikis,
-            yukleme_bekleme_dk: diffMinutes(rec.yukleme_varis, rec.yukleme_cikis),
-            yukleme_varis_guncelleyen: rec.yukleme_varis_guncelleyen,
-            yukleme_varis_guncelleme_tarihi: rec.yukleme_varis_guncelleme_tarihi,
-            yukleme_cikis_guncelleyen: rec.yukleme_cikis_guncelleyen,
-            yukleme_cikis_guncelleme_tarihi: rec.yukleme_cikis_guncelleme_tarihi,
-            // Teslim Bilgileri
-            teslim_noktasi: rec.teslim_noktasi,
-            teslim_ili: selectedRow.teslim_ili,
-            teslim_ilcesi: selectedRow.teslim_ilcesi,
-            teslim_varis: rec.teslim_varis,
-            teslim_cikis: rec.teslim_cikis,
+            id: `${selectedRow.sefer_no}-${idx}`,
+            ...rec,
             teslim_bekleme_dk: diffMinutes(rec.teslim_varis, rec.teslim_cikis),
-            teslim_varis_guncelleyen: rec.teslim_varis_guncelleyen,
-            teslim_varis_guncelleme_tarihi: rec.teslim_varis_guncelleme_tarihi,
-            teslim_cikis_guncelleyen: rec.teslim_cikis_guncelleyen,
-            teslim_cikis_guncelleme_tarihi: rec.teslim_cikis_guncelleme_tarihi,
         }));
     }, [selectedRow, detailByNo]);
 
-    /* ===== DataGrid Sütunları (Gecikme renderCell Güncellendi) ===== */
-    const columns = useMemo(() => [
-        {
-            field: "sefer_no",
-            headerName: "Sefer No",
-            width: 150,
-            renderCell: (p) => (
-                <Button
-                    size="small"
-                    startIcon={<InfoOutlinedIcon />}
-                    onClick={() => openDetail(p.row)}
-                    sx={{ fontWeight: 600, textTransform: 'none', px: 1, py: 0.5 }}
-                >
-                    {p.value || "—"}
-                </Button>
-            ),
-        },
-
-        { field: "plaka", headerName: "Plaka", width: 120 },
-        { field: "proje_adi", headerName: "Proje Adı", width: 160 },
-
-        // ⭐ TESLİM VARIŞ SÜTUNU — DOĞRU FORMAT
-        {
-            field: "teslim_varis",
-            headerName: "Teslim Varış",
-            width: 180,
-            renderCell: (p) => fmtDateTR(p.row?.teslim_varis),
-        },
-
-        // ⭐ TESLİM ÇIKIŞ SÜTUNU — DOĞRU FORMAT
-        {
-            field: "teslim_cikis",
-            headerName: "Teslim Çıkış",
-            width: 180,
-            renderCell: (p) => fmtDateTR(p.row?.teslim_cikis),
-        },
-
-        // DEADLINE
-        {
-            field: "deadline",
-            headerName: "Deadline",
-            width: 180,
-            renderCell: (p) => fmtDateTR(p.row?.deadline),
-        },
-
-        // GECİKME
-        {
-            field: "gecikme_dk",
-            headerName: "Gecikme Süresi",
-            width: 180,
-            renderCell: (p) => {
-                const gecikme = p.value ?? 0;
-                const { color } = getStatusProps(gecikme);
-                const isLate = gecikme > 0;
-
-                return (
-                    <Chip
-                        color={color}
-                        variant={isLate ? "filled" : "outlined"}
+    // ===========================
+    // DataGrid Columns
+    // ===========================
+    const columns = useMemo(
+        () => [
+            {
+                field: "sefer_no",
+                headerName: "Sefer No",
+                width: 150,
+                renderCell: (p) => (
+                    <Button
                         size="small"
-                        label={isLate ? minToHM(gecikme) : "Zamanında"}
-                        sx={{ fontWeight: isLate ? 700 : 500 }}
-                    />
-                );
-            },
-            sortComparator: (a, b) => (a ?? 0) - (b ?? 0),
-        },
-    ], []);
-
-    return (
-        <Box
-            sx={{
-                minHeight: "100dvh",
-                py: { xs: 2, md: 4 },
-                bgcolor: (t) => (t.palette.mode === "dark" ? "#121212" : "grey.50"), // Açık renkli daha modern zemin
-            }}
-        >
-            <Container maxWidth={false} sx={{ maxWidth: "1680px", px: { xs: 2, md: 4 } }}>
-                <Paper elevation={6} sx={{ borderRadius: 3, overflow: "hidden", p: 0 }}> {/* Daha yüksek gölge */}
-                    {/* Başlık ve Filtre Alanı */}
-                    <Box
-                        sx={{
-                            p: 3,
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: { xs: 'flex-start', md: 'center' },
-                            flexWrap: "wrap",
-                            gap: 2,
-                            bgcolor: 'primary.main', // Başlık için vurgu rengi
-                            color: 'primary.contrastText',
-                        }}
+                        startIcon={<InfoOutlinedIcon />}
+                        onClick={() => openDetail(p.row)}
                     >
-                        <Stack>
-                            <Typography variant="h5" fontWeight={700}>
-                                Teslimat Gecikme Raporu ⏱️
-                            </Typography>
-                            <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                                **{dayjs(dateFilter).format("DD MMMM YYYY")}** tarihli tamamlanan seferlerin teslimat gecikme analizi
-                            </Typography>
-                        </Stack>
+                        {p.value}
+                    </Button>
+                ),
+            },
+            { field: "plaka", headerName: "Plaka", width: 120 },
+            { field: "proje_adi", headerName: "Proje", width: 160 },
+            {
+                field: "teslim_varis",
+                headerName: "Teslim Varış",
+                width: 180,
+                renderCell: (p) => fmtDateTR(p.row.teslim_varis),
+            },
+            {
+                field: "teslim_cikis",
+                headerName: "Teslim Çıkış",
+                width: 180,
+                renderCell: (p) => fmtDateTR(p.row.teslim_cikis),
+            },
+            {
+                field: "deadline",
+                headerName: "Deadline",
+                width: 180,
+                renderCell: (p) => fmtDateTR(p.row.deadline),
+            },
+            {
+                field: "gecikme_dk",
+                headerName: "Gecikme",
+                width: 160,
+                renderCell: (p) => {
+                    const v = p.value ?? 0;
+                    const { color } = getStatusProps(v);
+                    return (
+                        <Chip
+                            label={v > 0 ? minToHM(v) : "Zamanında"}
+                            color={color}
+                            size="small"
+                        />
+                    );
+                },
+            },
+        ],
+        []
+    );
 
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="center">
+    // ===========================
+    // UI
+    // ===========================
+    return (
+        <Box sx={{ bgcolor: "#121212", minHeight: "100vh", py: 3 }}>
+            <Container maxWidth="xl">
+                <Paper sx={{ bgcolor: "#1e1e1e", p: 3, borderRadius: 3 }}>
+                    {/* Header */}
+                    <Stack spacing={1} mb={3}>
+                        <Typography variant="h5" color="white" fontWeight={700}>
+                            Teslimat Gecikme Raporu
+                        </Typography>
+                        <Typography variant="body2" color="gray">
+                            Teslim varışı seçilen tarih aralığında olan seferler görüntülenir.
+                        </Typography>
+                    </Stack>
+
+                    {/* Filters */}
+                    <Stack direction="row" spacing={2} mb={3}>
+                        {/* Filtre Türü */}
+                        <TextField
+                            select
+                            label="Filtre"
+                            value={filterMode}
+                            onChange={(e) => setFilterMode(e.target.value)}
+                            size="small"
+                            sx={{ minWidth: 150 }}
+                            InputLabelProps={{ sx: { color: "white" } }}
+                            InputProps={{ sx: { color: "white" } }}
+                        >
+                            <MenuItem value="gun">Günlük</MenuItem>
+                            <MenuItem value="hafta">Haftalık</MenuItem>
+                            <MenuItem value="ay">Aylık</MenuItem>
+                            <MenuItem value="aralik">Tarih Aralığı</MenuItem>
+                        </TextField>
+
+                        {/* Gün / Hafta / Ay */}
+                        {filterMode !== "aralik" && (
                             <TextField
-                                label="Tarih Seçin"
+                                label="Tarih"
                                 type="date"
-                                InputLabelProps={{ shrink: true, sx: { color: 'primary.contrastText' } }}
-                                InputProps={{ sx: { color: 'primary.contrastText' } }}
-                                value={dateFilter}
-                                onChange={(e) => setDateFilter(e.target.value)}
+                                value={baseDate}
+                                onChange={(e) => setBaseDate(e.target.value)}
                                 size="small"
-                                variant="outlined" // Şık görünüm
-                                sx={{
-                                    minWidth: 150,
-                                    '& .MuiOutlinedInput-root': {
-                                        '& fieldset': { borderColor: 'primary.light' },
-                                        '&:hover fieldset': { borderColor: 'white' },
-                                        '&.Mui-focused fieldset': { borderColor: 'white' },
-                                    }
-                                }}
+                                InputLabelProps={{ sx: { color: "white" } }}
+                                InputProps={{ sx: { color: "white" } }}
                             />
-                            <TextField
-                                label="Min. Gecikme (dk)"
-                                type="number"
-                                value={minLateMin}
-                                onChange={(e) => setMinLateMin(e.target.value)}
-                                size="small"
-                                variant="outlined"
-                                sx={{
-                                    minWidth: 150,
-                                    '& .MuiOutlinedInput-root': {
-                                        '& fieldset': { borderColor: 'primary.light' },
-                                        '&:hover fieldset': { borderColor: 'white' },
-                                        '&.Mui-focused fieldset': { borderColor: 'white' },
-                                    },
-                                    '& .MuiInputLabel-root': { color: 'primary.contrastText' },
-                                    '& .MuiInputBase-input': { color: 'primary.contrastText' },
-                                }}
-                            />
-                            <Tooltip title="Verileri Güncelle">
-                                <span>
-                                    <Button
-                                        onClick={fetchAll}
-                                        variant="outlined" // Daha hafif bir buton
-                                        disabled={loading}
-                                        startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
-                                        sx={{ height: '40px', color: 'primary.contrastText', borderColor: 'primary.light', '&:hover': { borderColor: 'white' } }}
-                                    >
-                                        Yenile
-                                    </Button>
-                                </span>
-                            </Tooltip>
-                        </Stack>
-                    </Box>
-
-                    {/* Veri Alanı */}
-                    <Box sx={{ height: "70vh", position: 'relative' }}>
-                        {loading && (
-                            <LinearProgress sx={{ position: 'absolute', top: 0, width: '100%', zIndex: 1 }} />
                         )}
+
+                        {/* Aralık */}
+                        {filterMode === "aralik" && (
+                            <>
+                                <TextField
+                                    label="Başlangıç"
+                                    type="date"
+                                    value={rangeStart}
+                                    onChange={(e) => setRangeStart(e.target.value)}
+                                    size="small"
+                                    InputLabelProps={{ sx: { color: "white" } }}
+                                    InputProps={{ sx: { color: "white" } }}
+                                />
+                                <TextField
+                                    label="Bitiş"
+                                    type="date"
+                                    value={rangeEnd}
+                                    onChange={(e) => setRangeEnd(e.target.value)}
+                                    size="small"
+                                    InputLabelProps={{ sx: { color: "white" } }}
+                                    InputProps={{ sx: { color: "white" } }}
+                                />
+                            </>
+                        )}
+
+                        {/* Minimum Gecikme */}
+                        <TextField
+                            label="Min. Gecikme (dk)"
+                            type="number"
+                            size="small"
+                            value={minLateMin}
+                            onChange={(e) => setMinLateMin(e.target.value)}
+                            InputLabelProps={{ sx: { color: "white" } }}
+                            InputProps={{ sx: { color: "white" } }}
+                        />
+
+                        {/* Yenile */}
+                        <Button
+                            variant="outlined"
+                            color="primary"
+                            onClick={fetchAll}
+                            startIcon={loading ? <CircularProgress size={16} /> : <RefreshIcon />}
+                        >
+                            Yenile
+                        </Button>
+                    </Stack>
+
+                    {/* Table */}
+                    <Box sx={{ height: "70vh" }}>
+                        {loading && <LinearProgress />}
                         <DataGrid
                             rows={filtered}
                             columns={columns}
                             loading={loading}
-                            density="comfortable" // Daha okunaklı satırlar
+                            density="comfortable"
                             slots={{ toolbar: ExcelToolbar }}
                             slotProps={{
                                 toolbar: {
@@ -560,32 +560,29 @@ export default function TeslimdeBekleme() {
                                     disabled: loading || !filtered.length,
                                 },
                             }}
-                            initialState={{
-                                pagination: { paginationModel: { pageSize: 25 } },
-                            }}
-                            pageSizeOptions={[10, 25, 50]}
                             sx={{
-                                '& .MuiDataGrid-columnHeaders': {
-                                    bgcolor: 'grey.100', // Başlık arka planı
-                                    fontWeight: 700,
+                                color: "white",
+                                borderColor: "rgba(255,255,255,0.1)",
+                                "& .MuiDataGrid-columnHeaders": {
+                                    backgroundColor: "#2c2c2c",
                                 },
-                                '& .deadline-column': { // Deadline sütununu vurgula
-                                    bgcolor: (t) => (t.palette.mode === 'dark' ? 'rgba(255, 205, 0, 0.1)' : 'rgba(255, 230, 100, 0.4)'),
+                                "& .MuiDataGrid-row": {
+                                    backgroundColor: "#1e1e1e",
                                 },
                             }}
                         />
                     </Box>
 
-                    {/* Hata Bildirimi */}
+                    {/* Error */}
                     {fetchError && (
-                        <Alert severity="error" sx={{ m: 2 }}>
-                            **Veri Yükleme Hatası:** {fetchError}
+                        <Alert sx={{ mt: 2 }} severity="error">
+                            {fetchError}
                         </Alert>
                     )}
                 </Paper>
             </Container>
 
-            {/* Detay Modal Bileşeni */}
+            {/* Modal */}
             <TripDetailModal
                 open={isDetailModalOpen}
                 onClose={closeDetail}

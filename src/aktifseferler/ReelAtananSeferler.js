@@ -486,12 +486,10 @@ export default function ReelAtananSeferler() {
         if (!editSefer) return false;
         setSaving(true);
 
-        // 🔥 DOĞRU ANAHTAR
         const currentUserName = (localStorage.getItem("kullaniciAdi") || "GENERIC").toUpperCase();
         const currentTimestamp = new Date().toISOString();
         const timeFields = ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"];
 
-        let successfullyUpdatedRows = [];
         let errorOccurred = false;
 
         try {
@@ -504,6 +502,7 @@ export default function ReelAtananSeferler() {
                         const v = clean(d[key]);
                         cleaned_d[key] = (v === "" ? null : v);
                     }
+
                     const updatedRow = {
                         sefer_id: cleaned_d.sefer_id,
                         nokta_sirasi: cleaned_d.nokta_sirasi,
@@ -521,8 +520,7 @@ export default function ReelAtananSeferler() {
                         arac_statu: computeAracStatu(detailRows) || null,
                         kayit_zamani: new Date().toISOString(),
 
-                        /* 🔥 BURASI EKLENDİ — KİM NE ZAMAN GÜNCELLEDİ? */
-
+                        // Eski tekli alanlar (UI hala kullanıyor)
                         yukleme_varis_guncelleyen:
                             normalizeISO(cleaned_d.yukleme_varis) !== normalizeISO(original.yukleme_varis)
                                 ? currentUserName
@@ -532,7 +530,6 @@ export default function ReelAtananSeferler() {
                             normalizeISO(cleaned_d.yukleme_varis) !== normalizeISO(original.yukleme_varis)
                                 ? currentTimestamp
                                 : original.yukleme_varis_guncelleme_tarihi,
-
 
                         yukleme_cikis_guncelleyen:
                             normalizeISO(cleaned_d.yukleme_cikis) !== normalizeISO(original.yukleme_cikis)
@@ -544,7 +541,6 @@ export default function ReelAtananSeferler() {
                                 ? currentTimestamp
                                 : original.yukleme_cikis_guncelleme_tarihi,
 
-
                         teslim_varis_guncelleyen:
                             normalizeISO(cleaned_d.teslim_varis) !== normalizeISO(original.teslim_varis)
                                 ? currentUserName
@@ -555,7 +551,6 @@ export default function ReelAtananSeferler() {
                                 ? currentTimestamp
                                 : original.teslim_varis_guncelleme_tarihi,
 
-
                         teslim_cikis_guncelleyen:
                             normalizeISO(cleaned_d.teslim_cikis) !== normalizeISO(original.teslim_cikis)
                                 ? currentUserName
@@ -565,12 +560,37 @@ export default function ReelAtananSeferler() {
                             normalizeISO(cleaned_d.teslim_cikis) !== normalizeISO(original.teslim_cikis)
                                 ? currentTimestamp
                                 : original.teslim_cikis_guncelleme_tarihi,
-
                     };
 
-                    /* ***********************
-                       🆕 ETA OTOMATİK HESAP
-                       *********************** */
+                    /* =======================================
+                       🆕 ÇOKLU LOG KAYDI SİSTEMİ
+                       ======================================= */
+                    for (const key of timeFields) {
+                        const oldVal = original[key] || null;
+                        const newVal = cleaned_d[key] || null;
+                        const logsKey = `${key}_logs`;
+
+                        const previousLogs = Array.isArray(original[logsKey])
+                            ? original[logsKey]
+                            : [];
+
+                        if (normalizeISO(oldVal) === normalizeISO(newVal)) {
+                            updatedRow[logsKey] = previousLogs;
+                            continue;
+                        }
+
+                        // Yeni log kaydı
+                        const newLog = {
+                            user: currentUserName,
+                            time: currentTimestamp,
+                            old: oldVal,
+                            new: newVal,
+                        };
+
+                        updatedRow[logsKey] = [...previousLogs, newLog];
+                    }
+
+                    /* ETA Hesapla */
                     if (cleaned_d.yukleme_cikis && cleaned_d.eta) {
                         const { km } = await fetchDistance({
                             from: { il: cleaned_d.yukleme_ili, ilce: cleaned_d.yukleme_ilcesi },
@@ -589,17 +609,16 @@ export default function ReelAtananSeferler() {
                 })
             );
 
-
             const upsertResult = await upsertDetaylar(upserts);
             if (upsertResult && upsertResult.error) throw upsertResult.error;
 
-            // Başarıyla kaydedilen detaylar bunlar
             setDetailRows(detailRows);
             setDetailRowsOrig(detailRows);
             setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
+
         } catch (e) {
-            errorOccurred = true;
             console.error(e);
+            errorOccurred = true;
             setSnack({ open: true, msg: `Kaydetme hatası: ${e?.message || e}`, severity: "error" });
         } finally {
             setSaving(false);

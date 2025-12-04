@@ -235,55 +235,57 @@ function fromISOTooltipFixed(raw) {
 
 /** * Alan Altı için gerekli bilgiyi hazırlar ve JSX Adornment'ı döndürür */
 function createFieldUpdateInfoText(row, fieldName, COLORS) {
-    const userKey = `${fieldName}_guncelleyen`;
-    const dateKey = `${fieldName}_guncelleme_tarihi`;
+    const logsKey = `${fieldName}_logs`;
+    const logs = row[logsKey];
 
-    const user = row[userKey];
-    const dateISO = row[dateKey];
+    // Log yoksa görünmesin
+    if (!Array.isArray(logs) || logs.length === 0) return null;
 
-    if (user && dateISO) {
-        const formattedDate = fromISOTooltipFixed(dateISO);
-        const shortUser = user.split(' ')[0].slice(0, 1);
-
-        const infoJSX = (
-            <InputAdornment position="end" sx={{
+    return (
+        <InputAdornment
+            position="end"
+            sx={{
                 position: 'absolute',
                 top: 8,
                 right: 8,
-                height: 'auto',
-                pointerEvents: 'none',
-            }}>
-                <Tooltip title={`Güncelleyen: ${user} - Kayıt Zamanı: ${formattedDate.replace(' ', ' ')}`} placement="top" enterDelay={500}>
-                    <Box sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        py: '2px',
-                        px: '6px',
-                        borderRadius: '4px',
-                        bgcolor: alpha('#00e676', 0.1),
-                        color: alpha(COLORS.text, 0.7),
-                        fontSize: 10,
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                        userSelect: 'none',
-                        pointerEvents: 'auto',
-                        border: `1px solid ${alpha('#00e676', 0.3)}`,
-                    }}>
-                        <Typography variant="caption" sx={{ fontSize: 10, fontWeight: 700, color: COLORS.text }}>
-                            {shortUser}
-                        </Typography>
-                        <Typography variant="caption" sx={{ fontSize: 10, opacity: 0.8 }}>
-                            {formattedDate.split(' ')[0]}
-                        </Typography>
+                pointerEvents: 'auto'
+            }}
+        >
+            <Tooltip
+                title={
+                    <Box sx={{ p: 0.5 }}>
+                        {logs.map((item, i) => (
+                            <Box key={i} sx={{ mb: 1 }}>
+                                <strong>{item.user}</strong> <br />
+                                {fromISOTooltipFixed(item.time)}
+                                {item.old || item.new ? (
+                                    <Typography sx={{ fontSize: 10, mt: 0.3, opacity: 0.7 }}>
+                                        {item.old && <>Eski: {fromISOToCombined(item.old)}<br /></>}
+                                        {item.new && <>Yeni: {fromISOToCombined(item.new)}</>}
+                                    </Typography>
+                                ) : null}
+                            </Box>
+                        ))}
                     </Box>
-                </Tooltip>
-            </InputAdornment>
-        );
-
-        return infoJSX;
-    }
-    return null;
+                }
+                placement="top"
+            >
+                <Box sx={{
+                    bgcolor: alpha('#00e676', 0.15),
+                    border: `1px solid ${alpha('#00e676', 0.25)}`,
+                    px: 0.6,
+                    py: 0.2,
+                    borderRadius: 1,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: COLORS.text,
+                    cursor: "pointer"
+                }}>
+                    {logs.length} kayıt
+                </Box>
+            </Tooltip>
+        </InputAdornment>
+    );
 }
 
 /* ----------------------------------------------------------------------------- 

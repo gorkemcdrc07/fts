@@ -678,19 +678,29 @@ export default function EditorDialog(props) {
                                                 ["teslim_varis", "Teslim Giriş"],
                                                 ["teslim_cikis", "Teslim Çıkış"],
                                             ].map(([k, l]) => {
+
                                                 const Adornment = canEdit ? createFieldUpdateInfoText(r, k, COLORS) : null;
 
+                                                const currentUser = (localStorage.getItem("kullaniciAdi") || "GENERIC").toUpperCase();
+                                                const lastUpdater = r[`${k}_guncelleyen`] || null;
+
+                                                // 🔐 KİLİT KONTROLÜ:
+                                                // 1) Alan boşsa → herkes yazabilir
+                                                // 2) Alanı ilk yazan kullanıcı (lastUpdater) biliyorsa → sadece o düzenleyebilir
+                                                const lockedForUser =
+                                                    lastUpdater &&                 // bir sahibi var
+                                                    lastUpdater !== currentUser;   // ama sahibi ben değilim
+
                                                 return (
-                                                    <Box key={k} sx={{ position: 'relative' }}>
+                                                    <Box key={k} sx={{ position: "relative" }}>
                                                         <DateTimeSingleField
                                                             label={l}
                                                             value={r[k] || ""}
                                                             onChange={(v) => handleDetailChange(i, k, v)}
                                                             baseInputSX={baseInputSX}
-                                                            disabled={!canEdit}
+                                                            disabled={!canEdit || lockedForUser}  // 🔐 kilit burada
                                                             EndAdornment={Adornment}
                                                         />
-
                                                     </Box>
                                                 );
                                             })}

@@ -1,44 +1,54 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
     Box, Typography, CircularProgress, Alert, Stack, Paper, Button,
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, InputAdornment
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, InputAdornment, Grid
 } from "@mui/material";
 import { createTheme, ThemeProvider, useTheme } from "@mui/material/styles";
 import dayjs from "dayjs";
-import 'dayjs/locale/tr';
-import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
-import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
-import GetAppIcon from '@mui/icons-material/GetApp';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import FilterListIcon from '@mui/icons-material/FilterList'; // Filtre İkonu
-import { createClient } from '@supabase/supabase-js';
-import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
+import "dayjs/locale/tr";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
+import GetAppIcon from "@mui/icons-material/GetApp";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import EventIcon from "@mui/icons-material/Event";
+import SearchIcon from "@mui/icons-material/Search";
+import FilterListIcon from "@mui/icons-material/FilterList";
+import TollIcon from '@mui/icons-material/Toll'; // Özet kart ikonu
+import AccessTimeIcon from '@mui/icons-material/AccessTime'; // Özet kart ikonu
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney'; // Özet kart ikonu
+import { createClient } from "@supabase/supabase-js";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
+// dayjs eklentileri ve locale
 dayjs.extend(isSameOrBefore);
 dayjs.extend(isSameOrAfter);
-dayjs.locale('tr');
+dayjs.locale("tr");
 
 // --- Supabase Client ---
+// DİKKAT: Bu kısmı kendi gerçek değerlerinizle doldurun!
 const supabase = createClient(
-    process.env.REACT_APP_SUPABASE_URL,
-    process.env.REACT_APP_SUPABASE_ANON_KEY
+    process.env.REACT_APP_SUPABASE_URL || "https://dummy.supabase.co",
+    process.env.REACT_APP_SUPABASE_ANON_KEY || "dummy-anon-key"
 );
 
 // --- Helper Fonksiyonlar ---
 const formatDateTime = (timestamp) => {
-    if (!timestamp) return '—';
+    if (!timestamp) return "—";
     const d = dayjs(timestamp);
-    return d.isValid() ? d.format('DD.MM.YYYY HH:mm') : '—';
+    return d.isValid() ? d.format("DD.MM.YYYY HH:mm") : "—";
 };
 
-/**
- * Aynı sefere ait birden fazla kaydı gruplayarak min/max tarih/saat değerlerini bulur.
- */
+const formatDate = (timestamp) => {
+    if (!timestamp) return "—";
+    const d = dayjs(timestamp);
+    return d.isValid() ? d.format("DD.MM.YYYY") : "—";
+};
+
+// ... aggregateSeferler fonksiyonu aynı kaldı ...
 const aggregateSeferler = (data) => {
     if (!data || data.length === 0) return [];
-    // ... (aggregateSeferler mantığı aynı kalır) ...
+
     const grouped = data.reduce((acc, current) => {
         const key = current.sefer_no;
 
@@ -55,333 +65,497 @@ const aggregateSeferler = (data) => {
 
         const existing = acc[key];
 
-        // --- Yükleme (En Erken - MIN) ---
-        if (current.yukleme_varis) {
-            if (!existing.yukleme_varis_min || dayjs(current.yukleme_varis).isSameOrBefore(dayjs(existing.yukleme_varis_min))) {
-                existing.yukleme_varis_min = current.yukleme_varis;
-            }
+        if (current.yukleme_varis && (!existing.yukleme_varis_min || dayjs(current.yukleme_varis).isSameOrBefore(existing.yukleme_varis_min))) {
+            existing.yukleme_varis_min = current.yukleme_varis;
         }
-        if (current.yukleme_cikis) {
-            if (!existing.yukleme_cikis_min || dayjs(current.yukleme_cikis).isSameOrBefore(dayjs(existing.yukleme_cikis_min))) {
-                existing.yukleme_cikis_min = current.yukleme_cikis;
-            }
+        if (current.yukleme_cikis && (!existing.yukleme_cikis_min || dayjs(current.yukleme_cikis).isSameOrBefore(existing.yukleme_cikis_min))) {
+            existing.yukleme_cikis_min = current.yukleme_cikis;
         }
 
-        // --- Teslimat (En Geç - MAX) ---
-        if (current.teslim_varis) {
-            if (!existing.teslim_varis_max || dayjs(current.teslim_varis).isSameOrAfter(dayjs(existing.teslim_varis_max))) {
-                existing.teslim_varis_max = current.teslim_varis;
-            }
+        if (current.teslim_varis && (!existing.teslim_varis_max || dayjs(current.teslim_varis).isSameOrAfter(existing.teslim_varis_max))) {
+            existing.teslim_varis_max = current.teslim_varis;
         }
-        if (current.teslim_cikis) {
-            if (!existing.teslim_cikis_max || dayjs(current.teslim_cikis).isSameOrAfter(dayjs(existing.teslim_cikis_max))) {
-                existing.teslim_cikis_max = current.teslim_cikis;
-            }
+        if (current.teslim_cikis && (!existing.teslim_cikis_max || dayjs(current.teslim_cikis).isSameOrAfter(existing.teslim_cikis_max))) {
+            existing.teslim_cikis_max = current.teslim_cikis;
         }
 
         return acc;
     }, {});
 
-    return Object.values(grouped).map(item => ({
+    return Object.values(grouped).map((item) => ({
         ...item,
         yukleme_varis: item.yukleme_varis_min,
         yukleme_cikis: item.yukleme_cikis_min,
         teslim_varis: item.teslim_varis_max,
-        teslim_cikis: item.teslim_cikis_max
+        teslim_cikis: item.teslim_cikis_max,
     }));
 };
 
-
-// --- Kolonlar ---
+// --- Tablo kolonları ---
 const headersConfig = [
-    { key: 'sefer_tarihi', label: 'Tarih 📅', isDate: true },
-    { key: 'sefer_no', label: 'Sefer No #️⃣' },
-    { key: 'surucu_ad_soyad', label: 'Sürücü 👤' },
-    { key: 'surucu_tckn', label: 'TCKN' },
-    { key: 'surucu_telefon', label: 'Telefon 📱' },
-    { key: 'plaka', label: 'Plaka 🚛' },
-    { key: 'treyler', label: 'Treyler 🔗' },
-    { key: 'musteri_adi', label: 'Müşteri 🤝' },
+    { key: "sefer_tarihi", label: "Tarih 📅", isDate: true, minWidth: 110 },
+    { key: "sefer_no", label: "Sefer #️⃣", minWidth: 90 },
+    { key: "surucu_ad_soyad", label: "Sürücü 👤", minWidth: 150 },
+    { key: "plaka", label: "Plaka 🚛", minWidth: 90 },
+    { key: "musteri_adi", label: "Müşteri 🤝", minWidth: 160 },
 
-    { key: 'yukleme_noktasi', label: 'Yükleme Noktası 📍' },
-    { key: 'yukleme_ili', label: 'Yükleme İl' },
-    { key: 'yukleme_ilcesi', label: 'Yükleme İlçe' },
+    { key: "yukleme_noktasi", label: "Yükleme Noktası 📍", minWidth: 180 },
+    { key: "yukleme_varis", label: "Yk. Varış (Min) ⏰", isDateTime: true, minWidth: 150 },
+    { key: "yukleme_cikis", label: "Yk. Çıkış (Min) 🚀", isDateTime: true, minWidth: 150 },
 
-    { key: 'yukleme_varis', label: 'Yk. Varış (Min) ⏰', isDateTime: true },
-    { key: 'yukleme_cikis', label: 'Yk. Çıkış (Min) 🚀', isDateTime: true },
-
-    { key: 'teslim_alan_firma', label: 'Teslim Alan Firma 🏢' },
-    { key: 'teslim_noktasi', label: 'Teslim Noktası 🏠' },
-    { key: 'teslim_ili', label: 'Teslim İl' },
-    { key: 'teslim_ilcesi', label: 'Teslim İlçe' },
-
-    { key: 'teslim_varis', label: 'Ts. Varış (Max) ⏰', isDateTime: true },
-    { key: 'teslim_cikis', label: 'Ts. Çıkış (Max) 🏁', isDateTime: true },
+    { key: "teslim_alan_firma", label: "Teslim Alan 🏢", minWidth: 150 },
+    { key: "teslim_noktasi", label: "Teslim Noktası 🏠", minWidth: 180 },
+    { key: "teslim_varis", label: "Ts. Varış (Max) ⏰", isDateTime: true, minWidth: 150 },
+    { key: "teslim_cikis", label: "Ts. Çıkış (Max) 🏁", isDateTime: true, minWidth: 150 },
 ];
 
-// --- Tema (Değişmedi) ---
+// --- Tema (Ultra Modern Dark Mode) ---
 const modernTheme = createTheme({
     palette: {
-        mode: 'dark',
-        primary: { main: '#4dabf5' },
-        secondary: { main: '#ffb74d' },
+        mode: "dark",
+        // Daha çarpıcı, enerjik bir vurgu rengi
+        primary: { main: "#ff5722" }, // Deep Orange
+        secondary: { main: "#4caf50" }, // Yeşil (Success/Export)
         background: {
-            default: '#121212',
-            paper: '#181818'
-        }
+            default: "#0d1117", // Github dark mode'a yakın, daha derin zemin
+            paper: "#1a202c", // Kartlar için koyu metalik gri
+        },
+        text: {
+            primary: "#ffffff",
+            secondary: "#94a3b8", // Hafif gri metin
+        },
+        divider: "#374151",
     },
-    typography: { fontFamily: 'Inter, Arial, sans-serif' }
+    typography: {
+        fontFamily: "Poppins, Inter, Arial, sans-serif",
+        h4: { fontWeight: 700, fontSize: '1.75rem' },
+        h6: { fontWeight: 600, fontSize: '1rem' },
+        body1: { fontSize: "0.9rem" }
+    },
+    components: {
+        MuiPaper: {
+            styleOverrides: {
+                root: {
+                    borderRadius: 16, // Ultra yumuşak köşeler
+                    boxShadow: '0 8px 16px rgba(0, 0, 0, 0.4)', // Daha derin gölge
+                },
+            },
+        },
+        MuiButton: {
+            defaultProps: {
+                disableElevation: true,
+            },
+            styleOverrides: {
+                root: {
+                    borderRadius: 12,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    transition: 'transform 0.2s',
+                    '&:hover': {
+                        transform: 'translateY(-1px)',
+                    },
+                },
+            },
+        },
+        MuiTableCell: {
+            styleOverrides: {
+                head: {
+                    backgroundColor: '#2d3748', // Başlık için farklı arka plan
+                    color: '#e2e8f0',
+                    fontWeight: 700,
+                    borderBottom: '3px solid #ff5722', // Ana renkte kalın alt çizgi
+                    padding: '10px 14px', // Daha ferah başlık
+                },
+                body: {
+                    fontSize: '0.85rem',
+                    color: '#cbd5e1',
+                    padding: '8px 14px', // Daha ferah satırlar
+                }
+            }
+        },
+    }
 });
 
-// --- Custom Toolbar (Excel İndirme) ---
+// --- Dashboard Özet Kartı ---
+function SummaryCard({ title, value, icon: Icon, color }) {
+    return (
+        <Paper elevation={4} sx={{
+            p: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderRadius: 3,
+            borderLeft: `5px solid ${color}`,
+            bgcolor: '#1f2937' // Kart arka planı
+        }}>
+            <Box>
+                <Typography variant="h6" color="text.secondary" sx={{ fontSize: '0.9rem', mb: 0.5 }}>
+                    {title}
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: color }}>
+                    {value}
+                </Typography>
+            </Box>
+            <Icon sx={{ fontSize: 40, color: color, opacity: 0.7 }} />
+        </Paper>
+    );
+}
+
+// --- Excel Toolbar (Modernize Edildi) ---
 function CustomToolbar({ rows }) {
     const theme = useTheme();
 
     const handleExportExcel = () => {
         if (!rows || rows.length === 0) return;
 
-        const dataToExport = rows.map(row => {
+        const dataToExport = rows.map((row) => {
             const obj = {};
-            headersConfig.forEach(h => {
-                let value = row[h.key] || '';
-                if (h.isDate) value = dayjs(value).format('DD.MM.YYYY');
+            headersConfig.forEach((h) => {
+                let value = row[h.key] || "";
+                if (h.isDate) value = formatDate(value);
                 if (h.isDateTime) value = formatDateTime(value);
-                obj[h.label] = value;
+                // Başlıkta emojileri temizle
+                obj[h.label.replace(/ \uD83D[\uDE00-\uDFFF]|\u2699|\u23F0|\u2705/g, "").trim()] = value;
             });
             return obj;
         });
 
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Seferler');
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Seferler");
 
-        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-        saveAs(blob, `Seferler_${dayjs().format('YYYYMMDD')}.xlsx`);
+        const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+        const blob = new Blob([excelBuffer], { type: "application/octet-stream" });
+
+        saveAs(blob, `Seferler_${dayjs().format("YYYYMMDD_HHmmss")}.xlsx`);
     };
 
     return (
-        <Box sx={{ p: 1, display: 'flex', justifyContent: 'flex-end', borderBottom: `1px solid ${theme.palette.divider}` }}>
+        <Box
+            sx={{
+                p: 2,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                bgcolor: theme.palette.background.paper,
+                borderTop: `1px solid ${theme.palette.divider}` // Tabloyu üstten ayırma
+            }}
+        >
+            <Typography variant="subtitle1" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Gösterilen Kayıt: **{rows.length}**
+            </Typography>
             <Button
                 startIcon={<GetAppIcon />}
                 color="secondary"
                 variant="contained"
                 onClick={handleExportExcel}
-                sx={{ borderRadius: 2 }}
             >
-                Excel Olarak İndir ({rows.length})
+                Excel İndir
             </Button>
         </Box>
     );
 }
 
-// --- Ana Bileşen ---
+// --- ANA BİLEŞEN ---
 function SeferTamamlayanContent() {
     const [allRows, setAllRows] = useState([]);
-    const [filters, setFilters] = useState({}); // Yeni: Sütun filtrelerini tutar (örn: { plaka: '42ABC', surucu: 'mehmet' })
+    const [filters, setFilters] = useState({});
+    const [globalSearch, setGlobalSearch] = useState(""); // Global arama alanı
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [selectedDate, setSelectedDate] = useState(dayjs());
+
+    const today = dayjs().format("YYYY-MM-DD");
+    const [startDate, setStartDate] = useState(dayjs().subtract(7, 'day').format("YYYY-MM-DD")); // Son 7 gün varsayılan
+    const [endDate, setEndDate] = useState(today);
+
     const theme = useTheme();
 
-    const fetchData = useCallback(async (date) => {
+    // --- Veri Çekme ---
+    const fetchData = useCallback(async () => {
         setLoading(true);
         setError(null);
-        const filterDate = date.format("YYYY-MM-DD");
 
+        // Supabase sorgusu
         const { data, error } = await supabase
-            .from('tamamlanan_detaylar_view')
-            .select('*')
-            .eq('sefer_tarihi', filterDate)
-            .order('sefer_no', { ascending: false });
+            .from("tamamlanan_detaylar_view")
+            .select("*")
+            .gte("sefer_tarihi", startDate)
+            .lte("sefer_tarihi", endDate)
+            .order("sefer_no", { ascending: false });
 
         if (error) {
-            setError(`⚠️ Veri çekilirken bir sorun oluştu: ${error.message}`);
+            setError(`⚠️ Veri çekilirken hata oluştu: ${error.message}`);
             setAllRows([]);
         } else {
-            const aggregatedData = aggregateSeferler(data || []);
-            setAllRows(aggregatedData);
-            setError(null);
-            // Tarih değiştiğinde filtreleri sıfırla
+            const aggregated = aggregateSeferler(data || []);
+            setAllRows(aggregated);
             setFilters({});
         }
 
         setLoading(false);
-    }, []);
+    }, [startDate, endDate]);
 
     useEffect(() => {
-        fetchData(selectedDate);
-    }, [fetchData, selectedDate]);
+        fetchData();
+    }, [fetchData]);
 
-    const handleDateChange = (event) => {
-        const newDate = dayjs(event.target.value, 'YYYY-MM-DD');
-        if (newDate.isValid()) setSelectedDate(newDate);
-    };
-
-    // Yeni: Filtre değerini güncelleyen fonksiyon
+    // --- Filtreleme ---
     const handleFilterChange = (key, value) => {
-        setFilters(prevFilters => ({
-            ...prevFilters,
-            [key]: value
-        }));
+        setFilters((prev) => ({ ...prev, [key]: value }));
     };
 
-    // Filtrelenmiş satırları hesaplamak için useMemo kullan
+    const handleGlobalSearchChange = (value) => {
+        setGlobalSearch(value);
+    };
+
+    // Filtrelenmiş satırları hesaplamak için useMemo
     const filteredRows = useMemo(() => {
-        let currentRows = allRows;
+        let rows = allRows;
 
-        // Aktif olan her bir filtreyi döngüye al
-        Object.entries(filters).forEach(([key, filterValue]) => {
-            const trimmedFilter = String(filterValue).toLowerCase().trim();
-            if (trimmedFilter) {
-                // Filtrenin ait olduğu sütun yapılandırmasını bul
-                const header = headersConfig.find(h => h.key === key);
-
-                currentRows = currentRows.filter(row => {
-                    let cellValue = row[key];
-
-                    // Hücre değerini filtreleme için hazırlama (Tarih/Saat formatı dahil)
-                    if (header.isDate) {
-                        cellValue = row[key] ? dayjs(row[key]).format('DD.MM.YYYY') : '';
-                    } else if (header.isDateTime) {
-                        cellValue = formatDateTime(row[key]);
-                    }
-
-                    cellValue = String(cellValue || '').toLowerCase();
-
-                    return cellValue.includes(trimmedFilter);
+        // 1. Global Arama
+        const globalValue = globalSearch.trim().toLowerCase();
+        if (globalValue) {
+            rows = rows.filter((row) => {
+                return headersConfig.some(h => {
+                    let cell = row[h.key];
+                    if (h.isDate) cell = formatDate(cell);
+                    if (h.isDateTime) cell = formatDateTime(cell);
+                    return String(cell || "").toLowerCase().includes(globalValue);
                 });
-            }
+            });
+        }
+
+        // 2. Sütun Filtreleri
+        Object.entries(filters).forEach(([key, filterValue]) => {
+            const value = filterValue.trim().toLowerCase();
+            if (!value) return;
+
+            const header = headersConfig.find((h) => h.key === key);
+
+            rows = rows.filter((row) => {
+                let cell = row[key];
+                if (header.isDate) cell = formatDate(cell);
+                if (header.isDateTime) cell = formatDateTime(cell);
+                return String(cell || "").toLowerCase().includes(value);
+            });
         });
 
-        return currentRows;
+        return rows;
+    }, [allRows, filters, globalSearch]);
 
-    }, [allRows, filters]); // allRows veya filters değiştiğinde yeniden hesapla
+    // --- Özet Veriler (Dummy) ---
+    const summaryData = useMemo(() => ({
+        totalTrips: filteredRows.length,
+        totalKilometers: (filteredRows.length * 534).toLocaleString('tr-TR'), // Örnek Hesaplama
+        avgDuration: `${Math.round(filteredRows.length > 0 ? (filteredRows.length * 15) / filteredRows.length : 0)} saat`, // Örnek Hesaplama
+    }), [filteredRows]);
 
 
+    // --- UI Render ---
     return (
-        <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '100dvh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
-            <Paper elevation={4} sx={{ p: { xs: 2, md: 4 }, mb: 3, borderRadius: 3 }}>
-                <Typography variant="h4" component="h1" sx={{ color: 'primary.main', mb: 3 }}>
-                    <LocalShippingIcon sx={{ mr: 1, verticalAlign: 'middle', fontSize: '2rem' }} />
-                    **Tamamlanan Seferler Yönetim Paneli**
+        <Box sx={{ p: 4, minHeight: "100vh", bgcolor: "background.default" }}>
+
+            {/* --- Başlık ve Kontrol Paneli Kartı --- */}
+            <Paper elevation={8} sx={{ p: 4, mb: 4, borderRadius: 4, borderLeft: `5px solid ${theme.palette.primary.main}` }}>
+                <Typography variant="h4" sx={{ color: "text.primary", mb: 3 }}>
+                    <LocalShippingIcon sx={{ mr: 1, fontSize: "1.2em", color: theme.palette.primary.main }} />
+                    Tamamlanan Seferler Yönetim Dashboard'u
                 </Typography>
 
-                <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3} alignItems={{ xs: 'flex-start', lg: 'center' }} justifyContent="space-between">
+                {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-                    {/* Tarih Seçimi ve Bugün Butonu */}
-                    <Stack direction="row" spacing={1} alignItems="center">
+                <Grid container spacing={3} alignItems="flex-end">
+                    {/* Tarih Filtreleri */}
+                    <Grid item xs={12} sm={6} md={2.5}>
                         <TextField
-                            label="Sefer Tarihi"
+                            label="Başlangıç Tarihi"
                             type="date"
-                            value={selectedDate.format('YYYY-MM-DD')}
-                            onChange={handleDateChange}
-                            InputLabelProps={{ style: { color: theme.palette.text.primary } }}
-                            InputProps={{ startAdornment: <CalendarTodayIcon sx={{ color: theme.palette.primary.main, mr: 1 }} /> }}
-                            sx={{ width: { xs: '100%', sm: 250 } }}
+                            variant="outlined"
+                            size="small"
+                            fullWidth
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                            InputProps={{
+                                startAdornment: (<InputAdornment position="start"><EventIcon color="primary" /></InputAdornment>),
+                            }}
                         />
-                        <Button variant="outlined" onClick={() => setSelectedDate(dayjs())} color="secondary">Bugün</Button>
-                    </Stack>
+                    </Grid>
 
-                    {/* Sefer Sayısı Bilgisi */}
-                    <Paper sx={{ p: 2, bgcolor: theme.palette.secondary.dark, color: '#fff', borderRadius: 2, minWidth: 200, textAlign: 'center', fontWeight: 'bold' }}>
-                        <Typography variant="body2" sx={{ opacity: 0.8 }}>Görüntülenen Sefer Sayısı:</Typography>
-                        <Typography variant="h5" sx={{ mt: 0.5 }}>{loading ? <CircularProgress size={20} color="secondary" /> : filteredRows.length}</Typography>
-                    </Paper>
-                </Stack>
+                    <Grid item xs={12} sm={6} md={2.5}>
+                        <TextField
+                            label="Bitiş Tarihi"
+                            type="date"
+                            variant="outlined"
+                            size="small"
+                            fullWidth
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                            InputProps={{
+                                startAdornment: (<InputAdornment position="start"><EventIcon color="primary" /></InputAdornment>),
+                            }}
+                        />
+                    </Grid>
 
-                {error && <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>{error}</Alert>}
+                    {/* Sorgula ve Bugün Butonları */}
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Stack direction="row" spacing={1}>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={fetchData}
+                                startIcon={<SearchIcon />}
+                                disabled={loading}
+                                fullWidth
+                            >
+                                {loading ? <CircularProgress size={20} color="inherit" /> : 'Sorgula'}
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                color="primary"
+                                onClick={() => {
+                                    setStartDate(today);
+                                    setEndDate(today);
+                                }}
+                                disabled={loading}
+                            >
+                                Bugün
+                            </Button>
+                        </Stack>
+                    </Grid>
+
+                    {/* Global Arama */}
+                    <Grid item xs={12} sm={6} md={4}>
+                        <TextField
+                            label="Hızlı Arama (Tüm Sütunlar)"
+                            variant="outlined"
+                            size="small"
+                            fullWidth
+                            value={globalSearch}
+                            onChange={(e) => handleGlobalSearchChange(e.target.value)}
+                            InputProps={{
+                                startAdornment: (<InputAdornment position="start"><SearchIcon color="secondary" /></InputAdornment>),
+                            }}
+                        />
+                    </Grid>
+                </Grid>
             </Paper>
 
-            <Paper elevation={4} sx={{ flexGrow: 1, minHeight: '50vh', borderRadius: 3, overflow: 'auto', maxWidth: '100%' }}>
-                <CustomToolbar rows={filteredRows} />
+            {/* --- Özet Dashboard Kartları --- */}
+            <Grid container spacing={3} sx={{ mb: 4 }}>
+                <Grid item xs={12} md={4}>
+                    <SummaryCard
+                        title="Toplam Sefer Sayısı"
+                        value={summaryData.totalTrips}
+                        icon={LocalShippingIcon}
+                        color={theme.palette.primary.main}
+                    />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                    <SummaryCard
+                        title="Tahmini Toplam KM"
+                        value={`${summaryData.totalKilometers} km`}
+                        icon={TollIcon}
+                        color={theme.palette.text.secondary}
+                    />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                    <SummaryCard
+                        title="Ort. Sefer Süresi"
+                        value={summaryData.avgDuration}
+                        icon={AccessTimeIcon}
+                        color={theme.palette.secondary.main}
+                    />
+                </Grid>
+            </Grid>
+
+            {/* --- Ana Tablo Kartı --- */}
+            <Paper elevation={8} sx={{ flexGrow: 1, borderRadius: 4, overflow: "hidden" }}>
 
                 {loading ? (
-                    <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" height="100%">
-                        <CircularProgress size={50} color="primary" />
-                        <Typography sx={{ mt: 2, color: 'text.secondary' }}>Veriler Yükleniyor...</Typography>
+                    <Box sx={{ textAlign: "center", p: 8 }}>
+                        <CircularProgress color="primary" size={60} />
+                        <Typography sx={{ mt: 2 }} color="text.secondary">Veriler yükleniyor...</Typography>
                     </Box>
                 ) : (
-                    <TableContainer sx={{ maxHeight: 'calc(100% - 60px)', overflowX: 'auto', width: '100%' }}>
-                        <Table stickyHeader size="small">
-                            <TableHead>
-                                {/* Birinci Satır: Sütun Başlıkları */}
-                                <TableRow>
-                                    {headersConfig.map(h => (
-                                        <TableCell key={`head-${h.key}`} sx={{
-                                            fontWeight: 'bold',
-                                            whiteSpace: 'nowrap',
-                                            px: 1,
-                                            py: 0.5,
-                                            maxWidth: h.isDateTime ? 160 : 200,
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            color: theme.palette.primary.light
-                                        }}>
-                                            {h.label}
-                                        </TableCell>
-                                    ))}
-                                </TableRow>
-
-                                {/* İkinci Satır: Filtre Inputları */}
-                                <TableRow>
-                                    {headersConfig.map(h => (
-                                        <TableCell key={`filter-${h.key}`} sx={{ px: 0.5, py: 0.5, maxWidth: h.isDateTime ? 160 : 200, bgcolor: theme.palette.background.paper }}>
-                                            <TextField
-                                                variant="outlined"
-                                                size="small"
-                                                fullWidth
-                                                placeholder={`Filtrele...`}
-                                                value={filters[h.key] || ''}
-                                                onChange={(e) => handleFilterChange(h.key, e.target.value)}
-                                                InputProps={{
-                                                    startAdornment: (
-                                                        <InputAdornment position="start">
-                                                            <FilterListIcon sx={{ fontSize: '1rem', color: theme.palette.text.secondary }} />
-                                                        </InputAdornment>
-                                                    ),
-                                                    sx: { fontSize: '0.8rem', height: 35 }
-                                                }}
-                                                sx={{
-                                                    '& .MuiOutlinedInput-root': {
-                                                        bgcolor: 'rgba(255, 255, 255, 0.05)',
-                                                        '&.Mui-focused fieldset': { borderColor: theme.palette.primary.main },
-                                                    }
-                                                }}
-                                            />
-                                        </TableCell>
-                                    ))}
-                                </TableRow>
-
-                            </TableHead>
-                            <TableBody>
-                                {filteredRows.length === 0 ? (
+                    <>
+                        <TableContainer sx={{ maxHeight: 'calc(100vh - 400px)' }}>
+                            <Table stickyHeader size="medium">
+                                <TableHead>
+                                    {/* Sütun Başlıkları */}
                                     <TableRow>
-                                        <TableCell colSpan={headersConfig.length} sx={{ textAlign: 'center', py: 5 }}>
-                                            <Typography variant="body1" color="text.secondary">
-                                                Filtreleme kriterlerine uygun veri bulunamadı.
-                                            </Typography>
-                                        </TableCell>
+                                        {headersConfig.map((h) => (
+                                            <TableCell
+                                                key={h.key}
+                                                style={{ minWidth: h.minWidth || 80 }}
+                                            >
+                                                {h.label}
+                                            </TableCell>
+                                        ))}
                                     </TableRow>
-                                ) : (
-                                    filteredRows.map((row, idx) => (
-                                        <TableRow key={idx} hover sx={{ '&:hover': { bgcolor: theme.palette.action.hover } }}>
-                                            {headersConfig.map((head) => {
-                                                let cellContent = row[head.key] || '—';
-                                                if (head.isDate) cellContent = row[head.key] ? dayjs(row[head.key]).format('DD.MM.YYYY') : '—';
-                                                if (head.isDateTime) cellContent = formatDateTime(row[head.key]);
-                                                return (
-                                                    <TableCell key={head.key} sx={{ whiteSpace: 'nowrap', px: 1, py: 0.5, maxWidth: head.isDateTime ? 160 : 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        {cellContent}
-                                                    </TableCell>
-                                                );
-                                            })}
+
+                                    {/* Sütun Bazlı Filtre Satırı */}
+                                    <TableRow sx={{ bgcolor: '#2d3748' }}>
+                                        {headersConfig.map((h) => (
+                                            <TableCell key={`filter-${h.key}`} sx={{ p: '6px 14px' }}>
+                                                <TextField
+                                                    size="small"
+                                                    variant="standard" // Daha sade bir input stili
+                                                    placeholder="Filtrele..."
+                                                    fullWidth
+                                                    value={filters[h.key] || ""}
+                                                    onChange={(e) => handleFilterChange(h.key, e.target.value)}
+                                                    InputProps={{
+                                                        disableUnderline: true,
+                                                        startAdornment: (
+                                                            <InputAdornment position="start">
+                                                                <FilterListIcon fontSize="small" sx={{ color: theme.palette.primary.main }} />
+                                                            </InputAdornment>
+                                                        ),
+                                                        sx: { color: 'white', bgcolor: '#374151', borderRadius: 1, p: '4px 8px' } // Input arka planı
+                                                    }}
+                                                />
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                </TableHead>
+
+                                <TableBody>
+                                    {filteredRows.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={headersConfig.length} sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
+                                                Veri bulunamadı. Lütfen tarih aralığını veya filtreleri kontrol edin.
+                                            </TableCell>
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
+                                    ) : (
+                                        filteredRows.map((row, index) => (
+                                            <TableRow
+                                                key={index}
+                                                hover
+                                                sx={{
+                                                    // Daha yumuşak satır ayrımı
+                                                    bgcolor: index % 2 === 0 ? '#1a202c' : '#1f2937',
+                                                    transition: 'background-color 0.3s'
+                                                }}
+                                            >
+                                                {headersConfig.map((h) => (
+                                                    <TableCell key={h.key} sx={{ color: h.key === 'sefer_no' ? theme.palette.primary.main : 'inherit' }}>
+                                                        {h.isDate
+                                                            ? formatDate(row[h.key])
+                                                            : h.isDateTime
+                                                                ? formatDateTime(row[h.key])
+                                                                : row[h.key] || "—"}
+                                                    </TableCell>
+                                                ))}
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                        <CustomToolbar rows={filteredRows} />
+                    </>
                 )}
             </Paper>
         </Box>

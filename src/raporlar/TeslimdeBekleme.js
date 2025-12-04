@@ -89,6 +89,30 @@ const DETAIL_COLS = [
 // ===========================
 // Helper functions
 // ===========================
+
+const checkWeekend = (start, end) => {
+    const s = parseDT(start);
+    const e = parseDT(end);
+    if (!s || !e) return "—";
+
+    let cur = s.clone();
+    let hasSaturday = false;
+    let hasSunday = false;
+
+    while (cur.isBefore(e) || cur.isSame(e, "day")) {
+        const day = cur.day(); // 0 = Pazar, 6 = Cumartesi
+        if (day === 6) hasSaturday = true;
+        if (day === 0) hasSunday = true;
+        cur = cur.add(1, "day");
+    }
+
+    if (hasSaturday && hasSunday) return "Cumartesi & Pazar Var";
+    if (hasSaturday) return "Cumartesi Var";
+    if (hasSunday) return "Pazar Var";
+
+    return "—";
+};
+
 const parseDT = (v) => {
     if (!v) return null;
     const d = dayjs(v);
@@ -334,7 +358,12 @@ export default function TeslimdeBekleme() {
             "Çıkış Zamanı": r.teslim_cikis
                 ? dayjs(r.teslim_cikis).format("DD.MM.YYYY HH:mm")
                 : "—",
-            "Bekleme Süresi": minToHM(r.gecikme_dk ?? 0),
+            "Bekleme Süresi":
+                r.teslim_varis && r.teslim_cikis
+                    ? minToHM(diffMinutes(r.teslim_varis, r.teslim_cikis))
+                    : "—",
+            "Hafta Sonu": checkWeekend(r.teslim_varis, r.teslim_cikis),
+
         }));
 
         // ================================
@@ -353,6 +382,8 @@ export default function TeslimdeBekleme() {
             { header: "Varış Zamanı", key: "Varış Zamanı", width: 20 },
             { header: "Çıkış Zamanı", key: "Çıkış Zamanı", width: 20 },
             { header: "Bekleme Süresi", key: "Bekleme Süresi", width: 16 },
+            { header: "Hafta Sonu", key: "Hafta Sonu", width: 20 },
+
         ];
 
         // ================================

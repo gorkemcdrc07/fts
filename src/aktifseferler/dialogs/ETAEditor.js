@@ -591,6 +591,10 @@ export default function ETAEditor({
             const hasSeferNo = !!sefer?.sefer_no;
             if (!hasId && !hasSeferNo) throw new Error("Sefer kimliği bulunamadı.");
 
+            // 🆕 ETA Güncelleyen bilgisi
+            const currentUserName = (localStorage.getItem("kullaniciAdi") || "GENERIC").toUpperCase();
+            const currentTimestamp = new Date().toISOString();
+
             // Ne kaydedilebilir?
             const parsedKalan = parseHoursInput(kalanSurusStr);
             const canSaveKalan =
@@ -600,8 +604,7 @@ export default function ETAEditor({
                 parsedKalan >= 0 &&
                 parsedKalan <= 9;
 
-            // ETA: çıkış yoksa sadece not; çıkış varsa mesafe+plan şart
-            const canSaveEtaNote = !yuklemeCikisRaw; // not yazar
+            const canSaveEtaNote = !yuklemeCikisRaw;
             const canSaveEtaVaris = Boolean(yuklemeCikisRaw && hasDistance && plan?.eta);
 
             if (!canSaveKalan && !canSaveEtaNote && !canSaveEtaVaris) {
@@ -610,7 +613,11 @@ export default function ETAEditor({
             }
 
             const payload = {};
-            if (canSaveKalan) payload.eta_kalan_surus = parsedKalan;
+
+            if (canSaveKalan) {
+                payload.eta_kalan_surus = parsedKalan;
+            }
+
             if (canSaveEtaNote) {
                 payload.eta_varis = null;
                 payload.eta_note = "Yükleme çıkış tarihi bekleniyor";
@@ -619,13 +626,18 @@ export default function ETAEditor({
                 payload.eta_note = null;
             }
 
+            // 🆕 LOG EKLENDİ → KİM NE ZAMAN GÜNCELLEDİ
+            if (canSaveKalan || canSaveEtaNote || canSaveEtaVaris) {
+                payload.eta_guncelleyen = currentUserName;
+                payload.eta_guncelleme_zamani = currentTimestamp;
+            }
+
             let q = supabase.from("seferler").update(payload);
             if (hasId) q = q.eq("id", String(sefer.id));
             else q = q.eq("sefer_no", sefer.sefer_no);
 
             const { error } = await q;
             if (error) {
-                // Kolon yoksa kullanıcıya net mesaj
                 if (error.code === "42703") {
                     setKalanColumnMissing(true);
                     setSnack({ open: true, severity: "warning", msg: "eta_kalan_surus kolonu mevcut değil. Migration uygulayın." });
@@ -637,11 +649,13 @@ export default function ETAEditor({
                     setInitialKalanHours(parsedKalan);
                     setKalanSaved(true);
                 }
+
                 const pieces = [
                     canSaveKalan ? "Kalan sürüş" : null,
                     canSaveEtaNote ? "ETA notu" : null,
                     canSaveEtaVaris ? "ETA varış tarihi" : null,
                 ].filter(Boolean).join(", ");
+
                 setSnack({ open: true, severity: "success", msg: `${pieces} kaydedildi.` });
                 onClose && onClose();
             }

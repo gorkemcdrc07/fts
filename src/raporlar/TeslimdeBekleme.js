@@ -327,6 +327,10 @@ export default function TeslimdeBekleme() {
         const minLate = Number(minLateMin) || 0;
         return rows
             .filter((r) => (r.gecikme_dk ?? 0) >= minLate)
+            .map((r) => ({
+                ...r,
+                weekendInfo: checkWeekend(r.teslim_varis, r.teslim_cikis),
+            }))
             .sort((a, b) => (b.gecikme_dk ?? 0) - (a.gecikme_dk ?? 0));
     }, [rows, minLateMin]);
 
@@ -360,6 +364,7 @@ export default function TeslimdeBekleme() {
                 : "—",
             "Gecikme Süresi":
                 r.gecikme_dk != null ? minToHM(r.gecikme_dk) : "Zamanında",
+            "Hafta Sonu": r.weekendInfo || "—",
         }));
 
         // ================================
@@ -376,7 +381,9 @@ export default function TeslimdeBekleme() {
             { header: "Teslim Çıkış", key: "Teslim Çıkış", width: 20 },
             { header: "Deadline", key: "Deadline", width: 20 },
             { header: "Gecikme Süresi", key: "Gecikme Süresi", width: 18 },
+            { header: "Hafta Sonu", key: "Hafta Sonu", width: 20 },
         ];
+
 
         // ================================
         // SATIRLARI EKLE

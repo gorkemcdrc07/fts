@@ -395,7 +395,7 @@ function SeferTamamlayanContent() {
         <Box sx={{ p: 4, minHeight: "100vh", bgcolor: "background.default" }}>
 
             {/* --- Başlık ve Kontrol Paneli Kartı --- */}
-            <Paper elevation={8} sx={{ p: 4, mb: 4, borderRadius: 4, borderLeft: `5px solid ${theme.palette.primary.main}` }}>
+            <Paper elevation={8} sx={{ p: 2, mb: 2, borderRadius: 4, borderLeft: `5px solid ${theme.palette.primary.main}` }}>
                 <Typography variant="h4" sx={{ color: "text.primary", mb: 3 }}>
                     <LocalShippingIcon sx={{ mr: 1, fontSize: "1.2em", color: theme.palette.primary.main }} />
                     Tamamlanan Seferler Yönetim Dashboard'u
@@ -519,7 +519,7 @@ function SeferTamamlayanContent() {
                     </Box>
                 ) : (
                     <>
-                        <TableContainer sx={{ maxHeight: 'calc(100vh - 400px)' }}>
+                            <TableContainer sx={{ maxHeight: 'calc(100vh - 260px)' }}>
                             <Table stickyHeader size="medium">
                                 <TableHead>
                                     {/* Sütun Başlıkları */}

@@ -353,6 +353,12 @@ export default function TeslimdeBekleme() {
             "Teslim Noktası": r.teslim_noktasi,
             "Teslim İl": r.teslim_ili,
             "Teslim İlçe": r.teslim_ilcesi,
+
+            // ✔️ EKLENECEK
+            "Sefer Tarihi": r.sefer_tarihi
+                ? dayjs(r.sefer_tarihi).format("DD.MM.YYYY HH:mm")
+                : "—",
+
             "Teslim Varış": r.teslim_varis
                 ? dayjs(r.teslim_varis).format("DD.MM.YYYY HH:mm")
                 : "—",
@@ -366,7 +372,6 @@ export default function TeslimdeBekleme() {
                 r.gecikme_dk != null ? minToHM(r.gecikme_dk) : "Zamanında",
             "Hafta Sonu": r.weekendInfo || "—",
         }));
-
         // ================================
         // SÜTUN BAŞLIKLARI
         // ================================
@@ -377,6 +382,10 @@ export default function TeslimdeBekleme() {
             { header: "Teslim Noktası", key: "Teslim Noktası", width: 28 },
             { header: "Teslim İl", key: "Teslim İl", width: 18 },
             { header: "Teslim İlçe", key: "Teslim İlçe", width: 18 },
+
+            // ✔️ EKLENECEK
+            { header: "Sefer Tarihi", key: "Sefer Tarihi", width: 20 },
+
             { header: "Teslim Varış", key: "Teslim Varış", width: 20 },
             { header: "Teslim Çıkış", key: "Teslim Çıkış", width: 20 },
             { header: "Deadline", key: "Deadline", width: 20 },

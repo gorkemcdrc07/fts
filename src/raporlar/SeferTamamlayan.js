@@ -94,19 +94,25 @@ const aggregateSeferler = (data) => {
 // --- Tablo kolonları ---
 const headersConfig = [
     { key: "sefer_tarihi", label: "Tarih 📅", isDate: true, minWidth: 110 },
-    { key: "sefer_no", label: "Sefer #️⃣", minWidth: 90 },
-    { key: "surucu_ad_soyad", label: "Sürücü 👤", minWidth: 150 },
-    { key: "plaka", label: "Plaka 🚛", minWidth: 90 },
-    { key: "musteri_adi", label: "Müşteri 🤝", minWidth: 160 },
+    { key: "sefer_no", label: "Sefer No", minWidth: 100 },
+    { key: "surucu_ad_soyad", label: "Sürücü", minWidth: 150 },
+    { key: "surucu_tckn", label: "TC", minWidth: 120 },
+    { key: "surucu_telefon", label: "Telefon", minWidth: 140 },
 
-    { key: "yukleme_noktasi", label: "Yükleme Noktası 📍", minWidth: 180 },
-    { key: "yukleme_varis", label: "Yk. Varış (Min) ⏰", isDateTime: true, minWidth: 150 },
-    { key: "yukleme_cikis", label: "Yk. Çıkış (Min) 🚀", isDateTime: true, minWidth: 150 },
+    { key: "plaka", label: "Plaka", minWidth: 100 },
+    { key: "treyler", label: "Treyler", minWidth: 120 },
 
-    { key: "teslim_alan_firma", label: "Teslim Alan 🏢", minWidth: 150 },
-    { key: "teslim_noktasi", label: "Teslim Noktası 🏠", minWidth: 180 },
-    { key: "teslim_varis", label: "Ts. Varış (Max) ⏰", isDateTime: true, minWidth: 150 },
-    { key: "teslim_cikis", label: "Ts. Çıkış (Max) 🏁", isDateTime: true, minWidth: 150 },
+    { key: "musteri_adi", label: "Müşteri", minWidth: 160 },
+
+    { key: "yukleme_noktasi", label: "Yükleme Noktası", minWidth: 180 },
+    { key: "yukleme_varis", label: "Yükleme Varış", isDateTime: true, minWidth: 150 },
+    { key: "yukleme_cikis", label: "Yükleme Çıkış", isDateTime: true, minWidth: 150 },
+
+    { key: "teslim_noktasi", label: "Teslim Noktası", minWidth: 180 },
+    { key: "teslim_ili", label: "Teslim İl", minWidth: 150 },
+    { key: "teslim_ilcesi", label: "Teslim İlçe", minWidth: 150 },
+    { key: "teslim_varis", label: "Teslim Varış", isDateTime: true, minWidth: 150 },
+    { key: "teslim_cikis", label: "Teslim Çıkış", isDateTime: true, minWidth: 150 },
 ];
 
 // --- Tema (Ultra Modern Dark Mode) ---
@@ -208,15 +214,47 @@ function CustomToolbar({ rows }) {
     const handleExportExcel = () => {
         if (!rows || rows.length === 0) return;
 
+        const exportColumns = [
+            { key: "sefer_tarihi", label: "Tarih" },
+            { key: "sefer_no", label: "Sefer No" },
+            { key: "surucu_ad_soyad", label: "Sürücü" },
+            { key: "surucu_tckn", label: "TC" },
+            { key: "surucu_telefon", label: "Telefon" },
+            { key: "plaka", label: "Plaka" },
+            { key: "treyler", label: "Treyler" },
+            { key: "musteri_adi", label: "Müşteri" },
+
+            { key: "yukleme_noktasi", label: "Yükleme Noktası" },
+            { key: "yukleme_varis", label: "Yükleme Varış" },
+            { key: "yukleme_cikis", label: "Yükleme Çıkış" },
+
+            { key: "teslim_noktasi", label: "Teslim Noktası" },
+            { key: "teslim_ili", label: "Teslim İl" },
+            { key: "teslim_ilcesi", label: "Teslim İlçe" },
+            { key: "teslim_varis", label: "Teslim Varış" },
+            { key: "teslim_cikis", label: "Teslim Çıkış" },
+        ];
+
         const dataToExport = rows.map((row) => {
             const obj = {};
-            headersConfig.forEach((h) => {
-                let value = row[h.key] || "";
-                if (h.isDate) value = formatDate(value);
-                if (h.isDateTime) value = formatDateTime(value);
-                // Başlıkta emojileri temizle
-                obj[h.label.replace(/ \uD83D[\uDE00-\uDFFF]|\u2699|\u23F0|\u2705/g, "").trim()] = value;
+
+            exportColumns.forEach((col) => {
+                let value = row[col.key] ?? "";
+
+                if (col.key === "sefer_tarihi") value = formatDate(value);
+
+                if ([
+                    "yukleme_varis",
+                    "yukleme_cikis",
+                    "teslim_varis",
+                    "teslim_cikis"
+                ].includes(col.key)) {
+                    value = formatDateTime(value);
+                }
+
+                obj[col.label] = value;
             });
+
             return obj;
         });
 
@@ -224,11 +262,12 @@ function CustomToolbar({ rows }) {
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Seferler");
 
-        const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-        const blob = new Blob([excelBuffer], { type: "application/octet-stream" });
+        const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+        const blob = new Blob([buffer], { type: "application/octet-stream" });
 
         saveAs(blob, `Seferler_${dayjs().format("YYYYMMDD_HHmmss")}.xlsx`);
     };
+
 
     return (
         <Box

@@ -289,12 +289,12 @@ export default function TeslimdeBekleme() {
 
             const teslim_varis = d?.teslim_varis ?? null;
             const teslim_cikis = d?.teslim_cikis ?? null;
+
             const deadline = teslim_varis ? deliveryDeadline(teslim_varis) : null;
 
             let gecikme_dk = null;
-            if (deadline && teslim_cikis) {
-                const diff = diffMinutes(deadline, teslim_cikis);
-                gecikme_dk = diff !== null ? Math.max(0, diff) : null;
+            if (teslim_varis && teslim_cikis) {
+                gecikme_dk = diffMinutes(teslim_varis, teslim_cikis);
             }
 
             return {
@@ -305,7 +305,7 @@ export default function TeslimdeBekleme() {
                 deadline: deadline ? deadline.toISOString() : null,
                 gecikme_dk,
             };
-        });
+        });  // ✔ Eksik olan parantez burası!
 
         const cleaned = computed.filter(
             (x) => x.teslim_varis !== null && x.teslim_cikis !== null
@@ -340,30 +340,26 @@ export default function TeslimdeBekleme() {
         const worksheet = workbook.addWorksheet("Teslimde Bekleme");
 
         // ================================
-        // EXCEL VERİ MAP
+        // EXCEL VERİLERİ
         // ================================
         const dataToExport = filtered.map((r) => ({
             "Sefer No": r.sefer_no,
             "Plaka": r.plaka,
-            "Treyler": r.treyler,
-            "Şoför": r.surucu_ad_soyad,
             "Proje Adı": r.proje_adi,
-            "Yükleme Noktası": r.yukleme_noktasi,
-            "Yükleme İli": r.yukleme_ili,
             "Teslim Noktası": r.teslim_noktasi,
-            "Teslim İli": r.teslim_ili,
-            "Varış Zamanı": r.teslim_varis
+            "Teslim İl": r.teslim_ili,
+            "Teslim İlçe": r.teslim_ilcesi,
+            "Teslim Varış": r.teslim_varis
                 ? dayjs(r.teslim_varis).format("DD.MM.YYYY HH:mm")
                 : "—",
-            "Çıkış Zamanı": r.teslim_cikis
+            "Teslim Çıkış": r.teslim_cikis
                 ? dayjs(r.teslim_cikis).format("DD.MM.YYYY HH:mm")
                 : "—",
-            "Bekleme Süresi":
-                r.teslim_varis && r.teslim_cikis
-                    ? minToHM(diffMinutes(r.teslim_varis, r.teslim_cikis))
-                    : "—",
-            "Hafta Sonu": checkWeekend(r.teslim_varis, r.teslim_cikis),
-
+            "Deadline": r.deadline
+                ? dayjs(r.deadline).format("DD.MM.YYYY HH:mm")
+                : "—",
+            "Gecikme Süresi":
+                r.gecikme_dk != null ? minToHM(r.gecikme_dk) : "Zamanında",
         }));
 
         // ================================
@@ -372,27 +368,23 @@ export default function TeslimdeBekleme() {
         worksheet.columns = [
             { header: "Sefer No", key: "Sefer No", width: 14 },
             { header: "Plaka", key: "Plaka", width: 14 },
-            { header: "Treyler", key: "Treyler", width: 18 },
-            { header: "Şoför", key: "Şoför", width: 22 },
             { header: "Proje Adı", key: "Proje Adı", width: 22 },
-            { header: "Yükleme Noktası", key: "Yükleme Noktası", width: 28 },
-            { header: "Yükleme İli", key: "Yükleme İli", width: 18 },
             { header: "Teslim Noktası", key: "Teslim Noktası", width: 28 },
-            { header: "Teslim İli", key: "Teslim İli", width: 18 },
-            { header: "Varış Zamanı", key: "Varış Zamanı", width: 20 },
-            { header: "Çıkış Zamanı", key: "Çıkış Zamanı", width: 20 },
-            { header: "Bekleme Süresi", key: "Bekleme Süresi", width: 16 },
-            { header: "Hafta Sonu", key: "Hafta Sonu", width: 20 },
-
+            { header: "Teslim İl", key: "Teslim İl", width: 18 },
+            { header: "Teslim İlçe", key: "Teslim İlçe", width: 18 },
+            { header: "Teslim Varış", key: "Teslim Varış", width: 20 },
+            { header: "Teslim Çıkış", key: "Teslim Çıkış", width: 20 },
+            { header: "Deadline", key: "Deadline", width: 20 },
+            { header: "Gecikme Süresi", key: "Gecikme Süresi", width: 18 },
         ];
 
         // ================================
-        // VERİYİ EXCEL’E EKLE
+        // SATIRLARI EKLE
         // ================================
         worksheet.addRows(dataToExport);
 
         // ================================
-        // DOSYA KAYDET
+        // DOSYAYI KAYDET
         // ================================
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], {

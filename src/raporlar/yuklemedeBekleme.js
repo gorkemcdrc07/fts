@@ -139,7 +139,6 @@ export default function CleanFetcher() {
                 const uniqueNoktalar = new Set();
                 const uniqueProjeler = new Set();
 
-                let total = 0;
                 let firstArrival = null;
                 let lastLeave = null;
 
@@ -153,12 +152,17 @@ export default function CleanFetcher() {
                     if (c && (!lastLeave || c.isAfter(lastLeave)))
                         lastLeave = c;
 
-                    const diff = diffMinutes(rec.yukleme_varis, rec.yukleme_cikis);
-                    if (diff !== null) total += diff;
-
                     if (summaryRow.yukleme_noktasi) uniqueNoktalar.add(summaryRow.yukleme_noktasi);
                     if (summaryRow.proje_adi) uniqueProjeler.add(summaryRow.proje_adi);
                 });
+
+                // ✅ Gerçek bekleme süresi: son çıkış - ilk varış
+                let total = null;
+
+                if (firstArrival && lastLeave) {
+                    total = diffMinutes(firstArrival, lastLeave);
+                }
+
 
                 if (total >= MINIMUM_WAIT_TIME_MINUTES) {
                     finalRows.push({

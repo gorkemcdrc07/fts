@@ -257,7 +257,7 @@ export default function Sidebar(props) {
             { ad: "ETA Uyumsuzluğu", yol: "/raporlar/eta-uyumsuz", ikon: <ScheduleIcon /> },
             { ad: "Yüklemede Bekleme", yol: "/raporlar/yuklemede-bekleme", ikon: <ScheduleIcon /> },
             { ad: "Teslimde Bekleme", yol: "/raporlar/teslimde-bekleme", ikon: <AvTimerIcon /> },
-            // { ad: "Yüklemede Gecikme", yol: "/raporlar/yuklemede-gecikme", ikon: <QueryStatsIcon /> }, <-- KALDIRILDI
+            { ad: "Boşta Araç", yol: "/raporlar/bosta-arac", ikon: <DirectionsCarIcon /> },
             { ad: "Sefer Süreleri", yol: "/raporlar/sefer-sureleri", ikon: <AirportShuttleIcon /> },
             { ad: "Plaka Bazlı", yol: "/raporlar/plaka-bazli", ikon: <AirportShuttleOutlinedIcon /> },
             { ad: "Sefer Tamamlayan", yol: "/raporlar/sefer-tamamlayan", ikon: <TaskAltIcon /> },

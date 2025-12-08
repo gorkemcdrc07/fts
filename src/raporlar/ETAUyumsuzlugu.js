@@ -1,6 +1,6 @@
 // =============================================================
-// MODERN DASHBOARD - FULL VERSION (TESLİM VARIŞ ZORUNLU)
-// DataGrid + Supabase + Mesafe Popup + Excel Export
+// MODERN DASHBOARD - FULL VERSION (TESLLİM VARIŞ ZORUNLU)
+// Tek Tarih → ETA Tarihine Göre Filtreleme
 // =============================================================
 
 import * as React from "react";
@@ -94,10 +94,7 @@ function calcETAFromDistance({ distanceKm, startIso, avgKmh = 65 }) {
 // =============================================================
 // FETCH PERFORMANCE DATA (TESLİM VARIŞ OLMAYANLARI ATAR)
 // =============================================================
-async function fetchPerformanceData(start, end) {
-    const rangeMin = `${start}T00:00:00`;
-    const rangeMax = `${end}T23:59:59`;
-
+async function fetchPerformanceData() {
     const selectQuery = `
         id,sefer_no,sefer_tarihi,plaka,surucu_ad_soyad,eta_varis,eta_note,
         sefer_detaylari(
@@ -110,9 +107,7 @@ async function fetchPerformanceData(start, end) {
 
     const { data, error } = await supabase
         .from("seferler")
-        .select(selectQuery)
-        .gte("sefer_tarihi", rangeMin)
-        .lte("sefer_tarihi", rangeMax);
+        .select(selectQuery);
 
     if (error) console.error("Supabase Error:", error);
 
@@ -123,7 +118,6 @@ async function fetchPerformanceData(start, end) {
             (a, b) => (a.nokta_sirasi || 0) - (b.nokta_sirasi || 0)
         )[0];
 
-        // ❗ TESLİM VARIŞ YOK → LİSTEYE EKLEME
         const teslimISO = ordered?.teslim_varis || null;
         if (!teslimISO) return;
 
@@ -188,9 +182,7 @@ function DistanceInputDialog({ open, onClose, seferData, onSaved }) {
     const det = seferData?.raw?.sefer_detaylari?.[0] || {};
 
     React.useEffect(() => {
-        if (open && seferData) {
-            lookup();
-        }
+        if (open && seferData) lookup();
     }, [open]);
 
     const lookup = async () => {
@@ -249,9 +241,7 @@ function DistanceInputDialog({ open, onClose, seferData, onSaved }) {
 
     return (
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-            <DialogTitle>
-                Mesafe Girişi – Sefer #{seferData?.sefer_no}
-            </DialogTitle>
+            <DialogTitle>Mesafe Girişi – Sefer #{seferData?.sefer_no}</DialogTitle>
 
             <DialogContent>
                 <Typography>Kalkış: {det.yukleme_ili} / {det.yukleme_ilcesi}</Typography>
@@ -293,9 +283,7 @@ export default function Dashboard() {
     const [rows, setRows] = React.useState([]);
     const [loading, setLoading] = React.useState(true);
 
-    const [start, setStart] = React.useState(getTodayDateString());
-    const [end, setEnd] = React.useState(getTodayDateString());
-
+    const [selectedDate, setSelectedDate] = React.useState(getTodayDateString());
     const [onlyLate, setOnlyLate] = React.useState(false);
     const [sortKey, setSortKey] = React.useState("farkDesc");
 
@@ -304,7 +292,7 @@ export default function Dashboard() {
 
     const loadData = async () => {
         setLoading(true);
-        const r = await fetchPerformanceData(start, end);
+        const r = await fetchPerformanceData();
         setRows(r);
         setLoading(false);
     };
@@ -313,10 +301,24 @@ export default function Dashboard() {
         loadData();
     }, []);
 
+    // ETA → Seçilen tarihle aynı gün mü?
     const filtered = rows
         .filter((r) => {
-            if (!onlyLate) return true;
-            return r.durum === "GECİKMİŞ";
+            if (!r.raw?.eta_varis) return false;
+
+            const etaDate = new Date(r.raw.eta_varis);
+            const sel = new Date(selectedDate);
+
+            const sameDay =
+                etaDate.getFullYear() === sel.getFullYear() &&
+                etaDate.getMonth() === sel.getMonth() &&
+                etaDate.getDate() === sel.getDate();
+
+            if (!sameDay) return false;
+
+            if (onlyLate && r.durum !== "GECİKMİŞ") return false;
+
+            return true;
         })
         .sort((a, b) => {
             if (sortKey === "farkDesc") {
@@ -324,7 +326,8 @@ export default function Dashboard() {
                 const bv = b.fark.includes("Gecikti") ? parseInt(b.fark) : -9999;
                 return bv - av;
             }
-            return new Date(a.raw?.sefer_tarihi) - new Date(b.raw?.sefer_tarihi);
+
+            return new Date(a.raw.eta_varis) - new Date(b.raw.eta_varis);
         });
 
     const columns = [
@@ -394,7 +397,7 @@ export default function Dashboard() {
         const buffer = await book.xlsx.writeBuffer();
         saveAs(
             new Blob([buffer]),
-            `eta_rapor_${start}_${end}.xlsx`
+            `eta_rapor_${selectedDate}.xlsx`
         );
     };
 
@@ -429,16 +432,9 @@ export default function Dashboard() {
                 <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                     <TextField
                         type="date"
-                        label="Başlangıç"
-                        value={start}
-                        onChange={(e) => setStart(e.target.value)}
-                        InputLabelProps={{ shrink: true }}
-                    />
-                    <TextField
-                        type="date"
-                        label="Bitiş"
-                        value={end}
-                        onChange={(e) => setEnd(e.target.value)}
+                        label="Tarih"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
                         InputLabelProps={{ shrink: true }}
                     />
 
@@ -476,7 +472,7 @@ export default function Dashboard() {
                 </Stack>
             </Paper>
 
-            {/* DATAGRID TABLE */}
+            {/* DATAGRID */}
             <Paper
                 sx={{
                     height: 650,
@@ -513,7 +509,7 @@ export default function Dashboard() {
                 )}
             </Paper>
 
-            {/* MESAFE POPUP */}
+            {/* MESAFE DİYALOĞU */}
             <DistanceInputDialog
                 open={distanceModal}
                 onClose={() => setDistanceModal(false)}

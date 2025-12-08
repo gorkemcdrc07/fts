@@ -1,99 +1,47 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+/**  MODERN DARK UI – GÜNCELLENMİŞ DÜZENLENMİŞ SÜRÜM  **/
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import { supabase } from "../supabaseClient";
-
-// Dayjs
 import dayjs from "dayjs";
-import duration from "dayjs/plugin/duration";
-import weekday from "dayjs/plugin/weekday";
-import weekOfYear from "dayjs/plugin/weekOfYear";
-import "dayjs/locale/tr";
-
-// Excel
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-// MUI
 import {
-    Box,
-    Button,
-    Chip,
-    Container,
-    IconButton,
-    Paper,
-    Stack,
-    TextField,
-    Tooltip,
-    Typography,
-    Alert,
-    CircularProgress,
-    LinearProgress,
-    Grid,
-    MenuItem,
-} from "@mui/material";
+    FiCalendar,
+    FiRefreshCw,
+    FiDownload,
+    FiAlertTriangle,
+    FiClock,
+    FiTruck,
+    FiUser,
+    FiArrowUp,
+    FiArrowDown
+} from "react-icons/fi";
 
-import { alpha } from "@mui/material/styles";
-
-// DataGrid
-import {
-    DataGrid,
-    GridToolbarContainer,
-    GridToolbarQuickFilter,
-} from "@mui/x-data-grid";
-
-// ICONS
-import {
-    Refresh as RefreshIcon,
-    InfoOutlined as InfoOutlinedIcon,
-    Download as DownloadIcon,
-    Summarize as SummarizeIcon,
-    AvTimer as AvTimerIcon,
-    WarningAmber as WarningIcon,
-    AccessAlarm as AccessAlarmIcon,
-} from "@mui/icons-material";
-
-// Modal Component
-import TripDetailModal from "./TripDetailModal";
-
-// ===================== Dayjs Setup =====================
-dayjs.extend(duration);
-dayjs.extend(weekday);
-dayjs.extend(weekOfYear);
-dayjs.locale("tr");
-
-/* ===================== Sabitler ===================== */
+/* ============================================================
+   SABİTLER
+============================================================ */
 const DETAIL_TABLE = "tamamlanan_detaylar";
 const SUMMARY_TABLE = "tamamlanan_seferler";
-const TARGET_WAIT_MINUTES = 240;
+const MINIMUM_WAIT_TIME_MINUTES = 240;
 
 const SUMMARY_COLS = [
     "id", "sefer_no", "plaka", "treyler", "surucu_ad_soyad", "surucu_tckn",
     "surucu_telefon", "sefer_tarihi", "yukleme_ili", "yukleme_ilcesi",
     "teslim_ili", "teslim_ilcesi", "musteri_adi", "yukleme_noktasi",
-    "teslim_noktasi", "proje_adi",
+    "teslim_noktasi", "proje_adi"
 ].join(",");
 
 const DETAIL_COLS = [
     "sefer_no", "nokta_sirasi", "yukleme_noktasi", "teslim_noktasi",
-    "yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis",
-    "yukleme_varis_guncelleyen", "yukleme_varis_guncelleme_tarihi",
-    "yukleme_cikis_guncelleyen", "yukleme_cikis_guncelleme_tarihi",
-    "teslim_varis_guncelleyen", "teslim_varis_guncelleme_tarihi",
-    "teslim_cikis_guncelleyen", "teslim_cikis_guncelleme_tarihi",
+    "yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"
 ].join(",");
 
-/* ===================== Yardımcı Fonksiyonlar ===================== */
+/* ============================================================
+   YARDIMCI FONKSIYONLAR
+============================================================ */
 const parseDT = (v) => {
-    if (!v && v !== 0) return null;
     const d = dayjs(v);
     return d.isValid() ? d : null;
-};
-
-const diffMinutes = (start, end) => {
-    const s = parseDT(start);
-    const e = parseDT(end);
-    if (!s || !e) return null;
-    const m = e.diff(s, "minute");
-    return Number.isFinite(m) && m >= 0 ? m : null;
 };
 
 const fmtDateTR = (v) => {
@@ -111,583 +59,474 @@ const minToHM = (m) => {
     return `0 dk`;
 };
 
-const fmtMinutes = (min) => {
-    if (min === null || min === undefined) return "—";
-    const n = Math.round(Number(min));
-    return minToHM(n);
+const diffMinutes = (start, end) => {
+    const s = parseDT(start);
+    const e = parseDT(end);
+    if (!s || !e) return null;
+    return Math.max(0, e.diff(s, "minute"));
 };
 
-/* ===================== WaitChip ===================== */
-const WaitChip = ({ minutes }) => {
-    if (minutes === null) return <Chip label="—" size="small" variant="outlined" />;
+/* ============================================================
+   ANA KOMPONENT
+============================================================ */
+export default function CleanFetcher() {
 
-    let color = "success";
-    let label = fmtMinutes(minutes);
-    if (minutes >= TARGET_WAIT_MINUTES) color = "error";
-    else if (minutes >= TARGET_WAIT_MINUTES * 0.75) color = "warning";
-    else if (minutes >= TARGET_WAIT_MINUTES * 0.5) color = "info";
-
-    return (
-        <Tooltip title={`${minutes} dakika bekleme`}>
-            <Chip
-                color={color}
-                label={label}
-                variant={minutes >= TARGET_WAIT_MINUTES * 0.75 ? "filled" : "outlined"}
-                size="small"
-                sx={{ fontWeight: 600 }}
-            />
-        </Tooltip>
-    );
-};
-
-/* ===================== ExcelToolbar ===================== */
-const ExcelToolbar = ({ onExport, onRefresh, disabled }) => (
-    <GridToolbarContainer sx={{ p: 1 }}>
-        <GridToolbarQuickFilter
-            quickFilterParser={(v) => v.split(/\s+/).filter(Boolean)}
-            debounceMs={300}
-            placeholder="Tabloda Ara..."
-            sx={{ flexGrow: 1 }}
-        />
-
-        <Stack direction="row" spacing={1}>
-            <Tooltip title="Excel Raporu İndir">
-                <span>
-                    <Button
-                        size="small"
-                        startIcon={<DownloadIcon />}
-                        variant="contained"
-                        onClick={onExport}
-                        disabled={disabled}
-                    >
-                        Excel İndir
-                    </Button>
-                </span>
-            </Tooltip>
-
-            <Tooltip title="Yenile">
-                <span>
-                    <IconButton onClick={onRefresh} disabled={disabled} color="primary">
-                        <RefreshIcon />
-                    </IconButton>
-                </span>
-            </Tooltip>
-        </Stack>
-    </GridToolbarContainer>
-);
-
-/* ===================== StatCard ===================== */
-const StatCard = ({ title, value, icon, color = "primary.main" }) => (
-    <Paper
-        elevation={0}
-        variant="outlined"
-        sx={{ p: 2.5, display: "flex", alignItems: "center", gap: 2, borderRadius: 2 }}
-    >
-        <Box sx={(theme) => {
-            const [pk, shade] = color.split(".");
-            const resolvedColor =
-                theme.palette[pk] && theme.palette[pk][shade]
-                    ? theme.palette[pk][shade]
-                    : color;
-            return {
-                p: 1.5,
-                bgcolor: alpha(resolvedColor, 0.1),
-                color,
-                borderRadius: "50%",
-                display: "grid",
-                placeItems: "center",
-            };
-        }}>
-            {icon}
-        </Box>
-
-        <Box>
-            <Typography variant="h6" fontWeight={700}>{value}</Typography>
-            <Typography variant="body2" color="text.secondary">{title}</Typography>
-        </Box>
-    </Paper>
-);
-
-/* ===================== ANA BİLEŞEN ===================== */
-export default function YuklemedeBekleme() {
+    /* ========== STATE ========== */
     const [rows, setRows] = useState([]);
-    const [detailByNo, setDetailByNo] = useState(new Map());
-    const [loading, setLoading] = useState(true);
-    const [fetchError, setFetchError] = useState(null);
+    const [selectedDate, setSelectedDate] = useState(dayjs().format("YYYY-MM-DD"));
+    const [loading, setLoading] = useState(false);
+    const [columnFilters, setColumnFilters] = useState({});
 
-    const [minDakika, setMinDakika] = useState(240);
+    const [sortKey, setSortKey] = useState("toplam_bekleme_dk");
+    const [sortDirection, setSortDirection] = useState("desc");
 
-    // ⭐ Yeni filtre türü
-    const [filterType, setFilterType] = useState("day"); // day | week | month | range
-
-    const [dateFilter, setDateFilter] = useState(dayjs().format("YYYY-MM-DD"));
-    const [dateStart, setDateStart] = useState(dayjs().format("YYYY-MM-DD"));
-    const [dateEnd, setDateEnd] = useState(dayjs().format("YYYY-MM-DD"));
-
-    const [selectedRow, setSelectedRow] = useState(null);
-    const [isDetailModalOpen, setDetailModalOpen] = useState(false);
-
-    const openDetail = (row) => {
-        setSelectedRow(row);
-        setDetailModalOpen(true);
-    };
-    const closeDetail = () => {
-        setDetailModalOpen(false);
-        setSelectedRow(null);
+    /* ============================================================
+       SÜTUN FİLTRELERİ
+    ============================================================ */
+    const handleFilterChange = (key, value) => {
+        setColumnFilters(prev => ({ ...prev, [key]: value }));
     };
 
-    /* ===================== FETCH ALL ===================== */
-    const fetchAll = useCallback(async () => {
-        setLoading(true);
-        setFetchError(null);
-
-        let startDate, endDate;
-
-        /** ⭐ Filtre türüne göre tarih aralığı belirle */
-        if (filterType === "day") {
-            startDate = dayjs(dateFilter).startOf("day").toISOString();
-            endDate = dayjs(dateFilter).endOf("day").toISOString();
-
-        } else if (filterType === "week") {
-            startDate = dayjs(dateFilter).startOf("week").toISOString();
-            endDate = dayjs(dateFilter).endOf("week").toISOString();
-
-        } else if (filterType === "month") {
-            startDate = dayjs(dateFilter).startOf("month").toISOString();
-            endDate = dayjs(dateFilter).endOf("month").toISOString();
-
+    const handleSort = (key) => {
+        if (key === sortKey) {
+            setSortDirection(sortDirection === "asc" ? "desc" : "asc");
         } else {
-            // RANGE
-            startDate = dayjs(dateStart).startOf("day").toISOString();
-            endDate = dayjs(dateEnd).endOf("day").toISOString();
+            setSortKey(key);
+            setSortDirection("asc");
         }
+    };
 
-        /* === SUMMARY === */
-        const { data: summaryData, error: summaryError } = await supabase
-            .from(SUMMARY_TABLE)
-            .select(SUMMARY_COLS)
-            .gte("sefer_tarihi", startDate)
-            .lte("sefer_tarihi", endDate);
+    /* ============================================================
+       VERİ ÇEKME
+    ============================================================ */
+    const fetchAll = useCallback(async (dateString) => {
+        setLoading(true);
+        setRows([]);
+        setColumnFilters({});
 
-        if (summaryError) {
-            setFetchError(summaryError.message);
-            setLoading(false);
-            return;
-        }
+        const dayStart = dayjs(dateString).startOf("day").toISOString();
+        const dayEnd = dayjs(dateString).endOf("day").toISOString();
 
-        const summaryResult = summaryData || [];
-        if (summaryResult.length === 0) {
-            setRows([]);
-            setDetailByNo(new Map());
-            setLoading(false);
-            return;
-        }
+        try {
+            const { data: details, error: e1 } = await supabase
+                .from(DETAIL_TABLE)
+                .select(DETAIL_COLS)
+                .gte("yukleme_varis", dayStart)
+                .lte("yukleme_varis", dayEnd);
 
-        const seferNos = summaryResult.map((s) => s.sefer_no).filter(Boolean);
+            if (e1) throw e1;
 
-        const { data: detailData, error: detailError } = await supabase
-            .from(DETAIL_TABLE)
-            .select(DETAIL_COLS)
-            .in("sefer_no", seferNos);
+            if (!details?.length) {
+                setRows([]);
+                setLoading(false);
+                return;
+            }
 
-        if (detailError) {
-            setFetchError(detailError.message);
-        }
+            const seferNos = [...new Set(details.map(x => x.sefer_no))];
 
-        const detailResult = detailData || [];
-        const byNo = new Map();
-        const finalGridRows = [];
+            const { data: summary, error: e2 } = await supabase
+                .from(SUMMARY_TABLE)
+                .select(SUMMARY_COLS)
+                .in("sefer_no", seferNos);
 
-        for (const summaryRow of summaryResult) {
-            const sefer_no = summaryRow.sefer_no;
+            if (e2) throw e2;
 
-            const detailsForSefer = detailResult
-                .filter((d) => d.sefer_no === sefer_no)
-                .sort((a, b) => (a.nokta_sirasi ?? 999) - (b.nokta_sirasi ?? 999));
+            const finalRows = [];
 
-            byNo.set(sefer_no, detailsForSefer);
+            summary.forEach((summaryRow) => {
+                const group = details.filter(d => d.sefer_no === summaryRow.sefer_no);
 
-            const validLoadsRaw = detailsForSefer.filter(
-                (d) => d.yukleme_varis && d.yukleme_cikis && d.yukleme_noktasi
-            );
-            if (validLoadsRaw.length === 0) continue;
+                const uniqueNoktalar = new Set();
+                const uniqueProjeler = new Set();
 
-            // Aynı nokta+varış+çıkış tekilleştirme
-            const seenKeys = new Set();
-            const validLoads = validLoadsRaw.filter((d) => {
-                const key = `${d.yukleme_noktasi}|${d.yukleme_varis}|${d.yukleme_cikis}`;
-                if (seenKeys.has(key)) return false;
-                seenKeys.add(key);
-                return true;
+                let total = 0;
+                let firstArrival = null;
+                let lastLeave = null;
+
+                group.forEach(rec => {
+                    const v = parseDT(rec.yukleme_varis);
+                    const c = parseDT(rec.yukleme_cikis);
+
+                    if (v && (!firstArrival || v.isBefore(firstArrival)))
+                        firstArrival = v;
+
+                    if (c && (!lastLeave || c.isAfter(lastLeave)))
+                        lastLeave = c;
+
+                    const diff = diffMinutes(rec.yukleme_varis, rec.yukleme_cikis);
+                    if (diff !== null) total += diff;
+
+                    if (summaryRow.yukleme_noktasi) uniqueNoktalar.add(summaryRow.yukleme_noktasi);
+                    if (summaryRow.proje_adi) uniqueProjeler.add(summaryRow.proje_adi);
+                });
+
+                if (total >= MINIMUM_WAIT_TIME_MINUTES) {
+                    finalRows.push({
+                        ...summaryRow,
+                        yukleme_noktalari_birlesik: [...uniqueNoktalar].join(" ; "),
+                        proje_adlari_birlesik: [...uniqueProjeler].join(" ; "),
+                        toplam_bekleme_dk: total,
+                        ilk_yukleme_varis: firstArrival?.toISOString(),
+                        son_yukleme_cikis: lastLeave?.toISOString(),
+                    });
+                }
             });
 
-            // Lokasyona göre gruplama
-            const grouped = validLoads.reduce((acc, stop) => {
-                if (!acc[stop.yukleme_noktasi]) acc[stop.yukleme_noktasi] = [];
-                acc[stop.yukleme_noktasi].push(stop);
-                return acc;
-            }, {});
-
-            for (const loc in grouped) {
-                const stops = grouped[loc];
-
-                const totalWait = stops.reduce((s, st) => {
-                    const m = diffMinutes(st.yukleme_varis, st.yukleme_cikis);
-                    return s + (m || 0);
-                }, 0);
-
-                if (totalWait === 0) continue;
-
-                finalGridRows.push({
-                    ...summaryRow,
-                    id: `${sefer_no}-${loc}`,
-                    yukleme_noktasi: loc,
-                    bekleme_dk: totalWait,
-                    yukleme_varis: stops[0].yukleme_varis,
-                    yukleme_cikis: stops[0].yukleme_cikis,
-                });
-            }
+            setRows(finalRows);
+        } catch (err) {
+            console.error("Veri çekme hatası:", err.message);
         }
 
-        setDetailByNo(byNo);
-        setRows(finalGridRows);
         setLoading(false);
-    }, [filterType, dateFilter, dateStart, dateEnd]);
+    }, []);
 
-    useEffect(() => {
-        fetchAll();
-    }, [fetchAll]);
+    /* ============================================================
+       FİLTRELENMİŞ + SIRALANMIŞ VERİ
+    ============================================================ */
+    const filteredAndSortedRows = useMemo(() => {
+        let temp = [...rows];
 
-    /* ===================== FİLTRELİ VERİ ===================== */
-    const filtered = useMemo(() => {
-        const minTime = Number(minDakika) || 0;
-        return rows
-            .filter((r) => (r.bekleme_dk ?? -1) >= minTime)
-            .sort((a, b) => (b.bekleme_dk ?? 0) - (a.bekleme_dk ?? 0));
-    }, [rows, minDakika]);
+        Object.keys(columnFilters).forEach(key => {
+            const filter = columnFilters[key]?.toLowerCase() ?? "";
+            if (filter.trim() === "") return;
 
-    /* ===================== İSTATİSTİKLER ===================== */
-    const stats = useMemo(() => {
-        if (!filtered.length) return { total: 0, avg: "0 dk", problematic: 0, totalExcess: "0 dk" };
+            temp = temp.filter(row => {
+                let val = row[key];
+                if (!val) val = "";
 
-        const total = filtered.length;
-        const sum = filtered.reduce((a, r) => a + (r.bekleme_dk || 0), 0);
-        const avg = sum / total;
+                if (key === "toplam_bekleme_dk") val = minToHM(val).toLowerCase();
+                else if (key.includes("varis") || key.includes("cikis")) val = fmtDateTR(val).toLowerCase();
+                else val = String(val).toLowerCase();
 
-        const problematic = filtered.filter((r) => r.bekleme_dk >= TARGET_WAIT_MINUTES).length;
-
-        const totalExcess = filtered.reduce((a, r) => {
-            const exc = r.bekleme_dk - TARGET_WAIT_MINUTES;
-            return exc > 0 ? a + exc : a;
-        }, 0);
-
-        return {
-            total,
-            avg: minToHM(avg),
-            problematic,
-            totalExcess: minToHM(totalExcess),
-        };
-    }, [filtered]);
-
-    /* ===================== EXCEL ===================== */
-    const handleExport = async () => {
-        if (!filtered.length) return;
-
-        const workbook = new ExcelJS.Workbook();
-        const sheet = workbook.addWorksheet("Bekleme Analizi");
-
-        const data = filtered.map((r) => ({
-            "Sefer No": r.sefer_no,
-            "Plaka": r.plaka,
-            "Treyler": r.treyler,
-            "Şoför": r.surucu_ad_soyad,
-            "Proje Adı": r.proje_adi,
-            "Yükleme Noktası": r.yukleme_noktasi,
-            "Yükleme İli": r.yukleme_ili,
-            "Teslim Noktası": r.teslim_noktasi,
-            "Teslim İli": r.teslim_ili,
-            "Varış Zamanı": fmtDateTR(r.yukleme_varis),
-            "Çıkış Zamanı": fmtDateTR(r.yukleme_cikis),
-            "Bekleme Süresi": minToHM(r.bekleme_dk),
-        }));
-
-        sheet.columns = Object.keys(data[0]).map((k) => ({
-            header: k,
-            key: k,
-            width: 25,
-        }));
-
-        sheet.addRows(data);
-
-        const buf = await workbook.xlsx.writeBuffer();
-        saveAs(
-            new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-            `bekleme_rapor_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`
-        );
-    };
-
-    /* ===================== SEÇİLEN SEFERİN DETAY DURAKLARI ===================== */
-    const stopRows = useMemo(() => {
-        if (!selectedRow) return [];
-        const det = detailByNo.get(selectedRow.sefer_no) || [];
-
-        const seen = new Set();
-        const result = [];
-
-        det.forEach((rec, idx) => {
-            const key = `${rec.yukleme_noktasi}|${rec.yukleme_varis}|${rec.yukleme_cikis}`;
-            if (seen.has(key)) return;
-            seen.add(key);
-
-            result.push({
-                id: `${selectedRow.sefer_no}-d-${idx}`,
-                sira: rec.nokta_sirasi,
-                yukleme_noktasi: rec.yukleme_noktasi,
-                yukleme_varis: rec.yukleme_varis,
-                yukleme_cikis: rec.yukleme_cikis,
-                yukleme_bekleme_dk: diffMinutes(rec.yukleme_varis, rec.yukleme_cikis),
-                teslim_noktasi: rec.teslim_noktasi,
-                teslim_varis: rec.teslim_varis,
-                teslim_cikis: rec.teslim_cikis,
-                teslim_bekleme_dk: diffMinutes(rec.teslim_varis, rec.teslim_cikis),
+                return val.includes(filter);
             });
         });
 
-        return result;
-    }, [selectedRow, detailByNo]);
+        if (sortKey) {
+            temp.sort((a, b) => {
+                const av = a[sortKey];
+                const bv = b[sortKey];
 
-    /* ===================== TABLO KOLONLARI ===================== */
-    const columns = useMemo(
-        () => [
-            {
-                field: "sefer_no",
-                headerName: "Sefer No",
-                width: 150,
-                renderCell: (p) => (
-                    <Button
-                        size="small"
-                        startIcon={<InfoOutlinedIcon />}
-                        onClick={() => openDetail(p.row)}
-                        sx={{ fontWeight: 600, textTransform: "none" }}
-                    >
-                        {p.value}
-                    </Button>
-                ),
-            },
-            { field: "plaka", headerName: "Plaka", width: 100 },
+                if (typeof av === "number") {
+                    return sortDirection === "asc" ? av - bv : bv - av;
+                }
 
-            {
-                field: "yukleme_noktasi",
-                headerName: "Yükleme Noktası",
-                width: 250,
-                renderCell: (p) => (
-                    <Tooltip title={p.value}>
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {p.value}
-                        </span>
-                    </Tooltip>
-                ),
-            },
+                return sortDirection === "asc"
+                    ? String(av).localeCompare(String(bv))
+                    : String(bv).localeCompare(String(av));
+            });
+        }
 
-            {
-                field: "yukleme_varis",
-                headerName: "Varış (Yükleme)",
-                width: 180,
-                valueGetter: (p) => fmtDateTR(p?.row?.yukleme_varis ?? null),
-            },
-            {
-                field: "yukleme_cikis",
-                headerName: "Çıkış (Yükleme)",
-                width: 180,
-                valueGetter: (p) => fmtDateTR(p?.row?.yukleme_cikis ?? null),
-            },
+        return temp;
+    }, [rows, columnFilters, sortKey, sortDirection]);
 
-            { field: "surucu_ad_soyad", headerName: "Şoför", width: 180 },
-            { field: "proje_adi", headerName: "Proje Adı", width: 150 },
+    /* ============================================================
+       OTOMATİK VERİ ÇEK
+    ============================================================ */
+    useEffect(() => {
+        fetchAll(selectedDate);
+    }, [selectedDate, fetchAll]);
 
-            {
-                field: "bekleme_dk",
-                headerName: "Toplam Bekleme",
-                width: 180,
-                renderCell: (p) => <WaitChip minutes={p.value} />,
-                sortComparator: (a, b) => (a ?? 0) - (b ?? 0),
-            },
-        ],
-        []
-    );
+    /* ============================================================
+       EXCEL EXPORT
+    ============================================================ */
+    const exportExcel = async () => {
+        if (!filteredAndSortedRows.length) return;
 
-    /* ===================== RETURN ===================== */
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet("Uzun Bekleme Raporu");
+
+        const data = filteredAndSortedRows.map(r => ({
+            "Sefer No": r.sefer_no,
+            "Plaka": r.plaka,
+            "Şoför": r.surucu_ad_soyad,
+            "Proje": r.proje_adlari_birlesik,
+            "Yükleme Noktası": r.yukleme_noktalari_birlesik,
+            "İlk Varış": fmtDateTR(r.ilk_yukleme_varis),
+            "Son Çıkış": fmtDateTR(r.son_yukleme_cikis),
+            "Bekleme Süresi": minToHM(r.toplam_bekleme_dk),
+        }));
+
+        ws.columns = Object.keys(data[0]).map(k => ({
+            header: k,
+            key: k,
+            width: 25
+        }));
+
+        ws.addRows(data);
+
+        const buf = await wb.xlsx.writeBuffer();
+        saveAs(new Blob([buf]), `bekleme_raporu_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
+    };
+
+    /* ============================================================
+       UI RENKLERİ
+    ============================================================ */
+    const UI = {
+        darkBg: "#121212",
+        cardBg: "#1e1e1e",
+        tableBg: "#262626",
+        border: "1px solid #333",
+        text: "#fff",
+        primary: "#4a90e2",
+        danger: "#ff6b6b",
+        hover: "#333"
+    };
+
+    const headers = [
+        { key: "sefer_no", label: "Sefer No", icon: FiTruck, sortable: true },
+        { key: "plaka", label: "Plaka", icon: FiTruck, sortable: true },
+        { key: "surucu_ad_soyad", label: "Şoför", icon: FiUser, sortable: true },
+        { key: "proje_adlari_birlesik", label: "Proje Adı", icon: FiClock, sortable: true },
+        { key: "yukleme_noktalari_birlesik", label: "Yükleme Noktası", icon: FiClock, sortable: true },
+        { key: "ilk_yukleme_varis", label: "İlk Varış", icon: FiCalendar, sortable: true },
+        { key: "son_yukleme_cikis", label: "Son Çıkış", icon: FiCalendar, sortable: true },
+        { key: "toplam_bekleme_dk", label: "Bekleme Süresi", icon: FiAlertTriangle, sortable: true }
+    ];
+
+    /* ============================================================
+       RENDER
+    ============================================================ */
     return (
-        <Box sx={{ width: "100%", py: 4 }}>
-            <Container maxWidth="xl">
-                <Stack spacing={3}>
-                    <Typography variant="h4" fontWeight={700}>
-                        Yüklemede Bekleme Analizi
-                    </Typography>
+        <div style={{
+            background: UI.darkBg,
+            minHeight: "100vh",
+            padding: 40,
+            color: UI.text,
+            fontFamily: "Inter, sans-serif"
+        }}>
 
-                    {/* ===================== FİLTRELER ===================== */}
-                    <Paper sx={{ p: 3 }} variant="outlined">
-                        <Grid container spacing={3}>
-                            <Grid item xs={12} md={4} lg={3}>
-                                <Stack spacing={2}>
-                                    <TextField
-                                        label="Filtre Türü"
-                                        select
-                                        value={filterType}
-                                        onChange={(e) => setFilterType(e.target.value)}
-                                        size="small"
-                                    >
-                                        <MenuItem value="day">Günlük</MenuItem>
-                                        <MenuItem value="week">Haftalık</MenuItem>
-                                        <MenuItem value="month">Aylık</MenuItem>
-                                        <MenuItem value="range">Tarih Aralığı</MenuItem>
-                                    </TextField>
+            {/* BAŞLIK */}
+            <h1 style={{
+                fontSize: 28,
+                fontWeight: 800,
+                borderLeft: `5px solid ${UI.danger}`,
+                paddingLeft: 15,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 35,
+                color: UI.danger
+            }}>
+                <FiAlertTriangle size={28} /> YÜKSEK BEKLEME ANALİZİ
+            </h1>
 
-                                    {(filterType === "day" ||
-                                        filterType === "week" ||
-                                        filterType === "month") && (
-                                            <TextField
-                                                label="Tarih"
-                                                type="date"
-                                                value={dateFilter}
-                                                onChange={(e) => setDateFilter(e.target.value)}
-                                                InputLabelProps={{ shrink: true }}
-                                                size="small"
-                                            />
-                                        )}
+            {/* KONTROLLER */}
+            <div style={{
+                background: UI.cardBg,
+                padding: 20,
+                borderRadius: 10,
+                border: UI.border,
+                marginBottom: 30,
+                display: "flex",
+                alignItems: "center",
+                gap: 25,
+                flexWrap: "wrap"
+            }}>
+                {/* TARİH */}
+                <div>
+                    <label style={{ fontSize: 14, marginBottom: 6, display: "block" }}>
+                        <FiCalendar /> Tarih
+                    </label>
+                    <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        style={{
+                            padding: "10px 15px",
+                            background: "#2c2c2c",
+                            color: UI.text,
+                            borderRadius: 6,
+                            border: UI.border
+                        }}
+                    />
+                </div>
 
-                                    {filterType === "range" && (
-                                        <>
-                                            <TextField
-                                                label="Başlangıç Tarihi"
-                                                type="date"
-                                                value={dateStart}
-                                                onChange={(e) => setDateStart(e.target.value)}
-                                                InputLabelProps={{ shrink: true }}
-                                                size="small"
-                                            />
-                                            <TextField
-                                                label="Bitiş Tarihi"
-                                                type="date"
-                                                value={dateEnd}
-                                                onChange={(e) => setDateEnd(e.target.value)}
-                                                InputLabelProps={{ shrink: true }}
-                                                size="small"
-                                            />
-                                        </>
-                                    )}
+                {/* BİLGİ ÇİPİ */}
+                <div style={{
+                    padding: "10px 15px",
+                    background: "rgba(255, 107, 107, 0.25)",
+                    color: UI.danger,
+                    borderRadius: 6,
+                    fontWeight: 600
+                }}>
+                    <FiClock /> Yalnızca **4 saat ve üzeri** beklemeler gösterilir.
+                </div>
 
-                                    <TextField
-                                        label="Min. Bekleme (dk)"
-                                        type="number"
-                                        value={minDakika}
-                                        onChange={(e) => setMinDakika(e.target.value)}
-                                        size="small"
-                                    />
+                {/* BUTONLAR */}
+                <div style={{ marginLeft: "auto", display: "flex", gap: 15 }}>
+                    <button
+                        onClick={() => fetchAll(selectedDate)}
+                        disabled={loading}
+                        style={{
+                            padding: "12px 25px",
+                            background: UI.primary,
+                            borderRadius: 8,
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            color: "#fff",
+                            opacity: loading ? 0.6 : 1
+                        }}
+                    >
+                        <FiRefreshCw className={loading ? "spin" : ""} />
+                        Yenile
+                    </button>
 
-                                    <Button
-                                        onClick={fetchAll}
-                                        variant="contained"
-                                        color="primary"
-                                        startIcon={
-                                            loading ? (
-                                                <CircularProgress size={16} color="inherit" />
-                                            ) : (
-                                                <RefreshIcon />
-                                            )
-                                        }
-                                    >
-                                        Getir & Yenile
-                                    </Button>
-                                </Stack>
-                            </Grid>
+                    <button
+                        onClick={exportExcel}
+                        disabled={!filteredAndSortedRows.length}
+                        style={{
+                            padding: "12px 25px",
+                            background: "#2ecc71",
+                            borderRadius: 8,
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            color: "#fff",
+                            opacity: !filteredAndSortedRows.length ? 0.6 : 1
+                        }}
+                    >
+                        <FiDownload /> Excel ({filteredAndSortedRows.length})
+                    </button>
+                </div>
+            </div>
 
-                            {/* İSTATİSTİKLER */}
-                            <Grid item xs={12} md={8} lg={9}>
-                                <Grid container spacing={2}>
-                                    <Grid item xs={12} sm={6} lg={3}>
-                                        <StatCard
-                                            title="Toplam Konum"
-                                            value={stats.total}
-                                            icon={<SummarizeIcon />}
-                                            color="primary.main"
+            {/* YÜKLENİYOR */}
+            {loading && (
+                <p style={{ fontSize: 20, color: UI.primary }}>
+                    <FiRefreshCw className="spin" /> Veriler getiriliyor...
+                </p>
+            )}
+
+            {/* KAYIT YOK */}
+            {!loading && rows.length === 0 && (
+                <p style={{
+                    background: "rgba(255,0,0,0.15)",
+                    padding: 15,
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    color: UI.danger
+                }}>
+                    <FiAlertTriangle /> Seçilen tarihte uzun bekleme kaydı bulunamadı.
+                </p>
+            )}
+
+            {/* TABLO */}
+            {!loading && rows.length > 0 && (
+                <div style={{
+                    background: UI.cardBg,
+                    padding: 10,
+                    borderRadius: 10,
+                    border: UI.border,
+                    overflowX: "auto",
+                    maxHeight: "70vh"
+                }}>
+                    <table style={{
+                        width: "100%",
+                        borderCollapse: "collapse",
+                        color: UI.text
+                    }}>
+                        {/* BAŞLIK */}
+                        <thead>
+                            <tr>
+                                {headers.map(h => (
+                                    <th key={h.key} style={{
+                                        padding: 12,
+                                        background: "#2f2f2f",
+                                        position: "sticky",
+                                        top: 0,
+                                        zIndex: 5,
+                                        textAlign: "left",
+                                        borderBottom: "2px solid #444"
+                                    }}>
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 8,
+                                                cursor: h.sortable ? "pointer" : "default"
+                                            }}
+                                            onClick={() => h.sortable && handleSort(h.key)}
+                                        >
+                                            <h.icon size={16} color={UI.primary} />
+                                            {h.label}
+                                            {sortKey === h.key && (
+                                                sortDirection === "asc"
+                                                    ? <FiArrowUp />
+                                                    : <FiArrowDown />
+                                            )}
+                                        </div>
+
+                                        <input
+                                            type="text"
+                                            placeholder="Filtrele..."
+                                            value={columnFilters[h.key] || ""}
+                                            onChange={(e) => handleFilterChange(h.key, e.target.value)}
+                                            style={{
+                                                width: "100%",
+                                                marginTop: 8,
+                                                padding: 6,
+                                                background: "#222",
+                                                border: "1px solid #444",
+                                                borderRadius: 6,
+                                                color: "#fff"
+                                            }}
                                         />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6} lg={3}>
-                                        <StatCard
-                                            title="Ortalama Bekleme"
-                                            value={stats.avg}
-                                            icon={<AvTimerIcon />}
-                                            color="info.main"
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6} lg={3}>
-                                        <StatCard
-                                            title="Limit Aşan Konum"
-                                            value={stats.problematic}
-                                            icon={<WarningIcon />}
-                                            color="warning.main"
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6} lg={3}>
-                                        <StatCard
-                                            title="Toplam Aşım Süresi"
-                                            value={stats.totalExcess}
-                                            icon={<AccessAlarmIcon />}
-                                            color="error.main"
-                                        />
-                                    </Grid>
-                                </Grid>
-                            </Grid>
-                        </Grid>
-                    </Paper>
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
 
-                    {/* ===================== DATA GRID ===================== */}
-                    <Paper sx={{ height: "70vh", position: "relative" }} elevation={3}>
-                        {loading && (
-                            <LinearProgress
-                                sx={{ position: "absolute", top: 0, width: "100%", zIndex: 2 }}
-                            />
-                        )}
+                        {/* İÇERİK */}
+                        <tbody>
+                            {filteredAndSortedRows.map((r, idx) => (
+                                <tr key={idx} style={{ background: idx % 2 ? "#1b1b1b" : "transparent" }}>
+                                    <td style={{ padding: 12 }}>{r.sefer_no}</td>
+                                    <td style={{ padding: 12, color: UI.primary }}>{r.plaka}</td>
+                                    <td style={{ padding: 12 }}>{r.surucu_ad_soyad}</td>
 
-                        <DataGrid
-                            rows={filtered}
-                            columns={columns}
-                            loading={loading}
-                            slots={{ toolbar: ExcelToolbar }}
-                            slotProps={{
-                                toolbar: {
-                                    onExport: handleExport,
-                                    onRefresh: fetchAll,
-                                    disabled: loading || !filtered.length,
-                                },
-                            }}
-                            initialState={{
-                                pagination: { paginationModel: { pageSize: 25 } },
-                            }}
-                            pageSizeOptions={[10, 25, 50]}
-                            sx={{
-                                border: "none",
-                                "& .MuiDataGrid-columnHeaders": {
-                                    bgcolor: "grey.100",
-                                },
-                            }}
-                        />
-                    </Paper>
+                                    <td style={{ padding: 12 }}>
+                                        <span style={{
+                                            background: "rgba(74,144,226,0.2)",
+                                            padding: "4px 8px",
+                                            borderRadius: 6
+                                        }}>
+                                            {r.proje_adlari_birlesik}
+                                        </span>
+                                    </td>
 
-                    {fetchError && (
-                        <Alert severity="error">Veri Hatası: {fetchError}</Alert>
-                    )}
-                </Stack>
-            </Container>
+                                    <td style={{ padding: 12 }}>{r.yukleme_noktalari_birlesik}</td>
 
-            <TripDetailModal
-                open={isDetailModalOpen}
-                onClose={closeDetail}
-                trip={selectedRow}
-                stopRows={stopRows}
-                fmt={{ minutes: fmtMinutes, dateTR: fmtDateTR }}
-            />
-        </Box>
+                                    <td style={{ padding: 12 }}>
+                                        <FiCalendar size={14} style={{ marginRight: 6 }} />
+                                        {fmtDateTR(r.ilk_yukleme_varis)}
+                                    </td>
+
+                                    <td style={{ padding: 12 }}>
+                                        <FiCalendar size={14} style={{ marginRight: 6 }} />
+                                        {fmtDateTR(r.son_yukleme_cikis)}
+                                    </td>
+
+                                    <td style={{
+                                        padding: 12,
+                                        fontWeight: 700,
+                                        color: UI.danger
+                                    }}>
+                                        {minToHM(r.toplam_bekleme_dk)}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+
+                    <p style={{ marginTop: 10, textAlign: "right", color: "#aaa" }}>
+                        Toplam {rows.length} seferden {filteredAndSortedRows.length} tanesi gösteriliyor.
+                    </p>
+                </div>
+            )}
+        </div>
     );
 }

@@ -39,6 +39,8 @@ import { default as KpiOlcumu } from "./raporlar/kpiOlcumu";
 import { default as YuklemedeBekleme } from "./raporlar/yuklemedeBekleme";
 import { default as ProjeLokasyonRaporlari } from "./raporlar/ProjeLokasyonRaporlari";
 import { default as TeslimdeBekleme } from "./raporlar/TeslimdeBekleme";
+import { default as BostaArac } from "./raporlar/BostaArac";
+
 
 // Layout
 import { default as AppLayout } from "./layout/AppLayout";
@@ -122,6 +124,7 @@ function App() {
                                 <Route path="raporlar/teslimde-bekleme" element={<TeslimdeBekleme />} />
                                 <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
                                 <Route path="raporlar/eta-uyumsuz" element={<Suspense fallback={<div>ETA Uyumsuzluğu yükleniyor...</div>}><ETAUyumsuzlugu /></Suspense>} />
+                                <Route path="raporlar/bosta-arac" element={<BostaArac />} />
                                 <Route path="raporlar/tools" element={<Suspense fallback={<div>Pivot Rapor Yükleniyor...</div>}><PivotTool datasets={TEST_VERILERI} defaultDataset="Sefer Performansı" /></Suspense>} />
                                 <Route path="raporlar/sefer-tamamlayan" element={<Suspense fallback={<div>Sefer Tamamlayan yükleniyor...</div>}><SeferTamamlayan /></Suspense>} />
                                 <Route path="raporlar/bolgesel-analiz" element={<Suspense fallback={<div>Bölgesel Analiz yükleniyor...</div>}><BolgeselAnaliz /></Suspense>} />

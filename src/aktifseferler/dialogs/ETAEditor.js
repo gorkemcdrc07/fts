@@ -124,6 +124,31 @@ const parseHoursInput = (s) => {
     return Number.isFinite(num) ? num : null;
 };
 
+/* ----------------- BURAYA EKLE! ------------------ */
+// DD.MM.YYYY HH:mm formatını doğru parse eder (timezone kayması olmaz)
+const parseDMY = (str) => {
+    if (!str) return null;
+    const [datePart, timePart] = str.split(" ");
+    if (!datePart || !timePart) return null;
+
+    const [dd, mm, yyyy] = datePart.split(".");
+    const [HH, MM] = timePart.split(":");
+
+    if (!dd || !mm || !yyyy || !HH || !MM) return null;
+
+    return new Date(
+        Number(yyyy),
+        Number(mm) - 1,
+        Number(dd),
+        Number(HH),
+        Number(MM),
+        0,
+        0
+    );
+};
+/* ------------------------------------------------- */
+
+
 /** Date -> "YYYY-MM-DDTHH:mm:ss+03:00" (yerel offset ile) */
 const toLocalOffsetISO = (d) => {
     if (!(d instanceof Date)) return null;
@@ -478,6 +503,14 @@ export default function ETAEditor({
             pushStep("Sürüş", remaining);
 
             let eta = adjustForWorkHours(new Date(t.getTime()));
+            // Eğer ETA Pazar günüyse Pazartesi 08:30'a çek
+            if (eta.getDay() === 0) {
+                const monday = new Date(eta);
+                monday.setDate(eta.getDate() + 1);
+                monday.setHours(8, 30, 0, 0);
+                eta = monday;
+            }
+
             if (isSaturday(rawStart) && isBefore(rawStart, 12, 0)) {
                 const eh = eta.getHours() + eta.getMinutes() / 60;
                 if (eh > 22) {
@@ -531,6 +564,15 @@ export default function ETAEditor({
         }
 
         let eta = adjustForWorkHours(new Date(t.getTime()));
+
+        // Eğer ETA Pazar günüyse Pazartesi 08:30'a çek
+        if (eta.getDay() === 0) {
+            const monday = new Date(eta);
+            monday.setDate(eta.getDate() + 1);
+            monday.setHours(8, 30, 0, 0);
+            eta = monday;
+        }
+
         if (isSaturday(rawStart) && isBefore(rawStart, 12, 0)) {
             const eh = eta.getHours() + eta.getMinutes() / 60;
             if (eh > 22) {
@@ -543,6 +585,38 @@ export default function ETAEditor({
 
         return { steps, eta, requiredDriveHours, usedFirstDay: userRemaining, startBase };
     }, [hasDistance, mesafeKm, speedKmh, kalanSurusStr, yuklemeCikisRaw, yuklemeVarisRaw]);
+
+    // -------------------- ETA DURUMU HESABI --------------------
+    const computeEtaStatus = useCallback(() => {
+
+        // 🔥 DEBUG LOG BURAYA EKLENİYOR
+        console.log("teslimVarisRaw =", teslimVarisRaw);
+        console.log("typeof teslimVarisRaw =", typeof teslimVarisRaw);
+        console.log("plan.eta =", plan?.eta);
+        console.log("typeof plan.eta =", typeof plan?.eta);
+        // 🔥 --------------------------
+
+        if (!plan?.eta) return null;
+
+        const eta = new Date(plan.eta);
+
+        let realArrive = null;
+        if (teslimVarisRaw) {
+            realArrive = parseDMY(teslimVarisRaw);
+        }
+
+
+        if (!realArrive) {
+            return { status: "notArrived", label: "Henüz varmamış" };
+        }
+
+        const diffMin = Math.round((realArrive.getTime() - eta.getTime()) / 60000);
+
+        if (diffMin < -15) return { status: "early", label: "Erken Varış" };
+        if (diffMin > 15) return { status: "late", label: `Gecikme (${diffMin} dk)` };
+        return { status: "ontime", label: "Zamanında" };
+    }, [plan?.eta, teslimVarisRaw]);
+
 
     /* -------------------- AUTO-SAVE ETA (opsiyonel) -------------------- */
     useEffect(() => {
@@ -667,28 +741,74 @@ export default function ETAEditor({
     /* -------------------- RENDER -------------------- */
     const renderPlan = () => {
         if (!plan) return null;
+        // 🔥 DEBUG LOG BURAYA
+        console.log("DEBUG → teslimVarisRaw:", teslimVarisRaw);
+        console.log("DEBUG → plan.eta:", plan?.eta);
+        console.log("DEBUG → typeof teslimVarisRaw:", typeof teslimVarisRaw);
+        console.log("DEBUG → typeof plan.eta:", typeof plan?.eta);
+
+        const etaStatus = computeEtaStatus(); // 🔥 Durum hesaplama
+
         return (
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 800 }}>
                     Planlanan Adımlar
                 </Typography>
+
                 <Stack spacing={1}>
-                    {plan.steps.map((s, i) => (<StepCard key={i} step={s} />))}
+                    {plan.steps.map((s, i) => (
+                        <StepCard key={i} step={s} />
+                    ))}
+
                     <Divider sx={{ my: 0.5 }} />
-                    <Paper elevation={0} sx={{ p: 1.25, borderRadius: 2, background: "linear-gradient(90deg,#22c55e22,#16a34a22)", border: "1px solid #16a34a55" }}>
+
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            p: 1.25,
+                            borderRadius: 2,
+                            background: "linear-gradient(90deg,#22c55e22,#16a34a22)",
+                            border: "1px solid #16a34a55",
+                        }}
+                    >
                         <Stack direction="row" spacing={1} alignItems="center">
                             <DriveEtaIcon fontSize="small" />
+
                             <Typography variant="body2" sx={{ fontWeight: 900 }}>
                                 ETA: {fmtDT(plan.eta)}
                             </Typography>
+
+                            {/* 🔥 ETA DURUM CHIP (Yeni eklendi) */}
+                            {etaStatus && (
+                                <Chip
+                                    size="small"
+                                    label={etaStatus.label}
+                                    color={
+                                        etaStatus.status === "early"
+                                            ? "success"
+                                            : etaStatus.status === "late"
+                                                ? "error"
+                                                : etaStatus.status === "ontime"
+                                                    ? "primary"
+                                                    : "default"
+                                    }
+                                    sx={{ ml: 1 }}
+                                />
+                            )}
+
+                            {/* Yükleme çıkış bilgisi */}
                             {yuklemeCikisRaw ? (
                                 <Chip size="small" color="success" label="Yükleme çıkış mevcut" />
                             ) : (
                                 <Chip size="small" color="warning" label="Yükleme çıkış eksik" />
                             )}
                         </Stack>
+
                         {sefer?.eta_note && (
-                            <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5 }}>
+                            <Typography
+                                variant="caption"
+                                sx={{ color: "text.secondary", display: "block", mt: 0.5 }}
+                            >
                                 {sefer.eta_note}
                             </Typography>
                         )}

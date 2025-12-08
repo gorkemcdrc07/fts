@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import ExcelAktarim from "./butonlar/ExcelAktarım";
 
 
+
 /* MUI */
 import {
     Box, Paper, Stack, Button, Typography, TextField, Snackbar, Alert,
@@ -32,6 +33,15 @@ import buildColumns from "./columns";
 import { fromISOToCombined } from "./utils/datetime";
 import { fetchSeferler, fetchTamamlananNos, loadDetaylar, updateSefer, upsertDetaylar } from "./services";
 import usePermissions from "../auth/usePermissions";
+
+// ------------------ HELPER FONKSİYON ------------------
+function isISODateTimeValid(isoString) {
+    if (!isoString) return false;
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(isoString)) return false;
+    const d = new Date(isoString);
+    return !isNaN(d.getTime());
+}
+
 
 // -------------- BÖLGE HARİTASI ----------------
 const ilToBolgeMap = {
@@ -242,6 +252,27 @@ export default function ReelAtananSeferler() {
     const [editSefer, setEditSefer] = useState(null);
     const [detailRows, setDetailRows] = useState([]);
     const [detailRowsOrig, setDetailRowsOrig] = useState([]);
+    const areAllTimesSaved = useMemo(() => {
+        if (!detailRows.length || !detailRowsOrig.length) return false;
+
+        return detailRows.every((d, i) => {
+            const o = detailRowsOrig[i];
+
+            return (
+                isISODateTimeValid(d.yukleme_varis) &&
+                isISODateTimeValid(d.yukleme_cikis) &&
+                isISODateTimeValid(d.teslim_varis) &&
+                isISODateTimeValid(d.teslim_cikis) &&
+
+                // Ayrıca KAYDEDİLMİŞ olması gerekiyor → orig ile bire bir aynı olmalı
+                d.yukleme_varis === o.yukleme_varis &&
+                d.yukleme_cikis === o.yukleme_cikis &&
+                d.teslim_varis === o.teslim_varis &&
+                d.teslim_cikis === o.teslim_cikis
+            );
+        });
+    }, [detailRows, detailRowsOrig]);
+
     const [seferTarihiYeni, setSeferTarihiYeni] = useState("");
 
     // ETA Dialog
@@ -659,8 +690,10 @@ export default function ReelAtananSeferler() {
                 kayit_zamani: new Date().toISOString(),
                 atama_yapan_kullanici: seferAna.atama_yapan_kullanici ?? null,
                 atama_tarihi: seferAna.atama_tarihi ?? null,
-            };
 
+                // 🆕 ETA TAM BURAYA EKLENECEK
+                eta_varis: seferAna.eta_varis ?? null,
+            };
             const detPayload = detailRows.map((d, i) => ({
                 sefer_no: seferAna.sefer_no,
                 nokta_sirasi: i,
@@ -677,6 +710,10 @@ export default function ReelAtananSeferler() {
                 teslim_cikis: clean(d.teslim_cikis) || null,
                 kayit_zamani: new Date().toISOString(),
                 arac_statu: seferAna.arac_statu ?? null,
+
+                // 🆕 BURAYA ETA EKLENİYOR
+                eta: clean(d.eta) || seferAna.eta_varis || null,
+
                 yukleme_varis_guncelleyen: d.yukleme_varis_guncelleyen || null,
                 yukleme_varis_guncelleme_tarihi: clean(d.yukleme_varis_guncelleme_tarihi) || null,
                 yukleme_cikis_guncelleyen: d.yukleme_cikis_guncelleyen || null,
@@ -686,7 +723,6 @@ export default function ReelAtananSeferler() {
                 teslim_cikis_guncelleyen: d.teslim_cikis_guncelleyen || null,
                 teslim_cikis_guncelleme_tarihi: clean(d.teslim_cikis_guncelleme_tarihi) || null,
             }));
-
             const { error: e1 } = await supabase
                 .from("tamamlanan_seferler")
                 .upsert(anaPayload, { onConflict: "sefer_no" });
@@ -1142,6 +1178,7 @@ export default function ReelAtananSeferler() {
                         }}
                         editSefer={editSefer}
                         detailRows={detailRows}
+                        allSavedTimesFilled={areAllTimesSaved}
                         computeAracStatu={computeAracStatu}
                         fromISOToCombined={fromISOToCombined}
                         DateTimeOneField={DateTimeOneField}

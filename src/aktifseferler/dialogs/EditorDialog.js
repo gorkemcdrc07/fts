@@ -444,7 +444,8 @@ export default function EditorDialog(props) {
         canEdit,
         editSefer, detailRows, seferTarihiYeni, setSeferTarihiYeni,
         addDetailRow, copyDetailRow, removeDetailRow, onDetailChange,
-        onSaveClick, onMoveToCompleted
+        onSaveClick, onMoveToCompleted,
+        allSavedTimesFilled: allTimesFilled
     } = props;
 
     // --- Hata Yönetimi State'i ve Uyarı Diyaloğu ---
@@ -529,7 +530,6 @@ export default function EditorDialog(props) {
     const canSave = canEdit && !allDatesComplete;
 
     // Tamamlananlara Aktar butonu: Düzenleme izni varsa VE tüm tarihler TAMAMLANMIŞSA VE hata yoksa aktif
-    const canMoveToCompleted = canEdit && allDatesComplete && !hasValidationError;
 
     // Buton tıklama işleyici
     const handleActionClick = (action) => {
@@ -730,7 +730,13 @@ export default function EditorDialog(props) {
                             </Button>
 
                             <Tooltip
-                                title={!canMoveToCompleted ? (hasValidationError ? "Önce Doğrulama Hatalarını Düzeltin" : "Tüm detay satırlarındaki 4 tarih/saat alanı (Giriş/Çıkış) ve Sefer Tarihi (Yeni) doldurulmalıdır.") : ""}
+                                title={
+                                    !allTimesFilled
+                                        ? (hasValidationError
+                                            ? "Önce Doğrulama Hatalarını Düzeltin"
+                                            : "Tüm detay satırlarındaki zaman alanları doldurulmalı ve kaydedilmiş olmalıdır.")
+                                        : ""
+                                }
                             >
                                 <span>
                                     <Button
@@ -738,7 +744,7 @@ export default function EditorDialog(props) {
                                         color="success"
                                         startIcon={<FileDownloadDoneIcon />}
                                         onClick={() => handleActionClick('complete')}
-                                        disabled={!canMoveToCompleted}
+                                        disabled={!allTimesFilled}
                                     >
                                         Tamamlananlara Aktar
                                     </Button>

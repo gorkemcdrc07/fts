@@ -47,24 +47,60 @@ const fmtDate = (d) => {
 // ---- Sabit Europe/Istanbul gösterimi ----
 const TR_TZ = "Europe/Istanbul";
 
+function fixToTR(iso) {
+    if (!iso) return null;
+
+    // Supabase UTC döndürdüğü için → TR saati yapıyoruz (UTC +3)
+    const d = new Date(iso);
+    const tr = new Date(d.getTime() + (3 * 60 * 60 * 1000));
+
+    return tr;
+}
+
+
 const fmtDateTimeTR = (isoString) => {
     if (!isoString) return "-";
-    const d = new Date(isoString);
+
+    // Supabase datetime UTC olarak geliyorsa, "+03:00" ekleyelim
+    let fixed = isoString;
+
+    // Eğer string "Z" içermiyorsa ve offset yoksa → UTC kabul et (+03 ekle)
+    if (!isoString.includes("Z") && !isoString.includes("+")) {
+        fixed = isoString + "+03:00";
+    }
+
+    const d = new Date(fixed);
     if (Number.isNaN(d.getTime())) return "-";
+
     const date = new Intl.DateTimeFormat("tr-TR", {
         timeZone: TR_TZ,
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
     }).format(d);
+
     const time = new Intl.DateTimeFormat("tr-TR", {
         timeZone: TR_TZ,
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,
     }).format(d);
+
     return `${date} ${time}`;
 };
+function formatMinToHourMin(min) {
+    if (min == null) return "-";
+
+    const abs = Math.abs(min);
+    const h = Math.floor(abs / 60);
+    const m = abs % 60;
+
+    if (h === 0) return `${m} dk`;
+    if (m === 0) return `${h} s`;
+
+    return `${h} s ${m} dk`;
+}
+
 
 const fmtDateTR = (isoString) => {
     if (!isoString) return "-";
@@ -496,6 +532,7 @@ export default function TamamlananlarPage() {
             // ------- ETA analizi -------
             const seferNos = currentRows.map((r) => r.sefer_no);
             let maxTeslim = {};
+            let firstTeslim = {};
 
             if (seferNos.length) {
                 const { data: detailsData, error: detailsError } = await supabase
@@ -505,19 +542,34 @@ export default function TamamlananlarPage() {
 
                 if (!detailsError) {
                     (detailsData || []).forEach(d => {
+                        // Teslim varış/gidiş zamanı
                         let currentTeslim = null;
-                        if (d.teslim_varis && !Number.isNaN(new Date(d.teslim_varis).getTime())) {
-                            currentTeslim = new Date(d.teslim_varis);
+
+                        if (d.teslim_varis) {
+                            const t = new Date(d.teslim_varis);
+                            if (!Number.isNaN(t.getTime())) currentTeslim = t;
                         }
-                        if (d.teslim_cikis && !Number.isNaN(new Date(d.teslim_cikis).getTime())) {
-                            const tCikis = new Date(d.teslim_cikis);
-                            if (!currentTeslim || tCikis > currentTeslim) {
-                                currentTeslim = tCikis;
+                        if (d.teslim_cikis) {
+                            const t = new Date(d.teslim_cikis);
+                            if (!Number.isNaN(t.getTime())) {
+                                if (!currentTeslim || t < currentTeslim) {
+                                    // ilk teslim
+                                    currentTeslim = t;
+                                }
                             }
                         }
+
                         if (currentTeslim) {
-                            if (!maxTeslim[d.sefer_no] || currentTeslim > maxTeslim[d.sefer_no]) {
-                                maxTeslim[d.sefer_no] = currentTeslim;
+                            const sn = d.sefer_no;
+
+                            // en son teslim
+                            if (!maxTeslim[sn] || currentTeslim > maxTeslim[sn]) {
+                                maxTeslim[sn] = currentTeslim;
+                            }
+
+                            // en ilk teslim
+                            if (!firstTeslim[sn] || currentTeslim < firstTeslim[sn]) {
+                                firstTeslim[sn] = currentTeslim;
                             }
                         }
                     });
@@ -570,6 +622,9 @@ export default function TamamlananlarPage() {
                 bySefer[r.sefer_no] = {
                     etaISO: tETA ? tETA.toISOString() : null,
                     maxTeslimISO: tReal ? tReal.toISOString() : null,
+                    firstTeslimISO: firstTeslim[r.sefer_no]
+                        ? firstTeslim[r.sefer_no].toISOString()
+                        : null,
                     status,
                     diffMin,
                 };
@@ -775,6 +830,19 @@ export default function TamamlananlarPage() {
                 width: 140,
                 valueGetter: (v, row) => (row?.sefer_tarihi ? fmtDateTR(row.sefer_tarihi) : "-"),
             },
+            {
+                field: "first_teslim_varis",
+                headerName: "İlk Teslim Varış",
+                width: 180,
+                sortable: false,
+                valueGetter: (v, row) => {
+                    const info = analysis.bySefer[row.sefer_no];
+                    return info?.firstTeslimISO
+                        ? fmtDateTimeTR(info.firstTeslimISO)
+                        : "-";
+                },
+            },
+
 
             {
                 field: "status_display",
@@ -796,10 +864,10 @@ export default function TamamlananlarPage() {
 
                     if (isLate) {
                         color = theme.palette.error.main;
-                        text = `GEÇ (${diffMin} dk)`;
+                        text = `GEÇ (${formatMinToHourMin(diffMin)})`;
                     } else if (isEarly) {
                         color = theme.palette.warning.main;
-                        text = `ERKEN (${Math.abs(diffMin)} dk)`;
+                        text = `ERKEN (${formatMinToHourMin(diffMin)})`;
                     }
 
                     return (
@@ -824,7 +892,11 @@ export default function TamamlananlarPage() {
                 field: "eta_varis",
                 headerName: "ETA Varış",
                 width: 180,
-                valueGetter: (v, row) => (row?.eta_varis ? fmtDateTimeTR(row.eta_varis) : "-"),
+                valueGetter: (v, row) => {
+                    if (!row?.eta_varis) return "-";
+
+                    return fmtDateTimeTR(row.eta_varis);
+                }
             },
 
             { field: "surucu_tckn", headerName: "TCKN", width: 120, hide: downMd },

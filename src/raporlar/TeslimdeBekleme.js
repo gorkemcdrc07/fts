@@ -116,18 +116,30 @@ const calcRule = (varis, cikis) => {
     if (!v || !c) return { appliedRule: 'None', compliant: null, delay: 0 };
     if (v.day() === 0) return { appliedRule: 'None', compliant: true, delay: 0 };
 
+    // 🔥 YENİ KURAL 3 — Cumartesi 12:00 sonrası → Pazar sayılmaz → Pazartesi 12:00 deadline
     const isSaturday = v.day() === 6;
-    const isAfter1700 = v.hour() >= 17;
+    const isAfter1200 = v.hour() >= 12;
 
-    if (isSaturday && isAfter1700) {
-        const deadline3 = v.clone().add(2, 'day').hour(8).minute(30).startOf('minute');
-        if (c.isSameOrBefore(deadline3)) {
-            return { appliedRule: 'Rule 3', compliant: true, delay: 0 };
+    if (isSaturday && isAfter1200) {
+        const mondayDeadline = v
+            .clone()
+            .add(2, "day")     // Cumartesi +2 = Pazartesi
+            .hour(12)
+            .minute(0)
+            .startOf("minute");
+
+        if (c.isSameOrBefore(mondayDeadline)) {
+            return { appliedRule: "Rule 3", compliant: true, delay: 0 };
         } else {
-            return { appliedRule: 'Rule 3', compliant: false, delay: c.diff(deadline3, "minute") };
+            return {
+                appliedRule: "Rule 3",
+                compliant: false,
+                delay: c.diff(mondayDeadline, "minute")
+            };
         }
     }
 
+    // --- KURAL 1 ---
     const lower1 = v.clone().hour(8).minute(30).startOf('minute');
     const upper1 = v.clone().hour(12).minute(0).startOf('minute');
     const isApplicable1 = v.isSameOrAfter(lower1) && v.isBefore(upper1);
@@ -141,12 +153,12 @@ const calcRule = (varis, cikis) => {
         }
     }
 
+    // --- KURAL 2 ---
     const lower2 = v.clone().hour(12).minute(0).startOf('minute');
     const isApplicable2 = v.isSameOrAfter(lower2);
 
     if (isApplicable2) {
         const deadline2 = v.clone().add(1, 'day').hour(12).minute(0).startOf('minute');
-
         if (c.isSameOrBefore(deadline2)) {
             return { appliedRule: 'Rule 2', compliant: true, delay: 0 };
         } else {
@@ -156,6 +168,7 @@ const calcRule = (varis, cikis) => {
 
     return { appliedRule: 'None', compliant: true, delay: 0 };
 };
+
 
 // --------------------------------------------------
 // PUANLAMA FONKSİYONU
@@ -1049,9 +1062,27 @@ export default function TeslimdeBekleme() {
                 </AccordionSummary>
                 <AccordionDetails>
                     <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                        <li style={{ color: theme.palette.text.primary }}>**Kural 1 (ÖÖ Varış):** Varış **08:30 (Dahil) - 12:00 (Hariç)**. Sınır: Aynı Gün **17:00**. Bu saatten sonraki çıkış süresi bekleme olarak hesaplanır.</li>
-                        <li style={{ color: theme.palette.text.primary }}>**Kural 2 (ÖS Varış):** Varış **12:00 (Dahil) ve sonrası**. Sınır: **Ertesi Gün 12:00**. Bu saatten sonraki çıkış süresi bekleme olarak hesaplanır.</li>
-                        <li style={{ color: theme.palette.text.primary }}>**Kural 3 (Hafta Sonu):** Varış **Cumartesi 17:00 (Dahil) ve sonrası**. Sınır: **Pazartesi 08:30**. Bu saatten sonraki çıkış süresi bekleme olarak hesaplanır.</li>
+                        <li style={{ color: theme.palette.text.primary }}>
+                            <b>Kural 1 (Öğleden Önce Varış):</b>
+                            Teslim varışı <b>08:30 – 12:00</b> aralığında gerçekleşen seferlerde,
+                            aracın en geç <b>aynı gün 17:00</b> saatine kadar çıkış yapması beklenir.
+                            17:00 sonrasındaki süre <b>bekleme süresi</b> olarak hesaplanır.
+                        </li>
+
+                        <li style={{ color: theme.palette.text.primary }}>
+                            <b>Kural 2 (Öğleden Sonra Varış):</b>
+                            Teslim varışı <b>12:00 ve sonrası</b> gerçekleşen seferlerde,
+                            aracın en geç <b>ertesi gün 12:00</b> saatine kadar çıkış yapması beklenir.
+                            Bu saatten sonraki süre <b>bekleme süresi</b> olarak hesaplanır.
+                        </li>
+
+                        <li style={{ color: theme.palette.text.primary }}>
+                            <b>Kural 3 (Hafta Sonu Varışı):</b>
+                            Teslim varışı <b>Cumartesi günü 12:00’den sonra</b> gerçekleşen seferlerde,
+                            <b>Pazar günü bekleme süresine dahil edilmez</b>.
+                            Aracın en geç <b>Pazartesi günü 12:00</b> saatine kadar çıkış yapması beklenir.
+                            Pazartesi 12:00 sonrasındaki süre <b>bekleme süresi</b> olarak hesaplanır.
+                        </li>
                     </ul>
                 </AccordionDetails>
             </Accordion>

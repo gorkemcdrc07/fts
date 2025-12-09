@@ -13,9 +13,8 @@ import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import EventIcon from "@mui/icons-material/Event";
 import SearchIcon from "@mui/icons-material/Search";
 import FilterListIcon from "@mui/icons-material/FilterList";
-import TollIcon from '@mui/icons-material/Toll'; // Özet kart ikonu
-import AccessTimeIcon from '@mui/icons-material/AccessTime'; // Özet kart ikonu
-import AttachMoneyIcon from '@mui/icons-material/AttachMoney'; // Özet kart ikonu
+import TollIcon from '@mui/icons-material/Toll';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -45,7 +44,38 @@ const formatDate = (timestamp) => {
     return d.isValid() ? d.format("DD.MM.YYYY") : "—";
 };
 
-// ... aggregateSeferler fonksiyonu aynı kaldı ...
+/**
+ * İlişkisel sorgu (JOIN) sonucu gelen iç içe geçmiş veriyi (nested array)
+ * tablo gösterimi için düzleştirir (flattens).
+ */
+const flattenData = (data) => {
+    if (!data || data.length === 0) return [];
+
+    return data.flatMap(sefer => {
+        // İlişkili tablo adı 'tamamlanan_detaylar' olarak varsayılmıştır.
+        const details = sefer.tamamlanan_detaylar;
+
+        if (!details || details.length === 0) {
+            // Detaysız seferleri de göster (detay alanları null/tanımsız olur)
+            return [{ ...sefer, tamamlanan_detaylar: undefined }];
+        }
+
+        // Detaylar dizi halinde gelebilir. Her bir detayı ana sefer kaydıyla birleştirir.
+        return details.map(detay => {
+            return {
+                ...sefer,
+                ...detay, // Detay verilerini üst seviyeye taşı
+                tamamlanan_detaylar: undefined // İlişki sonrası kalan detaylar objesini sil
+            };
+        });
+    });
+};
+
+
+/**
+ * Çoklu detay kaydı olan seferleri (örn: birden fazla yükleme/teslimat)
+ * tek bir satırda toplamak ve tarihleri MIN/MAX olarak belirlemek için kullanılır.
+ */
 const aggregateSeferler = (data) => {
     if (!data || data.length === 0) return [];
 
@@ -55,6 +85,7 @@ const aggregateSeferler = (data) => {
         if (!acc[key]) {
             acc[key] = {
                 ...current,
+                // Başlangıç değerleri olarak mevcut kaydın değerlerini ata
                 yukleme_varis_min: current.yukleme_varis,
                 yukleme_cikis_min: current.yukleme_cikis,
                 teslim_varis_max: current.teslim_varis,
@@ -65,6 +96,7 @@ const aggregateSeferler = (data) => {
 
         const existing = acc[key];
 
+        // En erken yükleme varış/çıkış tarihini bul
         if (current.yukleme_varis && (!existing.yukleme_varis_min || dayjs(current.yukleme_varis).isSameOrBefore(existing.yukleme_varis_min))) {
             existing.yukleme_varis_min = current.yukleme_varis;
         }
@@ -72,6 +104,7 @@ const aggregateSeferler = (data) => {
             existing.yukleme_cikis_min = current.yukleme_cikis;
         }
 
+        // En geç teslim varış/çıkış tarihini bul
         if (current.teslim_varis && (!existing.teslim_varis_max || dayjs(current.teslim_varis).isSameOrAfter(existing.teslim_varis_max))) {
             existing.teslim_varis_max = current.teslim_varis;
         }
@@ -84,6 +117,7 @@ const aggregateSeferler = (data) => {
 
     return Object.values(grouped).map((item) => ({
         ...item,
+        // En erken/en geç tarihleri ana alanlara atıyoruz
         yukleme_varis: item.yukleme_varis_min,
         yukleme_cikis: item.yukleme_cikis_min,
         teslim_varis: item.teslim_varis_max,
@@ -119,16 +153,15 @@ const headersConfig = [
 const modernTheme = createTheme({
     palette: {
         mode: "dark",
-        // Daha çarpıcı, enerjik bir vurgu rengi
         primary: { main: "#ff5722" }, // Deep Orange
         secondary: { main: "#4caf50" }, // Yeşil (Success/Export)
         background: {
-            default: "#0d1117", // Github dark mode'a yakın, daha derin zemin
+            default: "#0d1117", // Daha derin zemin
             paper: "#1a202c", // Kartlar için koyu metalik gri
         },
         text: {
             primary: "#ffffff",
-            secondary: "#94a3b8", // Hafif gri metin
+            secondary: "#94a3b8",
         },
         divider: "#374151",
     },
@@ -142,8 +175,8 @@ const modernTheme = createTheme({
         MuiPaper: {
             styleOverrides: {
                 root: {
-                    borderRadius: 16, // Ultra yumuşak köşeler
-                    boxShadow: '0 8px 16px rgba(0, 0, 0, 0.4)', // Daha derin gölge
+                    borderRadius: 16,
+                    boxShadow: '0 8px 16px rgba(0, 0, 0, 0.4)',
                 },
             },
         },
@@ -166,16 +199,16 @@ const modernTheme = createTheme({
         MuiTableCell: {
             styleOverrides: {
                 head: {
-                    backgroundColor: '#2d3748', // Başlık için farklı arka plan
+                    backgroundColor: '#2d3748',
                     color: '#e2e8f0',
                     fontWeight: 700,
-                    borderBottom: '3px solid #ff5722', // Ana renkte kalın alt çizgi
-                    padding: '10px 14px', // Daha ferah başlık
+                    borderBottom: '3px solid #ff5722',
+                    padding: '10px 14px',
                 },
                 body: {
                     fontSize: '0.85rem',
                     color: '#cbd5e1',
-                    padding: '8px 14px', // Daha ferah satırlar
+                    padding: '8px 14px',
                 }
             }
         },
@@ -192,7 +225,7 @@ function SummaryCard({ title, value, icon: Icon, color }) {
             justifyContent: 'space-between',
             borderRadius: 3,
             borderLeft: `5px solid ${color}`,
-            bgcolor: '#1f2937' // Kart arka planı
+            bgcolor: '#1f2937'
         }}>
             <Box>
                 <Typography variant="h6" color="text.secondary" sx={{ fontSize: '0.9rem', mb: 0.5 }}>
@@ -207,7 +240,7 @@ function SummaryCard({ title, value, icon: Icon, color }) {
     );
 }
 
-// --- Excel Toolbar (Modernize Edildi) ---
+// --- Excel Toolbar ---
 function CustomToolbar({ rows }) {
     const theme = useTheme();
 
@@ -277,7 +310,7 @@ function CustomToolbar({ rows }) {
                 justifyContent: "space-between",
                 alignItems: "center",
                 bgcolor: theme.palette.background.paper,
-                borderTop: `1px solid ${theme.palette.divider}` // Tabloyu üstten ayırma
+                borderTop: `1px solid ${theme.palette.divider}`
             }}
         >
             <Typography variant="subtitle1" color="text.secondary" sx={{ fontWeight: 600 }}>
@@ -299,40 +332,67 @@ function CustomToolbar({ rows }) {
 function SeferTamamlayanContent() {
     const [allRows, setAllRows] = useState([]);
     const [filters, setFilters] = useState({});
-    const [globalSearch, setGlobalSearch] = useState(""); // Global arama alanı
+    const [globalSearch, setGlobalSearch] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
     const today = dayjs().format("YYYY-MM-DD");
-    const [startDate, setStartDate] = useState(dayjs().subtract(7, 'day').format("YYYY-MM-DD")); // Son 7 gün varsayılan
+    const [startDate, setStartDate] = useState(dayjs().subtract(7, 'day').format("YYYY-MM-DD"));
     const [endDate, setEndDate] = useState(today);
 
     const theme = useTheme();
 
-    // --- Veri Çekme ---
+    // --- Veri Çekme (DÜZELTİLMİŞ İLİŞKİSEL SORGULAMA) ---
     const fetchData = useCallback(async () => {
         setLoading(true);
         setError(null);
 
-        // Supabase sorgusu
-        const { data, error } = await supabase
-            .from("tamamlanan_seferler_view")
-            .select("*")
-            .gte("sefer_tarihi", startDate)
-            .lte("sefer_tarihi", endDate)
-            .order("sefer_no", { ascending: false })
-            .range(0, 50000); // güvenli limit
+        try {
+            // Supabase sorgusu: tamamlanan_seferler'den çek, tamamlanan_detaylar'ı JOIN et
+            const { data, error } = await supabase
+                .from("tamamlanan_seferler") // Ana tablo
+                .select(`
+                    *,
+                    tamamlanan_detaylar (
+                        yukleme_noktasi,
+                        yukleme_varis,
+                        yukleme_cikis,
+                        teslim_noktasi,
+                        teslim_ili,
+                        teslim_ilcesi,
+                        teslim_varis,
+                        teslim_cikis
+                    )
+                `) // DİKKAT: Yorumlar ve hatalı format kaldırıldı!
+                .gte("sefer_tarihi", startDate)
+                .lte("sefer_tarihi", endDate)
+                .order("sefer_no", { ascending: false })
+                .range(0, 50000); // güvenli limit
 
+            if (error) {
+                // Hata mesajını daha anlaşılır hale getirelim
+                const errMsg = error.message.includes('parse select parameter')
+                    ? 'Supabase SELECT sorgu formatı hatası (imla, boşluk, yorumları kontrol edin).'
+                    : error.message;
 
-        if (error) {
-            setError(`⚠️ Veri çekilirken hata oluştu: ${error.message}`);
-            setAllRows([]);
-        } else {
-            setAllRows(data || []);
+                throw new Error(errMsg);
+            }
+
+            // 1. İlişkisel veriyi tek bir düz dizi haline getir
+            const flatData = flattenData(data || []);
+
+            // 2. Aynı sefer no'lu kayıtları tarihlerine göre topla (min/max)
+            const aggregatedData = aggregateSeferler(flatData);
+
+            setAllRows(aggregatedData);
             setFilters({});
-        }
 
-        setLoading(false);
+        } catch (err) {
+            setError(`⚠️ Veri çekilirken hata oluştu. Hata: ${err.message}`);
+            setAllRows([]);
+        } finally {
+            setLoading(false);
+        }
     }, [startDate, endDate]);
 
     useEffect(() => {
@@ -374,8 +434,10 @@ function SeferTamamlayanContent() {
 
             rows = rows.filter((row) => {
                 let cell = row[key];
+                // Tarih/Saat formatlarını filtrelerken kullan
                 if (header.isDate) cell = formatDate(cell);
                 if (header.isDateTime) cell = formatDateTime(cell);
+
                 return String(cell || "").toLowerCase().includes(value);
             });
         });
@@ -520,77 +582,79 @@ function SeferTamamlayanContent() {
                     </Box>
                 ) : (
                     <>
-                            <TableContainer>
-                                <Table stickyHeader size="medium">
-                                    <TableHead>
-                                        <TableRow>
-                                            {headersConfig.map((h) => (
-                                                <TableCell
-                                                    key={h.key}
-                                                    style={{ minWidth: h.minWidth || 80 }}
-                                                >
-                                                    {h.label}
-                                                </TableCell>
-                                            ))}
-                                        </TableRow>
+                        <TableContainer>
+                            <Table stickyHeader size="medium">
+                                <TableHead>
+                                    {/* Kolon Başlıkları */}
+                                    <TableRow>
+                                        {headersConfig.map((h) => (
+                                            <TableCell
+                                                key={h.key}
+                                                style={{ minWidth: h.minWidth || 80 }}
+                                            >
+                                                {h.label}
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
 
-                                        <TableRow sx={{ bgcolor: '#2d3748' }}>
-                                            {headersConfig.map((h) => (
-                                                <TableCell key={`filter-${h.key}`} sx={{ p: '6px 14px' }}>
-                                                    <TextField
-                                                        size="small"
-                                                        variant="standard"
-                                                        placeholder="Filtrele..."
-                                                        fullWidth
-                                                        value={filters[h.key] || ""}
-                                                        onChange={(e) => handleFilterChange(h.key, e.target.value)}
-                                                        InputProps={{
-                                                            disableUnderline: true,
-                                                            startAdornment: (
-                                                                <InputAdornment position="start">
-                                                                    <FilterListIcon fontSize="small" sx={{ color: theme.palette.primary.main }} />
-                                                                </InputAdornment>
-                                                            ),
-                                                            sx: { color: 'white', bgcolor: '#374151', borderRadius: 1, p: '4px 8px' }
-                                                        }}
-                                                    />
-                                                </TableCell>
-                                            ))}
-                                        </TableRow>
-                                    </TableHead>
-
-                                    <TableBody>
-                                        {filteredRows.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={headersConfig.length} sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
-                                                    Veri bulunamadı.
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : (
-                                            filteredRows.map((row, index) => (
-                                                <TableRow
-                                                    key={index}
-                                                    hover
-                                                    sx={{
-                                                        bgcolor: index % 2 === 0 ? '#1a202c' : '#1f2937',
-                                                        transition: 'background-color 0.3s'
+                                    {/* Filtre Satırı */}
+                                    <TableRow sx={{ bgcolor: '#2d3748' }}>
+                                        {headersConfig.map((h) => (
+                                            <TableCell key={`filter-${h.key}`} sx={{ p: '6px 14px' }}>
+                                                <TextField
+                                                    size="small"
+                                                    variant="standard"
+                                                    placeholder="Filtrele..."
+                                                    fullWidth
+                                                    value={filters[h.key] || ""}
+                                                    onChange={(e) => handleFilterChange(h.key, e.target.value)}
+                                                    InputProps={{
+                                                        disableUnderline: true,
+                                                        startAdornment: (
+                                                            <InputAdornment position="start">
+                                                                <FilterListIcon fontSize="small" sx={{ color: theme.palette.primary.main }} />
+                                                            </InputAdornment>
+                                                        ),
+                                                        sx: { color: 'white', bgcolor: '#374151', borderRadius: 1, p: '4px 8px' }
                                                     }}
-                                                >
-                                                    {headersConfig.map((h) => (
-                                                        <TableCell key={h.key} sx={{ color: h.key === 'sefer_no' ? theme.palette.primary.main : 'inherit' }}>
-                                                            {h.isDate
-                                                                ? formatDate(row[h.key])
-                                                                : h.isDateTime
-                                                                    ? formatDateTime(row[h.key])
-                                                                    : row[h.key] || "—"}
-                                                        </TableCell>
-                                                    ))}
-                                                </TableRow>
-                                            ))
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
+                                                />
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                </TableHead>
+
+                                <TableBody>
+                                    {filteredRows.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={headersConfig.length} sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
+                                                Veri bulunamadı.
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        filteredRows.map((row, index) => (
+                                            <TableRow
+                                                key={index}
+                                                hover
+                                                sx={{
+                                                    bgcolor: index % 2 === 0 ? '#1a202c' : '#1f2937',
+                                                    transition: 'background-color 0.3s'
+                                                }}
+                                            >
+                                                {headersConfig.map((h) => (
+                                                    <TableCell key={h.key} sx={{ color: h.key === 'sefer_no' ? theme.palette.primary.main : 'inherit' }}>
+                                                        {h.isDate
+                                                            ? formatDate(row[h.key])
+                                                            : h.isDateTime
+                                                                ? formatDateTime(row[h.key])
+                                                                : row[h.key] || "—"}
+                                                    </TableCell>
+                                                ))}
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
                         <CustomToolbar rows={filteredRows} />
                     </>
                 )}

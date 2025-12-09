@@ -316,18 +316,19 @@ function SeferTamamlayanContent() {
 
         // Supabase sorgusu
         const { data, error } = await supabase
-            .from("tamamlanan_detaylar_view")
+            .from("tamamlanan_seferler_view")
             .select("*")
             .gte("sefer_tarihi", startDate)
             .lte("sefer_tarihi", endDate)
-            .order("sefer_no", { ascending: false });
+            .order("sefer_no", { ascending: false })
+            .range(0, 50000); // güvenli limit
+
 
         if (error) {
             setError(`⚠️ Veri çekilirken hata oluştu: ${error.message}`);
             setAllRows([]);
         } else {
-            const aggregated = aggregateSeferler(data || []);
-            setAllRows(aggregated);
+            setAllRows(data || []);
             setFilters({});
         }
 
@@ -519,80 +520,77 @@ function SeferTamamlayanContent() {
                     </Box>
                 ) : (
                     <>
-                            <TableContainer sx={{ maxHeight: 'calc(100vh - 260px)' }}>
-                            <Table stickyHeader size="medium">
-                                <TableHead>
-                                    {/* Sütun Başlıkları */}
-                                    <TableRow>
-                                        {headersConfig.map((h) => (
-                                            <TableCell
-                                                key={h.key}
-                                                style={{ minWidth: h.minWidth || 80 }}
-                                            >
-                                                {h.label}
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-
-                                    {/* Sütun Bazlı Filtre Satırı */}
-                                    <TableRow sx={{ bgcolor: '#2d3748' }}>
-                                        {headersConfig.map((h) => (
-                                            <TableCell key={`filter-${h.key}`} sx={{ p: '6px 14px' }}>
-                                                <TextField
-                                                    size="small"
-                                                    variant="standard" // Daha sade bir input stili
-                                                    placeholder="Filtrele..."
-                                                    fullWidth
-                                                    value={filters[h.key] || ""}
-                                                    onChange={(e) => handleFilterChange(h.key, e.target.value)}
-                                                    InputProps={{
-                                                        disableUnderline: true,
-                                                        startAdornment: (
-                                                            <InputAdornment position="start">
-                                                                <FilterListIcon fontSize="small" sx={{ color: theme.palette.primary.main }} />
-                                                            </InputAdornment>
-                                                        ),
-                                                        sx: { color: 'white', bgcolor: '#374151', borderRadius: 1, p: '4px 8px' } // Input arka planı
-                                                    }}
-                                                />
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-                                </TableHead>
-
-                                <TableBody>
-                                    {filteredRows.length === 0 ? (
+                            <TableContainer>
+                                <Table stickyHeader size="medium">
+                                    <TableHead>
                                         <TableRow>
-                                            <TableCell colSpan={headersConfig.length} sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
-                                                Veri bulunamadı. Lütfen tarih aralığını veya filtreleri kontrol edin.
-                                            </TableCell>
+                                            {headersConfig.map((h) => (
+                                                <TableCell
+                                                    key={h.key}
+                                                    style={{ minWidth: h.minWidth || 80 }}
+                                                >
+                                                    {h.label}
+                                                </TableCell>
+                                            ))}
                                         </TableRow>
-                                    ) : (
-                                        filteredRows.map((row, index) => (
-                                            <TableRow
-                                                key={index}
-                                                hover
-                                                sx={{
-                                                    // Daha yumuşak satır ayrımı
-                                                    bgcolor: index % 2 === 0 ? '#1a202c' : '#1f2937',
-                                                    transition: 'background-color 0.3s'
-                                                }}
-                                            >
-                                                {headersConfig.map((h) => (
-                                                    <TableCell key={h.key} sx={{ color: h.key === 'sefer_no' ? theme.palette.primary.main : 'inherit' }}>
-                                                        {h.isDate
-                                                            ? formatDate(row[h.key])
-                                                            : h.isDateTime
-                                                                ? formatDateTime(row[h.key])
-                                                                : row[h.key] || "—"}
-                                                    </TableCell>
-                                                ))}
+
+                                        <TableRow sx={{ bgcolor: '#2d3748' }}>
+                                            {headersConfig.map((h) => (
+                                                <TableCell key={`filter-${h.key}`} sx={{ p: '6px 14px' }}>
+                                                    <TextField
+                                                        size="small"
+                                                        variant="standard"
+                                                        placeholder="Filtrele..."
+                                                        fullWidth
+                                                        value={filters[h.key] || ""}
+                                                        onChange={(e) => handleFilterChange(h.key, e.target.value)}
+                                                        InputProps={{
+                                                            disableUnderline: true,
+                                                            startAdornment: (
+                                                                <InputAdornment position="start">
+                                                                    <FilterListIcon fontSize="small" sx={{ color: theme.palette.primary.main }} />
+                                                                </InputAdornment>
+                                                            ),
+                                                            sx: { color: 'white', bgcolor: '#374151', borderRadius: 1, p: '4px 8px' }
+                                                        }}
+                                                    />
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                    </TableHead>
+
+                                    <TableBody>
+                                        {filteredRows.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={headersConfig.length} sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
+                                                    Veri bulunamadı.
+                                                </TableCell>
                                             </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
+                                        ) : (
+                                            filteredRows.map((row, index) => (
+                                                <TableRow
+                                                    key={index}
+                                                    hover
+                                                    sx={{
+                                                        bgcolor: index % 2 === 0 ? '#1a202c' : '#1f2937',
+                                                        transition: 'background-color 0.3s'
+                                                    }}
+                                                >
+                                                    {headersConfig.map((h) => (
+                                                        <TableCell key={h.key} sx={{ color: h.key === 'sefer_no' ? theme.palette.primary.main : 'inherit' }}>
+                                                            {h.isDate
+                                                                ? formatDate(row[h.key])
+                                                                : h.isDateTime
+                                                                    ? formatDateTime(row[h.key])
+                                                                    : row[h.key] || "—"}
+                                                        </TableCell>
+                                                    ))}
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
                         <CustomToolbar rows={filteredRows} />
                     </>
                 )}

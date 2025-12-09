@@ -7,43 +7,43 @@ import { ThemeProvider, CssBaseline } from "@mui/material";
 import theme from "./theme";
 
 // Guard
-import { default as RequirePageAccess } from "./routes/guards/RequirePageAccess";
+import RequirePageAccess from "./routes/guards/RequirePageAccess";
 
 // Sayfalar (eager)
-import { default as Login } from "./Login";
-import { default as Anasayfa } from "./Anasayfa";
-import { default as Planlama } from "./kullanıcıIslemleri/Planlama";
-import { default as PlakaOnerisi } from "./kullanıcıIslemleri/PlakaOnerisi";
-import { default as Siparisler } from "./kullanıcıIslemleri/Siparisler";
-import { default as TamamlananlarPage } from "./tamamlananseferler/TamamlananlarPage";
+import Login from "./Login";
+import Anasayfa from "./Anasayfa";
+import Planlama from "./kullanıcıIslemleri/Planlama";
+import PlakaOnerisi from "./kullanıcıIslemleri/PlakaOnerisi";
+import Siparisler from "./kullanıcıIslemleri/Siparisler";
+import TamamlananlarPage from "./tamamlananseferler/TamamlananlarPage";
 
 // Araç Durumları
-import { default as AracYonetimi } from "./aracDurum/AracYonetimi";
-import { default as IzinGirisi } from "./aracDurum/IzinGirisi";
-import { default as KesintiGirisi } from "./aracDurum/KesintiGirisi";
-import { default as AracDurumlari } from "./aracDurum/AracDurumlari";
+import AracYonetimi from "./aracDurum/AracYonetimi";
+import IzinGirisi from "./aracDurum/IzinGirisi";
+import KesintiGirisi from "./aracDurum/KesintiGirisi";
+import AracDurumlari from "./aracDurum/AracDurumlari";
 
 // Görevler
-import { default as GorevAta } from "./views/Gorevler/GorevAta";
-import { default as BenimGorevlerim } from "./views/Gorevler/BenimGorevlerim";
-import { default as TumGorevler } from "./views/Gorevler/TumGorevler";
+import GorevAta from "./views/Gorevler/GorevAta";
+import BenimGorevlerim from "./views/Gorevler/BenimGorevlerim";
+import TumGorevler from "./views/Gorevler/TumGorevler";
 
-// Hakediş
-import { default as TedarikciMasraf } from "./Hakedisler/TedarikciMasraf";
-import { default as AracCariVeFiyat } from "./Hakedisler/AracCariVeFiyat";
-import { default as HakedisSeferleri } from "./Hakedisler/HakedisSeferleri";
-import { default as Hamaliye } from "./Hakedisler/Hamaliye";
+// Hakediş (eager)
+import TedarikciMasraf from "./Hakedisler/TedarikciMasraf";
+import AracCariVeFiyat from "./Hakedisler/AracCariVeFiyat";
+import HakedisSeferleri from "./Hakedisler/HakedisSeferleri";
+import Hamaliye from "./Hakedisler/Hamaliye";
 
-// KPI & RAPORLAR
-import { default as KpiOlcumu } from "./raporlar/kpiOlcumu";
-import { default as YuklemedeBekleme } from "./raporlar/yuklemedeBekleme";
-import { default as ProjeLokasyonRaporlari } from "./raporlar/ProjeLokasyonRaporlari";
-import { default as TeslimdeBekleme } from "./raporlar/TeslimdeBekleme";
-import { default as BostaArac } from "./raporlar/BostaArac";
-
+// KPI & RAPORLAR (eager)
+import KpiOlcumu from "./raporlar/kpiOlcumu";
+import YuklemedeBekleme from "./raporlar/yuklemedeBekleme";
+import ProjeLokasyonRaporlari from "./raporlar/ProjeLokasyonRaporlari";
+import TeslimdeBekleme from "./raporlar/TeslimdeBekleme";
+import BostaArac from "./raporlar/BostaArac";
+import AracEtalari from "./raporlar/AracEtalari";
 
 // Layout
-import { default as AppLayout } from "./layout/AppLayout";
+import AppLayout from "./layout/AppLayout";
 
 // Lazy sayfalar
 const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler"));
@@ -55,13 +55,15 @@ const PivotTool = lazy(() => import("./raporlar/PivotTool"));
 const ETAUyumsuzlugu = lazy(() => import("./raporlar/ETAUyumsuzlugu"));
 const FrigoYakitHakedis = lazy(() => import("./Hakedisler/FrigoYakitHakedis"));
 
-// Yeni: Sefer Tamamlayan Raporu
-const SeferTamamlayan = lazy(() => import("./raporlar/SeferTamamlayan"));
+// ✔ Yeni lazy import – DOĞRU HALİ
+const FiloIskontoluHakedis = lazy(() =>
+    import("./Hakedisler/FiloIskontoluHakedis")
+);
 
-// Yeni: Bölgesel Analiz Raporu
+const SeferTamamlayan = lazy(() => import("./raporlar/SeferTamamlayan"));
 const BolgeselAnaliz = lazy(() => import("./raporlar/BolgeselAnaliz"));
 
-// TEST VERİSİ
+// Test Data
 const TEST_VERILERI = {
     "Sefer Performansı": [
         { Yıl: 2024, Ay: "Ocak", Bölge: "A", Tutar: 1500, KM: 500 },
@@ -84,15 +86,15 @@ function App() {
                 <CssBaseline />
                 <Router>
                     <Routes>
-                        {/* Public */}
+
                         <Route path="/" element={<Login />} />
 
-                        {/* App Layout */}
                         <Route element={<AppLayout />}>
                             <Route path="anasayfa" element={<Anasayfa />} />
 
-                            {/* Guard */}
                             <Route element={<RequirePageAccess><Outlet /></RequirePageAccess>}>
+
+                                {/* Kullanıcı İşlemleri */}
                                 <Route path="planlama" element={<Planlama />} />
                                 <Route path="plaka-onerisi" element={<PlakaOnerisi />} />
                                 <Route path="seferler" element={<Suspense fallback={<div>Yükleniyor...</div>}><ReelAtananSeferler /></Suspense>} />
@@ -100,7 +102,7 @@ function App() {
                                 <Route path="siparisler" element={<Siparisler />} />
                                 <Route path="tamamlanan-seferler" element={<TamamlananlarPage />} />
 
-                                {/* Araç Durumları */}
+                                {/* Araç Yönetimi */}
                                 <Route path="arac/durumlari" element={<AracDurumlari />} />
                                 <Route path="arac/yonetim" element={<AracYonetimi />} />
                                 <Route path="arac/izin-girisi" element={<IzinGirisi />} />
@@ -112,24 +114,43 @@ function App() {
                                 <Route path="gorevler/tum" element={<TumGorevler />} />
 
                                 {/* Hakediş */}
-                                <Route path="hakedis/frigo-yakit-hakedis" element={<Suspense fallback={<div>Frigo Yakıt Hakediş yükleniyor...</div>}><FrigoYakitHakedis /></Suspense>} />
+                                <Route
+                                    path="hakedis/frigo-yakit-hakedis"
+                                    element={
+                                        <Suspense fallback={<div>Frigo Yakıt Hakediş yükleniyor...</div>}>
+                                            <FrigoYakitHakedis />
+                                        </Suspense>
+                                    }
+                                />
+
                                 <Route path="hakedis/tedarikci-masraf" element={<TedarikciMasraf />} />
                                 <Route path="hakedis/arac-cari-ve-fiyat" element={<AracCariVeFiyat />} />
                                 <Route path="hakedis/hakedis-seferleri" element={<HakedisSeferleri />} />
                                 <Route path="hakedis/hamaliye" element={<Hamaliye />} />
 
-                                {/* KPI & Raporlar */}
+                                {/* ✔ EKLENEN YENİ SAYFA */}
+                                <Route
+                                    path="hakedis/FiloIskontoluHakedis"
+                                    element={
+                                        <Suspense fallback={<div>Filo İskontolu Hakediş yükleniyor...</div>}>
+                                            <FiloIskontoluHakedis />
+                                        </Suspense>
+                                    }
+                                />
+
+                                {/* Raporlar */}
                                 <Route path="raporlar/kpi-olcumu" element={<KpiOlcumu />} />
                                 <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
                                 <Route path="raporlar/teslimde-bekleme" element={<TeslimdeBekleme />} />
                                 <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
                                 <Route path="raporlar/eta-uyumsuz" element={<Suspense fallback={<div>ETA Uyumsuzluğu yükleniyor...</div>}><ETAUyumsuzlugu /></Suspense>} />
                                 <Route path="raporlar/bosta-arac" element={<BostaArac />} />
-                                <Route path="raporlar/tools" element={<Suspense fallback={<div>Pivot Rapor Yükleniyor...</div>}><PivotTool datasets={TEST_VERILERI} defaultDataset="Sefer Performansı" /></Suspense>} />
+                                <Route path="raporlar/tools" element={<Suspense fallback={<div>Pivot Yükleniyor...</div>}><PivotTool datasets={TEST_VERILERI} defaultDataset="Sefer Performansı" /></Suspense>} />
                                 <Route path="raporlar/sefer-tamamlayan" element={<Suspense fallback={<div>Sefer Tamamlayan yükleniyor...</div>}><SeferTamamlayan /></Suspense>} />
                                 <Route path="raporlar/bolgesel-analiz" element={<Suspense fallback={<div>Bölgesel Analiz yükleniyor...</div>}><BolgeselAnaliz /></Suspense>} />
+                                <Route path="raporlar/arac-etalari" element={<Suspense fallback={<div>Araç ETAları yükleniyor...</div>}><AracEtalari /></Suspense>} />
 
-                                {/* KOCAELİ kartı */}
+                                {/* Sipariş Analiz */}
                                 <Route path="siparis-analiz" element={<Suspense fallback={<div>Yükleniyor...</div>}><SiparisAnaliz /></Suspense>} />
 
                                 {/* Admin */}
@@ -137,8 +158,8 @@ function App() {
                                 <Route path="admin/permissions" element={<Suspense fallback={<div>Yükleniyor...</div>}><PagePermissionsPage /></Suspense>} />
                             </Route>
 
-                            {/* Default */}
                             <Route path="*" element={<Navigate to="/anasayfa" replace />} />
+
                         </Route>
                     </Routes>
                 </Router>

@@ -1,44 +1,71 @@
-/**  MODERN DARK UI – GÜNCELLENMİŞ DÜZENLENMİŞ SÜRÜM  **/
+// ======================================================
+// CLEANFETCHER — Yüklemede Bekleme Raporu (Modernize Edilmiş Versiyon)
+// ======================================================
+
 import React, { useCallback, useEffect, useState, useMemo } from "react";
+// Supabase istemcinizi doğru yoldan import ettiğiniz varsayılmıştır.
 import { supabase } from "../supabaseClient";
+
 import dayjs from "dayjs";
+import "dayjs/locale/tr";
+
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
 import {
-    FiCalendar,
-    FiRefreshCw,
-    FiDownload,
-    FiAlertTriangle,
-    FiClock,
-    FiTruck,
-    FiUser,
-    FiArrowUp,
-    FiArrowDown
-} from "react-icons/fi";
+    Container,
+    Typography,
+    Paper,
+    Box,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    TextField,
+    Button,
+    CircularProgress,
+    InputAdornment,
+    Collapse,
+    IconButton,
+    useTheme,
+    Divider,
+    Grid,
+    Alert,
+    Tooltip,
+    // Yeni Eklentiler
+    Card,
+    CardContent,
+    Tabs,
+    Tab,
+} from "@mui/material";
 
-/* ============================================================
-   SABİTLER
-============================================================ */
+// Material UI Icons
+import SearchIcon from "@mui/icons-material/Search";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import DateRangeIcon from "@mui/icons-material/DateRange";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import SpeedIcon from '@mui/icons-material/Speed';
+import StarIcon from '@mui/icons-material/Star';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+// Yeni Analitik İkonlar
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import WarningIcon from '@mui/icons-material/Warning';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp'; // Yeni
+
+// ======================================================
+// Sabitler ve Yardımcı Fonksiyonlar (Aynı kaldı)
+// ======================================================
 const DETAIL_TABLE = "tamamlanan_detaylar";
 const SUMMARY_TABLE = "tamamlanan_seferler";
 const MINIMUM_WAIT_TIME_MINUTES = 240;
 
-const SUMMARY_COLS = [
-    "id", "sefer_no", "plaka", "treyler", "surucu_ad_soyad", "surucu_tckn",
-    "surucu_telefon", "sefer_tarihi", "yukleme_ili", "yukleme_ilcesi",
-    "teslim_ili", "teslim_ilcesi", "musteri_adi", "yukleme_noktasi",
-    "teslim_noktasi", "proje_adi"
-].join(",");
 
-const DETAIL_COLS = [
-    "sefer_no", "nokta_sirasi", "yukleme_noktasi", "teslim_noktasi",
-    "yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"
-].join(",");
+// ... (parseDT, fmtDateTR, minToHM, diffMinutes fonksiyonları aynı)
 
-/* ============================================================
-   YARDIMCI FONKSIYONLAR
-============================================================ */
 const parseDT = (v) => {
     const d = dayjs(v);
     return d.isValid() ? d : null;
@@ -56,7 +83,7 @@ const minToHM = (m) => {
     if (h && r) return `${h} sa ${r} dk`;
     if (h) return `${h} sa`;
     if (r) return `${r} dk`;
-    return `0 dk`;
+    return "0 dk";
 };
 
 const diffMinutes = (start, end) => {
@@ -66,59 +93,251 @@ const diffMinutes = (start, end) => {
     return Math.max(0, e.diff(s, "minute"));
 };
 
-/* ============================================================
-   ANA KOMPONENT
-============================================================ */
-export default function CleanFetcher() {
+// ======================================================
+// YENİ BİLEŞEN: KPI GÖSTERİM KARTI
+// ======================================================
+const KPICard = ({ title, value, icon: Icon, color, subtitle }) => (
+    <Card elevation={6} sx={{ borderLeft: `5px solid ${color}`, height: '100%', borderRadius: 2 }}>
+        <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h6" color="text.secondary" gutterBottom>
+                    {title}
+                </Typography>
+                <Icon sx={{ color, fontSize: 36 }} />
+            </Box>
+            <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                {value}
+            </Typography>
+            {subtitle && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                    {subtitle}
+                </Typography>
+            )}
+        </CardContent>
+    </Card>
+);
 
-    /* ========== STATE ========== */
-    const [rows, setRows] = useState([]);
-    const [selectedDate, setSelectedDate] = useState(dayjs().format("YYYY-MM-DD"));
-    const [loading, setLoading] = useState(false);
-    const [columnFilters, setColumnFilters] = useState({});
+// ======================================================
+// YENİ/EK BİLEŞEN: TEK GÜNLÜK İHLAL SATIRI (Aynı kaldı)
+// ======================================================
+function PlateRow({ p, idx }) {
+    const theme = useTheme();
 
-    const [sortKey, setSortKey] = useState("toplam_bekleme_dk");
-    const [sortDirection, setSortDirection] = useState("desc");
+    return (
+        <TableRow
+            key={p.plaka}
+            sx={{
+                bgcolor: idx % 2 === 0 ? theme.palette.action.hover : 'inherit'
+            }}>
+            <TableCell></TableCell>
+            <TableCell sx={{ fontWeight: "bold" }}>{p.plaka}</TableCell>
+            <TableCell>{p.projeler}</TableCell>
+            <TableCell align="right" sx={{ color: theme.palette.error.dark }}>{p.ihlalliSefer}</TableCell>
+            <TableCell align="right">{minToHM(p.toplamIhlalSuresi)}</TableCell>
+        </TableRow>
+    );
+}
 
-    /* ============================================================
-       SÜTUN FİLTRELERİ
-    ============================================================ */
-    const handleFilterChange = (key, value) => {
-        setColumnFilters(prev => ({ ...prev, [key]: value }));
+// ======================================================
+// YENİ/EK BİLEŞEN: PLAKA PERFORMANS SATIRI (Aynı kaldı)
+// ======================================================
+function PlatePerformanceRow({ p, idx }) {
+    const theme = useTheme();
+    const [open, setOpen] = useState(false);
+
+    const isViolation = p.ihlalliSefer > 0;
+
+    const getPerfColor = (score) => {
+        if (score >= 8.5) return theme.palette.success.dark;
+        if (score >= 6) return theme.palette.warning.dark;
+        return theme.palette.error.dark;
     };
 
-    const handleSort = (key) => {
-        if (key === sortKey) {
-            setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-        } else {
-            setSortKey(key);
-            setSortDirection("asc");
+    const SeferDetailTable = () => {
+        const seferler = p.tumSeferler || [];
+
+        if (seferler.length === 0) {
+            return (
+                <Box sx={{ p: 2, bgcolor: theme.palette.mode === 'dark' ? '#1e1e1e' : '#f5f5f5', borderTop: `1px solid ${theme.palette.divider}` }}>
+                    <Alert severity="warning" size="small">Bu plakaya ait seçilen tarih aralığında detaylı sefer verisi bulunamadı.</Alert>
+                </Box>
+            );
         }
+
+        return (
+            <Box sx={{ p: 2, bgcolor: theme.palette.mode === 'dark' ? '#1e1e1e' : '#f5f5f5', borderTop: `1px solid ${theme.palette.divider}` }}>
+                <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: "bold", color: theme.palette.text.primary }}>
+                    {p.plaka} Plakasına Ait Tüm Seferler ({seferler.length} Adet)
+                </Typography>
+                <Table size="small">
+                    <TableHead>
+                        <TableRow sx={{ bgcolor: theme.palette.action.selected }}>
+                            <TableCell sx={{ fontWeight: "bold", py: 0.5 }}>Sefer No</TableCell>
+                            <TableCell sx={{ fontWeight: "bold", py: 0.5 }}>Proje</TableCell>
+                            <TableCell sx={{ fontWeight: "bold", py: 0.5 }}>Şoför</TableCell>
+                            <TableCell sx={{ fontWeight: "bold", py: 0.5 }}>İlk Varış</TableCell>
+                            <TableCell sx={{ fontWeight: "bold", py: 0.5 }}>Son Çıkış</TableCell>
+                            <TableCell sx={{ fontWeight: "bold", py: 0.5 }}>Toplam Bekleme</TableCell>
+                            <TableCell sx={{ fontWeight: "bold", py: 0.5 }}>Durum</TableCell>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {seferler.map((s, i) => {
+                            const isViol = s.isViolation;
+                            return (
+                                <TableRow key={i} hover sx={{ bgcolor: isViol ? 'rgba(255, 107, 107, 0.1)' : 'inherit' }}>
+                                    <TableCell>{s.sefer_no}</TableCell>
+                                    <TableCell>{s.proje_adi}</TableCell>
+                                    <TableCell>{s.surucu_ad_soyad}</TableCell>
+                                    <TableCell>{fmtDateTR(s.ilk_yukleme_varis)}</TableCell>
+                                    <TableCell>{fmtDateTR(s.son_yukleme_cikis)}</TableCell>
+                                    <TableCell sx={{ fontWeight: isViol ? 'bold' : 'normal', color: isViol ? theme.palette.error.main : theme.palette.text.secondary }}>
+                                        {minToHM(s.total_wait_minutes)}
+                                    </TableCell>
+                                    <TableCell>
+                                        <span style={{
+                                            color: isViol ? theme.palette.error.dark : theme.palette.success.dark,
+                                            fontWeight: 'bold'
+                                        }}>
+                                            {isViol ? 'İhlal (≥4sa)' : 'Normal'}
+                                        </span>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
+            </Box>
+        );
     };
 
-    /* ============================================================
-       VERİ ÇEKME
-    ============================================================ */
-    const fetchAll = useCallback(async (dateString) => {
-        setLoading(true);
-        setRows([]);
-        setColumnFilters({});
+    return (
+        <>
+            <TableRow
+                sx={{
+                    '& > *': { borderBottom: 'unset' },
+                    bgcolor: isViolation ? theme.palette.error.light + '1a' : (idx % 2 === 0 ? theme.palette.action.hover : 'inherit'),
+                }}
+            >
+                <TableCell width="1%">
+                    <Tooltip title={open ? "Detayları Gizle" : "Tüm Sefer Detaylarını Göster"}>
+                        <IconButton size="small" onClick={() => setOpen(!open)} color="primary">
+                            {open ? <ExpandLessIcon /> : <VisibilityIcon />}
+                        </IconButton>
+                    </Tooltip>
+                </TableCell>
 
-        const dayStart = dayjs(dateString).startOf("day").toISOString();
-        const dayEnd = dayjs(dateString).endOf("day").toISOString();
+                <TableCell sx={{ fontWeight: "bold" }}>{p.plaka}</TableCell>
+                <TableCell>{p.projeler}</TableCell>
+
+                <TableCell align="right">{p.toplamSefer}</TableCell>
+                <TableCell align="right" sx={{ color: isViolation ? theme.palette.error.dark : 'inherit' }}>{p.ihlalliSefer}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: "bold" }}>{p.ihlalOrani}</TableCell>
+                <TableCell align="right">{minToHM(p.toplamIhlalSuresi)}</TableCell>
+
+                <TableCell align="right" sx={{ color: theme.palette.error.main, fontWeight: "bold" }}>{p.ceza}</TableCell>
+                <TableCell align="right" sx={{ color: getPerfColor(parseFloat(p.performans)), fontWeight: "bold", fontSize: '1.1em' }}>
+                    <StarIcon sx={{ fontSize: '1em', verticalAlign: 'middle', mr: 0.5 }} />{p.performans}
+                </TableCell>
+            </TableRow>
+
+            <TableRow>
+                <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={10}>
+                    <Collapse in={open} timeout="auto" unmountOnExit>
+                        <SeferDetailTable />
+                    </Collapse>
+                </TableCell>
+            </TableRow>
+        </>
+    );
+}
+
+
+// ======================================================
+// ANA KOMPONENT
+// ======================================================
+export default function CleanFetcher() {
+    const [dailyViolationRows, setDailyViolationRows] = useState([]);
+    const [selectedDate, setSelectedDate] = useState(dayjs().format("YYYY-MM-DD"));
+
+    const [performanceData, setPerformanceData] = useState([]);
+    const [startDate, setStartDate] = useState(dayjs().startOf("month").format("YYYY-MM-DD"));
+    const [endDate, setEndDate] = useState(dayjs().format("YYYY-MM-DD"));
+
+    const [selectedMonth, setSelectedMonth] = useState(dayjs().format("YYYY-MM"));
+    const [selectedDailyMonth, setSelectedDailyMonth] = useState(dayjs().format("YYYY-MM"));
+
+
+
+    const [loadingDaily, setLoadingDaily] = useState(false);
+    const [loadingRange, setLoadingRange] = useState(false);
+
+    // YENİ EKLEME: Sekme Kontrolü
+    const [tabValue, setTabValue] = useState(0);
+    const theme = useTheme();
+
+    const handleMonthChange = (month) => {
+        setSelectedMonth(month);
+
+        const start = dayjs(month).startOf("month").format("YYYY-MM-DD");
+        const end = dayjs(month).endOf("month").format("YYYY-MM-DD");
+
+        setStartDate(start);
+        setEndDate(end);
+    };
+    const handleDailyMonthChange = (month) => {
+        setSelectedDailyMonth(month);
+
+        // 1) Ayın ilk gününü otomatik seç
+        const firstDay = dayjs(month).startOf("month").format("YYYY-MM-DD");
+        setSelectedDate(firstDay);
+
+        // 2) Otomatik ihlal analizini çalıştır
+        // Küçük bir timeout atıyoruz ki state güncellensin sonra fetch çalışsın
+        setTimeout(() => {
+            fetchDailyViolations("month");
+        }, 50);
+    };
+
+
+
+    const handleTabChange = (event, newValue) => {
+        setTabValue(newValue);
+    };
+
+    // ======================================================
+    // TEK GÜNLÜK İHLAL VERİSİ ÇEKME (Aynı kaldı)
+    // ======================================================
+
+    const monthStart = dayjs(selectedDailyMonth).startOf("month").toISOString();
+    const monthEnd = dayjs(selectedDailyMonth).endOf("month").toISOString();
+
+    const fetchDailyViolations = useCallback(async (mode = "day") => {
+        setLoadingDaily(true);
+        setDailyViolationRows([]);
+
+        let start, end;
+
+        if (mode === "day") {
+            // 🔥 GÜN MODU
+            start = dayjs(selectedDate).startOf("day").toISOString();
+            end = dayjs(selectedDate).endOf("day").toISOString();
+        } else {
+            // 🔥 AY MODU
+            start = dayjs(selectedDailyMonth).startOf("month").toISOString();
+            end = dayjs(selectedDailyMonth).endOf("month").toISOString();
+        }
 
         try {
             const { data: details, error: e1 } = await supabase
                 .from(DETAIL_TABLE)
-                .select(DETAIL_COLS)
-                .gte("yukleme_varis", dayStart)
-                .lte("yukleme_varis", dayEnd);
-
+                .select(`sefer_no, yukleme_noktasi, yukleme_varis, yukleme_cikis`)
+                .filter("yukleme_varis::timestamp", "gte", start)
+                .filter("yukleme_varis::timestamp", "lte", end);
             if (e1) throw e1;
-
             if (!details?.length) {
-                setRows([]);
-                setLoading(false);
+                setDailyViolationRows([]);
+                setLoadingDaily(false);
                 return;
             }
 
@@ -126,18 +345,15 @@ export default function CleanFetcher() {
 
             const { data: summary, error: e2 } = await supabase
                 .from(SUMMARY_TABLE)
-                .select(SUMMARY_COLS)
+                .select(`sefer_no, plaka, treyler, surucu_ad_soyad, sefer_tarihi, yukleme_ili, yukleme_ilcesi, musteri_adi, yukleme_noktasi, proje_adi`)
                 .in("sefer_no", seferNos);
 
             if (e2) throw e2;
 
-            const finalRows = [];
+            const violationRows = [];
 
             summary.forEach((summaryRow) => {
                 const group = details.filter(d => d.sefer_no === summaryRow.sefer_no);
-
-                const uniqueNoktalar = new Set();
-                const uniqueProjeler = new Set();
 
                 let firstArrival = null;
                 let lastLeave = null;
@@ -145,392 +361,617 @@ export default function CleanFetcher() {
                 group.forEach(rec => {
                     const v = parseDT(rec.yukleme_varis);
                     const c = parseDT(rec.yukleme_cikis);
-
-                    if (v && (!firstArrival || v.isBefore(firstArrival)))
-                        firstArrival = v;
-
-                    if (c && (!lastLeave || c.isAfter(lastLeave)))
-                        lastLeave = c;
-
-                    if (summaryRow.yukleme_noktasi) uniqueNoktalar.add(summaryRow.yukleme_noktasi);
-                    if (summaryRow.proje_adi) uniqueProjeler.add(summaryRow.proje_adi);
+                    if (v && (!firstArrival || v.isBefore(firstArrival))) firstArrival = v;
+                    if (c && (!lastLeave || c.isAfter(lastLeave))) lastLeave = c;
                 });
 
-                // ✅ Gerçek bekleme süresi: son çıkış - ilk varış
                 let total = null;
-
-                if (firstArrival && lastLeave) {
-                    total = diffMinutes(firstArrival, lastLeave);
-                }
-
+                if (firstArrival && lastLeave) total = diffMinutes(firstArrival, lastLeave);
 
                 if (total >= MINIMUM_WAIT_TIME_MINUTES) {
-                    finalRows.push({
+                    violationRows.push({
                         ...summaryRow,
-                        yukleme_noktalari_birlesik: [...uniqueNoktalar].join(" ; "),
-                        proje_adlari_birlesik: [...uniqueProjeler].join(" ; "),
-                        toplam_bekleme_dk: total,
+                        proje_adlari_birlesik: summaryRow.proje_adi,
                         ilk_yukleme_varis: firstArrival?.toISOString(),
                         son_yukleme_cikis: lastLeave?.toISOString(),
+                        toplam_bekleme_dk: total
                     });
                 }
             });
 
-            setRows(finalRows);
+            setDailyViolationRows(violationRows);
         } catch (err) {
-            console.error("Veri çekme hatası:", err.message);
+            console.error("Daily fetch error:", err);
         }
 
-        setLoading(false);
-    }, []);
+        setLoadingDaily(false);
+    }, [selectedDate]);
 
-    /* ============================================================
-       FİLTRELENMİŞ + SIRALANMIŞ VERİ
-    ============================================================ */
-    const filteredAndSortedRows = useMemo(() => {
-        let temp = [...rows];
+    useEffect(() => {
+        // İlk yüklemede sadece günlük veriyi çekmesi için bu hook bırakıldı
+        // Ancak sekmeli yapıya geçildiği için artık sadece ilgili sekmeye tıklandığında veya tarih değiştiğinde çalışması daha mantıklı.
+        // Şimdilik fetchDailyViolations'ı kaldırıyorum ki sekmeyi manuel kontrol etsin.
+    }, [selectedDate]);
 
-        Object.keys(columnFilters).forEach(key => {
-            const filter = columnFilters[key]?.toLowerCase() ?? "";
-            if (filter.trim() === "") return;
 
-            temp = temp.filter(row => {
-                let val = row[key];
-                if (!val) val = "";
+    // ======================================================
+    // TARİH ARALIĞI PERFORMANS VERİSİ ÇEKME (Aynı kaldı)
+    // ======================================================
+    const fetchRangePerformance = useCallback(async () => {
+        // ... (Mevcut fetchRangePerformance fonksiyon kodu aynı)
+        setLoadingRange(true);
+        setPerformanceData([]);
 
-                if (key === "toplam_bekleme_dk") val = minToHM(val).toLowerCase();
-                else if (key.includes("varis") || key.includes("cikis")) val = fmtDateTR(val).toLowerCase();
-                else val = String(val).toLowerCase();
+        const dayStart = dayjs(startDate).startOf("day").toISOString();
+        const dayEnd = dayjs(endDate).endOf("day").toISOString();
 
-                return val.includes(filter);
+        try {
+            const { data: details, error: e1 } = await supabase
+                .from(DETAIL_TABLE)
+                .select(`sefer_no, yukleme_noktasi, yukleme_varis, yukleme_cikis`)
+                .filter("yukleme_varis::timestamp", "gte", dayStart)
+                .filter("yukleme_varis::timestamp", "lte", dayEnd)
+
+            if (e1) throw e1;
+            if (!details?.length) {
+                setLoadingRange(false);
+                return;
+            }
+
+            const seferNos = [...new Set(details.map(x => x.sefer_no))];
+
+            const { data: summary, error: e2 } = await supabase
+                .from(SUMMARY_TABLE)
+                .select(`sefer_no, plaka, treyler, surucu_ad_soyad, sefer_tarihi, yukleme_ili, yukleme_ilcesi, musteri_adi, yukleme_noktasi, proje_adi`)
+                .in("sefer_no", seferNos);
+
+            if (e2) throw e2;
+
+            const allSeferRows = [];
+
+            summary.forEach((summaryRow) => {
+                const group = details.filter(d => d.sefer_no === summaryRow.sefer_no);
+
+                let firstArrival = null;
+                let lastLeave = null;
+
+                group.forEach(rec => {
+                    const v = parseDT(rec.yukleme_varis);
+                    const c = parseDT(rec.yukleme_cikis);
+                    if (v && (!firstArrival || v.isBefore(firstArrival))) firstArrival = v;
+                    if (c && (!lastLeave || c.isAfter(lastLeave))) lastLeave = c;
+                });
+
+                let total = null;
+                if (firstArrival && lastLeave) total = diffMinutes(firstArrival, lastLeave);
+
+                allSeferRows.push({
+                    ...summaryRow,
+                    isViolation: total >= MINIMUM_WAIT_TIME_MINUTES,
+                    total_wait_minutes: total || 0,
+                    proje_adlari_birlesik: summaryRow.proje_adi,
+                    ilk_yukleme_varis: firstArrival?.toISOString(),
+                    son_yukleme_cikis: lastLeave?.toISOString(),
+                });
+            });
+
+            const plakaMap = {};
+
+            allSeferRows.forEach(r => {
+                const plaka = r.plaka || "Tanımsız";
+
+                if (!plakaMap[plaka]) {
+                    plakaMap[plaka] = {
+                        plaka,
+                        projeler: new Set(),
+                        toplamSefer: 0,
+                        ihlalliSefer: 0,
+                        toplamIhlalSuresi: 0,
+                        tumSeferler: [],
+                    };
+                }
+
+                const obj = plakaMap[plaka];
+                obj.toplamSefer += 1;
+                obj.projeler.add(r.proje_adlari_birlesik);
+                obj.tumSeferler.push(r);
+
+                if (r.isViolation) {
+                    obj.ihlalliSefer += 1;
+                    obj.toplamIhlalSuresi += r.total_wait_minutes;
+                }
+            });
+
+            const aggregatedList = Object.values(plakaMap).map(p => ({
+                ...p,
+                projeler: [...p.projeler].join(", "),
+                ihlalOrani: p.toplamSefer ? ((p.ihlalliSefer / p.toplamSefer) * 100) : 0
+            }));
+
+            const maxIhlalSure = Math.max(...aggregatedList.map(x => x.toplamIhlalSuresi), 1);
+            const maxIhlalOrani = Math.max(...aggregatedList.map(x => x.ihlalOrani), 0.1);
+
+            const scores = aggregatedList.map(item => {
+                const cezaPuanı = (
+                    (item.toplamIhlalSuresi / maxIhlalSure) * 5 +
+                    (item.ihlalOrani / maxIhlalOrani) * 5
+                );
+
+                const finalCezaPuanı = Math.min(10, cezaPuanı).toFixed(1);
+                const perfPuanı = (10 - finalCezaPuanı).toFixed(1);
+
+                return {
+                    ...item,
+                    ihlalOrani: item.ihlalOrani.toFixed(1) + "%",
+                    ceza: finalCezaPuanı,
+                    performans: perfPuanı
+                };
+            }).sort((a, b) => parseFloat(b.performans) - parseFloat(a.performans));
+
+            setPerformanceData(scores);
+
+        } catch (err) {
+            console.error("Range fetch error:", err);
+        }
+
+        setLoadingRange(false);
+    }, [startDate, endDate]);
+
+
+    // ======================================================
+    // YENİ EKLEME: Analiz Verileri (useMemo)
+    // ======================================================
+
+    // Tek Günlük İhlal Analizi (Görünüm ve KPI Hesaplaması için temel veri)
+    const dailyPlateAnalysis = useMemo(() => {
+        const plakaMap = {};
+
+        dailyViolationRows.forEach(r => {
+            const plaka = r.plaka || "Tanımsız";
+
+            if (!plakaMap[plaka]) {
+                plakaMap[plaka] = {
+                    plaka,
+                    projeler: new Set(),
+                    ihlalliSefer: 0,
+                    toplamIhlalSuresi: 0,
+                    detaylar: []
+                };
+            }
+
+            const obj = plakaMap[plaka];
+
+            obj.projeler.add(r.proje_adi);
+            obj.ihlalliSefer += 1;
+            obj.toplamIhlalSuresi += r.toplam_bekleme_dk;
+
+            obj.detaylar.push({
+                sefer_no: r.sefer_no,
+                plaka: r.plaka,
+                sofor: r.surucu_ad_soyad,
+                proje: r.proje_adi,
+                yukleme_noktasi: r.yukleme_noktasi,
+                varis: r.ilk_yukleme_varis,
+                cikis: r.son_yukleme_cikis,
+                sure: r.toplam_bekleme_dk
             });
         });
 
-        if (sortKey) {
-            temp.sort((a, b) => {
-                const av = a[sortKey];
-                const bv = b[sortKey];
+        return Object.values(plakaMap).map(p => ({
+            ...p,
+            projeler: [...p.projeler].join(", "),
+        }));
+    }, [dailyViolationRows]);
 
-                if (typeof av === "number") {
-                    return sortDirection === "asc" ? av - bv : bv - av;
-                }
+    // YENİ EKLEME: Tek Günlük KPI Hesaplamaları
+    const dailyKpis = useMemo(() => {
+        const totalViolations = dailyViolationRows.length;
+        const totalViolationTime = dailyViolationRows.reduce((sum, row) => sum + row.toplam_bekleme_dk, 0);
+        const avgViolationTime = totalViolations > 0 ? totalViolationTime / totalViolations : 0;
 
-                return sortDirection === "asc"
-                    ? String(av).localeCompare(String(bv))
-                    : String(bv).localeCompare(String(av));
-            });
-        }
+        return {
+            totalViolations,
+            totalViolationTime: minToHM(totalViolationTime),
+            avgViolationTime: minToHM(avgViolationTime),
+            uniquePlates: new Set(dailyViolationRows.map(r => r.plaka)).size
+        };
+    }, [dailyViolationRows]);
 
-        return temp;
-    }, [rows, columnFilters, sortKey, sortDirection]);
 
-    /* ============================================================
-       OTOMATİK VERİ ÇEK
-    ============================================================ */
-    useEffect(() => {
-        fetchAll(selectedDate);
-    }, [selectedDate, fetchAll]);
+    // YENİ EKLEME: Tarih Aralığı KPI Hesaplamaları
+    const rangeKpis = useMemo(() => {
+        const totalPlates = performanceData.length;
+        const avgPerformance = performanceData.reduce((sum, p) => sum + parseFloat(p.performans), 0) / (totalPlates || 1);
+        const totalViolationTime = performanceData.reduce((sum, p) => sum + p.toplamIhlalSuresi, 0);
 
-    /* ============================================================
-       EXCEL EXPORT
-    ============================================================ */
-    const exportExcel = async () => {
-        if (!filteredAndSortedRows.length) return;
+        return {
+            totalPlates,
+            avgPerformance: avgPerformance.toFixed(1),
+            totalViolationTime: minToHM(totalViolationTime),
+            totalViolations: performanceData.reduce((sum, p) => sum + p.ihlalliSefer, 0),
+        };
+    }, [performanceData]);
+
+
+    // ======================================================
+    // EXCEL EXPORT FONKSİYONLARI (Başlıklar güncel haliyle korundu)
+    // ======================================================
+    const exportDailyViolationExcel = async () => {
+        if (!dailyPlateAnalysis.length) return;
 
         const wb = new ExcelJS.Workbook();
-        const ws = wb.addWorksheet("Uzun Bekleme Raporu");
+        const ws = wb.addWorksheet("Gunluk Ihlal Analizi");
 
-        const data = filteredAndSortedRows.map(r => ({
-            "Sefer No": r.sefer_no,
-            "Plaka": r.plaka,
-            "Şoför": r.surucu_ad_soyad,
-            "Proje": r.proje_adlari_birlesik,
-            "Yükleme Noktası": r.yukleme_noktalari_birlesik,
-            "İlk Varış": fmtDateTR(r.ilk_yukleme_varis),
-            "Son Çıkış": fmtDateTR(r.son_yukleme_cikis),
-            "Bekleme Süresi": minToHM(r.toplam_bekleme_dk),
-        }));
+        const data = dailyPlateAnalysis.flatMap(p =>
+            p.detaylar.map(d => ({
+                "sefer no": d.sefer_no,
+                "plaka": d.plaka,
+                "şoför": d.sofor,
+                "proje": d.proje,
+                "yükleme noktası": d.yukleme_noktasi,
+                "varış": fmtDateTR(d.varis),
+                "çıkış": fmtDateTR(d.cikis),
+                "bekleme süresi": minToHM(d.sure),
+                "Bekleme Süresi (DK)": d.sure,
+            }))
+        );
 
-        ws.columns = Object.keys(data[0]).map(k => ({
-            header: k,
-            key: k,
-            width: 25
-        }));
+        ws.columns = [
+            { header: "SEFER NO", key: "sefer no", width: 15 },
+            { header: "PLAKA", key: "plaka", width: 12 },
+            { header: "ŞOFÖR", key: "şoför", width: 25 },
+            { header: "PROJE", key: "proje", width: 20 },
+            { header: "YÜKLEME NOKTASI", key: "yükleme noktası", width: 30 },
+            { header: "VARIŞ ZAMANI", key: "varış", width: 20 },
+            { header: "ÇIKIŞ ZAMANI", key: "çıkış", width: 20 },
+            { header: "BEKLEME SÜRESİ", key: "bekleme süresi", width: 20 },
+            { header: "BEKLEME SÜRESİ (DK)", key: "Bekleme Süresi (DK)", width: 10, hidden: true },
+        ];
 
         ws.addRows(data);
 
         const buf = await wb.xlsx.writeBuffer();
-        saveAs(new Blob([buf]), `bekleme_raporu_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
+        saveAs(new Blob([buf]), `gunluk_ihlalli_bekleme_${selectedDate}.xlsx`);
     };
 
-    /* ============================================================
-       UI RENKLERİ
-    ============================================================ */
-    const UI = {
-        darkBg: "#121212",
-        cardBg: "#1e1e1e",
-        tableBg: "#262626",
-        border: "1px solid #333",
-        text: "#fff",
-        primary: "#4a90e2",
-        danger: "#ff6b6b",
-        hover: "#333"
+    const exportPerformanceExcel = async () => {
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet("Plaka Performans");
+
+        ws.columns = [
+            { header: "Plaka", key: "plaka", width: 12 },
+            { header: "Projeler", key: "projeler", width: 25 },
+            { header: "Toplam Sefer", key: "toplamSefer", width: 15 },
+            { header: "İhlalli Sefer", key: "ihlalliSefer", width: 15 },
+            { header: "İhlal Oranı", key: "ihlalOrani", width: 15 },
+            { header: "Toplam İhlal Süresi (dk)", key: "toplamIhlalSuresi", width: 25 },
+            { header: "Ceza Puanı (10)", key: "ceza", width: 15 },
+            { header: "Performans Puanı (10)", key: "performans", width: 15 }
+        ];
+
+        performanceData.forEach(r => ws.addRow({
+            ...r,
+            toplamIhlalSuresi: r.toplamIhlalSuresi
+        }));
+
+        const buf = await wb.xlsx.writeBuffer();
+        saveAs(new Blob([buf]), `plaka_performans_${startDate}_${endDate}.xlsx`);
     };
 
-    const headers = [
-        { key: "sefer_no", label: "Sefer No", icon: FiTruck, sortable: true },
-        { key: "plaka", label: "Plaka", icon: FiTruck, sortable: true },
-        { key: "surucu_ad_soyad", label: "Şoför", icon: FiUser, sortable: true },
-        { key: "proje_adlari_birlesik", label: "Proje Adı", icon: FiClock, sortable: true },
-        { key: "yukleme_noktalari_birlesik", label: "Yükleme Noktası", icon: FiClock, sortable: true },
-        { key: "ilk_yukleme_varis", label: "İlk Varış", icon: FiCalendar, sortable: true },
-        { key: "son_yukleme_cikis", label: "Son Çıkış", icon: FiCalendar, sortable: true },
-        { key: "toplam_bekleme_dk", label: "Bekleme Süresi", icon: FiAlertTriangle, sortable: true }
-    ];
-
-    /* ============================================================
-       RENDER
-    ============================================================ */
+    // ======================================================
+    // RENDER (Sekmeli ve KPI Kartlı Görünüm)
+    // ======================================================
     return (
-        <div style={{
-            background: UI.darkBg,
-            minHeight: "100vh",
-            padding: 40,
-            color: UI.text,
-            fontFamily: "Inter, sans-serif"
-        }}>
+        <Container maxWidth="xl" sx={{ py: 4 }}>
+            <Typography variant="h4" sx={{ mb: 1, fontWeight: "bold", color: theme.palette.primary.main }}>
+                🚀 Yüklemede Bekleme Performans Yönetimi
+            </Typography>
+            <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 3 }}>
+                Filo bekleme sürelerini analiz edin ve performans puanlarını takip edin. (İhlal sınırı: **4 saat**)
+            </Typography>
 
-            {/* BAŞLIK */}
-            <h1 style={{
-                fontSize: 28,
-                fontWeight: 800,
-                borderLeft: `5px solid ${UI.danger}`,
-                paddingLeft: 15,
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                marginBottom: 35,
-                color: UI.danger
-            }}>
-                <FiAlertTriangle size={28} /> YÜKSEK BEKLEME ANALİZİ
-            </h1>
+            {/* YENİ EKLEME: Sekmeli Navigasyon */}
+            <Paper elevation={4} sx={{ mb: 4, borderRadius: 2 }}>
+                <Tabs value={tabValue} onChange={handleTabChange} indicatorColor="primary" textColor="primary" centered>
+                    <Tab label="Anlık İhlal Analizi (Tek Gün)" icon={<WarningIcon />} iconPosition="start" />
+                    <Tab label="Kümülatif Plaka Performansı (Aralık)" icon={<SpeedIcon />} iconPosition="start" />
+                </Tabs>
+            </Paper>
 
-            {/* KONTROLLER */}
-            <div style={{
-                background: UI.cardBg,
-                padding: 20,
-                borderRadius: 10,
-                border: UI.border,
-                marginBottom: 30,
-                display: "flex",
-                alignItems: "center",
-                gap: 25,
-                flexWrap: "wrap"
-            }}>
-                {/* TARİH */}
-                <div>
-                    <label style={{ fontSize: 14, marginBottom: 6, display: "block" }}>
-                        <FiCalendar /> Tarih
-                    </label>
-                    <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        style={{
-                            padding: "10px 15px",
-                            background: "#2c2c2c",
-                            color: UI.text,
-                            borderRadius: 6,
-                            border: UI.border
-                        }}
-                    />
-                </div>
+            {/* İçerik Gösterimi - TAB 0: Tek Günlük İhlal */}
+            {tabValue === 0 && (
+                <Box>
 
-                {/* BİLGİ ÇİPİ */}
-                <div style={{
-                    padding: "10px 15px",
-                    background: "rgba(255, 107, 107, 0.25)",
-                    color: UI.danger,
-                    borderRadius: 6,
-                    fontWeight: 600
-                }}>
-                    <FiClock /> Yalnızca **4 saat ve üzeri** beklemeler gösterilir.
-                </div>
 
-                {/* BUTONLAR */}
-                <div style={{ marginLeft: "auto", display: "flex", gap: 15 }}>
-                    <button
-                        onClick={() => fetchAll(selectedDate)}
-                        disabled={loading}
-                        style={{
-                            padding: "12px 25px",
-                            background: UI.primary,
-                            borderRadius: 8,
-                            fontWeight: 600,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            color: "#fff",
-                            opacity: loading ? 0.6 : 1
-                        }}
-                    >
-                        <FiRefreshCw className={loading ? "spin" : ""} />
-                        Yenile
-                    </button>
+                    {/* ---------------- AY FİLTRESİ (Sadece veri aralığı için) ---------------- */}
+                    <Box sx={{ mb: 3 }}>
+                        <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: "bold" }}>
+                            📅 Ay Bazlı Veri Aralığı
+                        </Typography>
 
-                    <button
-                        onClick={exportExcel}
-                        disabled={!filteredAndSortedRows.length}
-                        style={{
-                            padding: "12px 25px",
-                            background: "#2ecc71",
-                            borderRadius: 8,
-                            fontWeight: 600,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            color: "#fff",
-                            opacity: !filteredAndSortedRows.length ? 0.6 : 1
-                        }}
-                    >
-                        <FiDownload /> Excel ({filteredAndSortedRows.length})
-                    </button>
-                </div>
-            </div>
+                        <TextField
+                            fullWidth
+                            type="month"
+                            label="Ay Seçin"
+                            value={selectedDailyMonth}
+                            onChange={(e) => handleDailyMonthChange(e.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                        />
+                    </Box>
 
-            {/* YÜKLENİYOR */}
-            {loading && (
-                <p style={{ fontSize: 20, color: UI.primary }}>
-                    <FiRefreshCw className="spin" /> Veriler getiriliyor...
-                </p>
+                    <Divider sx={{ my: 3 }} />
+
+                    {/* ---------------- GÜNLÜK ANALİZ TARİHİ ---------------- */}
+                    <Grid container spacing={3} alignItems="center" sx={{ mb: 3 }}>
+                        <Grid item xs={12} sm={8}>
+                            <TextField
+                                fullWidth
+                                type="date"
+                                label="Analiz Edilecek Gün"
+                                value={selectedDate}
+                                onChange={(e) => setSelectedDate(e.target.value)}
+                                InputLabelProps={{ shrink: true }}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <DateRangeIcon color="primary" />
+                                        </InputAdornment>
+                                    )
+                                }}
+                            />
+                        </Grid>
+
+                        <Grid item xs={12} sm={4}>
+                            <Button
+                                fullWidth
+                                variant="contained"
+                                color="primary"
+                                size="large"
+                                startIcon={loadingDaily ? <CircularProgress size={20} color="inherit" /> : <SearchIcon />}
+                                onClick={() => fetchDailyViolations("day")}
+                                disabled={loadingDaily}
+                                sx={{ height: '56px' }}
+                            >
+                                {loadingDaily ? "Veriler Yükleniyor..." : "İhlalleri Getir"}
+                            </Button>
+                        </Grid>
+                    </Grid>
+
+                    {/* YENİ EKLEME: Tek Günlük KPI KARTLARI */}
+                    {!loadingDaily && dailyPlateAnalysis.length > 0 && (
+                        <Grid container spacing={3} sx={{ mb: 4 }}>
+                            <Grid item xs={12} md={3}>
+                                <KPICard
+                                    title="Toplam İhlalli Sefer"
+                                    value={dailyKpis.totalViolations}
+                                    icon={WarningIcon}
+                                    color={theme.palette.error.main}
+                                    subtitle={`Toplam ${dailyKpis.uniquePlates} plakada gerçekleşti.`}
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={3}>
+                                <KPICard
+                                    title="Toplam İhlal Süresi"
+                                    value={dailyKpis.totalViolationTime}
+                                    icon={AccessTimeIcon}
+                                    color={theme.palette.warning.main}
+                                    subtitle="Seçili günde kaybedilen toplam süre."
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={3}>
+                                <KPICard
+                                    title="Ortalama Bekleme (İhlalli)"
+                                    value={dailyKpis.avgViolationTime}
+                                    icon={TrendingUpIcon}
+                                    color={theme.palette.info.main}
+                                    subtitle="İhlalli seferlerin ortalama süresi."
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={3}>
+                                <KPICard
+                                    title="İhlalli Plaka Çeşidi"
+                                    value={dailyKpis.uniquePlates}
+                                    icon={DirectionsCarIcon}
+                                    color={theme.palette.primary.main}
+                                    subtitle={`Toplam ${dailyKpis.totalViolations} seferde kullanıldı.`}
+                                />
+                            </Grid>
+                        </Grid>
+                    )}
+
+                    {loadingDaily && <Box sx={{ p: 5, textAlign: "center" }}><CircularProgress /><Typography sx={{ mt: 1 }}>Günlük veriler analiz ediliyor...</Typography></Box>}
+
+                    {!loadingDaily && dailyViolationRows.length === 0 && (
+                        <Alert severity="success" sx={{ mt: 3, p: 2 }}>
+                            **{dayjs(selectedDate).format("DD.MM.YYYY")}** tarihinde **4 saat üzeri** bekleme ihlali tespit edilmemiştir.
+                        </Alert>
+                    )}
+
+                    {!loadingDaily && dailyPlateAnalysis.length > 0 && (
+                        <Paper elevation={1} sx={{ mt: 3, p: 2, borderRadius: 2 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                <Typography variant="h6" sx={{ fontWeight: "bold" }}>
+                                    İhlal Dağılımı (Plaka Bazlı)
+                                </Typography>
+                                <Button
+                                    startIcon={<FileDownloadIcon />}
+                                    variant="outlined"
+                                    color="error"
+                                    onClick={exportDailyViolationExcel}
+                                >
+                                    Tüm Sefer Detaylarını Excel'e Aktar
+                                </Button>
+                            </Box>
+                            <TableContainer sx={{ maxHeight: 400 }}>
+                                <Table stickyHeader size="small">
+                                    <TableHead>
+                                        <TableRow sx={{ bgcolor: theme.palette.error.light }}>
+                                            <TableCell></TableCell>
+                                            <TableCell sx={{ fontWeight: "bold", color: theme.palette.getContrastText(theme.palette.error.light) }}>Plaka</TableCell>
+                                            <TableCell sx={{ fontWeight: "bold", color: theme.palette.getContrastText(theme.palette.error.light) }}>Projeler</TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: "bold", color: theme.palette.getContrastText(theme.palette.error.light) }}>İhlalli Sefer Adedi</TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: "bold", color: theme.palette.getContrastText(theme.palette.error.light) }}>Toplam İhlal Süresi</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {dailyPlateAnalysis.map((p, idx) => (
+                                            <PlateRow p={p} idx={idx} key={p.plaka} />
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </Paper>
+                    )}
+                </Box>
             )}
 
-            {/* KAYIT YOK */}
-            {!loading && rows.length === 0 && (
-                <p style={{
-                    background: "rgba(255,0,0,0.15)",
-                    padding: 15,
-                    borderRadius: 8,
-                    fontWeight: 600,
-                    color: UI.danger
-                }}>
-                    <FiAlertTriangle /> Seçilen tarihte uzun bekleme kaydı bulunamadı.
-                </p>
+            {/* İçerik Gösterimi - TAB 1: Tarih Aralığı Performans */}
+            {tabValue === 1 && (
+                <Box>
+                    <Grid container spacing={2} alignItems="center" sx={{ mb: 3 }}>
+
+                        <Grid item xs={12} sm={3}>
+                            <TextField
+                                fullWidth
+                                type="month"
+                                label="Ay Seçin"
+                                value={selectedMonth}
+                                onChange={(e) => handleMonthChange(e.target.value)}
+                                InputLabelProps={{ shrink: true }}
+                            />
+                        </Grid>
+
+                        <Grid item xs={12} sm={3}>
+                            <TextField
+                                fullWidth
+                                type="date"
+                                label="Başlangıç Tarihi"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                InputLabelProps={{ shrink: true }}
+                            />
+                        </Grid>
+
+                        <Grid item xs={12} sm={3}>
+                            <TextField
+                                fullWidth
+                                type="date"
+                                label="Bitiş Tarihi"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                InputLabelProps={{ shrink: true }}
+                            />
+                        </Grid>
+
+                        <Grid item xs={12} sm={3}>
+                            <Button
+                                fullWidth
+                                variant="contained"
+                                color="success"
+                                size="large"
+                                startIcon={<SearchIcon />}
+                                onClick={fetchRangePerformance}
+                                disabled={loadingRange}
+                                sx={{ height: '56px' }}
+                            >
+                                Performansı Getir
+                            </Button>
+                        </Grid>
+
+                    </Grid>
+                    {/* YENİ EKLEME: Performans KPI KARTLARI */}
+                    {!loadingRange && performanceData.length > 0 && (
+                        <Grid container spacing={3} sx={{ mb: 4 }}>
+                            <Grid item xs={12} md={3}>
+                                <KPICard
+                                    title="Ortalama Performans Puanı"
+                                    value={rangeKpis.avgPerformance}
+                                    icon={StarIcon}
+                                    color={rangeKpis.avgPerformance >= 8 ? theme.palette.success.main : theme.palette.warning.dark}
+                                    subtitle={`Toplam ${rangeKpis.totalPlates} plakanın ortalaması.`}
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={3}>
+                                <KPICard
+                                    title="İhlalli Sefer Sayısı"
+                                    value={rangeKpis.totalViolations}
+                                    icon={WarningIcon}
+                                    color={theme.palette.error.main}
+                                    subtitle="Seçilen aralıktaki toplam ihlal sayısı."
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={3}>
+                                <KPICard
+                                    title="Toplam İhlal Süresi"
+                                    value={rangeKpis.totalViolationTime}
+                                    icon={AccessTimeIcon}
+                                    color={theme.palette.warning.main}
+                                    subtitle="Aralık boyunca kaybedilen kümülatif süre."
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={3}>
+                                <KPICard
+                                    title="Analiz Edilen Plaka Sayısı"
+                                    value={rangeKpis.totalPlates}
+                                    icon={DirectionsCarIcon}
+                                    color={theme.palette.primary.main}
+                                    subtitle="Sisteme giriş/çıkış yapan farklı plaka adedi."
+                                />
+                            </Grid>
+                        </Grid>
+                    )}
+
+
+                    {loadingRange && <Box sx={{ p: 5, textAlign: "center" }}><CircularProgress /><Typography sx={{ mt: 1 }}>Performans verileri analiz ediliyor...</Typography></Box>}
+
+                    {!loadingRange && performanceData.length === 0 && (
+                        <Alert severity="info" sx={{ mt: 3, p: 2 }}>
+                            Seçilen aralıkta yükleme kaydı olan sefer bulunamadı veya analiz için yeterli veri yok.
+                        </Alert>
+                    )}
+
+                    {!loadingRange && performanceData.length > 0 && (
+                        <Paper elevation={1} sx={{ mt: 3, p: 2, borderRadius: 2 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                <Typography variant="h6" sx={{ fontWeight: "bold" }}>
+                                    Plaka Performans Sıralaması (İhlal Oranına Göre)
+                                </Typography>
+                                <Button
+                                    startIcon={<FileDownloadIcon />}
+                                    variant="outlined"
+                                    color="success"
+                                    onClick={exportPerformanceExcel}
+                                >
+                                    Performans Özetini Excel'e Aktar
+                                </Button>
+                            </Box>
+                            <TableContainer sx={{ maxHeight: 550 }}>
+                                <Table stickyHeader size="small">
+                                    <TableHead>
+                                        <TableRow sx={{ bgcolor: theme.palette.success.light }}>
+                                            <TableCell sx={{ fontWeight: "bold", width: '1%' }}>Detay</TableCell>
+                                            <TableCell sx={{ fontWeight: "bold" }}>Plaka</TableCell>
+                                            <TableCell sx={{ fontWeight: "bold" }}>Projeler</TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: "bold" }}>Toplam Sefer</TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: "bold" }}>İhlalli Sefer</TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: "bold" }}>İhlal Oranı</TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: "bold" }}>Toplam İhlal Süresi</TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: "bold" }}>Ceza Puanı (10)</TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: "bold" }}>Performans (10)</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+
+                                    <TableBody>
+                                        {performanceData.map((p, idx) => (
+                                            <PlatePerformanceRow p={p} idx={idx} key={p.plaka} />
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </Paper>
+                    )}
+                </Box>
             )}
-
-            {/* TABLO */}
-            {!loading && rows.length > 0 && (
-                <div style={{
-                    background: UI.cardBg,
-                    padding: 10,
-                    borderRadius: 10,
-                    border: UI.border,
-                    overflowX: "auto",
-                    maxHeight: "70vh"
-                }}>
-                    <table style={{
-                        width: "100%",
-                        borderCollapse: "collapse",
-                        color: UI.text
-                    }}>
-                        {/* BAŞLIK */}
-                        <thead>
-                            <tr>
-                                {headers.map(h => (
-                                    <th key={h.key} style={{
-                                        padding: 12,
-                                        background: "#2f2f2f",
-                                        position: "sticky",
-                                        top: 0,
-                                        zIndex: 5,
-                                        textAlign: "left",
-                                        borderBottom: "2px solid #444"
-                                    }}>
-                                        <div
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: 8,
-                                                cursor: h.sortable ? "pointer" : "default"
-                                            }}
-                                            onClick={() => h.sortable && handleSort(h.key)}
-                                        >
-                                            <h.icon size={16} color={UI.primary} />
-                                            {h.label}
-                                            {sortKey === h.key && (
-                                                sortDirection === "asc"
-                                                    ? <FiArrowUp />
-                                                    : <FiArrowDown />
-                                            )}
-                                        </div>
-
-                                        <input
-                                            type="text"
-                                            placeholder="Filtrele..."
-                                            value={columnFilters[h.key] || ""}
-                                            onChange={(e) => handleFilterChange(h.key, e.target.value)}
-                                            style={{
-                                                width: "100%",
-                                                marginTop: 8,
-                                                padding: 6,
-                                                background: "#222",
-                                                border: "1px solid #444",
-                                                borderRadius: 6,
-                                                color: "#fff"
-                                            }}
-                                        />
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-
-                        {/* İÇERİK */}
-                        <tbody>
-                            {filteredAndSortedRows.map((r, idx) => (
-                                <tr key={idx} style={{ background: idx % 2 ? "#1b1b1b" : "transparent" }}>
-                                    <td style={{ padding: 12 }}>{r.sefer_no}</td>
-                                    <td style={{ padding: 12, color: UI.primary }}>{r.plaka}</td>
-                                    <td style={{ padding: 12 }}>{r.surucu_ad_soyad}</td>
-
-                                    <td style={{ padding: 12 }}>
-                                        <span style={{
-                                            background: "rgba(74,144,226,0.2)",
-                                            padding: "4px 8px",
-                                            borderRadius: 6
-                                        }}>
-                                            {r.proje_adlari_birlesik}
-                                        </span>
-                                    </td>
-
-                                    <td style={{ padding: 12 }}>{r.yukleme_noktalari_birlesik}</td>
-
-                                    <td style={{ padding: 12 }}>
-                                        <FiCalendar size={14} style={{ marginRight: 6 }} />
-                                        {fmtDateTR(r.ilk_yukleme_varis)}
-                                    </td>
-
-                                    <td style={{ padding: 12 }}>
-                                        <FiCalendar size={14} style={{ marginRight: 6 }} />
-                                        {fmtDateTR(r.son_yukleme_cikis)}
-                                    </td>
-
-                                    <td style={{
-                                        padding: 12,
-                                        fontWeight: 700,
-                                        color: UI.danger
-                                    }}>
-                                        {minToHM(r.toplam_bekleme_dk)}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-
-                    <p style={{ marginTop: 10, textAlign: "right", color: "#aaa" }}>
-                        Toplam {rows.length} seferden {filteredAndSortedRows.length} tanesi gösteriliyor.
-                    </p>
-                </div>
-            )}
-        </div>
+        </Container>
     );
 }

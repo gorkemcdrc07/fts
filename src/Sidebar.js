@@ -49,6 +49,8 @@ import DirectionsBusFilledIcon from "@mui/icons-material/DirectionsBusFilled";
 import AirportShuttleOutlinedIcon from "@mui/icons-material/AirportShuttleOutlined";
 import PivotTableChartIcon from "@mui/icons-material/PivotTableChart";
 import LocalGasStationIcon from "@mui/icons-material/LocalGasStation"; // ✅ Frigo Yakıt Hakediş
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+
 
 export const DRAWER_WIDTH_OPEN = 280;
 export const DRAWER_WIDTH_CLOSED = 72;
@@ -210,6 +212,7 @@ export default function Sidebar(props) {
                 "/raporlar/eta-uyumsuz",
                 "/raporlar/sefer-tamamlayan",
                 "/raporlar/bolgesel-analiz", // ✅ eklendi
+                "/raporlar/arac-etalari",   // ✔️ BURAYI EKLEDİK
             ])
         );
 
@@ -221,6 +224,7 @@ export default function Sidebar(props) {
                 "/hakedis/hakedis-seferleri",
                 "/hakedis/hamaliye",
                 "/hakedis/frigo-yakit-hakedis", // ✅ yeni yol
+
             ])
         );
 
@@ -260,8 +264,12 @@ export default function Sidebar(props) {
             { ad: "Boşta Araç", yol: "/raporlar/bosta-arac", ikon: <DirectionsCarIcon /> },
             { ad: "Sefer Süreleri", yol: "/raporlar/sefer-sureleri", ikon: <AirportShuttleIcon /> },
             { ad: "Plaka Bazlı", yol: "/raporlar/plaka-bazli", ikon: <AirportShuttleOutlinedIcon /> },
+
+            // ✔️ YENİ EKLENEN — ACTIF ARAÇ ETA RAPORU
+            { ad: "Araç ETAları", yol: "/raporlar/arac-etalari", ikon: <AccessTimeIcon /> },
+
             { ad: "Sefer Tamamlayan", yol: "/raporlar/sefer-tamamlayan", ikon: <TaskAltIcon /> },
-            { ad: "Bölgesel Analiz", yol: "/raporlar/bolgesel-analiz", ikon: <QueryStatsIcon /> }, // ✅ yeni
+            { ad: "Bölgesel Analiz", yol: "/raporlar/bolgesel-analiz", ikon: <QueryStatsIcon /> },
         ],
         []
     );
@@ -270,10 +278,12 @@ export default function Sidebar(props) {
     const hakedisAltMenuler = useMemo(
         () => [
             { ad: "Frigo Yakıt Hakediş", yol: "/hakedis/frigo-yakit-hakedis", ikon: <LocalGasStationIcon /> }, // ✅ yeni
+            { ad: "Frigo Hakediş Seferleri", yol: "/hakedis/hakedis-seferleri", ikon: <ReceiptLongIcon /> },
+            { ad: "Filo-Frigo Araç Cari & Fiyat", yol: "/hakedis/arac-cari-ve-fiyat", ikon: <CreditCardIcon /> },
+            { ad: "Filo %9 İskontolu Yakıt Hakedişi", yol: "/hakedis/FiloIskontoluHakedis", ikon: <PaidIcon /> },
             { ad: "Tedarikçi Masraf", yol: "/hakedis/tedarikci-masraf", ikon: <PaidIcon /> },
-            { ad: "Araç Cari & Fiyat", yol: "/hakedis/arac-cari-ve-fiyat", ikon: <CreditCardIcon /> },
-            { ad: "Hakediş Seferleri", yol: "/hakedis/hakedis-seferleri", ikon: <ReceiptLongIcon /> },
             { ad: "Hamaliye", yol: "/hakedis/hamaliye", ikon: <PaidIcon /> },
+
         ],
         []
     );

@@ -1,22 +1,20 @@
 // ===============================================
-// TeslimdeBekleme.jsx — NİHAİ SÜRÜM (HATA DÜZELTME: c.sx is not a function)
+// TeslimdeBekleme.jsx — SON SÜRÜM (Sefer Tekrarı Hatası Düzeltildi)
 // ===============================================
 
 import React, { useState, useCallback, useEffect } from "react";
-// Supabase (ÖNEMLİ: Kendi projenizdeki yolu güncelleyin)
 import { supabase } from "../supabaseClient";
 
-// DayJS ve Eklentiler
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
 import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
 import weekOfYear from "dayjs/plugin/weekOfYear";
-import updateLocale from 'dayjs/plugin/updateLocale';
+import updateLocale from "dayjs/plugin/updateLocale";
+
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-// MUI Bileşenleri
 import {
     Container,
     Typography,
@@ -34,61 +32,59 @@ import {
     TableRow,
     TableCell,
     Tooltip,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
-    InputAdornment,
     Collapse,
     IconButton,
-    useTheme
+    LinearProgress,
 } from "@mui/material";
 
-// MUI İkonlar
+import { useTheme } from "@mui/material/styles"; // useTheme importu düzeltildi
+
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import SearchIcon from "@mui/icons-material/Search";
-import AccessTimeFilledIcon from "@mui/icons-material/AccessTimeFilled";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CloseIcon from "@mui/icons-material/Close";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import DateRangeIcon from '@mui/icons-material/DateRange';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 
 
-// DayJS Eklentileri ve Global Ayarlar
+// --------------------------------------------------------------
+// DAYJS AYARLARI
+// --------------------------------------------------------------
 dayjs.extend(isSameOrBefore);
 dayjs.extend(isSameOrAfter);
 dayjs.extend(weekOfYear);
 dayjs.extend(updateLocale);
-dayjs.locale('tr');
+dayjs.locale("tr");
 
-dayjs.updateLocale('tr', {
-    weekStart: 1,
-});
+dayjs.updateLocale("tr", { weekStart: 1 });
 
 
-// --------------------------------------------------
-// SQL TABLO ALANLARI
-// --------------------------------------------------
+// --------------------------------------------------------------
+// SUPABASE TABLOLARI
+// --------------------------------------------------------------
 const DETAIL_TABLE = "tamamlanan_detaylar";
 const SUMMARY_TABLE = "tamamlanan_seferler";
 
-const SUMMARY_COLS = [
-    "id", "sefer_no", "plaka", "treyler", "surucu_ad_soyad", "surucu_tckn",
-    "sefer_tarihi", "yukleme_ili", "teslim_ili", "musteri_adi",
-    "proje_adi"
-].join(",");
+const DETAIL_COLS = `
+    sefer_no,
+    teslim_noktasi,
+    teslim_varis,
+    teslim_cikis
+`;
 
-const DETAIL_COLS = [
-    "sefer_no", "nokta_sirasi", "yukleme_noktasi", "teslim_noktasi",
-    "yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"
-].join(",");
+const SUMMARY_COLS = `
+    sefer_no,
+    plaka,
+    proje_adi,
+    yukleme_ili,
+    teslim_ili,
+    sefer_tarihi
+`;
 
-// --------------------------------------------------
-// YARDIMCI FONKSİYONLAR VE KURAL HESAPLAMA
-// --------------------------------------------------
 
+// --------------------------------------------------------------
+// YARDIMCI FONKSİYONLAR
+// --------------------------------------------------------------
 const parseDT = (v) => {
     const d = dayjs(v);
     return d.isValid() ? d : null;
@@ -100,1062 +96,714 @@ const fmt = (v) => {
 };
 
 const minToHM = (m) => {
-    const mm = Math.max(0, Math.round(m || 0));
-    const h = Math.floor(mm / 60);
-    const r = mm % 60;
+    const total = Math.max(0, Math.round(m || 0));
+    const h = Math.floor(total / 60);
+    const r = total % 60;
     if (h && r) return `${h} sa ${r} dk`;
     if (h) return `${h} sa`;
     if (r) return `${r} dk`;
     return "0 dk";
 };
 
+
+// --------------------------------------------------------------
+// KURAL HESAPLAMA
+// --------------------------------------------------------------
 const calcRule = (varis, cikis) => {
     const v = parseDT(varis);
     const c = parseDT(cikis);
 
-    if (!v || !c) return { appliedRule: 'None', compliant: null, delay: 0 };
-    if (v.day() === 0) return { appliedRule: 'None', compliant: true, delay: 0 };
+    if (!v || !c) return { appliedRule: "None", compliant: null, delay: 0 };
+    if (v.day() === 0) return { appliedRule: "None", compliant: true, delay: 0 };
 
-    // 🔥 YENİ KURAL 3 — Cumartesi 12:00 sonrası → Pazar sayılmaz → Pazartesi 12:00 deadline
-    const isSaturday = v.day() === 6;
-    const isAfter1200 = v.hour() >= 12;
-
-    if (isSaturday && isAfter1200) {
-        const mondayDeadline = v
-            .clone()
-            .add(2, "day")     // Cumartesi +2 = Pazartesi
-            .hour(12)
-            .minute(0)
-            .startOf("minute");
-
-        if (c.isSameOrBefore(mondayDeadline)) {
-            return { appliedRule: "Rule 3", compliant: true, delay: 0 };
-        } else {
-            return {
-                appliedRule: "Rule 3",
-                compliant: false,
-                delay: c.diff(mondayDeadline, "minute")
-            };
-        }
+    if (v.day() === 6 && v.hour() >= 12) {
+        const monday = v.clone().add(2, "day").hour(12).minute(0);
+        return c.isSameOrBefore(monday)
+            ? { appliedRule: "Rule 3", compliant: true, delay: 0 }
+            : { appliedRule: "Rule 3", compliant: false, delay: c.diff(monday, "minute") };
     }
 
-    // --- KURAL 1 ---
-    const lower1 = v.clone().hour(8).minute(30).startOf('minute');
-    const upper1 = v.clone().hour(12).minute(0).startOf('minute');
-    const isApplicable1 = v.isSameOrAfter(lower1) && v.isBefore(upper1);
+    const lower1 = v.clone().hour(8).minute(30);
+    const upper1 = v.clone().hour(12).minute(0);
 
-    if (isApplicable1) {
-        const deadline1 = v.clone().hour(17).minute(0).startOf('minute');
-        if (c.isSameOrBefore(deadline1)) {
-            return { appliedRule: 'Rule 1', compliant: true, delay: 0 };
-        } else {
-            return { appliedRule: 'Rule 1', compliant: false, delay: c.diff(deadline1, "minute") };
-        }
+    if (v.isSameOrAfter(lower1) && v.isBefore(upper1)) {
+        const deadline = v.clone().hour(17).minute(0);
+        return c.isSameOrBefore(deadline)
+            ? { appliedRule: "Rule 1", compliant: true, delay: 0 }
+            : { appliedRule: "Rule 1", compliant: false, delay: c.diff(deadline, "minute") };
     }
 
-    // --- KURAL 2 ---
-    const lower2 = v.clone().hour(12).minute(0).startOf('minute');
-    const isApplicable2 = v.isSameOrAfter(lower2);
+    if (v.isSameOrAfter(upper1)) {
+        let deadline = v.clone().add(1, "day").hour(12).minute(0);
 
-    if (isApplicable2) {
-        const deadline2 = v.clone().add(1, 'day').hour(12).minute(0).startOf('minute');
-        if (c.isSameOrBefore(deadline2)) {
-            return { appliedRule: 'Rule 2', compliant: true, delay: 0 };
-        } else {
-            return { appliedRule: 'Rule 2', compliant: false, delay: c.diff(deadline2, "minute") };
+        if (v.day() === 5 && v.hour() >= 12) {
+            deadline = v.clone().add(3, "day").hour(12).minute(0);
         }
+
+        return c.isSameOrBefore(deadline)
+            ? { appliedRule: "Rule 2", compliant: true, delay: 0 }
+            : { appliedRule: "Rule 2", compliant: false, delay: c.diff(deadline, "minute") };
     }
 
-    return { appliedRule: 'None', compliant: true, delay: 0 };
+    return { appliedRule: "None", compliant: true, delay: 0 };
 };
 
 
-// --------------------------------------------------
-// PUANLAMA FONKSİYONU
-// --------------------------------------------------
-const calculateScore = (totalTrips, nonCompliantCount, totalDelayMinutes) => {
-    const MAX_VIOLATION_RATE = 50;
-    const MAX_DELAY_MINUTES_PER_TRIP = 180;
+// --------------------------------------------------------------
+// PERFORMANS PUANI HESABI
+// --------------------------------------------------------------
+const calculateScore = (trips, nonComp, delayMin) => {
+    if (trips === 0) return { score: 10.0, penalty: 0.0 };
 
-    if (totalTrips === 0) {
-        return { score: 10.0, penalty: 0.0 };
-    }
+    const violRate = (nonComp / trips) * 100;
+    const avgDelay = nonComp > 0 ? delayMin / nonComp : 0;
 
-    const violationRate = (nonCompliantCount / totalTrips) * 100;
-    const avgDelayPerViolation = nonCompliantCount > 0
-        ? totalDelayMinutes / nonCompliantCount
-        : 0;
+    const violPenalty = Math.min(5, (violRate / 50) * 5);
+    const delayPenalty = Math.min(5, (avgDelay / 180) * 5);
 
-    let penalty = 0;
-
-    // A. İhlal Oranı Cezası (Maksimum 5 Puan Ceza)
-    const violationPenalty = Math.min(5, (violationRate / MAX_VIOLATION_RATE) * 5);
-    penalty += violationPenalty;
-
-    // B. Gecikme Süresi Cezası (Maksimum 5 Puan Ceza)
-    const delayPenalty = Math.min(5, (avgDelayPerViolation / MAX_DELAY_MINUTES_PER_TRIP) * 5);
-    penalty += delayPenalty;
-
-    const finalScore = Math.max(0, 10 - penalty);
+    const penalty = violPenalty + delayPenalty;
+    const score = Math.max(0, 10 - penalty);
 
     return {
-        score: parseFloat(finalScore.toFixed(1)),
-        penalty: parseFloat(penalty.toFixed(1))
+        score: parseFloat(score.toFixed(1)),
+        penalty: parseFloat(penalty.toFixed(1)),
     };
 };
 
 
-// --------------------------------------------------
-// EXCEL EXPORT (Aynı kaldı)
-// --------------------------------------------------
+// --------------------------------------------------------------
+// EXCEL EXPORT
+// --------------------------------------------------------------
 const exportExcel = async (rows) => {
     if (!rows.length) return;
 
-    const filteredRows = rows.filter(r => {
-        const rule = r.rule;
-        return rule && rule.compliant === false && rule.delay > 0;
-    });
+    // Sadece ihlalli kayıtları filtrele
+    const filtered = rows.filter(
+        (r) => r.rule.compliant === false && r.rule.delay > 0
+    );
 
-    if (!filteredRows.length) {
-        alert("Seçilen tarihte kural ihlali olan kayıt bulunamadı.");
+    if (!filtered.length) {
+        alert("İhlalli kayıt bulunamadı.");
         return;
     }
 
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Teslimde Bekleme - İHLAL");
+    const ws = wb.addWorksheet("İhlalli Kayıtlar");
 
     ws.columns = [
-        { header: "Sefer No", key: "sefer_no", width: 15 },
-        { header: "Plaka", key: "plaka", width: 12 },
-        { header: "Proje", key: "proje_adi", width: 20 },
-        { header: "Teslim Noktası", key: "teslim_noktasi", width: 25 },
-        { header: "Varış", key: "teslim_varis", width: 20 },
-        { header: "Çıkış", key: "teslim_cikis", width: 20 },
-        { header: "Uygulanan Kural", key: "rule_name", width: 30 },
-        { header: "Kurala Uygun", key: "kural", width: 25 },
-        { header: "Şartlı Bekleme (İhlal Süresi)", key: "delay", width: 30 }
+        { header: "Sefer No", key: "sefer_no", width: 12 },
+        { header: "Plaka", key: "plaka", width: 10 },
+        { header: "Proje", key: "proje", width: 20 },
+        { header: "Teslim Noktası", key: "nokta", width: 25 },
+        { header: "Varış", key: "varis", width: 20 },
+        { header: "Çıkış", key: "cikis", width: 20 },
+        { header: "Kural", key: "rule", width: 15 },
+        { header: "Gecikme", key: "delay", width: 15 },
     ];
 
-    filteredRows.forEach((r) => {
-        const rule = r.rule;
-        let ruleName = '';
-        let kuralText = 'Hayır';
-
-        if (rule.appliedRule === 'Rule 1') {
-            ruleName = 'Kural 1: [08:30 - 12:00) Varış';
-        } else if (rule.appliedRule === 'Rule 2') {
-            ruleName = 'Kural 2: [12:00 - Sonrası] Varış';
-        } else if (rule.appliedRule === 'Rule 3') {
-            ruleName = 'Kural 3: [Cmt 17:00 - Sonrası] Varış';
-        }
-
+    filtered.forEach((r) =>
         ws.addRow({
             sefer_no: r.sefer_no,
             plaka: r.plaka,
-            proje_adi: r.proje_adi,
-            teslim_noktasi: r.teslim_noktasi,
-            teslim_varis: fmt(r.teslim_varis),
-            teslim_cikis: fmt(r.teslim_cikis),
-            rule_name: ruleName,
-            kural: kuralText,
-            delay: minToHM(rule.delay)
-        });
-    });
+            proje: r.proje_adi,
+            nokta: r.teslim_noktasi,
+            varis: fmt(r.teslim_varis),
+            cikis: fmt(r.teslim_cikis),
+            rule: r.rule.appliedRule,
+            delay: minToHM(r.rule.delay),
+        })
+    );
 
-    ws.getRow(1).font = { bold: true };
-
-    const buf = await wb.xlsx.writeBuffer();
-    saveAs(new Blob([buf]), `teslimde_bekleme_IHLAL_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
+    const buffer = await wb.xlsx.writeBuffer();
+    saveAs(
+        new Blob([buffer]),
+        `bekleme_ihlalleri_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`
+    );
 };
 
 
-// --------------------------------------------------
-// BİLEŞEN: DetailedRow (KOYU TEMA UYUMLU)
-// --------------------------------------------------
+// ======================================================================
+// UI — Detaylı plaka satırı (açılır liste)
+// ======================================================================
 const DetailedRow = ({ row }) => {
     const [open, setOpen] = useState(false);
-    const theme = useTheme();
 
-    const renderCompliance = (r) => {
-        const rule = r.rule;
-        const color = rule.compliant === false ? 'error.main' : rule.compliant === true ? 'success.main' : 'warning.dark';
-        const icon = rule.compliant === false ? <AccessTimeFilledIcon fontSize="small" /> : rule.compliant === true ? <CheckCircleIcon fontSize="small" /> : <ErrorOutlineIcon fontSize="small" />;
-        const text = rule.compliant === false ? `GEÇ KALDI (${rule.appliedRule.replace('Rule ', 'K')})` : rule.compliant === true ? `UYGUN (${rule.appliedRule.replace('Rule ', 'K')})` : 'Eksik Veri';
-
-        return (
-            <Tooltip title={`Gecikme: ${minToHM(rule.delay)}`}>
-                <Box sx={{ color: color, display: "flex", alignItems: "center" }}>
-                    {icon}
-                    <Typography variant="caption" sx={{ ml: 0.5, fontWeight: 'bold' }}>
-                        {text}
-                    </Typography>
-                </Box>
-            </Tooltip>
-        );
-    };
-
-    const nonCompliantBg = 'rgba(255, 0, 0, 0.08)';
-    const headerBg = theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200];
-    const detailBg = theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[50];
-
+    // Kurala uymayan seferleri say
+    const nonCompliantTrips = row.trips.filter(t => t.rule.compliant === false);
 
     return (
-        <React.Fragment>
-            {/* 1. ANA SATIR (Plaka Özeti) */}
-            <TableRow hover>
-                <TableCell>
-                    <IconButton
-                        aria-label="expand row"
-                        size="small"
-                        onClick={() => setOpen(!open)}
-                        sx={{ color: theme.palette.text.secondary }}
-                    >
-                        {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-                    </IconButton>
-                </TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>{row.plaka}</TableCell>
+        <>
+            <TableRow hover onClick={() => setOpen(!open)} sx={{ cursor: "pointer" }}>
+                <TableCell>{open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>{row.plaka}</TableCell>
                 <TableCell>{row.proje_adi}</TableCell>
                 <TableCell align="right">{row.totalTrips}</TableCell>
-                <TableCell align="right" sx={{ color: row.nonCompliantCount > 0 ? 'error.dark' : 'text.primary', fontWeight: 'bold' }}>
+                <TableCell align="right" sx={{ color: row.nonCompliantCount ? "error.main" : "" }}>
                     {row.nonCompliantCount}
                 </TableCell>
-                <TableCell align="right">{row.violationRate}</TableCell>
-                <TableCell align="right" sx={{ color: row.totalDelayMinutes > 0 ? 'error.dark' : 'text.primary', fontWeight: 'bold' }}>{row.totalDelay}</TableCell>
+                <TableCell align="right">{row.violationRate}%</TableCell>
+                <TableCell align="right">{row.totalDelay}</TableCell>
             </TableRow>
 
-            {/* 2. DETAY SATIRI (Sefer Listesi) */}
             <TableRow>
-                <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={7}>
-                    <Collapse in={open} timeout="auto" unmountOnExit>
-                        {/* Koyu temada detay arkaplanı grey[900] */}
-                        <Box sx={{ margin: 1, p: 2, bgcolor: detailBg, border: `1px solid ${theme.palette.divider}` }}>
-                            <Typography variant="h6" gutterBottom component="div" sx={{ fontWeight: 'bold', mb: 2 }}>
-                                📑 Sefer Detayları ({row.plaka})
+                <TableCell colSpan={7} sx={{ p: 0 }}>
+                    <Collapse in={open}>
+                        <Box sx={{ p: 2 }}>
+                            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                                İhlalli Sefer Detayları ({nonCompliantTrips.length} kayıt)
                             </Typography>
-                            <Table size="small" aria-label="sefer-detay">
-                                <TableHead>
-                                    <TableRow sx={{ bgcolor: headerBg }}>
-                                        <TableCell sx={{ fontWeight: 'bold' }}>Sefer No</TableCell>
-                                        <TableCell sx={{ fontWeight: 'bold' }}>Sefer Tarihi</TableCell>
-                                        <TableCell sx={{ fontWeight: 'bold' }}>Güzergah</TableCell>
-                                        <TableCell sx={{ fontWeight: 'bold' }}>Teslim Noktası</TableCell>
-                                        <TableCell sx={{ fontWeight: 'bold' }}>Varış / Çıkış</TableCell>
-                                        <TableCell sx={{ fontWeight: 'bold' }}>Kural Durumu</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>İhlal Süresi</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {row.trips?.map((trip) => (
-                                        <TableRow key={trip.sefer_no + trip.teslim_noktasi}
-                                            sx={{ bgcolor: trip.rule.compliant === false ? nonCompliantBg : 'inherit' }}>
-                                            <TableCell component="th" scope="row">
-                                                {trip.sefer_no}
-                                            </TableCell>
-                                            <TableCell>{dayjs(trip.sefer_tarihi).format('DD.MM.YYYY')}</TableCell>
-                                            <TableCell>{`${trip.yukleme_ili || '—'} -> ${trip.teslim_ili || '—'}`}</TableCell>
-                                            <TableCell>{trip.teslim_noktasi || '—'}</TableCell>
-                                            <TableCell>
-                                                Varış: {fmt(trip.teslim_varis)} <br />
-                                                Çıkış: {fmt(trip.teslim_cikis)}
-                                            </TableCell>
-                                            <TableCell>
-                                                {renderCompliance(trip)}
-                                            </TableCell>
-                                            <TableCell align="right" sx={{ color: trip.rule.delay > 0 ? 'error.dark' : 'text.primary', fontWeight: trip.rule.delay > 0 ? 'bold' : 'normal' }}>
-                                                {minToHM(trip.rule.delay)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {(!row.trips || row.trips.length === 0) && (
+
+                            {nonCompliantTrips.length === 0 ? (
+                                <Alert severity="success" size="small">
+                                    Bu araç için seçili aralıkta kural ihlali bulunmamaktadır.
+                                </Alert>
+                            ) : (
+                                <Table size="small">
+                                    <TableHead>
                                         <TableRow>
-                                            <TableCell colSpan={7} sx={{ color: 'text.secondary', textAlign: 'center' }}>
-                                                Bu plaka için detaylı sefer kaydı bulunamadı.
-                                            </TableCell>
+                                            <TableCell>Sefer</TableCell>
+                                            <TableCell>Tarih</TableCell>
+                                            <TableCell>Güzergah</TableCell>
+                                            <TableCell>Nokta</TableCell>
+                                            <TableCell>Varış / Çıkış</TableCell>
+                                            <TableCell>Kural</TableCell>
+                                            <TableCell align="right">Gecikme</TableCell>
                                         </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
+                                    </TableHead>
+
+                                    <TableBody>
+                                        {nonCompliantTrips.map((t, i) => (
+                                            <TableRow
+                                                key={i}
+                                                sx={{
+                                                    backgroundColor: "rgba(255,0,0,0.08)",
+                                                }}
+                                            >
+                                                <TableCell>{t.sefer_no}</TableCell>
+                                                <TableCell>
+                                                    {dayjs(t.sefer_tarihi).format("DD.MM.YYYY")}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {t.yukleme_ili} → {t.teslim_ili}
+                                                </TableCell>
+                                                <TableCell>{t.teslim_noktasi}</TableCell>
+                                                <TableCell>
+                                                    {fmt(t.teslim_varis)} <br /> {fmt(t.teslim_cikis)}
+                                                </TableCell>
+                                                <TableCell>{t.rule.appliedRule}</TableCell>
+                                                <TableCell align="right">
+                                                    {minToHM(t.rule.delay)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
                         </Box>
                     </Collapse>
                 </TableCell>
             </TableRow>
-        </React.Fragment>
-    );
-};
-
-// --------------------------------------------------
-// BİLEŞEN: DetailedAnalysisTable (Aynı kaldı)
-// --------------------------------------------------
-const DetailedAnalysisTable = ({ data, loading, start, end }) => {
-    const theme = useTheme();
-
-    return (
-        <Paper
-            elevation={8}
-            sx={{
-                borderRadius: 2,
-                overflow: 'hidden',
-                mt: 4,
-                bgcolor: theme.palette.background.paper
-            }}
-        >
-            <Box sx={{ p: 2, bgcolor: 'primary.dark', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        🚚 Plaka Bazlı Detaylı Bekleme Analizi
-                    </Typography>
-                    <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                        ({start} - {end}) Aralığı | Tıklayarak sefer detaylarını görebilirsiniz.
-                    </Typography>
-                </Box>
-                <Box>
-                    {loading && <CircularProgress size={24} sx={{ color: 'white' }} />}
-                </Box>
-            </Box>
-
-            <TableContainer sx={{ maxHeight: 600 }}>
-                <Table stickyHeader size="small">
-                    <TableHead>
-                        <TableRow sx={{ bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[100] }}>
-                            <TableCell sx={{ fontWeight: 'bold' }} width={50} />
-                            <TableCell sx={{ fontWeight: 'bold' }}>Plaka</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>Proje Adı</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>Toplam Sefer</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>İhlalli Sefer</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>İhlal Oranı (%)</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold', color: theme.palette.error.main }}>Toplam İhlal Süresi</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {!loading && data.length > 0 ? (
-                            data.map((row) => (
-                                <DetailedRow key={row.plaka} row={row} />
-                            ))
-                        ) : !loading && data.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={7} align="center">
-                                    <Box sx={{ p: 2 }}>
-                                        <Typography variant="body1">Belirtilen aralıkta ( {start} - {end} ) ihlalli kayıt veya tamamlanmış sefer bulunamadı.</Typography>
-                                    </Box>
-                                </TableCell>
-                            </TableRow>
-                        ) : null}
-                    </TableBody>
-                </Table>
-            </TableContainer>
-        </Paper>
+        </>
     );
 };
 
 
-// --------------------------------------------------
-// BİLEŞEN: ScoreAnalysisTable (HATA DÜZELTİLDİ)
-// --------------------------------------------------
-const ScoreAnalysisTable = ({ data }) => {
-    const theme = useTheme();
-
-    // Sütun tanımları: sx artık sadece nesne/statik stil için kullanılıyor.
-    const columns = [
-        { header: "Sıra", render: (r, i) => i + 1, width: 60, align: 'right', key: 'rank' },
-        { header: "Plaka", render: (r) => r.plaka, width: 100, align: 'left', key: 'plaka' },
-        { header: "Proje", render: (r) => r.proje_adi, width: 150, align: 'left', key: 'proje' },
-        { header: "Toplam Sefer", render: (r) => r.totalTrips, align: 'right', width: 100, key: 'trips' },
-        { header: "İhlal Oranı (%)", render: (r) => `${r.violationRate}%`, align: 'right', width: 120, key: 'rate' },
-        { header: "Toplam İhlal Süresi", render: (r) => r.totalDelay, align: 'right', width: 150, key: 'delay' },
-        {
-            header: "Ceza Puanı (10 Üzerinden)",
-            render: (r) => r.penalty,
-            align: 'right',
-            width: 150,
-            // Statik stil nesnesi (TableHead ve TableBody'deki sabit renk)
-            sx: { color: theme.palette.error.light },
-            key: 'penalty'
-        },
-        {
-            header: "✨ Performans Puanı (10 Üzerinden)",
-            render: (r) => r.score,
-            align: 'right',
-            width: 180,
-            key: 'score'
-        },
-    ];
-
-    // Puana göre dinamik stil fonksiyonu (Sadece TableBody'de kullanılacak)
-    const getScoreSx = (row) => ({
-        fontWeight: 'bold',
-        fontSize: '1.1rem',
-        color: row.score >= 8 ? theme.palette.success.main : row.score >= 5 ? theme.palette.warning.main : theme.palette.error.main
-    });
-
-    return (
-        <Paper elevation={8} sx={{ borderRadius: 2, overflow: 'hidden', mt: 4, bgcolor: theme.palette.background.paper }}>
-            <Box sx={{ p: 2, bgcolor: theme.palette.primary.main, color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                    🏆 Plaka Performans Puanları (İhlal Oranı ve Süreye Göre)
-                </Typography>
-            </Box>
-            <TableContainer sx={{ maxHeight: 600 }}>
-                <Table stickyHeader size="small">
-                    <TableHead>
-                        <TableRow sx={{ bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[100] }}>
-                            {columns.map((c, i) => (
-                                <TableCell
-                                    key={c.key || i}
-                                    align={c.align || 'left'}
-                                    // Sadece nesne/statik stil uygulanıyor
-                                    sx={{ fontWeight: 'bold', minWidth: c.width, ...(c.sx || {}) }}>
-                                    {c.header}
-                                </TableCell>
-                            ))}
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {data.length > 0 ? (
-                            data.map((row, index) => (
-                                <TableRow key={row.plaka} hover>
-                                    {columns.map((c, i) => (
-                                        <TableCell
-                                            key={c.key || i}
-                                            align={c.align || 'left'}
-                                            // c.key === 'score' ise dinamik stili uygula, aksi takdirde statik stili (c.sx)
-                                            sx={c.key === 'score'
-                                                ? getScoreSx(row)
-                                                : c.sx
-                                            }
-                                        >
-                                            {c.render(row, index)}
-                                        </TableCell>
-                                    ))}
-                                </TableRow>
-                            ))
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={columns.length} align="center">
-                                    <Typography variant="body1" sx={{ p: 2 }}>
-                                        Puanlanacak veri bulunamadı. Lütfen analiz aralığını kontrol edin.
-                                    </Typography>
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </TableContainer>
-        </Paper>
-    );
-};
-
-
-// --------------------------------------------------
-// FONKSİYON: Plaka Bazlı Detaylı Analiz Verisi Çekme (PUANLAMA EKLENDİ)
-// --------------------------------------------------
-const fetchDetailedAnalysis = async (start, end) => {
-    if (!start || !end || dayjs(start).isAfter(dayjs(end))) {
-        throw new Error("Geçersiz tarih aralığı.");
-    }
-
-    const startTime = dayjs(start).startOf('day').toISOString();
-    const endTime = dayjs(end).endOf('day').toISOString();
-
-    const { data: detail, error: e1 } = await supabase
-        .from(DETAIL_TABLE)
-        .select(DETAIL_COLS)
-        .gte("teslim_varis", startTime)
-        .lte("teslim_varis", endTime);
-
-    if (e1) throw e1;
-
-    const seferNos = [...new Set(detail.map((x) => x.sefer_no))];
-
-    const { data: summary, error: e2 } = await supabase
-        .from(SUMMARY_TABLE)
-        .select(SUMMARY_COLS)
-        .in("sefer_no", seferNos);
-
-    if (e2) throw e2;
-
-    const analysisMap = new Map();
-
-    detail.forEach((d) => {
-        const s = summary.find((x) => x.sefer_no === d.sefer_no);
-        if (!s || !s.plaka) return;
-
-        const plaka = s.plaka;
-        const rule = calcRule(d.teslim_varis, d.teslim_cikis);
-
-        if (!analysisMap.has(plaka)) {
-            analysisMap.set(plaka, {
-                plaka,
-                proje_adi: s.proje_adi || 'Bilinmiyor',
-                totalTrips: 0,
-                nonCompliantCount: 0,
-                totalDelayMinutes: 0,
-                trips: []
-            });
-        }
-
-        const currentData = analysisMap.get(plaka);
-
-        currentData.trips.push({
-            ...s,
-            teslim_varis: d.teslim_varis,
-            teslim_cikis: d.teslim_cikis,
-            teslim_noktasi: d.teslim_noktasi,
-            rule,
-        });
-
-        if (rule.compliant !== null) {
-            currentData.totalTrips++;
-        }
-
-        if (rule.compliant === false && rule.delay > 0) {
-            currentData.nonCompliantCount++;
-            currentData.totalDelayMinutes += rule.delay;
-        }
-    });
-
-    return Array.from(analysisMap.values())
-        .map(item => {
-            // PUANLAMA VE CEZA HESAPLAMA
-            const { score, penalty } = calculateScore(
-                item.totalTrips,
-                item.nonCompliantCount,
-                item.totalDelayMinutes
-            );
-
-            return {
-                ...item,
-                trips: item.trips.sort((a, b) => dayjs(b.sefer_tarihi).valueOf() - dayjs(a.sefer_tarihi).valueOf()),
-
-                totalDelay: minToHM(item.totalDelayMinutes),
-                avgDelayPerViolation: item.nonCompliantCount > 0
-                    ? minToHM(item.totalDelayMinutes / item.nonCompliantCount)
-                    : "0 dk",
-                violationRate: item.totalTrips > 0
-                    ? ((item.nonCompliantCount / item.totalTrips) * 100).toFixed(1)
-                    : 0,
-
-                score: score,
-                penalty: penalty,
-            };
-        })
-        .sort((a, b) => b.score - a.score); // Puanı en yüksekten en düşüğe sırala
-};
-
-
-// --------------------------------------------------
-// ANA KOMPONENT: TeslimdeBekleme 
-// --------------------------------------------------
+// ======================================================================
+// ANA KOMPONENT
+// ======================================================================
 export default function TeslimdeBekleme() {
-    const [rows, setRows] = useState([]);
+    const theme = useTheme();
+
+    // GÜNLÜK & AYLIK
     const [date, setDate] = useState(dayjs().format("YYYY-MM-DD"));
-    const [dailyMonth, setDailyMonth] = useState(dayjs().format("YYYY-MM"));
-
+    const [dailyMonth, setDailyMonth] = useState("");
+    const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [startDate, setStartDate] = useState(dayjs().subtract(7, 'day').format("YYYY-MM-DD"));
-    const [endDate, setEndDate] = useState(dayjs().format("YYYY-MM-DD"));
 
-    // YENİ EKLENECEK SATIR
-    const [selectedMonth, setSelectedMonth] = useState(dayjs().format("YYYY-MM"));
+    // YENİ STATE'LER (Progress ve Zaman Takibi)
+    const [progressMessage, setProgressMessage] = useState(null);
+    const [startTime, setStartTime] = useState(null);
+    const [progressValue, setProgressValue] = useState(0);
+
+
+    // ANALİZ
+    const [startDate, setStartDate] = useState(dayjs().subtract(7, "day").format("YYYY-MM-DD"));
+    const [endDate, setEndDate] = useState(dayjs().format("YYYY-MM-DD"));
     const [detailedAnalysis, setDetailedAnalysis] = useState([]);
     const [analysisLoading, setAnalysisLoading] = useState(false);
 
-    const theme = useTheme();
+    const [error, setError] = useState(null);
 
-    // AY DEĞİŞİMİ — Yeni Fonksiyon
-    const handleMonthChange = (month) => {
-        setSelectedMonth(month);
+    /**
+     * Tek bir gün/hafta aralığı için veriyi çeken yardımcı fonksiyon
+     */
+    const fetchByDayRange = async (startISO, endISO) => {
+        const { data: detail, error: detailError } = await supabase
+            .from(DETAIL_TABLE)
+            .select(DETAIL_COLS)
+            .gte("teslim_varis", startISO)
+            .lte("teslim_varis", endISO);
 
-        const start = dayjs(month).startOf("month").format("YYYY-MM-DD");
-        const end = dayjs(month).endOf("month").format("YYYY-MM-DD");
-
-        setStartDate(start);
-        setEndDate(end);
-
-        // Ay seçilince otomatik analiz başlasın
-        setTimeout(() => {
-            runDetailedAnalysis();
-        }, 50);
-    };
+        if (detailError) throw detailError;
+        return detail;
+    }
 
 
-    const runDetailedAnalysis = useCallback(async () => {
-        if (!startDate || !endDate) return;
-        setAnalysisLoading(true);
-        setError(null);
-        try {
-            const analysisResult = await fetchDetailedAnalysis(startDate, endDate);
-            setDetailedAnalysis(analysisResult);
-        } catch (err) {
-            console.error("Detaylı analiz çekilirken hata oluştu:", err);
-            setError("Detaylı Analiz Hatası: " + (err.message || "Bilinmeyen Hata"));
-            setDetailedAnalysis([]);
-        }
-        setAnalysisLoading(false);
-    }, [startDate, endDate]);
-
-
-    const fetchAll = useCallback(async () => {
+    // --------------------------------------------------------------
+    // GÜNLÜK + AYLIK VERİ ÇEK (AYLIK HAFTA HAFTA ÇEKİYOR)
+    // --------------------------------------------------------------
+    const fetchDaily = useCallback(async () => {
         setLoading(true);
-        setError(null);
         setRows([]);
+        setError(null);
+        setProgressMessage("Veri çekimi başlatılıyor...");
+        setProgressValue(0);
+
+        const fetchStartTime = Date.now();
+        setStartTime(fetchStartTime);
+
+        let allDetails = [];
+        let totalWeeks = 1;
 
         try {
-            let start, end;
+            if (date) {
+                // 1. Günlük filtre (Tek sorgu)
+                const start = dayjs(date).startOf("day").toISOString();
+                const end = dayjs(date).endOf("day").toISOString();
+                setProgressValue(50);
+                allDetails = await fetchByDayRange(start, end);
+                setProgressMessage(`'${dayjs(date).format('DD.MM.YYYY')}' tarihi için ${allDetails.length} detay kaydı çekildi.`);
+                setProgressValue(100);
 
-            // 📌 AY SEÇİLDİYSE → AYLIK VERİ GETİR
-            if (dailyMonth && dailyMonth !== "" && !date) {
-                start = dayjs(dailyMonth).startOf("month").toISOString();
-                end = dayjs(dailyMonth).endOf("month").toISOString();
+            } else if (dailyMonth) {
+                // 2. Aylık filtre: HAFTA HAFTA ÇEKİP BİRLEŞTİRME İYİLEŞTİRMESİ
+                const startOfMonth = dayjs(dailyMonth).startOf("month");
+                const endOfMonth = dayjs(dailyMonth).endOf("month");
+
+                let currentDate = startOfMonth.clone();
+                let allMonthDetails = [];
+                let weekCounter = 0;
+                let totalDetailsCount = 0;
+
+                // Tahmini hafta sayısını hesapla
+                totalWeeks = Math.ceil(endOfMonth.diff(startOfMonth, 'week', true));
+                if (totalWeeks === 0) totalWeeks = 1;
+
+
+                while (currentDate.isSameOrBefore(endOfMonth, 'day')) {
+                    weekCounter++;
+
+                    // Haftalık aralığın sonunu belirle
+                    let weekEnd = currentDate.clone().endOf('week');
+                    if (weekEnd.isAfter(endOfMonth)) {
+                        weekEnd = endOfMonth.clone();
+                    }
+
+                    // Progress Bar Güncellemesi (Çekim Kısmı: %0'dan %90'a kadar)
+                    const calculatedProgress = Math.round((weekCounter / totalWeeks) * 90);
+                    setProgressValue(calculatedProgress);
+
+
+                    setProgressMessage(
+                        `Veri çekiliyor: ${weekCounter} / ${totalWeeks} Hafta (${currentDate.format('DD.MM')} - ${weekEnd.format('DD.MM')})`
+                    );
+
+                    // --- Veri Çekme ---
+                    const start = currentDate.startOf("day").toISOString();
+                    const end = weekEnd.endOf("day").toISOString();
+                    const details = await fetchByDayRange(start, end);
+                    // ------------------
+
+
+                    allMonthDetails = allMonthDetails.concat(details);
+                    totalDetailsCount += details.length;
+
+                    // Kalan Süre Tahmini Güncellemesi
+                    const elapsed = Date.now() - fetchStartTime;
+                    const timePerWeek = elapsed / weekCounter;
+                    const remainingTimeMs = timePerWeek * (totalWeeks - weekCounter);
+                    const remainingTimeSec = Math.round(remainingTimeMs / 1000);
+
+                    setProgressMessage(
+                        `Veri çekiliyor: ${weekCounter} / ${totalWeeks} Hafta (${totalDetailsCount} kayıt). Tahmini kalan süre: ${remainingTimeSec} sn.`
+                    );
+
+                    currentDate = weekEnd.add(1, 'day').startOf('day');
+                }
+                allDetails = allMonthDetails;
+
+                // Progress Bar %95
+                setProgressValue(95);
+                setProgressMessage(`Detay kayıtları çekimi tamamlandı (${totalDetailsCount} kayıt). Özet veriler alınıyor...`);
+
+
+            } else {
+                // 3. Varsayılan olarak bugünü getir
+                const today = dayjs();
+                const start = today.startOf("day").toISOString();
+                const end = today.endOf("day").toISOString();
+                setDate(today.format("YYYY-MM-DD"));
+                setProgressValue(50);
+                allDetails = await fetchByDayRange(start, end);
+                setProgressMessage(`Bugün (${today.format('DD.MM.YYYY')}) için ${allDetails.length} detay kaydı çekildi.`);
+                setProgressValue(100);
             }
-            // 📌 GÜN SEÇİLDİYSE → SADECE O GÜNÜ GETİR
-            else if (date) {
-                start = dayjs(date).startOf("day").toISOString();
-                end = dayjs(date).endOf("day").toISOString();
-            }
-            else {
+
+            if (!allDetails || allDetails.length === 0) {
+                setRows([]);
                 setLoading(false);
+                setProgressMessage("Kayıt bulunamadı.");
                 return;
             }
 
-            const { data: detail, error: e1 } = await supabase
+            // Özet verileri (Summary) tek seferde çek
+            const seferNos = [...new Set(allDetails.map((d) => d.sefer_no))];
+
+            setProgressValue(98);
+            setProgressMessage(`Özet veri alınıyor (${seferNos.length} sefer)...`);
+
+            const { data: summary, error: summaryError } = await supabase
+                .from(SUMMARY_TABLE)
+                .select(SUMMARY_COLS)
+                .in("sefer_no", seferNos);
+
+            if (summaryError) throw summaryError;
+
+            // Summary verilerini Map'e atayalım
+            const summaryMap = new Map();
+            summary.forEach(s => summaryMap.set(s.sefer_no, s));
+
+            // =========================================================================
+            // YENİ GRUPLAMA MANTIĞI: Sefer Bazında En Kötü İhlali Bulma
+            // =========================================================================
+            const consolidatedMap = new Map();
+
+            allDetails.forEach((d) => {
+                const seferNo = d.sefer_no;
+                const s = summaryMap.get(seferNo);
+                if (!s) return;
+
+                const rule = calcRule(d.teslim_varis, d.teslim_cikis);
+
+                // Eğer bu detay kaydı ihlalli veya eksikse, işleme devam et
+                if (rule.compliant === false || rule.compliant === null) {
+
+                    const currentRecord = {
+                        ...s,
+                        teslim_noktasi: d.teslim_noktasi,
+                        teslim_varis: d.teslim_varis,
+                        teslim_cikis: d.teslim_cikis,
+                        rule: rule,
+                    };
+
+                    // Haritada bu sefer için zaten bir kayıt var mı?
+                    if (consolidatedMap.has(seferNo)) {
+                        const existingRecord = consolidatedMap.get(seferNo);
+
+                        // 1. Priorite: Eğer mevcut kayıt eksik veri (null) ise, yeni kural (false) veya daha büyük gecikme varsa değiştir.
+                        if (existingRecord.rule.compliant === null) {
+                            if (rule.compliant === false || rule.delay > existingRecord.rule.delay) {
+                                consolidatedMap.set(seferNo, currentRecord);
+                            }
+                        }
+                        // 2. Priorite: Eğer mevcut kayıt ihlalli (false) ise, daha büyük gecikmeyi seç.
+                        else if (rule.delay > existingRecord.rule.delay) {
+                            consolidatedMap.set(seferNo, currentRecord);
+                        }
+                        // Not: Yeni kural null ise ve mevcut false ise, değiştirme.
+
+                    } else {
+                        // İlk kez ekleniyorsa
+                        consolidatedMap.set(seferNo, currentRecord);
+                    }
+                }
+            });
+
+            const final = Array.from(consolidatedMap.values());
+            // =========================================================================
+
+
+            setRows(final);
+
+            // Bitiş mesajı
+            const totalElapsed = (Date.now() - fetchStartTime) / 1000;
+            setProgressMessage(`İşlem ${totalElapsed.toFixed(1)} saniyede tamamlandı. ${final.length} ihlal kaydı bulundu.`);
+            setProgressValue(100);
+
+        } catch (err) {
+            setError(err.message);
+            setProgressMessage("Hata oluştu.");
+            setProgressValue(0);
+        }
+
+        setLoading(false);
+        setStartTime(null);
+    }, [date, dailyMonth]);
+
+
+    // Günlük/Aylık Filtre Değişimini Otomatik Tetikle
+    useEffect(() => {
+        fetchDaily();
+    }, [date, dailyMonth, fetchDaily]);
+
+
+    // --------------------------------------------------------------
+    // DETAYLI ANALİZ VERİSİ ÇEK
+    // --------------------------------------------------------------
+    const runAnalysis = useCallback(async () => {
+        setAnalysisLoading(true);
+        setDetailedAnalysis([]);
+        setError(null);
+
+        try {
+            const start = dayjs(startDate).startOf("day").toISOString();
+            const end = dayjs(endDate).endOf("day").toISOString();
+
+            // Tüm detay kayıtlarını tek seferde çek 
+            const { data: detail, error: detailError } = await supabase
                 .from(DETAIL_TABLE)
                 .select(DETAIL_COLS)
                 .gte("teslim_varis", start)
                 .lte("teslim_varis", end);
 
-            if (e1) throw e1;
+            if (detailError) throw detailError;
 
-            // 📌 Eğer gün seçiliyse → sadece o güne ait kayıtları ayıkla
-            const filtered = date
-                ? detail.filter(d => dayjs(d.teslim_varis).isSame(date, "day"))
-                : detail;
-
-            if (!filtered.length) {
-                setRows([]);
-                setLoading(false);
+            if (!detail || !detail.length) {
+                setDetailedAnalysis([]);
+                setAnalysisLoading(false);
                 return;
             }
 
-            const seferNos = [...new Set(filtered.map((x) => x.sefer_no))];
-            const { data: summary, error: e2 } = await supabase
+            const seferNos = [...new Set(detail.map((d) => d.sefer_no))];
+
+            const { data: summary, error: summaryError } = await supabase
                 .from(SUMMARY_TABLE)
                 .select(SUMMARY_COLS)
                 .in("sefer_no", seferNos);
 
-            if (e2) throw e2;
+            if (summaryError) throw summaryError;
 
-            const final = filtered.map((d) => {
+
+            const map = new Map();
+
+            detail.forEach((d) => {
                 const s = summary.find((x) => x.sefer_no === d.sefer_no);
-                if (!s) return null;
+                if (!s) return;
 
-                return {
+                const plaka = s.plaka;
+                const rule = calcRule(d.teslim_varis, d.teslim_cikis);
+
+                // Tüm verinin dahil edildiği, plaka bazlı gruplama
+                if (!map.has(plaka)) {
+                    map.set(plaka, {
+                        plaka,
+                        proje_adi: s.proje_adi,
+                        totalTrips: 0,
+                        nonCompliantCount: 0,
+                        totalDelayMinutes: 0,
+                        trips: [], // Detaylı seyahat listesi
+                    });
+                }
+
+                const item = map.get(plaka);
+
+                item.trips.push({
                     ...s,
+                    teslim_noktasi: d.teslim_noktasi,
                     teslim_varis: d.teslim_varis,
                     teslim_cikis: d.teslim_cikis,
-                    teslim_noktasi: d.teslim_noktasi,
-                    rule: calcRule(d.teslim_varis, d.teslim_cikis),
+                    rule,
+                });
+
+                if (rule.compliant !== null) {
+                    item.totalTrips++;
+                }
+
+                if (rule.compliant === false) {
+                    item.nonCompliantCount++;
+                    item.totalDelayMinutes += rule.delay;
+                }
+            });
+
+            const output = Array.from(map.values()).map((item) => {
+                const { score, penalty } = calculateScore(
+                    item.totalTrips,
+                    item.nonCompliantCount,
+                    item.totalDelayMinutes
+                );
+
+                return {
+                    ...item,
+                    violationRate:
+                        item.totalTrips > 0
+                            ? ((item.nonCompliantCount / item.totalTrips) * 100).toFixed(1)
+                            : 0,
+                    totalDelay: minToHM(item.totalDelayMinutes),
+                    score,
+                    penalty,
                 };
-            }).filter(Boolean);
+            });
 
-            setRows(final);
+            setDetailedAnalysis(output.sort((a, b) => b.score - a.score));
         } catch (err) {
-            setError("Veri çekerken hata oluştu: " + err.message);
+            setError(err.message);
         }
 
-        setLoading(false);
-    }, [date, dailyMonth]);
+        setAnalysisLoading(false);
+    }, [startDate, endDate]);
 
 
-    useEffect(() => {
-        fetchAll();
-    }, [fetchAll]);
-
-    useEffect(() => {
-        runDetailedAnalysis();
-    }, [runDetailedAnalysis]);
-
-    const columns = [
-        { header: "Sefer No", render: (r) => r.sefer_no, width: 100 },
-        { header: "Plaka", render: (r) => r.plaka, width: 80 },
-        { header: "Proje", render: (r) => r.proje_adi, width: 150 },
-        { header: "Teslim Noktası", render: (r) => r.teslim_noktasi, width: 150 },
-        { header: "Varış Zamanı", render: (r) => fmt(r.teslim_varis), width: 130 },
-        { header: "Çıkış Zamanı", render: (r) => fmt(r.teslim_cikis), width: 130 },
-
-        {
-            header: "Kural Uygunluğu",
-            width: 280,
-            render: (r) => {
-                const varisSaati = r.teslim_varis ? parseDT(r.teslim_varis).format('HH:mm') : '—';
-                const rule = r.rule;
-
-                const Text = ({ children, color, icon, tooltipTitle }) => (
-                    <Tooltip title={tooltipTitle}>
-                        <Box sx={{ color: color, display: "flex", alignItems: "center" }}>
-                            {icon}
-                            <Typography variant="subtitle2" sx={{ ml: 1, fontWeight: 'bold' }}>
-                                {children}
-                            </Typography>
-                        </Box>
-                    </Tooltip>
-                );
-
-                if (rule.compliant === null)
-                    return (<Text color="warning.dark" icon={<ErrorOutlineIcon fontSize="small" />} tooltipTitle="Teslim Varış veya Çıkış tarih/saati eksik veya geçersiz.">Eksik Veri</Text>);
-
-                if (rule.appliedRule === 'Rule 3') {
-                    const deadline = parseDT(r.teslim_varis).add(2, 'day').hour(8).minute(30);
-                    const deadlineFmt = deadline.format('DD.MM HH:mm');
-                    if (rule.compliant) return (<Text color="success.main" icon={<CheckCircleIcon fontSize="small" />} tooltipTitle={`[Kural 3 - Cmt Varış ${varisSaati}] Çıkış saati Pzt ${deadlineFmt}'dan önce.`}>UYGUN (Kural 3)</Text>);
-                    return (<Text color="error.main" icon={<AccessTimeFilledIcon fontSize="small" />} tooltipTitle={`[Kural 3 İhlali] Çıkış saati Pzt ${deadlineFmt}'ı aştı. Gecikme: ${minToHM(rule.delay)}`}>GEÇ KALDI (Kural 3)</Text>);
-                }
-                if (rule.appliedRule === 'Rule 1') {
-                    const deadline = parseDT(r.teslim_varis).hour(17).minute(0).format('HH:mm');
-                    if (rule.compliant) return (<Text color="success.main" icon={<CheckCircleIcon fontSize="small" />} tooltipTitle={`[Kural 1 - Varış ${varisSaati}] Çıkış saati ${deadline}'dan önce.`}>UYGUN (Kural 1)</Text>);
-                    return (<Text color="error.main" icon={<AccessTimeFilledIcon fontSize="small" />} tooltipTitle={`[Kural 1 İhlali] Çıkış saati ${deadline}'ı aştı. Gecikme: ${minToHM(rule.delay)}`}>GEÇ KALDI (Kural 1)</Text>);
-                }
-                if (rule.appliedRule === 'Rule 2') {
-                    const deadline = parseDT(r.teslim_varis).add(1, 'day').hour(12).minute(0);
-                    const deadlineFmt = deadline.format('DD.MM HH:mm');
-                    if (rule.compliant) return (<Text color="success.main" icon={<CheckCircleIcon fontSize="small" />} tooltipTitle={`[Kural 2 - Varış ${varisSaati}] Çıkış saati ertesi gün ${deadlineFmt}'dan önce.`}>UYGUN (Kural 2)</Text>);
-                    return (<Text color="error.main" icon={<AccessTimeFilledIcon fontSize="small" />} tooltipTitle={`[Kural 2 İhlali] Çıkış saati ertesi gün ${deadlineFmt}'ı aştı. Gecikme: ${minToHM(rule.delay)}`}>GEÇ KALDI (Kural 2)</Text>);
-                }
-                return (
-                    <Text color="grey.600" icon={<CloseIcon fontSize="small" />} tooltipTitle={`Kural dışı varış. Varış saati kural aralıklarının dışında.`}>
-                        Uygulanmadı
-                    </Text>
-                );
-            }
-        },
-
-        {
-            header: "Şartlı Bekleme Süresi",
-            width: 150,
-            render: (r) => {
-                const color = r.rule.delay > 0 ? "error.dark" : "text.primary";
-                return (
-                    <Typography
-                        variant="subtitle2"
-                        sx={{ fontWeight: r.rule.delay > 0 ? 'bold' : 'normal', color: color }}
-                    >
-                        {minToHM(r.rule.delay)}
-                    </Typography>
-                );
-            }
-        }
-    ];
-
-    // --------------------------------------------------
-    // UI RENDER 
-    // --------------------------------------------------
+    // --------------------------------------------------------------
+    // RENDER
+    // --------------------------------------------------------------
     return (
-        <Container maxWidth="xl" sx={{ py: 5 }}>
-            <Typography variant="h4" sx={{ mb: 4, fontWeight: "bold", color: "primary.main" }}>
-                🚚 Teslimde Bekleme Raporu ve Analizi
+        <Container maxWidth="xl" sx={{ py: 4 }}>
+            <Typography variant="h4" sx={{ mb: 3, fontWeight: "bold", color: "primary.main" }}>
+                🚚 Teslimde Bekleme Analizi
             </Typography>
 
-            {error && (
-                <Alert severity="error" sx={{ mb: 3 }}>
-                    {error}
-                </Alert>
-            )}
+            {error && <Alert severity="error">{error}</Alert>}
 
-            {/* Plaka Bazlı Detaylı Analiz Sonuçları */}
-            <DetailedAnalysisTable
-                data={detailedAnalysis}
-                loading={analysisLoading}
-                start={dayjs(startDate).format('DD.MM.YYYY')}
-                end={dayjs(endDate).format('DD.MM.YYYY')}
-            />
+            {/* ========================================================= */}
+            {/* 1️⃣ GÜNLÜK + AYLIK TABLO (İHLALLİ KAYITLAR) */}
+            {/* ========================================================= */}
 
-            {/* Plaka Performans Puanlama Tablosu */}
-            <ScoreAnalysisTable
-                data={detailedAnalysis}
-            />
-
-            <hr />
-
-            {/* Analiz Tarih Aralığı Filtrelemesi */}
-            <Paper elevation={8} sx={{ p: 3, mb: 4, mt: 4, borderRadius: 2, bgcolor: theme.palette.background.paper }}>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                    🗓️ Analiz Tarih Aralığı Filtresi (Plaka Bazlı)
-                </Typography>
-                <Grid container spacing={3} alignItems="center">
-                    {/* YENİ EKLENEN AY FİLTRESİ */}
-                    <Grid item>
-                        <TextField
-                            type="month"
-                            label="Ay Seçin"
-                            value={selectedMonth}
-                            onChange={(e) => handleMonthChange(e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                        />
-                    </Grid>
-                    <Grid item>
-                        <TextField
-                            type="date"
-                            label="Başlangıç Tarihi"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                            variant="outlined"
-                            size="medium"
-                            InputProps={{
-                                startAdornment: (<InputAdornment position="start"><DateRangeIcon color="primary" /></InputAdornment>),
-                            }}
-                        />
-                    </Grid>
-                    <Grid item>
-                        <TextField
-                            type="date"
-                            label="Bitiş Tarihi"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                            variant="outlined"
-                            size="medium"
-                            InputProps={{
-                                startAdornment: (<InputAdornment position="start"><DateRangeIcon color="primary" /></InputAdornment>),
-                            }}
-                        />
-                    </Grid>
-
-                    <Grid item>
-                        <Button
-                            variant="contained"
-                            color="secondary"
-                            size="large"
-                            startIcon={analysisLoading ? <CircularProgress size={20} color="inherit" /> : <SearchIcon />}
-                            onClick={runDetailedAnalysis}
-                            disabled={analysisLoading}
-                        >
-                            Analizi Güncelle
-                        </Button>
-                    </Grid>
-                </Grid>
-            </Paper>
-
-            <hr />
-
-            {/* Günlük Detay Tablosu Filtrelemesi */}
-            {/* Günlük Detay Tablosu Filtrelemesi */}
-            <Paper elevation={8} sx={{ p: 3, mb: 4, borderRadius: 2, bgcolor: theme.palette.background.paper }}>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                    📋 Günlük Detay Tablosu Filtresi
+            <Paper sx={{ p: 3, mb: 4 }} elevation={6}>
+                <Typography variant="h6" sx={{ mb: 2 }}>
+                    📅 Günlük / Aylık İhlal Detay Tablosu ({rows.length} İhlal Kaydı)
                 </Typography>
 
                 <Grid container spacing={3} alignItems="center">
-
-                    {/* ✅ YENİ EKLENEN AY FİLTRESİ */}
                     <Grid item>
                         <TextField
+                            label="Günlük Tarih"
+                            type="date"
+                            value={date}
+                            InputLabelProps={{ shrink: true }}
+                            onChange={(e) => {
+                                setDate(e.target.value);
+                                setDailyMonth("");
+                            }}
+                            disabled={loading}
+                        />
+                    </Grid>
+
+                    <Grid item>
+                        <TextField
+                            label="Ay Seç"
                             type="month"
-                            label="Ay (Detay Tablosu)"
                             value={dailyMonth}
+                            InputLabelProps={{ shrink: true }}
                             onChange={(e) => {
                                 setDailyMonth(e.target.value);
-                                setDate(""); // Gün seçimini sıfırlar
+                                setDate("");
                             }}
-                            InputLabelProps={{ shrink: true }}
-                            variant="outlined"
-                            size="medium"
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <DateRangeIcon color="primary" />
-                                    </InputAdornment>
-                                ),
-                            }}
-                        />
-                    </Grid>
-
-                    {/* 🟦 Gün seçme alanı (eski halinde duruyor) */}
-                    <Grid item>
-                        <TextField
-                            type="date"
-                            label="Varış Günü (Detay Tablosu İçin)"
-                            value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                            variant="outlined"
-                            size="medium"
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <DateRangeIcon color="primary" />
-                                    </InputAdornment>
-                                ),
-                            }}
-                        />
-                    </Grid>
-
-                    <Grid item>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            size="large"
-                            startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <SearchIcon />}
-                            onClick={fetchAll}
                             disabled={loading}
-                        >
-                            Detay Tablosunu Getir
-                        </Button>
+                        />
+                    </Grid>
+
+                    <Grid item>
+                        <Tooltip title="Tarih/Ay seçildiğinde otomatik güncellenir.">
+                            <span>
+                                <Button
+                                    variant="contained"
+                                    startIcon={<SearchIcon />}
+                                    onClick={fetchDaily}
+                                    disabled={loading}
+                                >
+                                    {loading ? "Yükleniyor..." : "Yenile"}
+                                </Button>
+                            </span>
+                        </Tooltip>
                     </Grid>
 
                     <Grid item>
                         <Button
                             variant="outlined"
                             color="success"
-                            size="large"
                             startIcon={<FileDownloadIcon />}
-                            onClick={() => exportExcel(rows)}
                             disabled={!rows.length || loading}
+                            onClick={() => exportExcel(rows)}
                         >
-                            Excel'e Aktar (Sadece Günlük İhlaller)
+                            İhlalli Kayıtları Excel İndir ({rows.length})
                         </Button>
-                        {rows.length > 0 && (
-                            <Grid item xs={12}>
-                                <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                                    📌 Toplam Gelen Kayıt: {rows.length}
-                                </Typography>
-
-                                <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'error.main' }}>
-                                    ⚠️ İhlalli + Eksik Veri Kayıt Sayısı: {
-                                        rows.filter(r => r.rule.compliant === false || r.rule.compliant === null).length
-                                    }
-                                </Typography>
-                            </Grid>
-                        )}
-
                     </Grid>
-
-                    {rows.length > 0 && (
-                        <Grid item>
-                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
-                                Tabloda gösterilen kayıt sayısı: {rows.filter(r => r.rule.compliant === false || r.rule.compliant === null).length} / Toplam {rows.length} kayıt
-                            </Typography>
-                        </Grid>
-                    )}
                 </Grid>
-            </Paper>
 
+                {/* Yükleme Durumu ve Progress Mesajı */}
+                {loading && (
+                    <Box sx={{ mt: 2, p: 1, backgroundColor: theme.palette.action.hover, borderRadius: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                            <CircularProgress size={20} sx={{ mr: 2 }} />
+                            <Typography variant="body2" color="textSecondary">
+                                {progressMessage}
+                            </Typography>
+                        </Box>
 
-            {/* Kural Tanımları - Accordion */}
-            <Accordion
-                elevation={2}
-                sx={{
-                    mb: 3,
-                    borderRadius: 1,
-                    border: `1px solid ${theme.palette.divider}`,
-                    bgcolor: theme.palette.background.paper
-                }}
-            >
-                <AccordionSummary
-                    expandIcon={<ExpandMoreIcon />}
-                    aria-controls="panel1a-content"
-                    id="panel1a-header"
-                >
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.dark' }}>
-                        📊 Kural Tanımları ve Bekleme Süresi Hesaplama Mantığı
-                    </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                    <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                        <li style={{ color: theme.palette.text.primary }}>
-                            <b>Kural 1 (Öğleden Önce Varış):</b>
-                            Teslim varışı <b>08:30 – 12:00</b> aralığında gerçekleşen seferlerde,
-                            aracın en geç <b>aynı gün 17:00</b> saatine kadar çıkış yapması beklenir.
-                            17:00 sonrasındaki süre <b>bekleme süresi</b> olarak hesaplanır.
-                        </li>
+                        {/* Progress Bar */}
+                        <LinearProgress variant="determinate" value={progressValue} sx={{ height: 8, borderRadius: 4 }} />
 
-                        <li style={{ color: theme.palette.text.primary }}>
-                            <b>Kural 2 (Öğleden Sonra Varış):</b>
-                            Teslim varışı <b>12:00 ve sonrası</b> gerçekleşen seferlerde,
-                            aracın en geç <b>ertesi gün 12:00</b> saatine kadar çıkış yapması beklenir.
-                            Bu saatten sonraki süre <b>bekleme süresi</b> olarak hesaplanır.
-                        </li>
+                    </Box>
+                )}
 
-                        <li style={{ color: theme.palette.text.primary }}>
-                            <b>Kural 3 (Hafta Sonu Varışı):</b>
-                            Teslim varışı <b>Cumartesi günü 12:00’den sonra</b> gerçekleşen seferlerde,
-                            <b>Pazar günü bekleme süresine dahil edilmez</b>.
-                            Aracın en geç <b>Pazartesi günü 12:00</b> saatine kadar çıkış yapması beklenir.
-                            Pazartesi 12:00 sonrasındaki süre <b>bekleme süresi</b> olarak hesaplanır.
-                        </li>
-                    </ul>
-                </AccordionDetails>
-            </Accordion>
-
-
-            {/* GÜNLÜK DETAY TABLOSU */}
-            <Paper elevation={8} sx={{ borderRadius: 2, overflow: 'hidden', bgcolor: theme.palette.background.paper }}>
-                <TableContainer sx={{ maxHeight: "70vh", overflow: "auto" }}>
-                    <Table stickyHeader sx={{ minWidth: 1400 }} size="medium">
+                {/* Günlük Tablo */}
+                <TableContainer sx={{ mt: 3, maxHeight: "60vh" }}>
+                    <Table stickyHeader size="small">
                         <TableHead>
                             <TableRow>
-                                {columns.map((c, i) => (
-                                    <TableCell
-                                        key={i}
-                                        sx={{
-                                            backgroundColor: "primary.main",
-                                            color: "white",
-                                            fontWeight: "bold",
-                                            minWidth: c.width || 100,
-                                            py: 1.5
-                                        }}
-                                    >
-                                        {c.header}
-                                    </TableCell>
-                                ))}
+                                <TableCell>Sefer</TableCell>
+                                <TableCell>Plaka</TableCell>
+                                <TableCell>Proje</TableCell>
+                                <TableCell>Teslim Noktası</TableCell>
+                                <TableCell>Varış</TableCell>
+                                <TableCell>Çıkış</TableCell>
+                                <TableCell>Kural</TableCell>
+                                <TableCell>Bekleme</TableCell>
                             </TableRow>
                         </TableHead>
 
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={columns.length}>
-                                        <Box sx={{ p: 5, textAlign: "center" }}>
-                                            <CircularProgress size={30} />
-                                            <Typography variant="h6" sx={{ mt: 2, color: 'text.secondary' }}>
-                                                Günlük detay verileri yükleniyor...
-                                            </Typography>
-                                        </Box>
+                                    <TableCell align="center" colSpan={8}>
+                                        {/* Progress bilgisi yukarıda gösterildiği için burada boş bırakılabilir. */}
                                     </TableCell>
                                 </TableRow>
-                            ) : rows.length ? (
-                                rows
-                                    .filter(r => r.rule.compliant === false || r.rule.compliant === null)
-                                    .map((r, idx) => (
-                                        <TableRow
-                                            key={r.sefer_no + idx}
-                                            hover
-                                            sx={{
-                                                backgroundColor:
-                                                    r.rule.compliant === false
-                                                        ? "rgba(255, 0, 0, 0.08)"
-                                                        : r.rule.compliant === null
-                                                            ? "rgba(255, 193, 7, 0.15)"
-                                                            : "inherit",
-                                                '&:last-child td, &:last-child th': { border: 0 },
-                                            }}
-                                        >
-                                            {columns.map((c, i) => (
-                                                <TableCell key={i}>{c.render(r)}</TableCell>
-                                            ))}
-                                        </TableRow>
-                                    ))
+                            ) : rows.length > 0 ? (
+                                rows.map((r, i) => (
+                                    <TableRow
+                                        key={i}
+                                        sx={{
+                                            backgroundColor:
+                                                r.rule.compliant === false
+                                                    ? theme.palette.error.main + "14"
+                                                    : r.rule.compliant === null
+                                                        ? theme.palette.warning.main + "14"
+                                                        : "inherit",
+                                        }}
+                                    >
+                                        <TableCell>{r.sefer_no}</TableCell>
+                                        <TableCell>{r.plaka}</TableCell>
+                                        <TableCell>{r.proje_adi}</TableCell>
+                                        <TableCell>{r.teslim_noktasi}</TableCell>
+                                        <TableCell>{fmt(r.teslim_varis)}</TableCell>
+                                        <TableCell>{fmt(r.teslim_cikis)}</TableCell>
+                                        <TableCell>
+                                            {r.rule.compliant === false && <CloseIcon color="error" fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />}
+                                            {r.rule.compliant === null && <ErrorOutlineIcon color="warning" fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />}
+                                            {r.rule.appliedRule}
+                                        </TableCell>
+                                        <TableCell sx={{ fontWeight: r.rule.delay > 0 ? 'bold' : 'normal' }}>
+                                            {minToHM(r.rule.delay)}
+                                        </TableCell>
+                                    </TableRow>
+                                ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={columns.length}>
-                                        <Box sx={{ p: 5, textAlign: "center", color: "text.secondary" }}>
-                                            <Typography variant="h6">
-                                                🔍 Seçilen gün ({dayjs(date).format('DD.MM.YYYY')}) için ihlalli veya eksik kayıt bulunamadı.
-                                            </Typography>
-                                            <Typography variant="body2">
-                                                Lütfen detayları görmek için farklı bir varış tarihi seçin.
-                                            </Typography>
-                                        </Box>
+                                    <TableCell align="center" colSpan={8} sx={{ py: 2 }}>
+                                        <Alert severity="info" variant="outlined">
+                                            Seçili tarih/ay aralığında kural ihlalli veya eksik veri içeren kayıt bulunamadı.
+                                        </Alert>
                                     </TableCell>
                                 </TableRow>
                             )}
@@ -1163,7 +811,93 @@ export default function TeslimdeBekleme() {
                     </Table>
                 </TableContainer>
             </Paper>
+
+            {/* ========================================================= */}
+            {/* 2️⃣ TARİH ARALIĞI ANALİZİ (Giriş) */}
+            {/* ========================================================= */}
+
+            <Paper sx={{ p: 3, mb: 4 }} elevation={6}>
+                <Typography variant="h6" sx={{ mb: 2 }}>
+                    📊 Tarih Aralığı Analizi (Performans Puanı)
+                </Typography>
+
+                <Grid container spacing={3} alignItems="center">
+                    <Grid item>
+                        <TextField
+                            type="date"
+                            label="Başlangıç"
+                            value={startDate}
+                            InputLabelProps={{ shrink: true }}
+                            onChange={(e) => setStartDate(e.target.value)}
+                        />
+                    </Grid>
+
+                    <Grid item>
+                        <TextField
+                            type="date"
+                            label="Bitiş"
+                            value={endDate}
+                            InputLabelProps={{ shrink: true }}
+                            onChange={(e) => setEndDate(e.target.value)}
+                        />
+                    </Grid>
+
+                    <Grid item>
+                        <Button
+                            variant="contained"
+                            color="secondary"
+                            startIcon={<SearchIcon />}
+                            disabled={analysisLoading}
+                            onClick={runAnalysis}
+                        >
+                            {analysisLoading ? "Analiz Ediliyor..." : "Analiz Et"}
+                        </Button>
+                    </Grid>
+                </Grid>
+
+                {analysisLoading && (
+                    <Box sx={{ textAlign: "center", mt: 2 }}>
+                        <CircularProgress size={24} />
+                        <Typography variant="body2" color="textSecondary">
+                            Detaylı analiz verileri çekiliyor...
+                        </Typography>
+                    </Box>
+                )}
+            </Paper>
+
+            {/* ========================================================= */}
+            {/* 3️⃣ ANALİZ TABLOLARI (Sonuç) */}
+            {/* ========================================================= */}
+
+            {detailedAnalysis.length > 0 && (
+                <Paper sx={{ p: 3 }} elevation={6}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                        📄 Plaka Bazlı Sonuçlar ({detailedAnalysis.length} Plaka - 10.0 Üzerinden Performans Puanı)
+                    </Typography>
+
+                    <TableContainer sx={{ maxHeight: 600 }}>
+                        <Table stickyHeader>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell />
+                                    <TableCell>Plaka</TableCell>
+                                    <TableCell>Proje</TableCell>
+                                    <TableCell align="right">Toplam Sefer</TableCell>
+                                    <TableCell align="right">İhlal Sayısı</TableCell>
+                                    <TableCell align="right">İhlal Oranı</TableCell>
+                                    <TableCell align="right">Toplam Gecikme</TableCell>
+                                </TableRow>
+                            </TableHead>
+
+                            <TableBody>
+                                {detailedAnalysis.map((row) => (
+                                    <DetailedRow key={row.plaka} row={row} />
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Paper>
+            )}
         </Container>
     );
 }
-

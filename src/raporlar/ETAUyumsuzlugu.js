@@ -1,524 +1,532 @@
-// =============================================================
-// MODERN DASHBOARD - FULL VERSION (TESLLİM VARIŞ ZORUNLU)
-// Tek Tarih → ETA Tarihine Göre Filtreleme
-// =============================================================
-
 import * as React from "react";
 import {
-    Box,
-    Stack,
-    Typography,
-    Chip,
-    Paper,
-    Container,
-    TextField,
-    MenuItem,
-    Switch,
-    FormControlLabel,
-    Button,
-    CircularProgress,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions
+    Box, Stack, Typography, Chip, Paper, TextField,
+    Button, CircularProgress, IconButton, Switch, FormControlLabel
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import TimelineIcon from "@mui/icons-material/Timeline";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { supabase } from "../supabaseClient";
 
 
 // =============================================================
-// DARK THEME COLORS
+// 🛠️ YARDIMCI FONKSİYONLAR
 // =============================================================
-const DARK_COLORS = {
-    pageBg: "#0E0E0E",
-    surface: "#1B1B1B",
-    surface2: "#232323",
-    border: "#3A3A3A",
-    text: "#F1F1F1",
-    textMuted: "#8E8E8E",
-    primary: "#BB86FC",
-    neonGreen: "#03DAC6",
-    neonRed: "#CF6679",
-    zebra: "#272727"
+
+/**
+ * İki ISO tarih/saat damgası arasındaki farkı hesaplar ve metin olarak döndürür.
+ * @param {string | null} etaIso - Tahmini varış zamanı (ISO 8601).
+ * @param {string | null} teslimIso - Gerçek teslim varış zamanı (ISO 8601).
+ * @returns {string} Fark metni (örn: "Gecikti 1 saat 30 dakika", "Zamanında").
+ */
+const calcFarkText = (etaIso, teslimIso) => {
+    if (!etaIso || !teslimIso) return "-";
+
+    const eta = new Date(etaIso);
+    const teslim = new Date(teslimIso);
+
+    // Geçersiz tarih kontrolü
+    if (Number.isNaN(eta.getTime()) || Number.isNaN(teslim.getTime())) {
+        return "-";
+    }
+
+    const diffMin = Math.round((teslim.getTime() - eta.getTime()) / 60000); // dakika cinsinden fark
+    const abs = Math.abs(diffMin);
+
+    if (diffMin > 0) return `Gecikti ${minToHM(abs)}`;
+    if (diffMin < 0) return `Erken ${minToHM(abs)}`;
+    return "Zamanında";
 };
 
-
-// =============================================================
-// HELPERS
-// =============================================================
+/**
+ * ISO tarih/saat damgasını GG.AA.YYYY SS:DD formatına dönüştürür.
+ * @param {string | null} iso - ISO 8601 tarih/saat damgası.
+ * @returns {string} Formatlanmış tarih metni veya "-".
+ */
 const fmt = (iso) => {
     if (!iso) return "-";
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "-";
-    return `${String(d.getDate()).padStart(2, "0")}.${String(
+    // Tarih formatı: GG.AA.YYYY SS:DD
+    const datePart = `${String(d.getDate()).padStart(2, "0")}.${String(
         d.getMonth() + 1
-    ).padStart(2, "0")}.${d.getFullYear()} ${String(d.getHours()).padStart(
-        2,
-        "0"
-    )}:${String(d.getMinutes()).padStart(2, "0")}`;
+    ).padStart(2, "0")}.${d.getFullYear()}`;
+    const timePart = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    return `${datePart} ${timePart}`;
 };
 
+/**
+ * Dakika cinsinden süreyi saat ve dakika metnine dönüştürür.
+ * @param {number} m - Toplam dakika.
+ * @returns {string} Saat ve dakika metni (örn: "2 saat 15 dakika").
+ */
 const minToHM = (m) => {
     const mm = Math.max(0, Math.round(m || 0));
     const h = Math.floor(mm / 60);
     const r = mm % 60;
-    if (h && r) return `${h} saat ${r} dakika`;
-    if (h) return `${h} saat`;
-    return `${r} dakika`;
+    
+    const parts = [];
+    if (h) parts.push(`${h} saat`);
+    if (r || (!h && r === 0)) parts.push(`${r} dakika`);
+    
+    return parts.join(" ");
 };
 
-const getTodayDateString = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-        2,
-        "0"
-    )}-${String(d.getDate()).padStart(2, "0")}`;
+/**
+ * Bugünün tarihini YYYY-MM-DD formatında döndürür.
+ * @returns {string}
+ */
+const getTodayDateString = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * Seçili gün için [start, end) ISO aralığı üretir.
+ * Örn: "2025-12-09" -> start: 2025-12-09T00:00:00.000Z, end: 2025-12-10T00:00:00.000Z
+ * @param {string} dateStr - YYYY-MM-DD formatında tarih.
+ * @returns {{start: string, end: string}}
+ */
+const getDateRangeForDay = (dateStr) => {
+    const start = new Date(`${dateStr}T00:00:00.000Z`); // UTC başlangıcı olarak ele al
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return {
+        start: start.toISOString(),
+        end: end.toISOString()
+    };
 };
 
-function calcETAFromDistance({ distanceKm, startIso, avgKmh = 65 }) {
-    if (!distanceKm || !startIso) return null;
-    const start = new Date(startIso);
-    if (Number.isNaN(start.getTime())) return null;
+/**
+ * Ham veri nesnesinden (Aktif/Tamamlanan) filtreleme için kullanılacak tarih alanını bulur.
+ * Bu, DataGrid'deki filtreleme mantığıyla uyumlu olmak için önemlidir.
+ * @param {object} raw - Ham sefer verisi (r.raw).
+ * @param {string} durum - "Aktif" veya "Tamamlandı".
+ * @returns {string | null} Filtreleme için kullanılacak ISO tarih stringi.
+ */
+const getRelevantDateIso = (raw, durum) => {
+    if (!raw) return null;
+    if (durum === "Tamamlandı") {
+        // Tamamlananlarda: ETA VARİŞ, yoksa SEFER TARİHİ
+        return raw.eta_varis || raw.sefer_tarihi;
+    } else {
+        // Aktiflerde: ETA → ETA VARİŞ → SEFER TARİHİ
+        return raw.eta || raw.eta_varis || raw.sefer_tarihi;
+    }
+};
 
-    const driveHours = distanceKm / avgKmh;
-    const driveMs = driveHours * 60 * 60 * 1000;
-    const blocks = Math.floor(driveHours / 4.5);
-    const breakMs = blocks * 45 * 60 * 1000;
-    return new Date(start.getTime() + driveMs + breakMs);
+/**
+ * Bir ISO tarih/saat damgasını yerel saat dilimine göre YYYY-MM-DD formatına çevirir.
+ * @param {string | null} iso - ISO 8601 tarih/saat damgası.
+ * @returns {string | null} YYYY-MM-DD formatında tarih veya null.
+ */
+const getDateKey = (iso) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+
+    // Yerel saati kullanmak yerine, orijinal kodun mantığına uygun olarak
+    // (ki bu genelde ISO string'in tarih kısmını alır) bu şekilde bırakılmıştır.
+    // Ancak daha doğru bir filtreleme için zaman dilimi dikkate alınabilir.
+    // Şu an için sadece tarih kısmını alalım:
+    return iso.slice(0, 10);
+};
+
+
+// =============================================================
+// 🌐 VERİ ÇEKME FONKSİYONU
+// =============================================================
+async function fetchPerformanceData(selectedDate) {
+    const { start, end } = getDateRangeForDay(selectedDate);
+    console.log("DB TARİH ARALIĞI:", { start, end });
+    const LIMIT = 5000; // Veri çekme limiti
+
+    try {
+        // ------------------ 1. AKTİF SEFERLER (JS Tarafında Filtre) ----------------------
+        const activeSelect =
+            "id, sefer_no, sefer_tarihi, plaka, eta, proje_adi, atama_yapan_kullanici, yukleme_noktasi, yukleme_ili, yukleme_ilcesi, teslim_noktasi, teslim_ili, teslim_ilcesi, eta_varis, sefer_detaylari:sefer_detaylari!sefer_id(yukleme_varis, yukleme_cikis, teslim_varis, teslim_cikis, nokta_sirasi)";
+
+        const { data: active, error: activeError } = await supabase
+            .from("seferler")
+            .select(activeSelect)
+            .limit(LIMIT);
+
+        if (activeError) throw new Error("Aktif Seferler Hatası: " + activeError.message);
+        console.log("AKTİF SEFER ADET (toplam):", active?.length || 0);
+
+        // ---------------- 2. TAMAMLANAN SEFERLER (DB Tarafında Tarih Filtresi) ----------------
+        // Tarih filtresi burada DB tarafında uygulanır (eta_varis'e göre)
+        const completedSelect =
+            "id, sefer_no, sefer_tarihi, plaka, proje_adi, atama_yapan_kullanici, eta_varis, yukleme_noktasi, yukleme_ili, yukleme_ilcesi, teslim_noktasi, teslim_ili, teslim_ilcesi";
+
+        const { data: completedHeaders, error: headersError } = await supabase
+            .from("tamamlanan_seferler")
+            .select(completedSelect)
+            .gte("eta_varis", start)
+            .lt("eta_varis", end)
+            .limit(LIMIT);
+
+        if (headersError)
+            throw new Error("Tamamlanan Seferler Ana Tablo Hatası: " + headersError.message);
+        console.log(
+            "TAMAMLANAN SEFER ADET (DB filtresi sonrası):",
+            completedHeaders?.length || 0
+        );
+
+        // ---------------- 3. TAMAMLANAN SEFERLER DETAYLARI -------------------
+        // Buradaki detayların tamamı çekilir ve daha sonra eşleştirilir.
+        const { data: completedDetails, error: detailsError } = await supabase
+            .from("tamamlanan_detaylar")
+            .select(
+                "sefer_no, yukleme_varis, yukleme_cikis, teslim_varis, teslim_cikis, nokta_sirasi"
+            )
+            .limit(20000);
+
+        if (detailsError) throw new Error("Tamamlanan Seferler Detay Hatası: " + detailsError.message);
+
+        // ------------------ 4. BİRLEŞTİRME VE NORMALİZASYON ----------------------
+        const detailsMap = (completedDetails || []).reduce((acc, detail) => {
+            const seferNo = detail.sefer_no;
+            if (!acc[seferNo]) acc[seferNo] = [];
+            acc[seferNo].push(detail);
+            return acc;
+        }, {});
+
+        const rows = [];
+        let tamamlananSayaci = 0;
+
+        // Yardımcı fonksiyon: En düşük nokta sırasına sahip detayı bul
+        const getFirstDetail = (detailsArray) => {
+             return (detailsArray || [])
+                .sort((a, b) => (a.nokta_sirasi ?? 0) - (b.nokta_sirasi ?? 0))[0] || {};
+        }
+
+        // ------------------ NORMALİZE: AKTİF ----------------------
+        (active || []).forEach((s) => {
+            const det = getFirstDetail(s.sefer_detaylari);
+
+            const etaIsoActive = s.eta || s.eta_varis || null;
+            const teslimIsoActive = det.teslim_varis || null;
+
+            rows.push({
+                id: `A-${s.id}`,
+                sefer_no: s.sefer_no,
+                plaka: s.plaka,
+                proje_adi: s.proje_adi || "-",
+                atama_yapan: s.atama_yapan_kullanici || "-",
+                tarih: fmt(s.sefer_tarihi),
+                yukleme: `${s.yukleme_noktasi || "-"} (${s.yukleme_ili || ""}/${s.yukleme_ilcesi || ""})`,
+                teslim: `${s.teslim_noktasi || "-"} (${s.teslim_ili || ""}/${s.teslim_ilcesi || ""})`,
+
+                yukleme_varis: fmt(det.yukleme_varis),
+                yukleme_cikis: fmt(det.yukleme_cikis),
+                teslim_varis: fmt(det.teslim_varis),
+                teslim_cikis: fmt(det.teslim_cikis),
+
+                eta: etaIsoActive ? fmt(etaIsoActive) : "ETA YOK",
+                fark: calcFarkText(etaIsoActive, teslimIsoActive),
+                durum: "Aktif",
+                raw: s
+            });
+        });
+
+        // --------------- NORMALİZE: TAMAMLANAN -------------------
+        (completedHeaders || []).forEach((s) => {
+            tamamlananSayaci++;
+
+            const details = detailsMap[s.sefer_no] || [];
+            const det = getFirstDetail(details);
+            
+            // Orjinal kodun mantığı: Tamamlananlarda farkı hesaplamak için eta_varis ve teslim_varis kullanılır.
+            const etaIsoCompleted = s.eta_varis || null;
+            const teslimIsoCompleted = det.teslim_varis || null;
+
+            rows.push({
+                id: `T-${s.id}`,
+                sefer_no: s.sefer_no,
+                plaka: s.plaka,
+                proje_adi: s.proje_adi || "-",
+                atama_yapan: s.atama_yapan_kullanici || "-",
+                tarih: fmt(s.sefer_tarihi),
+                yukleme: `${s.yukleme_noktasi || "-"} (${s.yukleme_ili || ""}/${s.yukleme_ilcesi || ""})`,
+                teslim: `${s.teslim_noktasi || "-"} (${s.teslim_ili || ""}/${s.teslim_ilcesi || ""})`,
+
+                yukleme_varis: fmt(det.yukleme_varis),
+                yukleme_cikis: fmt(det.yukleme_cikis),
+                teslim_varis: fmt(det.teslim_varis),
+                teslim_cikis: fmt(det.teslim_cikis),
+
+                eta: etaIsoCompleted ? fmt(etaIsoCompleted) : "ETA YOK",
+                fark: calcFarkText(etaIsoCompleted, teslimIsoCompleted),
+                durum: "Tamamlandı",
+                raw: s
+            });
+        });
+
+        console.log("NORMALİZASYON BİTTİ: Toplam Tamamlanan Sefer Sayısı:", tamamlananSayaci);
+        console.log("ROWS DİZİSİNİN SON UZUNLUĞU:", rows.length);
+
+        return rows;
+    } catch (error) {
+        console.error("Veri çekme/işleme sırasında kritik hata:", error);
+        throw error; // Hatanın bileşene iletilmesini sağlar
+    }
 }
 
 
 // =============================================================
-// FETCH PERFORMANCE DATA (TESLİM VARIŞ OLMAYANLARI ATAR)
-// =============================================================
-async function fetchPerformanceData() {
-    const selectQuery = `
-        id,sefer_no,sefer_tarihi,plaka,surucu_ad_soyad,eta_varis,eta_note,
-        sefer_detaylari(
-            teslim_varis,yukleme_cikis,nokta_sirasi,
-            yukleme_ili,yukleme_ilcesi,
-            teslim_ili,teslim_ilcesi,
-            yukleme_noktasi,teslim_noktasi
-        )
-    `;
-
-    const { data, error } = await supabase
-        .from("seferler")
-        .select(selectQuery);
-
-    if (error) console.error("Supabase Error:", error);
-
-    const result = [];
-
-    (data || []).forEach((s) => {
-        const ordered = (s.sefer_detaylari || []).sort(
-            (a, b) => (a.nokta_sirasi || 0) - (b.nokta_sirasi || 0)
-        )[0];
-
-        const teslimISO = ordered?.teslim_varis || null;
-        if (!teslimISO) return;
-
-        const yuklemeISO = ordered?.yukleme_cikis || null;
-        const teslim = new Date(teslimISO);
-        const eta = s.eta_varis ? new Date(s.eta_varis) : null;
-
-        let durum = "KULLANICI GİRİŞİ BEKLENİYOR";
-        let fark_signed = null;
-        let fark = null;
-
-        if (teslim && eta) {
-            fark_signed = Math.round((teslim - eta) / 60000);
-            fark = Math.abs(fark_signed);
-
-            durum =
-                fark_signed > 5
-                    ? "GECİKMİŞ"
-                    : fark_signed < -5
-                        ? "ERKEN"
-                        : "ZAMANINDA";
-        } else if (s.eta_note) {
-            durum = "VERİ EKSİK";
-        }
-
-        let eta_display = s.eta_varis ? fmt(s.eta_varis) : s.eta_note || "-";
-        if ((s.eta_note || "").toLowerCase().includes("mesafe"))
-            eta_display = "Mesafe bulunamadı";
-
-        result.push({
-            id: s.id,
-            sefer_no: s.sefer_no,
-            plaka: s.plaka,
-            tarih: fmt(s.sefer_tarihi),
-            yukleme: ordered?.yukleme_noktasi || "-",
-            teslim: ordered?.teslim_noktasi || "-",
-            yukleme_cikis: fmt(yuklemeISO),
-            eta: eta_display,
-            teslim_varis: fmt(teslimISO),
-            fark:
-                fark !== null
-                    ? `${fark_signed > 0 ? "Gecikti" : "Erken"} ${minToHM(fark)}`
-                    : "-",
-            durum,
-            raw: s
-        });
-    });
-
-    return result;
-}
-
-
-// =============================================================
-// MESAFE DİYALOĞU
-// =============================================================
-function DistanceInputDialog({ open, onClose, seferData, onSaved }) {
-    const [distance, setDistance] = React.useState("");
-    const [status, setStatus] = React.useState("");
-    const [loading, setLoading] = React.useState(false);
-    const [canInput, setCanInput] = React.useState(false);
-
-    const det = seferData?.raw?.sefer_detaylari?.[0] || {};
-
-    React.useEffect(() => {
-        if (open && seferData) lookup();
-    }, [open]);
-
-    const lookup = async () => {
-        setLoading(true);
-        setStatus("Mesafe sorgulanıyor...");
-
-        const { data } = await supabase
-            .from("mesafeler")
-            .select("mesafe")
-            .eq("yukleme_il", det.yukleme_ili)
-            .eq("yukleme_ilce", det.yukleme_ilcesi)
-            .eq("teslim_il", det.teslim_ili)
-            .eq("teslim_ilce", det.teslim_ilcesi)
-            .maybeSingle();
-
-        setLoading(false);
-
-        if (data?.mesafe) {
-            setDistance(String(data.mesafe));
-            setCanInput(true);
-            setStatus(`Mesafe bulundu: ${data.mesafe} km`);
-        } else {
-            setCanInput(true);
-            setStatus("Mesafe yok, manuel girin");
-        }
-    };
-
-    const save = async () => {
-        if (!distance || isNaN(Number(distance))) return alert("Geçerli mesafe girin");
-
-        setLoading(true);
-
-        await supabase.from("mesafeler").upsert({
-            yukleme_il: det.yukleme_ili,
-            yukleme_ilce: det.yukleme_ilcesi,
-            teslim_il: det.teslim_ili,
-            teslim_ilce: det.teslim_ilcesi,
-            mesafe: Number(distance)
-        });
-
-        const eta = calcETAFromDistance({
-            distanceKm: Number(distance),
-            startIso: seferData.raw.sefer_tarihi
-        });
-
-        if (eta) {
-            await supabase
-                .from("seferler")
-                .update({ eta_varis: eta.toISOString(), eta_note: null })
-                .eq("id", seferData.id);
-        }
-
-        setLoading(false);
-        onSaved?.();
-    };
-
-    return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-            <DialogTitle>Mesafe Girişi – Sefer #{seferData?.sefer_no}</DialogTitle>
-
-            <DialogContent>
-                <Typography>Kalkış: {det.yukleme_ili} / {det.yukleme_ilcesi}</Typography>
-                <Typography>Varış: {det.teslim_ili} / {det.teslim_ilcesi}</Typography>
-
-                <Box mt={2}>
-                    {loading ? <CircularProgress size={24} /> : status}
-                </Box>
-
-                {canInput && (
-                    <TextField
-                        fullWidth
-                        type="number"
-                        label="Mesafe (km)"
-                        value={distance}
-                        onChange={(e) => setDistance(e.target.value)}
-                        sx={{ mt: 2 }}
-                    />
-                )}
-            </DialogContent>
-
-            <DialogActions>
-                <Button onClick={onClose}>Kapat</Button>
-                {canInput && (
-                    <Button variant="contained" onClick={save} disabled={loading}>
-                        Kaydet
-                    </Button>
-                )}
-            </DialogActions>
-        </Dialog>
-    );
-}
-
-
-// =============================================================
-// MAIN DASHBOARD COMPONENT
+// 📊 DASHBOARD BİLEŞENİ
 // =============================================================
 export default function Dashboard() {
     const [rows, setRows] = React.useState([]);
     const [loading, setLoading] = React.useState(true);
-
     const [selectedDate, setSelectedDate] = React.useState(getTodayDateString());
     const [onlyLate, setOnlyLate] = React.useState(false);
-    const [sortKey, setSortKey] = React.useState("farkDesc");
 
-    const [distanceModal, setDistanceModal] = React.useState(false);
-    const [selected, setSelected] = React.useState(null);
-
-    const loadData = async () => {
+    // Veri Yükleme Fonksiyonu
+    const loadData = React.useCallback(async (dateStr) => {
         setLoading(true);
-        const r = await fetchPerformanceData();
-        setRows(r);
-        setLoading(false);
-    };
-
-    React.useEffect(() => {
-        loadData();
+        try {
+            const res = await fetchPerformanceData(dateStr);
+            setRows(res);
+        } catch (error) {
+            console.error("Veri yüklenirken hata oluştu:", error);
+            setRows([]); // Hata durumunda tabloyu temizle
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
-    // ETA → Seçilen tarihle aynı gün mü?
-    const filtered = rows
-        .filter((r) => {
-            if (!r.raw?.eta_varis) return false;
+    React.useEffect(() => {
+        loadData(selectedDate);
+    }, [loadData, selectedDate]); // Başlangıçta ve selectedDate değiştiğinde yükle
 
-            const etaDate = new Date(r.raw.eta_varis);
-            const sel = new Date(selectedDate);
+    // -------------------------------------------------------------
+    // FİLTRELER
+    // -------------------------------------------------------------
+    const filtered = React.useMemo(() => {
+        console.log(`Filtreleme Başladı: Tarih=${selectedDate}, Sadece Gecikenler=${onlyLate}`);
 
-            const sameDay =
-                etaDate.getFullYear() === sel.getFullYear() &&
-                etaDate.getMonth() === sel.getMonth() &&
-                etaDate.getDate() === sel.getDate();
+        return rows.filter((r) => {
+            const rawDateIso = getRelevantDateIso(r.raw, r.durum);
+            const dateKey = getDateKey(rawDateIso);
 
-            if (!sameDay) return false;
+            if (!dateKey) return false;
 
-            if (onlyLate && r.durum !== "GECİKMİŞ") return false;
+            // Tarih filtresi
+            if (dateKey !== selectedDate) return false;
 
-            return true;
-        })
-        .sort((a, b) => {
-            if (sortKey === "farkDesc") {
-                const av = a.fark.includes("Gecikti") ? parseInt(a.fark) : -9999;
-                const bv = b.fark.includes("Gecikti") ? parseInt(b.fark) : -9999;
-                return bv - av;
+            // Sadece gecikenler filtresi
+            if (onlyLate && !String(r.fark || "").includes("Gecikti")) {
+                return false;
             }
 
-            return new Date(a.raw.eta_varis) - new Date(b.raw.eta_varis);
+            return true;
         });
+    }, [rows, selectedDate, onlyLate]);
+    
+    console.log("Filtre sonrası (filtered):", filtered.length);
 
-    const columns = [
-        { field: "sefer_no", headerName: "Sefer No", flex: 1 },
-        { field: "plaka", headerName: "Plaka", flex: 1 },
-        { field: "tarih", headerName: "Tarih", flex: 1 },
-        { field: "yukleme", headerName: "Yükleme", flex: 1 },
-        { field: "teslim", headerName: "Teslim", flex: 1 },
-        { field: "yukleme_cikis", headerName: "Yükleme Çıkış", flex: 1 },
-        {
-            field: "eta",
-            headerName: "ETA",
-            flex: 1,
-            renderCell: (p) => (
-                <Typography
-                    sx={{
-                        cursor: p.value === "Mesafe bulunamadı" ? "pointer" : "default",
-                        color:
-                            p.value === "Mesafe bulunamadı"
-                                ? DARK_COLORS.neonRed
-                                : DARK_COLORS.text
-                    }}
-                    onClick={() => {
-                        if (p.value === "Mesafe bulunamadı") {
-                            setSelected(p.row);
-                            setDistanceModal(true);
-                        }
-                    }}
-                >
-                    {p.value}
-                </Typography>
-            )
-        },
-        { field: "teslim_varis", headerName: "Teslim Varış", flex: 1 },
-        { field: "fark", headerName: "Fark", flex: 1 },
+
+    // -------------------------------------------------------------
+    // KOLONLAR (Memoize edilmiş)
+    // -------------------------------------------------------------
+    const columns = React.useMemo(() => [
         {
             field: "durum",
             headerName: "Durum",
+            minWidth: 120,
             flex: 1,
             renderCell: (p) => (
                 <Chip
                     label={p.value}
-                    color={
-                        p.value === "GECİKMİŞ"
-                            ? "error"
-                            : p.value === "ERKEN"
-                                ? "success"
-                                : "default"
-                    }
+                    color={p.value === "Aktif" ? "warning" : "primary"}
+                    size="small"
+                    variant="outlined"
                 />
             )
+        },
+        { field: "sefer_no", headerName: "Sefer No", minWidth: 120, flex: 1 },
+        { field: "plaka", headerName: "Plaka", minWidth: 100, flex: 1 },
+        { field: "proje_adi", headerName: "Proje Adı", minWidth: 180, flex: 2 },
+        { field: "tarih", headerName: "Sefer Tarihi", minWidth: 150, flex: 1.5 },
+        { field: "atama_yapan", headerName: "Atama Yapan", minWidth: 180, flex: 1.5 },
+
+        { field: "yukleme", headerName: "Yükleme Noktası", minWidth: 250, flex: 2.5 },
+        { field: "teslim", headerName: "Teslim Noktası", minWidth: 250, flex: 2.5 },
+
+        { field: "yukleme_varis", headerName: "Yük. Varış", minWidth: 150, flex: 1.5 },
+        { field: "yukleme_cikis", headerName: "Yük. Çıkış", minWidth: 150, flex: 1.5 },
+
+        { field: "eta", headerName: "Tahmini Varış (ETA)", minWidth: 150, flex: 1.5 },
+        { field: "teslim_varis", headerName: "Gerçek Varış", minWidth: 150, flex: 1.5 },
+        { field: "teslim_cikis", headerName: "Teslim Çıkış", minWidth: 150, flex: 1.5 },
+
+        {
+            field: "fark",
+            headerName: "Fark (Teslim - ETA)",
+            minWidth: 180,
+            flex: 2,
+            renderCell: (p) => {
+                const value = String(p.value || "");
+                let color = "default";
+                if (value.includes("Gecikti")) color = "error";
+                else if (value.includes("Erken")) color = "success";
+                else if (value.includes("Zamanında")) color = "info";
+
+                return (
+                    <Chip
+                        label={value}
+                        color={color}
+                        size="small"
+                    />
+                );
+            }
         }
-    ];
+    ], []);
 
+    // -------------------------------------------------------------
+    // EXCEL EXPORT
+    // -------------------------------------------------------------
     const exportExcel = async () => {
-        const book = new ExcelJS.Workbook();
-        const sheet = book.addWorksheet("ETA");
+        try {
+            const book = new ExcelJS.Workbook();
+            const sheet = book.addWorksheet("ETA Performans");
 
-        sheet.columns = columns.map((c) => ({
-            header: c.headerName,
-            key: c.field,
-            width: 25
-        }));
+            // Kolon başlıklarını ve anahtarlarını ayarla
+            sheet.columns = columns.map((c) => ({
+                header: c.headerName,
+                key: c.field,
+                width: c.minWidth / 7 || 20 // Ortalama genişlik hesaplaması
+            }));
 
-        sheet.addRows(filtered);
+            // Filtrelenmiş veriyi ekle
+            sheet.addRows(filtered);
 
-        const buffer = await book.xlsx.writeBuffer();
-        saveAs(
-            new Blob([buffer]),
-            `eta_rapor_${selectedDate}.xlsx`
-        );
+            // Dosya oluştur ve indir
+            const buffer = await book.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `eta_performans_raporu_${selectedDate}.xlsx`);
+        } catch (error) {
+            console.error("Excel dışa aktarma hatası:", error);
+            alert("Excel dosyası oluşturulurken bir hata oluştu.");
+        }
     };
 
     return (
-        <Container maxWidth="xl" sx={{ py: 4, color: DARK_COLORS.text }}>
+        <Box sx={{ py: 4, px: 2 }}>
             {/* HEADER */}
-            <Paper
-                sx={{
-                    p: 3,
-                    mb: 3,
-                    borderRadius: 3,
-                    bgcolor: DARK_COLORS.surface
-                }}
-            >
+            <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
                 <Stack direction="row" spacing={2} alignItems="center">
-                    <TimelineIcon sx={{ fontSize: 34, color: DARK_COLORS.primary }} />
-                    <Typography variant="h5" fontWeight={700}>
-                        ETA Performans Paneli (Modern)
+                    <TimelineIcon color="primary" sx={{ fontSize: 34 }} />
+                    <Typography variant="h5" fontWeight={700} color="primary">
+                        ETA Performans Paneli
                     </Typography>
                 </Stack>
             </Paper>
 
-            {/* FILTERS */}
-            <Paper
-                sx={{
-                    p: 3,
-                    mb: 3,
-                    borderRadius: 3,
-                    bgcolor: DARK_COLORS.surface
-                }}
-            >
-                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+            {/* FILTERS & ACTIONS */}
+            <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
+                <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={3}
+                    alignItems={{ xs: "flex-start", sm: "center" }}
+                    flexWrap="wrap"
+                >
+                    {/* Tarih Seçimi */}
                     <TextField
                         type="date"
-                        label="Tarih"
+                        label="ETA Tarihi (Hedef Gün)"
                         value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedDate(val);
+                            loadData(val); // Yeni tarih için DB'den yeniden çek
+                        }}
                         InputLabelProps={{ shrink: true }}
+                        variant="outlined"
+                        size="small"
+                        sx={{ minWidth: 200 }}
                     />
 
-                    <Button
-                        variant="contained"
-                        onClick={loadData}
-                        sx={{ bgcolor: DARK_COLORS.primary, px: 3 }}
-                    >
-                        Yenile
-                    </Button>
-
-                    <Button variant="outlined" onClick={exportExcel}>
-                        Excel'e Aktar
-                    </Button>
-
+                    {/* Sadece Gecikenler Filtresi */}
                     <FormControlLabel
                         control={
                             <Switch
                                 checked={onlyLate}
                                 onChange={(e) => setOnlyLate(e.target.checked)}
+                                color="error"
                             />
                         }
-                        label="Sadece Gecikmeli"
+                        label="Sadece Gecikenleri Göster"
                     />
 
-                    <TextField
-                        select
-                        label="Sırala"
-                        value={sortKey}
-                        onChange={(e) => setSortKey(e.target.value)}
+                    {/* Yenile Butonu */}
+                    <Button
+                        variant="contained"
+                        onClick={() => loadData(selectedDate)}
+                        disabled={loading}
+                        startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
+                        sx={{ minWidth: 120 }}
                     >
-                        <MenuItem value="farkDesc">Gecikme (Büyükten)</MenuItem>
-                        <MenuItem value="dateAsc">Tarih (Eskiden)</MenuItem>
-                    </TextField>
+                        {loading ? "Yükleniyor..." : "Yenile"}
+                    </Button>
+
+                    {/* Excel Export Butonu */}
+                    <Button
+                        variant="outlined"
+                        onClick={exportExcel}
+                        disabled={!filtered.length || loading}
+                        startIcon={<FileDownloadIcon />}
+                        color="success"
+                        sx={{ minWidth: 120 }}
+                    >
+                        Excel ({filtered.length})
+                    </Button>
                 </Stack>
             </Paper>
 
             {/* DATAGRID */}
-            <Paper
-                sx={{
-                    height: 650,
-                    borderRadius: 3,
-                    bgcolor: DARK_COLORS.surface
-                }}
-            >
+            <Paper elevation={3} sx={{ height: 700, width: "100%", overflowX: "auto" }}>
                 {loading ? (
                     <Box
-                        height="100%"
-                        display="flex"
-                        justifyContent="center"
-                        alignItems="center"
+                        sx={{
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            height: "100%",
+                            flexDirection: "column",
+                            gap: 2
+                        }}
                     >
-                        <CircularProgress size={40} />
+                        <CircularProgress size={50} />
+                        <Typography variant="subtitle1" color="text.secondary">
+                            Veriler yükleniyor... Bu biraz zaman alabilir.
+                        </Typography>
                     </Box>
                 ) : (
                     <DataGrid
                         rows={filtered}
                         columns={columns}
+                        getRowId={(r) => r.id}
                         disableRowSelectionOnClick
-                        sx={{
-                            color: DARK_COLORS.text,
-                            border: "none",
-                            "& .MuiDataGrid-columnHeaders": {
-                                bgcolor: DARK_COLORS.surface2,
-                                fontWeight: 700
-                            },
-                            "& .MuiDataGrid-row:nth-of-type(odd)": {
-                                bgcolor: DARK_COLORS.zebra
-                            }
+                        density="compact"
+                        localeText={{
+                            noRowsLabel: "Belirtilen tarihe ait sefer bulunamadı."
                         }}
+                        initialState={{
+                            pagination: { paginationModel: { pageSize: 100 } },
+                            sorting: { sortModel: [{ field: 'fark', sort: 'asc' }] }
+                        }}
+                        pageSizeOptions={[50, 100, 200]}
+                        // Orjinal kodda minWidth: 2000 olduğu için autoHeight kullanmıyoruz
+                        // columnVisibilityModel={{
+                        //     // Kolonları gizleme/gösterme için örnek
+                        //     yukleme_cikis: false,
+                        //     teslim_cikis: false,
+                        // }}
                     />
                 )}
             </Paper>
-
-            {/* MESAFE DİYALOĞU */}
-            <DistanceInputDialog
-                open={distanceModal}
-                onClose={() => setDistanceModal(false)}
-                seferData={selected}
-                onSaved={() => {
-                    setDistanceModal(false);
-                    loadData();
-                }}
-            />
-        </Container>
+        </Box>
     );
 }

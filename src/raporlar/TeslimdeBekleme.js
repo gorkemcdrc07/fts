@@ -1,5 +1,5 @@
 // ===============================================
-// TeslimdeBekleme.jsx — SON SÜRÜM (Sefer Tekrarı Hatası Düzeltildi)
+// TeslimdeBekleme.jsx — GÜNCEL (Haftalık + Aylık + Günlük Mod Eklendi)
 // ===============================================
 
 import React, { useState, useCallback, useEffect } from "react";
@@ -35,9 +35,10 @@ import {
     Collapse,
     IconButton,
     LinearProgress,
+    MenuItem,
 } from "@mui/material";
 
-import { useTheme } from "@mui/material/styles"; // useTheme importu düzeltildi
+import { useTheme } from "@mui/material/styles";
 
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import SearchIcon from "@mui/icons-material/Search";
@@ -45,7 +46,6 @@ import CloseIcon from "@mui/icons-material/Close";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-
 
 // --------------------------------------------------------------
 // DAYJS AYARLARI
@@ -55,9 +55,7 @@ dayjs.extend(isSameOrAfter);
 dayjs.extend(weekOfYear);
 dayjs.extend(updateLocale);
 dayjs.locale("tr");
-
-dayjs.updateLocale("tr", { weekStart: 1 });
-
+dayjs.updateLocale("tr", { weekStart: 1 }); // Pazartesi başlangıç
 
 // --------------------------------------------------------------
 // SUPABASE TABLOLARI
@@ -66,21 +64,20 @@ const DETAIL_TABLE = "tamamlanan_detaylar";
 const SUMMARY_TABLE = "tamamlanan_seferler";
 
 const DETAIL_COLS = `
-    sefer_no,
-    teslim_noktasi,
-    teslim_varis,
-    teslim_cikis
+  sefer_no,
+  teslim_noktasi,
+  teslim_varis,
+  teslim_cikis
 `;
 
 const SUMMARY_COLS = `
-    sefer_no,
-    plaka,
-    proje_adi,
-    teslim_ili,
-    teslim_ilcesi,
-    sefer_tarihi
+  sefer_no,
+  plaka,
+  proje_adi,
+  teslim_ili,
+  teslim_ilcesi,
+  sefer_tarihi
 `;
-
 
 // --------------------------------------------------------------
 // YARDIMCI FONKSİYONLAR
@@ -104,7 +101,6 @@ const minToHM = (m) => {
     if (r) return `${r} dk`;
     return "0 dk";
 };
-
 
 // --------------------------------------------------------------
 // KURAL HESAPLAMA
@@ -148,7 +144,6 @@ const calcRule = (varis, cikis) => {
     return { appliedRule: "None", compliant: true, delay: 0 };
 };
 
-
 // --------------------------------------------------------------
 // PERFORMANS PUANI HESABI
 // --------------------------------------------------------------
@@ -170,7 +165,6 @@ const calculateScore = (trips, nonComp, delayMin) => {
     };
 };
 
-
 // --------------------------------------------------------------
 // EXCEL EXPORT
 // --------------------------------------------------------------
@@ -178,9 +172,7 @@ const exportExcel = async (rows) => {
     if (!rows.length) return;
 
     // Sadece ihlalli kayıtları filtrele
-    const filtered = rows.filter(
-        (r) => r.rule.compliant === false && r.rule.delay > 0
-    );
+    const filtered = rows.filter((r) => r.rule.compliant === false && r.rule.delay > 0);
 
     if (!filtered.length) {
         alert("İhlalli kayıt bulunamadı.");
@@ -201,6 +193,7 @@ const exportExcel = async (rows) => {
         { header: "Teslim Çıkış", key: "teslim_cikis", width: 20 },
         { header: "Gecikme Süresi", key: "gecikme", width: 18 },
     ];
+
     filtered.forEach((r) =>
         ws.addRow({
             sefer_no: r.sefer_no,
@@ -215,14 +208,9 @@ const exportExcel = async (rows) => {
         })
     );
 
-
     const buffer = await wb.xlsx.writeBuffer();
-    saveAs(
-        new Blob([buffer]),
-        `bekleme_ihlalleri_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`
-    );
+    saveAs(new Blob([buffer]), `bekleme_ihlalleri_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`);
 };
-
 
 // ======================================================================
 // UI — Detaylı plaka satırı (açılır liste)
@@ -230,8 +218,7 @@ const exportExcel = async (rows) => {
 const DetailedRow = ({ row }) => {
     const [open, setOpen] = useState(false);
 
-    // Kurala uymayan seferleri say
-    const nonCompliantTrips = row.trips.filter(t => t.rule.compliant === false);
+    const nonCompliantTrips = row.trips.filter((t) => t.rule.compliant === false);
 
     return (
         <>
@@ -275,16 +262,9 @@ const DetailedRow = ({ row }) => {
 
                                     <TableBody>
                                         {nonCompliantTrips.map((t, i) => (
-                                            <TableRow
-                                                key={i}
-                                                sx={{
-                                                    backgroundColor: "rgba(255,0,0,0.08)",
-                                                }}
-                                            >
+                                            <TableRow key={i} sx={{ backgroundColor: "rgba(255,0,0,0.08)" }}>
                                                 <TableCell>{t.sefer_no}</TableCell>
-                                                <TableCell>
-                                                    {dayjs(t.sefer_tarihi).format("DD.MM.YYYY")}
-                                                </TableCell>
+                                                <TableCell>{dayjs(t.sefer_tarihi).format("DD.MM.YYYY")}</TableCell>
                                                 <TableCell>
                                                     {t.yukleme_ili} → {t.teslim_ili}
                                                 </TableCell>
@@ -293,9 +273,7 @@ const DetailedRow = ({ row }) => {
                                                     {fmt(t.teslim_varis)} <br /> {fmt(t.teslim_cikis)}
                                                 </TableCell>
                                                 <TableCell>{t.rule.appliedRule}</TableCell>
-                                                <TableCell align="right">
-                                                    {minToHM(t.rule.delay)}
-                                                </TableCell>
+                                                <TableCell align="right">{minToHM(t.rule.delay)}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -309,24 +287,32 @@ const DetailedRow = ({ row }) => {
     );
 };
 
-
 // ======================================================================
 // ANA KOMPONENT
 // ======================================================================
 export default function TeslimdeBekleme() {
     const theme = useTheme();
 
-    // GÜNLÜK & AYLIK
+    // ✅ YENİ: Gün / Haftalık / Ay Modu
+    // day | week | month
+    const [mode, setMode] = useState("day");
+
+    // Günlük
     const [date, setDate] = useState(dayjs().format("YYYY-MM-DD"));
-    const [dailyMonth, setDailyMonth] = useState("");
+
+    // Haftalık/Aylık için ay
+    const [dailyMonth, setDailyMonth] = useState(dayjs().format("YYYY-MM"));
+
+    // Haftalık için “ilk kaç hafta”
+    // 1 | 2 | 3 | all
+    const [weekCount, setWeekCount] = useState("1");
+
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    // YENİ STATE'LER (Progress ve Zaman Takibi)
+    // Progress ve zaman takibi
     const [progressMessage, setProgressMessage] = useState(null);
-    const [startTime, setStartTime] = useState(null);
     const [progressValue, setProgressValue] = useState(0);
-
 
     // ANALİZ
     const [startDate, setStartDate] = useState(dayjs().subtract(7, "day").format("YYYY-MM-DD"));
@@ -337,7 +323,7 @@ export default function TeslimdeBekleme() {
     const [error, setError] = useState(null);
 
     /**
-     * Tek bir gün/hafta aralığı için veriyi çeken yardımcı fonksiyon
+     * Tek bir aralık için detay verisi çeken yardımcı fonksiyon
      */
     const fetchByDayRange = async (startISO, endISO) => {
         const { data: detail, error: detailError } = await supabase
@@ -348,11 +334,46 @@ export default function TeslimdeBekleme() {
 
         if (detailError) throw detailError;
         return detail;
-    }
+    };
 
+    /**
+     * ✅ YENİ: Mod’a göre aralık üretir
+     */
+    const computeRange = useCallback(() => {
+        if (mode === "day") {
+            const s = dayjs(date).startOf("day");
+            const e = dayjs(date).endOf("day");
+            return { start: s, end: e, label: dayjs(date).format("DD.MM.YYYY") };
+        }
+
+        const monthStart = dayjs(dailyMonth).startOf("month");
+        const monthEnd = dayjs(dailyMonth).endOf("month");
+
+        if (mode === "month") {
+            return { start: monthStart, end: monthEnd, label: dayjs(dailyMonth).format("MMMM YYYY") };
+        }
+
+        // mode === "week" => ayın başından itibaren ilk N hafta / tüm ay
+        let end;
+        if (weekCount === "all") {
+            end = monthEnd;
+        } else {
+            end = monthStart.add(Number(weekCount) * 7, "day").endOf("day");
+            if (end.isAfter(monthEnd)) end = monthEnd;
+        }
+
+        return {
+            start: monthStart,
+            end,
+            label:
+                weekCount === "all"
+                    ? `${monthStart.format("DD.MM")} - ${monthEnd.format("DD.MM.YYYY")}`
+                    : `İlk ${weekCount} hafta (${monthStart.format("DD.MM")} - ${end.format("DD.MM.YYYY")})`,
+        };
+    }, [mode, date, dailyMonth, weekCount]);
 
     // --------------------------------------------------------------
-    // GÜNLÜK + AYLIK VERİ ÇEK (AYLIK HAFTA HAFTA ÇEKİYOR)
+    // GÜNLÜK / HAFTALIK / AYLIK VERİ ÇEK (HAFTA HAFTA ÇEKİP BİRLEŞTİRİR)
     // --------------------------------------------------------------
     const fetchDaily = useCallback(async () => {
         setLoading(true);
@@ -362,103 +383,78 @@ export default function TeslimdeBekleme() {
         setProgressValue(0);
 
         const fetchStartTime = Date.now();
-        setStartTime(fetchStartTime);
 
         let allDetails = [];
-        let totalWeeks = 1;
 
         try {
-            if (date) {
-                // 1. Günlük filtre (Tek sorgu)
-                const start = dayjs(date).startOf("day").toISOString();
-                const end = dayjs(date).endOf("day").toISOString();
+            const range = computeRange();
+            const startOfRange = range.start.clone().startOf("day");
+            const endOfRange = range.end.clone().endOf("day");
+
+            // ✅ Haftalık/Aylık modlarda: büyük aralıkta tek sefer yerine hafta hafta çek
+            const shouldChunkByWeek = mode !== "day";
+
+            if (!shouldChunkByWeek) {
+                // Günlük tek sorgu
                 setProgressValue(50);
-                allDetails = await fetchByDayRange(start, end);
-                setProgressMessage(`'${dayjs(date).format('DD.MM.YYYY')}' tarihi için ${allDetails.length} detay kaydı çekildi.`);
-                setProgressValue(100);
+                allDetails = await fetchByDayRange(startOfRange.toISOString(), endOfRange.toISOString());
+                setProgressMessage(`'${range.label}' için ${allDetails.length} detay kaydı çekildi.`);
+                setProgressValue(95);
+            } else {
+                // Haftalık/Aylık: hafta hafta çekip birleştir
+                let currentDate = startOfRange.clone();
+                const endDateLocal = endOfRange.clone();
 
-            } else if (dailyMonth) {
-                // 2. Aylık filtre: HAFTA HAFTA ÇEKİP BİRLEŞTİRME İYİLEŞTİRMESİ
-                const startOfMonth = dayjs(dailyMonth).startOf("month");
-                const endOfMonth = dayjs(dailyMonth).endOf("month");
+                // Tahmini hafta sayısı
+                let totalWeeks = Math.ceil(endDateLocal.diff(currentDate, "week", true));
+                if (totalWeeks <= 0) totalWeeks = 1;
 
-                let currentDate = startOfMonth.clone();
-                let allMonthDetails = [];
                 let weekCounter = 0;
                 let totalDetailsCount = 0;
 
-                // Tahmini hafta sayısını hesapla
-                totalWeeks = Math.ceil(endOfMonth.diff(startOfMonth, 'week', true));
-                if (totalWeeks === 0) totalWeeks = 1;
-
-
-                while (currentDate.isSameOrBefore(endOfMonth, 'day')) {
+                while (currentDate.isSameOrBefore(endDateLocal, "day")) {
                     weekCounter++;
 
-                    // Haftalık aralığın sonunu belirle
-                    let weekEnd = currentDate.clone().endOf('week');
-                    if (weekEnd.isAfter(endOfMonth)) {
-                        weekEnd = endOfMonth.clone();
-                    }
+                    // Haftanın sonu
+                    let weekEnd = currentDate.clone().endOf("week");
+                    if (weekEnd.isAfter(endDateLocal)) weekEnd = endDateLocal.clone();
 
-                    // Progress Bar Güncellemesi (Çekim Kısmı: %0'dan %90'a kadar)
-                    const calculatedProgress = Math.round((weekCounter / totalWeeks) * 90);
-                    setProgressValue(calculatedProgress);
+                    const progress = Math.round((weekCounter / totalWeeks) * 90);
+                    setProgressValue(progress);
 
+                    const startISO = currentDate.startOf("day").toISOString();
+                    const endISO = weekEnd.endOf("day").toISOString();
 
-                    setProgressMessage(
-                        `Veri çekiliyor: ${weekCounter} / ${totalWeeks} Hafta (${currentDate.format('DD.MM')} - ${weekEnd.format('DD.MM')})`
-                    );
+                    const details = await fetchByDayRange(startISO, endISO);
 
-                    // --- Veri Çekme ---
-                    const start = currentDate.startOf("day").toISOString();
-                    const end = weekEnd.endOf("day").toISOString();
-                    const details = await fetchByDayRange(start, end);
-                    // ------------------
-
-
-                    allMonthDetails = allMonthDetails.concat(details);
+                    allDetails = allDetails.concat(details);
                     totalDetailsCount += details.length;
 
-                    // Kalan Süre Tahmini Güncellemesi
                     const elapsed = Date.now() - fetchStartTime;
                     const timePerWeek = elapsed / weekCounter;
                     const remainingTimeMs = timePerWeek * (totalWeeks - weekCounter);
-                    const remainingTimeSec = Math.round(remainingTimeMs / 1000);
+                    const remainingTimeSec = Math.max(0, Math.round(remainingTimeMs / 1000));
 
                     setProgressMessage(
-                        `Veri çekiliyor: ${weekCounter} / ${totalWeeks} Hafta (${totalDetailsCount} kayıt). Tahmini kalan süre: ${remainingTimeSec} sn.`
+                        `Veri çekiliyor (${range.label}): ${weekCounter}/${totalWeeks} hafta — ${totalDetailsCount} kayıt. Kalan ~${remainingTimeSec} sn.`
                     );
 
-                    currentDate = weekEnd.add(1, 'day').startOf('day');
+                    currentDate = weekEnd.add(1, "day").startOf("day");
                 }
-                allDetails = allMonthDetails;
 
-                // Progress Bar %95
                 setProgressValue(95);
-                setProgressMessage(`Detay kayıtları çekimi tamamlandı (${totalDetailsCount} kayıt). Özet veriler alınıyor...`);
-
-
-            } else {
-                // 3. Varsayılan olarak bugünü getir
-                const today = dayjs();
-                const start = today.startOf("day").toISOString();
-                const end = today.endOf("day").toISOString();
-                setDate(today.format("YYYY-MM-DD"));
-                setProgressValue(50);
-                allDetails = await fetchByDayRange(start, end);
-                setProgressMessage(`Bugün (${today.format('DD.MM.YYYY')}) için ${allDetails.length} detay kaydı çekildi.`);
-                setProgressValue(100);
+                setProgressMessage(`Detay kayıtları çekildi (${allDetails.length}). Özet veriler alınıyor...`);
             }
 
             if (!allDetails || allDetails.length === 0) {
                 setRows([]);
                 setLoading(false);
                 setProgressMessage("Kayıt bulunamadı.");
+                setProgressValue(0);
                 return;
             }
 
-            // Özet verileri (Summary) tek seferde çek
+            // Summary verilerini tek seferde çek
             const seferNos = [...new Set(allDetails.map((d) => d.sefer_no))];
 
             setProgressValue(98);
@@ -471,13 +467,11 @@ export default function TeslimdeBekleme() {
 
             if (summaryError) throw summaryError;
 
-            // Summary verilerini Map'e atayalım
+            // Summary Map
             const summaryMap = new Map();
-            summary.forEach(s => summaryMap.set(s.sefer_no, s));
+            (summary || []).forEach((s) => summaryMap.set(s.sefer_no, s));
 
-            // =========================================================================
-            // YENİ GRUPLAMA MANTIĞI: Sefer Bazında En Kötü İhlali Bulma
-            // =========================================================================
+            // ✅ Sefer bazında “en kötü ihlali” konsolide et
             const consolidatedMap = new Map();
 
             allDetails.forEach((d) => {
@@ -487,67 +481,52 @@ export default function TeslimdeBekleme() {
 
                 const rule = calcRule(d.teslim_varis, d.teslim_cikis);
 
-                // Eğer bu detay kaydı ihlalli veya eksikse, işleme devam et
+                // ihlal veya eksikse al
                 if (rule.compliant === false || rule.compliant === null) {
-
                     const currentRecord = {
                         ...s,
                         teslim_noktasi: d.teslim_noktasi,
                         teslim_varis: d.teslim_varis,
                         teslim_cikis: d.teslim_cikis,
-                        rule: rule,
+                        rule,
                     };
 
-                    // Haritada bu sefer için zaten bir kayıt var mı?
                     if (consolidatedMap.has(seferNo)) {
-                        const existingRecord = consolidatedMap.get(seferNo);
+                        const existing = consolidatedMap.get(seferNo);
 
-                        // 1. Priorite: Eğer mevcut kayıt eksik veri (null) ise, yeni kural (false) veya daha büyük gecikme varsa değiştir.
-                        if (existingRecord.rule.compliant === null) {
-                            if (rule.compliant === false || rule.delay > existingRecord.rule.delay) {
+                        // mevcut null ise, false veya daha büyük gecikme ile değiştir
+                        if (existing.rule.compliant === null) {
+                            if (rule.compliant === false || rule.delay > existing.rule.delay) {
                                 consolidatedMap.set(seferNo, currentRecord);
                             }
-                        }
-                        // 2. Priorite: Eğer mevcut kayıt ihlalli (false) ise, daha büyük gecikmeyi seç.
-                        else if (rule.delay > existingRecord.rule.delay) {
+                        } else if (rule.delay > existing.rule.delay) {
                             consolidatedMap.set(seferNo, currentRecord);
                         }
-                        // Not: Yeni kural null ise ve mevcut false ise, değiştirme.
-
                     } else {
-                        // İlk kez ekleniyorsa
                         consolidatedMap.set(seferNo, currentRecord);
                     }
                 }
             });
 
             const final = Array.from(consolidatedMap.values());
-            // =========================================================================
-
-
             setRows(final);
 
-            // Bitiş mesajı
             const totalElapsed = (Date.now() - fetchStartTime) / 1000;
-            setProgressMessage(`İşlem ${totalElapsed.toFixed(1)} saniyede tamamlandı. ${final.length} ihlal kaydı bulundu.`);
+            setProgressMessage(`İşlem ${totalElapsed.toFixed(1)} sn’de tamamlandı. ${final.length} ihlal kaydı bulundu.`);
             setProgressValue(100);
-
         } catch (err) {
-            setError(err.message);
+            setError(err?.message || "Bilinmeyen hata");
             setProgressMessage("Hata oluştu.");
             setProgressValue(0);
         }
 
         setLoading(false);
-        setStartTime(null);
-    }, [date, dailyMonth]);
+    }, [mode, date, dailyMonth, weekCount, computeRange]);
 
-
-    // Günlük/Aylık Filtre Değişimini Otomatik Tetikle
+    // ✅ Otomatik tetikleme: mod/date/month/weekCount değişince
     useEffect(() => {
         fetchDaily();
-    }, [date, dailyMonth, fetchDaily]);
-
+    }, [mode, date, dailyMonth, weekCount, fetchDaily]);
 
     // --------------------------------------------------------------
     // DETAYLI ANALİZ VERİSİ ÇEK
@@ -561,7 +540,6 @@ export default function TeslimdeBekleme() {
             const start = dayjs(startDate).startOf("day").toISOString();
             const end = dayjs(endDate).endOf("day").toISOString();
 
-            // Tüm detay kayıtlarını tek seferde çek 
             const { data: detail, error: detailError } = await supabase
                 .from(DETAIL_TABLE)
                 .select(DETAIL_COLS)
@@ -585,7 +563,6 @@ export default function TeslimdeBekleme() {
 
             if (summaryError) throw summaryError;
 
-
             const map = new Map();
 
             detail.forEach((d) => {
@@ -595,7 +572,6 @@ export default function TeslimdeBekleme() {
                 const plaka = s.plaka;
                 const rule = calcRule(d.teslim_varis, d.teslim_cikis);
 
-                // Tüm verinin dahil edildiği, plaka bazlı gruplama
                 if (!map.has(plaka)) {
                     map.set(plaka, {
                         plaka,
@@ -603,7 +579,7 @@ export default function TeslimdeBekleme() {
                         totalTrips: 0,
                         nonCompliantCount: 0,
                         totalDelayMinutes: 0,
-                        trips: [], // Detaylı seyahat listesi
+                        trips: [],
                     });
                 }
 
@@ -617,9 +593,7 @@ export default function TeslimdeBekleme() {
                     rule,
                 });
 
-                if (rule.compliant !== null) {
-                    item.totalTrips++;
-                }
+                if (rule.compliant !== null) item.totalTrips++;
 
                 if (rule.compliant === false) {
                     item.nonCompliantCount++;
@@ -628,18 +602,12 @@ export default function TeslimdeBekleme() {
             });
 
             const output = Array.from(map.values()).map((item) => {
-                const { score, penalty } = calculateScore(
-                    item.totalTrips,
-                    item.nonCompliantCount,
-                    item.totalDelayMinutes
-                );
+                const { score, penalty } = calculateScore(item.totalTrips, item.nonCompliantCount, item.totalDelayMinutes);
 
                 return {
                     ...item,
                     violationRate:
-                        item.totalTrips > 0
-                            ? ((item.nonCompliantCount / item.totalTrips) * 100).toFixed(1)
-                            : 0,
+                        item.totalTrips > 0 ? ((item.nonCompliantCount / item.totalTrips) * 100).toFixed(1) : 0,
                     totalDelay: minToHM(item.totalDelayMinutes),
                     score,
                     penalty,
@@ -648,12 +616,11 @@ export default function TeslimdeBekleme() {
 
             setDetailedAnalysis(output.sort((a, b) => b.score - a.score));
         } catch (err) {
-            setError(err.message);
+            setError(err?.message || "Bilinmeyen hata");
         }
 
         setAnalysisLoading(false);
     }, [startDate, endDate]);
-
 
     // --------------------------------------------------------------
     // RENDER
@@ -667,47 +634,85 @@ export default function TeslimdeBekleme() {
             {error && <Alert severity="error">{error}</Alert>}
 
             {/* ========================================================= */}
-            {/* 1️⃣ GÜNLÜK + AYLIK TABLO (İHLALLİ KAYITLAR) */}
+            {/* 1️⃣ GÜNLÜK / HAFTALIK / AYLIK TABLO */}
             {/* ========================================================= */}
-
             <Paper sx={{ p: 3, mb: 4 }} elevation={6}>
                 <Typography variant="h6" sx={{ mb: 2 }}>
-                    📅 Günlük / Aylık İhlal Detay Tablosu ({rows.length} İhlal Kaydı)
+                    📅 İhlal Detay Tablosu ({rows.length} İhlal Kaydı)
                 </Typography>
 
-                <Grid container spacing={3} alignItems="center">
-                    <Grid item>
+                <Grid container spacing={2} alignItems="center">
+                    {/* MOD */}
+                    <Grid item xs={12} md={3}>
                         <TextField
-                            label="Günlük Tarih"
-                            type="date"
-                            value={date}
-                            InputLabelProps={{ shrink: true }}
-                            onChange={(e) => {
-                                setDate(e.target.value);
-                                setDailyMonth("");
-                            }}
+                            select
+                            fullWidth
+                            label="Mod"
+                            value={mode}
+                            onChange={(e) => setMode(e.target.value)}
                             disabled={loading}
-                        />
+                        >
+                            <MenuItem value="day">Günlük</MenuItem>
+                            <MenuItem value="week">Haftalık (Ay + İlk N Hafta)</MenuItem>
+                            <MenuItem value="month">Aylık (Tüm Ay)</MenuItem>
+                        </TextField>
                     </Grid>
 
-                    <Grid item>
-                        <TextField
-                            label="Ay Seç"
-                            type="month"
-                            value={dailyMonth}
-                            InputLabelProps={{ shrink: true }}
-                            onChange={(e) => {
-                                setDailyMonth(e.target.value);
-                                setDate("");
-                            }}
-                            disabled={loading}
-                        />
-                    </Grid>
+                    {/* GÜNLÜK TARİH */}
+                    {mode === "day" && (
+                        <Grid item xs={12} md={3}>
+                            <TextField
+                                fullWidth
+                                label="Günlük Tarih"
+                                type="date"
+                                value={date}
+                                InputLabelProps={{ shrink: true }}
+                                onChange={(e) => setDate(e.target.value)}
+                                disabled={loading}
+                            />
+                        </Grid>
+                    )}
 
-                    <Grid item>
-                        <Tooltip title="Tarih/Ay seçildiğinde otomatik güncellenir.">
+                    {/* AY SEÇ */}
+                    {(mode === "week" || mode === "month") && (
+                        <Grid item xs={12} md={3}>
+                            <TextField
+                                fullWidth
+                                label="Ay Seç"
+                                type="month"
+                                value={dailyMonth}
+                                InputLabelProps={{ shrink: true }}
+                                onChange={(e) => setDailyMonth(e.target.value)}
+                                disabled={loading}
+                            />
+                        </Grid>
+                    )}
+
+                    {/* HAFTA SAYISI */}
+                    {mode === "week" && (
+                        <Grid item xs={12} md={3}>
+                            <TextField
+                                select
+                                fullWidth
+                                label="Kaç Haftası"
+                                value={weekCount}
+                                onChange={(e) => setWeekCount(e.target.value)}
+                                disabled={loading}
+                            >
+                                <MenuItem value="1">İlk 1 Hafta</MenuItem>
+                                <MenuItem value="2">İlk 2 Hafta</MenuItem>
+                                <MenuItem value="3">İlk 3 Hafta</MenuItem>
+                                <MenuItem value="all">Tüm Ay</MenuItem>
+                            </TextField>
+                        </Grid>
+                    )}
+
+                    {/* YENİLE */}
+                    <Grid item xs={12} md={3}>
+                        <Tooltip title="Seçimler değişince otomatik güncellenir, yine de manuel yenileyebilirsin.">
                             <span>
                                 <Button
+                                    fullWidth
                                     variant="contained"
                                     startIcon={<SearchIcon />}
                                     onClick={fetchDaily}
@@ -719,36 +724,35 @@ export default function TeslimdeBekleme() {
                         </Tooltip>
                     </Grid>
 
-                    <Grid item>
+                    {/* EXCEL */}
+                    <Grid item xs={12} md={3}>
                         <Button
+                            fullWidth
                             variant="outlined"
                             color="success"
                             startIcon={<FileDownloadIcon />}
                             disabled={!rows.length || loading}
                             onClick={() => exportExcel(rows)}
                         >
-                            İhlalli Kayıtları Excel İndir ({rows.length})
+                            İhlalli Kayıtları Excel ({rows.length})
                         </Button>
                     </Grid>
                 </Grid>
 
-                {/* Yükleme Durumu ve Progress Mesajı */}
+                {/* Progress */}
                 {loading && (
                     <Box sx={{ mt: 2, p: 1, backgroundColor: theme.palette.action.hover, borderRadius: 1 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
                             <CircularProgress size={20} sx={{ mr: 2 }} />
                             <Typography variant="body2" color="textSecondary">
                                 {progressMessage}
                             </Typography>
                         </Box>
-
-                        {/* Progress Bar */}
                         <LinearProgress variant="determinate" value={progressValue} sx={{ height: 8, borderRadius: 4 }} />
-
                     </Box>
                 )}
 
-                {/* Günlük Tablo */}
+                {/* Tablo */}
                 <TableContainer sx={{ mt: 3, maxHeight: "60vh" }}>
                     <Table stickyHeader size="small">
                         <TableHead>
@@ -767,9 +771,7 @@ export default function TeslimdeBekleme() {
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell align="center" colSpan={8}>
-                                        {/* Progress bilgisi yukarıda gösterildiği için burada boş bırakılabilir. */}
-                                    </TableCell>
+                                    <TableCell align="center" colSpan={8} />
                                 </TableRow>
                             ) : rows.length > 0 ? (
                                 rows.map((r, i) => (
@@ -791,11 +793,15 @@ export default function TeslimdeBekleme() {
                                         <TableCell>{fmt(r.teslim_varis)}</TableCell>
                                         <TableCell>{fmt(r.teslim_cikis)}</TableCell>
                                         <TableCell>
-                                            {r.rule.compliant === false && <CloseIcon color="error" fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />}
-                                            {r.rule.compliant === null && <ErrorOutlineIcon color="warning" fontSize="small" sx={{ verticalAlign: 'middle', mr: 0.5 }} />}
+                                            {r.rule.compliant === false && (
+                                                <CloseIcon color="error" fontSize="small" sx={{ verticalAlign: "middle", mr: 0.5 }} />
+                                            )}
+                                            {r.rule.compliant === null && (
+                                                <ErrorOutlineIcon color="warning" fontSize="small" sx={{ verticalAlign: "middle", mr: 0.5 }} />
+                                            )}
                                             {r.rule.appliedRule}
                                         </TableCell>
-                                        <TableCell sx={{ fontWeight: r.rule.delay > 0 ? 'bold' : 'normal' }}>
+                                        <TableCell sx={{ fontWeight: r.rule.delay > 0 ? "bold" : "normal" }}>
                                             {minToHM(r.rule.delay)}
                                         </TableCell>
                                     </TableRow>
@@ -804,7 +810,7 @@ export default function TeslimdeBekleme() {
                                 <TableRow>
                                     <TableCell align="center" colSpan={8} sx={{ py: 2 }}>
                                         <Alert severity="info" variant="outlined">
-                                            Seçili tarih/ay aralığında kural ihlalli veya eksik veri içeren kayıt bulunamadı.
+                                            Seçili aralıkta kural ihlalli veya eksik veri içeren kayıt bulunamadı.
                                         </Alert>
                                     </TableCell>
                                 </TableRow>
@@ -815,9 +821,8 @@ export default function TeslimdeBekleme() {
             </Paper>
 
             {/* ========================================================= */}
-            {/* 2️⃣ TARİH ARALIĞI ANALİZİ (Giriş) */}
+            {/* 2️⃣ TARİH ARALIĞI ANALİZİ */}
             {/* ========================================================= */}
-
             <Paper sx={{ p: 3, mb: 4 }} elevation={6}>
                 <Typography variant="h6" sx={{ mb: 2 }}>
                     📊 Tarih Aralığı Analizi (Performans Puanı)
@@ -868,13 +873,12 @@ export default function TeslimdeBekleme() {
             </Paper>
 
             {/* ========================================================= */}
-            {/* 3️⃣ ANALİZ TABLOLARI (Sonuç) */}
+            {/* 3️⃣ ANALİZ TABLOSU */}
             {/* ========================================================= */}
-
             {detailedAnalysis.length > 0 && (
                 <Paper sx={{ p: 3 }} elevation={6}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
-                        📄 Plaka Bazlı Sonuçlar ({detailedAnalysis.length} Plaka - 10.0 Üzerinden Performans Puanı)
+                        📄 Plaka Bazlı Sonuçlar ({detailedAnalysis.length} Plaka)
                     </Typography>
 
                     <TableContainer sx={{ maxHeight: 600 }}>

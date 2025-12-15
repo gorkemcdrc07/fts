@@ -76,8 +76,8 @@ const SUMMARY_COLS = `
     sefer_no,
     plaka,
     proje_adi,
-    yukleme_ili,
     teslim_ili,
+    teslim_ilcesi,
     sefer_tarihi
 `;
 
@@ -193,26 +193,28 @@ const exportExcel = async (rows) => {
     ws.columns = [
         { header: "Sefer No", key: "sefer_no", width: 12 },
         { header: "Plaka", key: "plaka", width: 10 },
-        { header: "Proje", key: "proje", width: 20 },
-        { header: "Teslim Noktası", key: "nokta", width: 25 },
-        { header: "Varış", key: "varis", width: 20 },
-        { header: "Çıkış", key: "cikis", width: 20 },
-        { header: "Kural", key: "rule", width: 15 },
-        { header: "Gecikme", key: "delay", width: 15 },
+        { header: "Proje", key: "proje", width: 22 },
+        { header: "Teslim Noktası", key: "teslim_noktasi", width: 28 },
+        { header: "Teslim İli", key: "teslim_ili", width: 14 },
+        { header: "Teslim İlçesi", key: "teslim_ilcesi", width: 16 },
+        { header: "Teslim Varış", key: "teslim_varis", width: 20 },
+        { header: "Teslim Çıkış", key: "teslim_cikis", width: 20 },
+        { header: "Gecikme Süresi", key: "gecikme", width: 18 },
     ];
-
     filtered.forEach((r) =>
         ws.addRow({
             sefer_no: r.sefer_no,
             plaka: r.plaka,
             proje: r.proje_adi,
-            nokta: r.teslim_noktasi,
-            varis: fmt(r.teslim_varis),
-            cikis: fmt(r.teslim_cikis),
-            rule: r.rule.appliedRule,
-            delay: minToHM(r.rule.delay),
+            teslim_noktasi: r.teslim_noktasi,
+            teslim_ili: r.teslim_ili || "",
+            teslim_ilcesi: r.teslim_ilcesi || "",
+            teslim_varis: fmt(r.teslim_varis),
+            teslim_cikis: fmt(r.teslim_cikis),
+            gecikme: minToHM(r.rule.delay),
         })
     );
+
 
     const buffer = await wb.xlsx.writeBuffer();
     saveAs(

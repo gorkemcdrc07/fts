@@ -388,22 +388,62 @@ export default function Dashboard() {
     // -------------------------------------------------------------
     // EXCEL EXPORT
     // -------------------------------------------------------------
+    // -------------------------------------------------------------
+    // EXCEL EXPORT (İstenen kolonlarla)
+    // -------------------------------------------------------------
     const exportExcel = async () => {
         try {
             const book = new ExcelJS.Workbook();
             const sheet = book.addWorksheet("ETA Performans");
 
-            // Kolon başlıklarını ve anahtarlarını ayarla
-            sheet.columns = columns.map((c) => ({
-                header: c.headerName,
-                key: c.field,
-                width: c.minWidth / 7 || 20 // Ortalama genişlik hesaplaması
-            }));
+            // 1) Excel kolon şeması (istenen sırayla)
+            sheet.columns = [
+                { header: "Durum", key: "durum", width: 14 },
+                { header: "Sefer No", key: "sefer_no", width: 14 },
+                { header: "Plaka", key: "plaka", width: 12 },
+                { header: "Sefer Tarihi", key: "tarih", width: 18 },
 
-            // Filtrelenmiş veriyi ekle
-            sheet.addRows(filtered);
+                { header: "Yükleme Noktası", key: "yukleme", width: 40 },
+                { header: "Teslim Noktası", key: "teslim", width: 40 },
 
-            // Dosya oluştur ve indir
+                { header: "Yükleme Çıkış Tarihi", key: "yukleme_cikis", width: 20 },
+                { header: "ETA", key: "eta", width: 18 },
+                { header: "Teslim Varış", key: "teslim_varis", width: 18 },
+                { header: "Fark", key: "fark", width: 22 },
+
+                { header: "Açıklama", key: "aciklama", width: 35 },
+            ];
+
+            // 2) Satırlar (filtered içinden istenen alanları seç + açıklama üret)
+            const excelRows = filtered.map((r) => {
+                let aciklama = "-";
+                const farkStr = String(r.fark || "");
+
+                if (farkStr.includes("Gecikti")) aciklama = "Teslimat gecikmiş";
+                else if (farkStr.includes("Erken")) aciklama = "Teslimat erken yapılmış";
+                else if (farkStr.includes("Zamanında")) aciklama = "Teslimat zamanında";
+                else if (farkStr === "-" || farkStr.trim() === "") aciklama = "Fark hesaplanamadı";
+
+                return {
+                    durum: r.durum,
+                    sefer_no: r.sefer_no,
+                    plaka: r.plaka,
+                    tarih: r.tarih,
+                    yukleme: r.yukleme,
+                    teslim: r.teslim,
+                    yukleme_cikis: r.yukleme_cikis,
+                    eta: r.eta,
+                    teslim_varis: r.teslim_varis,
+                    fark: r.fark,
+                    aciklama,
+                };
+            });
+
+            sheet.addRows(excelRows);
+
+            // (İsteğe bağlı) başlık satırını kalın yap
+            sheet.getRow(1).font = { bold: true };
+
             const buffer = await book.xlsx.writeBuffer();
             saveAs(new Blob([buffer]), `eta_performans_raporu_${selectedDate}.xlsx`);
         } catch (error) {

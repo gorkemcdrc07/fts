@@ -345,7 +345,20 @@ export default function CleanFetcher() {
 
             const { data: summary, error: e2 } = await supabase
                 .from(SUMMARY_TABLE)
-                .select(`sefer_no, plaka, treyler, surucu_ad_soyad, sefer_tarihi, yukleme_ili, yukleme_ilcesi, musteri_adi, yukleme_noktasi, proje_adi`)
+                .select(`
+  sefer_no,
+  plaka,
+  treyler,
+  surucu_ad_soyad,
+  sefer_tarihi,
+  yukleme_ili,
+  yukleme_ilcesi,
+  musteri_adi,
+  yukleme_noktasi,
+  proje_adi,
+  teslim_noktasi,
+  teslim_ili
+`)
                 .in("sefer_no", seferNos);
 
             if (e2) throw e2;
@@ -372,6 +385,8 @@ export default function CleanFetcher() {
                     violationRows.push({
                         ...summaryRow,
                         proje_adlari_birlesik: summaryRow.proje_adi,
+                        teslim_noktasi: summaryRow.teslim_noktasi,
+                        teslim_ili: summaryRow.teslim_ili,
                         ilk_yukleme_varis: firstArrival?.toISOString(),
                         son_yukleme_cikis: lastLeave?.toISOString(),
                         toplam_bekleme_dk: total
@@ -529,12 +544,18 @@ export default function CleanFetcher() {
         dailyViolationRows.forEach(r => {
             const plaka = r.plaka || "Tanımsız";
 
+
             if (!plakaMap[plaka]) {
                 plakaMap[plaka] = {
                     plaka,
                     projeler: new Set(),
                     ihlalliSefer: 0,
                     toplamIhlalSuresi: 0,
+                    treyler: r.treyler,
+                    yukleme_ili: r.yukleme_ili,
+                    teslim_noktasi: r.teslim_noktasi,
+                    teslim_ili: r.teslim_ili,
+
                     detaylar: []
                 };
             }
@@ -548,9 +569,13 @@ export default function CleanFetcher() {
             obj.detaylar.push({
                 sefer_no: r.sefer_no,
                 plaka: r.plaka,
+                treyler: r.treyler || "",
                 sofor: r.surucu_ad_soyad,
                 proje: r.proje_adi,
                 yukleme_noktasi: r.yukleme_noktasi,
+                yukleme_ili: r.yukleme_ili || "",
+                teslim_noktasi: r.teslim_noktasi || "",
+                teslim_ili: r.teslim_ili || "",
                 varis: r.ilk_yukleme_varis,
                 cikis: r.son_yukleme_cikis,
                 sure: r.toplam_bekleme_dk
@@ -604,28 +629,36 @@ export default function CleanFetcher() {
 
         const data = dailyPlateAnalysis.flatMap(p =>
             p.detaylar.map(d => ({
-                "sefer no": d.sefer_no,
+                "sefer_no": d.sefer_no,
                 "plaka": d.plaka,
-                "şoför": d.sofor,
+                "treyler": d.treyler || "",
+                "sofor": d.sofor,
                 "proje": d.proje,
-                "yükleme noktası": d.yukleme_noktasi,
-                "varış": fmtDateTR(d.varis),
-                "çıkış": fmtDateTR(d.cikis),
-                "bekleme süresi": minToHM(d.sure),
-                "Bekleme Süresi (DK)": d.sure,
+                "yukleme_noktasi": d.yukleme_noktasi,
+                "yukleme_ili": d.yukleme_ili || "",
+                "teslim_noktasi": d.teslim_noktasi || "",
+                "teslim_ili": d.teslim_ili || "",
+                "varis_zamani": fmtDateTR(d.varis),
+                "cikis_zamani": fmtDateTR(d.cikis),
+                "bekleme_suresi": minToHM(d.sure),
+                "Bekleme_Suresi_DK": d.sure,
             }))
         );
 
         ws.columns = [
-            { header: "SEFER NO", key: "sefer no", width: 15 },
+            { header: "SEFER NO", key: "sefer_no", width: 15 },
             { header: "PLAKA", key: "plaka", width: 12 },
-            { header: "ŞOFÖR", key: "şoför", width: 25 },
+            { header: "TREYLER", key: "treyler", width: 12 },
+            { header: "ŞOFÖR", key: "sofor", width: 25 },
             { header: "PROJE", key: "proje", width: 20 },
-            { header: "YÜKLEME NOKTASI", key: "yükleme noktası", width: 30 },
-            { header: "VARIŞ ZAMANI", key: "varış", width: 20 },
-            { header: "ÇIKIŞ ZAMANI", key: "çıkış", width: 20 },
-            { header: "BEKLEME SÜRESİ", key: "bekleme süresi", width: 20 },
-            { header: "BEKLEME SÜRESİ (DK)", key: "Bekleme Süresi (DK)", width: 10, hidden: true },
+            { header: "YÜKLEME NOKTASI", key: "yukleme_noktasi", width: 30 },
+            { header: "YÜKLEME İLİ", key: "yukleme_ili", width: 15 },
+            { header: "TESLİM NOKTASI", key: "teslim_noktasi", width: 30 },
+            { header: "TESLİM İLİ", key: "teslim_ili", width: 15 },
+            { header: "VARIŞ ZAMANI", key: "varis_zamani", width: 20 },
+            { header: "ÇIKIŞ ZAMANI", key: "cikis_zamani", width: 20 },
+            { header: "BEKLEME SÜRESİ", key: "bekleme_suresi", width: 20 },
+            { header: "BEKLEME SÜRESİ (DK)", key: "Bekleme_Suresi_DK", width: 10, hidden: true },
         ];
 
         ws.addRows(data);

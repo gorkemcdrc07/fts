@@ -391,6 +391,9 @@ export default function Dashboard() {
     // -------------------------------------------------------------
     // EXCEL EXPORT (İstenen kolonlarla)
     // -------------------------------------------------------------
+    // -------------------------------------------------------------
+    // EXCEL EXPORT (sadece istenen sütunlarla)
+    // -------------------------------------------------------------
     const exportExcel = async () => {
         try {
             const book = new ExcelJS.Workbook();
@@ -402,46 +405,31 @@ export default function Dashboard() {
                 { header: "Sefer No", key: "sefer_no", width: 14 },
                 { header: "Plaka", key: "plaka", width: 12 },
                 { header: "Sefer Tarihi", key: "tarih", width: 18 },
-
                 { header: "Yükleme Noktası", key: "yukleme", width: 40 },
                 { header: "Teslim Noktası", key: "teslim", width: 40 },
-
                 { header: "Yükleme Çıkış Tarihi", key: "yukleme_cikis", width: 20 },
                 { header: "ETA", key: "eta", width: 18 },
-                { header: "Teslim Varış", key: "teslim_varis", width: 18 },
+                { header: "Teslim Varış Tarihi", key: "teslim_varis", width: 20 },
                 { header: "Fark", key: "fark", width: 22 },
-
-                { header: "Açıklama", key: "aciklama", width: 35 },
             ];
 
-            // 2) Satırlar (filtered içinden istenen alanları seç + açıklama üret)
-            const excelRows = filtered.map((r) => {
-                let aciklama = "-";
-                const farkStr = String(r.fark || "");
-
-                if (farkStr.includes("Gecikti")) aciklama = "Teslimat gecikmiş";
-                else if (farkStr.includes("Erken")) aciklama = "Teslimat erken yapılmış";
-                else if (farkStr.includes("Zamanında")) aciklama = "Teslimat zamanında";
-                else if (farkStr === "-" || farkStr.trim() === "") aciklama = "Fark hesaplanamadı";
-
-                return {
-                    durum: r.durum,
-                    sefer_no: r.sefer_no,
-                    plaka: r.plaka,
-                    tarih: r.tarih,
-                    yukleme: r.yukleme,
-                    teslim: r.teslim,
-                    yukleme_cikis: r.yukleme_cikis,
-                    eta: r.eta,
-                    teslim_varis: r.teslim_varis,
-                    fark: r.fark,
-                    aciklama,
-                };
-            });
+            // 2) Satırlar (filtered içinden istenen alanlar)
+            const excelRows = filtered.map((r) => ({
+                durum: r.durum,
+                sefer_no: r.sefer_no,
+                plaka: r.plaka,
+                tarih: r.tarih,
+                yukleme: r.yukleme,
+                teslim: r.teslim,
+                yukleme_cikis: r.yukleme_cikis,
+                eta: r.eta,
+                teslim_varis: r.teslim_varis,
+                fark: r.fark,
+            }));
 
             sheet.addRows(excelRows);
 
-            // (İsteğe bağlı) başlık satırını kalın yap
+            // başlık satırı kalın
             sheet.getRow(1).font = { bold: true };
 
             const buffer = await book.xlsx.writeBuffer();

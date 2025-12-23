@@ -34,11 +34,12 @@ import {
     CircularProgress,
     Badge,
     Container,
-    useTheme,
-    ThemeProvider,
-    createTheme,
+    ToggleButton,
+    ToggleButtonGroup,
 } from "@mui/material";
-import { alpha } from "@mui/material/styles";
+
+import { alpha, createTheme, ThemeProvider } from "@mui/material/styles";
+
 import {
     Add as AddIcon,
     FilterList as FilterListIcon,
@@ -56,25 +57,19 @@ import {
     WarningAmber as WarningIcon,
     CheckCircle as CheckIcon,
     DoDisturb as RemovedIcon,
-    ContentCopy as ContentCopyIcon, // 👈 EKLENDİ (Kopyala butonu için)
+    ContentCopy as ContentCopyIcon,
+    ViewCompact as CompactIcon,
+    ViewComfy as ComfyIcon,
+    TableChart as TableIcon,
 } from "@mui/icons-material";
 
 import { DataGrid, GridToolbar, gridClasses } from "@mui/x-data-grid";
-
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
-import customParseFormat from "dayjs/plugin/customParseFormat";
-
 dayjs.locale("tr");
-dayjs.extend(customParseFormat);
 
 /* ===================== Görsel Sabitler ===================== */
 const HOME_PATH = "/anasayfa";
-
-// 🚀 LAYOUT DOKUNULMADI (İsteğin üzerine)
 const BASE_WIDTH = 1920;
 const BASE_HEIGHT = 1080;
 const MAX_SCALE = Infinity;
@@ -92,50 +87,28 @@ const glass = (opacityTop = 0.92, opacityBottom = 0.75) => ({
     borderRadius: 16,
 });
 
-// Karanlık Tema Tanımı
 const theme = createTheme({
     palette: {
-        mode: 'dark',
-        primary: { main: '#8B5CF6' }, // Mor
-        secondary: { main: '#22D3EE' }, // Açık Mavi
-        background: { default: '#02040C', paper: '#0F172A' },
-        success: { main: '#10B981' },
-        error: { main: '#F43F5E' },
-        warning: { main: '#FBBF24' },
-        info: { main: '#3B82F6' }, // Mavi
+        mode: "dark",
+        primary: { main: "#8B5CF6" },
+        secondary: { main: "#22D3EE" },
+        background: { default: "#02040C", paper: "#0F172A" },
+        success: { main: "#10B981" },
+        error: { main: "#F43F5E" },
+        warning: { main: "#FBBF24" },
+        info: { main: "#3B82F6" },
     },
     typography: {
-        fontFamily: 'Inter, sans-serif',
-        button: { textTransform: 'none', fontWeight: 600 },
+        fontFamily: "Inter, sans-serif",
+        button: { textTransform: "none", fontWeight: 700 },
     },
     components: {
-        MuiButton: {
-            styleOverrides: {
-                root: {
-                    borderRadius: 10,
-                },
-            },
-        },
-        MuiPaper: {
-            styleOverrides: {
-                root: {
-                    backgroundImage: 'none',
-                },
-            },
-        },
-        MuiDialog: {
-            styleOverrides: {
-                paper: {
-                    ...glass(0.9, 0.8),
-                    borderRadius: 20,
-                    border: '1px solid rgba(255,255,255,0.1)',
-                },
-            },
-        },
+        MuiButton: { styleOverrides: { root: { borderRadius: 12 } } },
+        MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
     },
 });
 
-/* ===================== Ölçekleme: Zoom'dan Bağımsız (DOKUNULMADI) ===================== */
+/* ===================== Ölçekleme ===================== */
 function useContainerScale(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = MAX_SCALE) {
     const ref = useRef(null);
     const [scale, setScale] = useState(1);
@@ -145,9 +118,7 @@ function useContainerScale(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = M
         if (!el) return;
         const ro = new ResizeObserver((entries) => {
             const cr = entries[0].contentRect;
-            const availW = Math.max(0, cr.width);
-            const availH = Math.max(0, cr.height);
-            const s = Math.min(availW / baseW, availH / baseH, maxScale);
+            const s = Math.min(cr.width / baseW, cr.height / baseH, maxScale);
             setScale(Number.isFinite(s) && s > 0 ? s : 1);
         });
         ro.observe(el);
@@ -159,7 +130,6 @@ function useContainerScale(baseW = BASE_WIDTH, baseH = BASE_HEIGHT, maxScale = M
 
 function ScaleToFit({ children }) {
     const [ref, scale] = useContainerScale();
-
     return (
         <Box
             ref={ref}
@@ -182,7 +152,11 @@ function ScaleToFit({ children }) {
                     overflow: "hidden",
                 }}
             >
-                <Container maxWidth={false} disableGutters sx={{ width: BASE_WIDTH, height: BASE_HEIGHT, p: 2, boxSizing: "border-box" }}>
+                <Container
+                    maxWidth={false}
+                    disableGutters
+                    sx={{ width: BASE_WIDTH, height: BASE_HEIGHT, p: 2, boxSizing: "border-box" }}
+                >
                     {children}
                 </Container>
             </Box>
@@ -190,10 +164,10 @@ function ScaleToFit({ children }) {
     );
 }
 
-/* ===================== Util Fonksiyonlar ===================== */
+/* ===================== Helpers ===================== */
 const BOS_FORM = {
     plaka: "",
-    treyler: "",
+    // treyler: "", // ❌ kaldırıldı (UI+export+form+search)
     surucu_adi: "",
     surucu_telefon: "",
     surucu_tc: "",
@@ -215,142 +189,38 @@ const BOS_FORM = {
     odak_k1: "",
 };
 
+const safeLower = (v) => (v ?? "").toString().toLowerCase();
 const getMevcutKullanici = () => localStorage.getItem("kullanici") || "Bilinmeyen Kullanıcı";
 
-const tespitEtDegisenAlanlar = (eski, yeni) => {
-    const farklar = [];
-    for (const key in yeni) {
-        if ((eski && eski[key]) !== (yeni && yeni[key])) farklar.push(key);
-    }
-    return farklar.join(", ");
-};
-
 function turkiyeSaatISOString() {
-    const turkiyeSaati = new Date(Date.now() + 3 * 60 * 60 * 1000);
-    return turkiyeSaati.toISOString();
+    const tr = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    return tr.toISOString();
 }
 
-function safeLower(v) {
-    return (v ?? "").toString().toLowerCase();
-}
-
-// localStorage helper
-function useLocalStorage(key, initial) {
-    const [value, setValue] = useState(() => {
-        try {
-            const raw = localStorage.getItem(key);
-            return raw ? JSON.parse(raw) : initial;
-        } catch {
-            return initial;
-        }
-    });
+function useDebounced(value, delay = 250) {
+    const [d, setD] = useState(value);
     useEffect(() => {
-        try {
-            localStorage.setItem(key, JSON.stringify(value));
-        } catch { }
-    }, [key, value]);
-    return [value, setValue];
-}
-
-// debounce hook
-function useDebounced(value, delay = 300) {
-    const [debounced, setDebounced] = useState(value);
-    useEffect(() => {
-        const t = setTimeout(() => setDebounced(value), delay);
+        const t = setTimeout(() => setD(value), delay);
         return () => clearTimeout(t);
     }, [value, delay]);
-    return debounced;
+    return d;
 }
 
-/* ===================== ►►► YETKİ ◄◄◄ ===================== */
-const SCREEN_KEY = "arac_yonetimi"; // Bu sayfa için screen_key
-const ROLE_NAME_TO_KEY = { "YÖNETİCİ": "YONETICI", "OPERASYON": "OPERASYON", "TAKİP": "TAKIP" };
-
-async function fetchAracPerms() {
-    // ... (Yetki kodunda değişiklik yok)
-    const kullaniciId = parseInt(localStorage.getItem("kullaniciId"));
-    if (!kullaniciId) return { canCreate: false, canEdit: false, canDelete: false };
-    const { data: up } = await supabase
-        .from("user_permissions")
-        .select("ayon_create, ayon_edit, ayon_delete")
-        .eq("user_id", kullaniciId)
-        .maybeSingle();
-    const userHasAny =
-        up && (typeof up?.ayon_create === "boolean" || typeof up?.ayon_edit === "boolean" || typeof up?.ayon_delete === "boolean");
-    if (userHasAny) {
-        return {
-            canCreate: !!up?.ayon_create,
-            canEdit: !!up?.ayon_edit,
-            canDelete: !!up?.ayon_delete,
-        };
-    }
-    const { data: u } = await supabase.from("login").select("rol").eq("id", kullaniciId).maybeSingle();
-    const roleKey = ROLE_NAME_TO_KEY[String(u?.rol || "").toUpperCase()] || String(u?.rol || "").toUpperCase();
-    if (!roleKey) return { canCreate: false, canEdit: false, canDelete: false };
-    const { data: role } = await supabase.from("roles").select("id").eq("key", roleKey).maybeSingle();
-    if (!role?.id) return { canCreate: false, canEdit: false, canDelete: false };
-    const { data: rp } = await supabase
-        .from("role_permissions")
-        .select("arcdur_create, arcdur_edit, arcdur_delete")
-        .eq("role_id", role.id)
-        .eq("screen_key", SCREEN_KEY)
-        .maybeSingle();
-    if (rp && (typeof rp.arcdur_create === "boolean" || typeof rp.arcdur_edit === "boolean" || typeof rp.arcdur_delete === "boolean")) {
-        return {
-            canCreate: !!rp?.arcdur_create,
-            canEdit: !!rp?.arcdur_edit,
-            canDelete: !!rp?.arcdur_delete,
-        };
-    }
-    const { data: rp2 } = await supabase
-        .from("role_permissions")
-        .select("arcdur_create, arcdur_edit, arcdur_delete")
-        .eq("role_id", role.id)
-        .maybeSingle();
-    return {
-        canCreate: !!rp2?.arcdur_create,
-        canEdit: !!rp2?.arcdur_edit,
-        canDelete: !!rp2?.arcdur_delete,
-    };
-}
-
-/* ===================== Yardımcı Bileşenler ===================== */
-function SubtleDivider({ sx, orientation = 'horizontal', flexItem = false }) {
-    return <Divider orientation={orientation} flexItem={flexItem} sx={{ my: orientation === 'horizontal' ? 1.5 : 0, borderColor: "rgba(255,255,255,0.08)", ...sx }} />;
-}
-
-function EmptyState({ title = "Kayıt bulunamadı", caption = "Filtreleri değiştirerek tekrar deneyin." }) {
+function SubtleDivider({ sx, orientation = "horizontal", flexItem = false }) {
     return (
-        <Stack alignItems="center" justifyContent="center" sx={{ height: "100%", py: 6 }}>
-            <Box
-                sx={{
-                    width: 84,
-                    height: 84,
-                    borderRadius: "50%",
-                    display: "grid",
-                    placeItems: "center",
-                    background: alpha("#22D3EE", 0.1),
-                    border: "1px solid " + alpha("#22D3EE", 0.3),
-                    mb: 2,
-                }}
-            >
-                <CarIcon />
-            </Box>
-            <Typography variant="h6" sx={{ opacity: 0.9, mb: 0.5 }}>
-                {title}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-                {caption}
-            </Typography>
-        </Stack>
+        <Divider
+            orientation={orientation}
+            flexItem={flexItem}
+            sx={{ my: orientation === "horizontal" ? 1.5 : 0, borderColor: "rgba(255,255,255,0.08)", ...sx }}
+        />
     );
 }
 
-function Section({ title, right, sx, children }) {
+function Section({ title, right, children }) {
     return (
-        <Paper sx={{ p: 2, borderRadius: 2, ...glass(0.08, 0.02), ...sx }}>
+        <Paper sx={{ p: 2, borderRadius: 2, ...glass(0.10, 0.03) }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                <Typography variant="subtitle2" sx={{ letterSpacing: 0.3, opacity: 0.85 }}>
+                <Typography variant="subtitle2" sx={{ letterSpacing: 0.3, opacity: 0.9, fontWeight: 800 }}>
                     {title}
                 </Typography>
                 {right}
@@ -360,31 +230,97 @@ function Section({ title, right, sx, children }) {
     );
 }
 
+function EmptyState({ title = "Kayıt bulunamadı", caption = "Filtreleri değiştirerek tekrar deneyin." }) {
+    return (
+        <Stack alignItems="center" justifyContent="center" sx={{ height: "100%", py: 6 }}>
+            <Box
+                sx={{
+                    width: 86,
+                    height: 86,
+                    borderRadius: "50%",
+                    display: "grid",
+                    placeItems: "center",
+                    background: alpha("#22D3EE", 0.10),
+                    border: "1px solid " + alpha("#22D3EE", 0.30),
+                    mb: 2,
+                }}
+            >
+                <CarIcon />
+            </Box>
+            <Typography variant="h6" sx={{ opacity: 0.95, mb: 0.5, fontWeight: 900 }}>
+                {title}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+                {caption}
+            </Typography>
+        </Stack>
+    );
+}
+
+/* ===================== Yetki ===================== */
+const SCREEN_KEY = "arac_yonetimi";
+const ROLE_NAME_TO_KEY = { YÖNETİCİ: "YONETICI", OPERASYON: "OPERASYON", TAKİP: "TAKIP" };
+
+async function fetchAracPerms() {
+    const kullaniciId = parseInt(localStorage.getItem("kullaniciId"));
+    if (!kullaniciId) return { canCreate: false, canEdit: false, canDelete: false };
+
+    const { data: up } = await supabase
+        .from("user_permissions")
+        .select("ayon_create, ayon_edit, ayon_delete")
+        .eq("user_id", kullaniciId)
+        .maybeSingle();
+
+    const userHasAny =
+        up &&
+        (typeof up?.ayon_create === "boolean" ||
+            typeof up?.ayon_edit === "boolean" ||
+            typeof up?.ayon_delete === "boolean");
+
+    if (userHasAny) return { canCreate: !!up?.ayon_create, canEdit: !!up?.ayon_edit, canDelete: !!up?.ayon_delete };
+
+    const { data: u } = await supabase.from("login").select("rol").eq("id", kullaniciId).maybeSingle();
+    const roleKey = ROLE_NAME_TO_KEY[String(u?.rol || "").toUpperCase()] || String(u?.rol || "").toUpperCase();
+    if (!roleKey) return { canCreate: false, canEdit: false, canDelete: false };
+
+    const { data: role } = await supabase.from("roles").select("id").eq("key", roleKey).maybeSingle();
+    if (!role?.id) return { canCreate: false, canEdit: false, canDelete: false };
+
+    const { data: rp } = await supabase
+        .from("role_permissions")
+        .select("arcdur_create, arcdur_edit, arcdur_delete")
+        .eq("role_id", role.id)
+        .eq("screen_key", SCREEN_KEY)
+        .maybeSingle();
+
+    if (rp) return { canCreate: !!rp.arcdur_create, canEdit: !!rp.arcdur_edit, canDelete: !!rp.arcdur_delete };
+
+    const { data: rp2 } = await supabase
+        .from("role_permissions")
+        .select("arcdur_create, arcdur_edit, arcdur_delete")
+        .eq("role_id", role.id)
+        .maybeSingle();
+
+    return { canCreate: !!rp2?.arcdur_create, canEdit: !!rp2?.arcdur_edit, canDelete: !!rp2?.arcdur_delete };
+}
+
 /* ===================== Ana Bileşen ===================== */
 export default function AracYonetimiMUI() {
     const navigate = useNavigate();
-    const currentTheme = useTheme();
+    const currentTheme = theme;
 
     const [tumAraclar, setTumAraclar] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [tab, setTab] = useLocalStorage("aracTab", "aktif");
-    const [globalSearch, setGlobalSearch] = useLocalStorage("aracSearch", "");
+
+    const [tab, setTab] = useState("aktif");
+    const [globalSearch, setGlobalSearch] = useState("");
     const debouncedSearch = useDebounced(globalSearch, 250);
+
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const [filters, setFilters] = useState({ bolge: "", plaka: "", surucu: "" });
 
-    // DataGrid kalıcılık
-    const [density, setDensity] = useLocalStorage("aracGridDensity", "compact");
-    const [colVis, setColVis] = useLocalStorage("aracColVis", {});
-    const [pinnedCols, setPinnedCols] = useLocalStorage("aracPinned", { left: ["plaka", "treyler", "surucu_adi"], right: ["__actions"] });
-
-    // Detaylı filtreler
-    const FILTER_DEFAULTS = { bolge: "", plaka: "", surucu: "" };
-    const [filters, setFilters] = useLocalStorage("aracFilters", FILTER_DEFAULTS);
-    useEffect(() => {
-        setFilters((f) => ({ ...FILTER_DEFAULTS, ...(f || {}) }));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-    const clearFilters = () => setFilters(FILTER_DEFAULTS);
+    const [density, setDensity] = useState("compact");
+    const [viewPreset, setViewPreset] = useState("minimal"); // minimal / detaylı
 
     const [form, setForm] = useState(BOS_FORM);
     const [formErrors, setFormErrors] = useState({});
@@ -398,29 +334,23 @@ export default function AracYonetimiMUI() {
 
     const [bilgiModalAcik, setBilgiModalAcik] = useState(false);
     const [bilgiArac, setBilgiArac] = useState(null);
-    const [izinBilgisi, setIzinBilgisi] = useState(null);
-    const [kesintiBilgisi, setKesintiBilgisi] = useState(null);
 
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
     const openSnack = useCallback((msg, severity = "success") => setSnack({ open: true, msg, severity }), []);
 
-    // ► YETKİ
     const [canCreate, setCanCreate] = useState(false);
     const [canEdit, setCanEdit] = useState(false);
     const [canDelete, setCanDelete] = useState(false);
 
-    // =============================================================
-    // FONKSİYON TANIMLARI
-    // =============================================================
-
+    /* ===================== Data Fetch ===================== */
     const verileriGetir = useCallback(async () => {
         setLoading(true);
         try {
-            const { data } = await supabase.from("plakalar").select("*").order("id", { ascending: false });
+            const { data, error } = await supabase.from("plakalar").select("*").order("id", { ascending: false });
+            if (error) throw error;
 
             const bugun = new Date();
             const guncelData = (data || []).map((arac) => {
-                // Kesinti bitmişse statüyü güncelle
                 if (arac.kesinti_bitis_tarihi) {
                     const bitis = new Date(arac.kesinti_bitis_tarihi);
                     if (bitis < bugun) {
@@ -440,6 +370,30 @@ export default function AracYonetimiMUI() {
         }
     }, [openSnack]);
 
+    /* ===================== Effects ===================== */
+    useEffect(() => {
+        const kullanici = localStorage.getItem("kullanici");
+        if (!kullanici) navigate("/login");
+    }, [navigate]);
+
+    useEffect(() => {
+        verileriGetir();
+        (async () => {
+            try {
+                const perms = await fetchAracPerms();
+                setCanCreate(perms.canCreate);
+                setCanEdit(perms.canEdit);
+                setCanDelete(perms.canDelete);
+            } catch {
+                setCanCreate(false);
+                setCanEdit(false);
+                setCanDelete(false);
+            }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    /* ===================== CRUD Helpers ===================== */
     const temizleVeKapat = useCallback(() => {
         setForm(BOS_FORM);
         setFormErrors({});
@@ -447,26 +401,13 @@ export default function AracYonetimiMUI() {
         setDuzenleAcik(false);
     }, []);
 
-    const handleYeniEkle = useCallback(() => {
-        if (!canCreate) {
-            openSnack("Yeni araç ekleme yetkiniz yok.", "warning");
-            return;
-        }
-        setForm(BOS_FORM);
-        setFormErrors({});
-        setEditId(null);
-        setDuzenleAcik(true);
-    }, [canCreate, openSnack]);
-
     const validateForm = useCallback((f) => {
         const errs = {};
         if (!f.plaka?.trim()) errs.plaka = "Plaka zorunludur.";
         if (!f.cekici_muayene) errs.cekici_muayene = "Tarih gerekli";
         if (!f.dorse_muayene) errs.dorse_muayene = "Tarih gerekli";
         if (!f.trafik_sigorta) errs.trafik_sigorta = "Tarih gerekli";
-        if (f.surucu_telefon && !/^\+?\d[\d\s-]{7,}$/.test(f.surucu_telefon)) {
-            errs.surucu_telefon = "Telefon formatını kontrol edin.";
-        }
+        if (f.surucu_telefon && !/^\+?\d[\d\s-]{7,}$/.test(f.surucu_telefon)) errs.surucu_telefon = "Telefon formatını kontrol edin.";
         return errs;
     }, []);
 
@@ -475,147 +416,102 @@ export default function AracYonetimiMUI() {
         setForm((p) => ({ ...p, [name]: value }));
     }, []);
 
-    const handleSubmit = useCallback(
-        async (e) => {
-            e?.preventDefault?.();
-            const kullanici = getMevcutKullanici();
-
-            const errs = validateForm(form);
-            setFormErrors(errs);
-            if (Object.keys(errs).length) {
-                openSnack("Lütfen zorunlu alanları doldurun.", "warning");
-                return;
-            }
-
-            if (editId) {
-                if (!canEdit) {
-                    openSnack("Düzenleme yetkiniz yok.", "warning");
-                    return;
-                }
-                const mevcut = tumAraclar.find((a) => a.id === editId) || {};
-                const guncellenenAlanlar = tespitEtDegisenAlanlar(mevcut, form);
-                const guncellemeTarihi = turkiyeSaatISOString();
-                const { error } = await supabase
-                    .from("plakalar")
-                    .update({
-                        ...form,
-                        guncelleyen_kullanici: kullanici,
-                        guncellenen_alanlar: guncellenenAlanlar,
-                        guncelleme_tarihi: guncellemeTarihi,
-                    })
-                    .eq("id", editId);
-
-                if (!error) {
-                    openSnack("Araç güncellendi");
-                    temizleVeKapat();
-                    verileriGetir();
-                } else openSnack("Güncelleme başarısız", "error");
-            } else {
-                if (!canCreate) {
-                    openSnack("Yeni araç ekleme yetkiniz yok.", "warning");
-                    return;
-                }
-                const { error } = await supabase.from("plakalar").insert([
-                    {
-                        ...form,
-                        statu: "Aktif",
-                        ekleyen_kullanici: kullanici,
-                        eklenen_tarih: turkiyeSaatISOString(),
-                    },
-                ]);
-                if (!error) {
-                    openSnack("Araç eklendi");
-                    temizleVeKapat();
-                    verileriGetir();
-                } else openSnack("Ekleme başarısız", "error");
-            }
-        },
-        [editId, form, openSnack, temizleVeKapat, tumAraclar, verileriGetir, validateForm, canCreate, canEdit]
-    );
+    const handleYeniEkle = useCallback(() => {
+        if (!canCreate) return openSnack("Yeni araç ekleme yetkiniz yok.", "warning");
+        setForm(BOS_FORM);
+        setFormErrors({});
+        setEditId(null);
+        setDuzenleAcik(true);
+    }, [canCreate, openSnack]);
 
     const handleDuzenle = useCallback(
         (arac) => {
-            if (!canEdit) {
-                openSnack("Düzenleme yetkiniz yok.", "warning");
-                return;
-            }
-            if (!arac?.id) return openSnack("HATA: Bu aracın ID bilgisi eksik.", "error");
+            if (!canEdit) return openSnack("Düzenleme yetkiniz yok.", "warning");
+            if (!arac?.id) return openSnack("HATA: ID eksik.", "error");
+
             setForm({
-                plaka: arac.plaka || "",
-                treyler: arac.treyler || "",
-                surucu_adi: arac.surucu_adi || "",
-                surucu_telefon: arac.surucu_telefon || "",
-                surucu_tc: arac.surucu_tc || "",
-                ikamet_adresi: arac.ikamet_adresi || "",
-                cekici_ruhsat_no: arac.cekici_ruhsat_no || "",
-                dorse_ruhsat_no: arac.dorse_ruhsat_no || "",
-                tedarikci_isim: arac.tedarikci_isim || "",
+                ...BOS_FORM,
+                ...arac,
+                // treyler alanını UI'da göstermiyoruz, ama DB'de kalsa da problem değil.
                 cekici_muayene: arac.cekici_muayene ? String(arac.cekici_muayene).slice(0, 10) : "",
                 dorse_muayene: arac.dorse_muayene ? String(arac.dorse_muayene).slice(0, 10) : "",
                 trafik_sigorta: arac.trafik_sigorta ? String(arac.trafik_sigorta).slice(0, 10) : "",
-                arac_yil: arac.arac_yil || "",
-                dorse_yil: arac.dorse_yil || "",
-                bolge: arac.bolge || "",
-                arac_tip: arac.arac_tip || "",
-                dorse_tip: arac.dorse_tip || "",
-                liftmaster: arac.liftmaster || "",
-                gps_seri_no: arac.gps_seri_no || "",
-                gps_sim_kart_no: arac.gps_sim_kart_no || "",
-                odak_k1: arac.odak_k1 || "",
+                arac_yil: arac.arac_yil ?? "",
+                dorse_yil: arac.dorse_yil ?? "",
             });
+
             setFormErrors({});
             setEditId(arac.id);
             setDuzenleAcik(true);
         },
-        [openSnack, canEdit]
+        [canEdit, openSnack]
     );
 
-    // 🚀 YENİ: Kopyala Fonksiyonu
     const handleKopyala = useCallback(
         (arac) => {
-            if (!canCreate) { // Kopyalamak için 'create' yetkisi gerekir
-                openSnack("Yeni araç ekleme yetkiniz yok.", "warning");
-                return;
-            }
-            if (!arac?.id) return openSnack("HATA: Kopyalanacak aracın ID'si eksik.", "error");
-
-            // Formu doldur, ANCAK plaka ve treyleri boşalt
+            if (!canCreate) return openSnack("Yeni araç ekleme yetkiniz yok.", "warning");
             setForm({
-                plaka: "", // 👈 Kopyalamada boş gelir
-                treyler: "", // 👈 Kopyalamada boş gelir
-                surucu_adi: arac.surucu_adi || "",
-                surucu_telefon: arac.surucu_telefon || "",
-                surucu_tc: arac.surucu_tc || "",
-                ikamet_adresi: arac.ikamet_adresi || "",
-                cekici_ruhsat_no: "", // 👈 Boş gelir
-                dorse_ruhsat_no: "", // 👈 Boş gelir
-                tedarikci_isim: arac.tedarikci_isim || "", // 👈 Tedarikçi kalsın
+                ...BOS_FORM,
+                ...arac,
+                plaka: "",
+                // treyler: "", // kaldırıldı
+                cekici_ruhsat_no: "",
+                dorse_ruhsat_no: "",
+                gps_seri_no: "",
+                gps_sim_kart_no: "",
                 cekici_muayene: arac.cekici_muayene ? String(arac.cekici_muayene).slice(0, 10) : "",
                 dorse_muayene: arac.dorse_muayene ? String(arac.dorse_muayene).slice(0, 10) : "",
                 trafik_sigorta: arac.trafik_sigorta ? String(arac.trafik_sigorta).slice(0, 10) : "",
-                arac_yil: arac.arac_yil || "",
-                dorse_yil: arac.dorse_yil || "",
-                bolge: arac.bolge || "",
-                arac_tip: arac.arac_tip || "",
-                dorse_tip: arac.dorse_tip || "",
-                liftmaster: arac.liftmaster || "",
-                gps_seri_no: "", // 👈 Boş gelir
-                gps_sim_kart_no: "", // 👈 Boş gelir
-                odak_k1: arac.odak_k1 || "", // 👈 Kalsın
             });
             setFormErrors({});
-            setEditId(null); // 👈 Edit modu değil, Create modu
-            setDuzenleAcik(true); // Drawer'ı aç
+            setEditId(null);
+            setDuzenleAcik(true);
         },
-        [openSnack, canCreate]
+        [canCreate, openSnack]
+    );
+
+    const handleSubmit = useCallback(
+        async (e) => {
+            e?.preventDefault?.();
+            const errs = validateForm(form);
+            setFormErrors(errs);
+            if (Object.keys(errs).length) return openSnack("Lütfen zorunlu alanları doldurun.", "warning");
+
+            const kullanici = getMevcutKullanici();
+
+            try {
+                if (editId) {
+                    const { error } = await supabase
+                        .from("plakalar")
+                        .update({
+                            ...form,
+                            guncelleyen_kullanici: kullanici,
+                            guncellenen_alanlar: "güncellendi",
+                            guncelleme_tarihi: turkiyeSaatISOString(),
+                        })
+                        .eq("id", editId);
+                    if (error) throw error;
+                    openSnack("Araç güncellendi");
+                } else {
+                    const { error } = await supabase.from("plakalar").insert([
+                        { ...form, statu: "Aktif", ekleyen_kullanici: kullanici, eklenen_tarih: turkiyeSaatISOString() },
+                    ]);
+                    if (error) throw error;
+                    openSnack("Araç eklendi");
+                }
+
+                temizleVeKapat();
+                verileriGetir();
+            } catch (err) {
+                openSnack(err?.message || "İşlem başarısız", "error");
+            }
+        },
+        [editId, form, openSnack, temizleVeKapat, verileriGetir, validateForm]
     );
 
     const handleSilIstegi = useCallback(
         (id) => {
-            if (!canDelete) {
-                openSnack("Silme yetkiniz yok.", "warning");
-                return;
-            }
+            if (!canDelete) return openSnack("Silme yetkiniz yok.", "warning");
             setSeciliAracId(id);
             setSilmeSebebi("");
             setSilinmeTarihi(dayjs().format("YYYY-MM-DDTHH:mm"));
@@ -625,69 +521,41 @@ export default function AracYonetimiMUI() {
     );
 
     const handleSilOnayla = useCallback(async () => {
-        if (!canDelete) {
-            openSnack("Silme yetkiniz yok.", "warning");
-            return;
-        }
-        if (!(silmeSebebi || "").trim() || !silinmeTarihi) {
-            openSnack("Lütfen silme sebebini ve tarihini girin.", "warning");
-            return;
-        }
+        if (!canDelete) return openSnack("Silme yetkiniz yok.", "warning");
+        if (!(silmeSebebi || "").trim() || !silinmeTarihi) return openSnack("Sebep ve tarih girin.", "warning");
+
         const kullanici = getMevcutKullanici();
-        const { error } = await supabase
-            .from("plakalar")
-            .update({
-                statu: "ÇIKARILDI",
-                silme_sebebi: silmeSebebi,
-                silinme_tarihi: silinmeTarihi,
-                silen_kullanici: kullanici,
-            })
-            .eq("id", seciliAracId);
-        if (!error) {
-            openSnack("Araç statüsü ÇIKARILDI olarak güncellendi");
+
+        try {
+            const { error } = await supabase
+                .from("plakalar")
+                .update({ statu: "ÇIKARILDI", silme_sebebi: silmeSebebi, silinme_tarihi: silinmeTarihi, silen_kullanici: kullanici })
+                .eq("id", seciliAracId);
+            if (error) throw error;
+
+            openSnack("Araç çıkarıldı");
             setSilModalAcik(false);
             setSeciliAracId(null);
             verileriGetir();
-        } else openSnack("Silme işlemi başarısız", "error");
-    }, [seciliAracId, silinmeTarihi, silmeSebebi, openSnack, verileriGetir, canDelete]);
+        } catch (err) {
+            openSnack(err?.message || "Silme işlemi başarısız", "error");
+        }
+    }, [canDelete, openSnack, seciliAracId, silinmeTarihi, silmeSebebi, verileriGetir]);
 
-    const handleBilgiAc = useCallback(async (arac) => {
-        const plakaTreyler = `${arac.plaka} - ${arac.treyler}`;
-
-        const { data: izinData } = await supabase.from("izinler").select("*").eq("plaka_treyler", plakaTreyler).order("id", { ascending: false }).limit(1);
-        setIzinBilgisi(izinData?.[0] || null);
-
-        const { data: kesintiData } = await supabase.from("kesintiler").select("*").eq("plaka_treyler", plakaTreyler).order("id", { ascending: false }).limit(1);
-
-        let gosterilecek = { ...arac };
-        if (kesintiData?.[0]) {
-            setKesintiBilgisi(kesintiData[0]);
-            const bitis = new Date(kesintiData[0].bitis_tarihi);
-            const bugun = new Date();
-            if (bitis < bugun) {
-                const farkGun = Math.floor((+bugun - +bitis) / (1000 * 60 * 60 * 24));
-                gosterilecek = { ...gosterilecek, statu: `${farkGun} gün kesintiden yeni çıktı` };
-            }
-        } else setKesintiBilgisi(null);
-
-        setBilgiArac(gosterilecek);
+    const handleBilgiAc = useCallback((arac) => {
+        setBilgiArac(arac);
         setBilgiModalAcik(true);
     }, []);
 
-    // =============================================================
-    // USEMEMO TANIMLARI
-    // =============================================================
-
-    // Filtrelenmiş liste
+    /* ===================== Derived Lists ===================== */
     const araclar = useMemo(() => {
         let liste = [...tumAraclar];
-
         if (tab === "aktif") liste = liste.filter((a) => a.statu !== "ÇIKARILDI");
         if (tab === "pasif") liste = liste.filter((a) => a.statu === "ÇIKARILDI");
 
-        const fBolge = safeLower(filters?.bolge).trim();
-        const fPlaka = safeLower(filters?.plaka).trim();
-        const fSurucu = safeLower(filters?.surucu).trim();
+        const fBolge = safeLower(filters.bolge).trim();
+        const fPlaka = safeLower(filters.plaka).trim();
+        const fSurucu = safeLower(filters.surucu).trim();
 
         if (fBolge) liste = liste.filter((a) => safeLower(a.bolge).includes(fBolge));
         if (fPlaka) liste = liste.filter((a) => safeLower(a.plaka).includes(fPlaka));
@@ -698,7 +566,7 @@ export default function AracYonetimiMUI() {
             liste = liste.filter((a) =>
                 [
                     a.plaka,
-                    a.treyler,
+                    // a.treyler, // ❌ kaldırıldı
                     a.surucu_adi,
                     a.surucu_telefon,
                     a.surucu_tc,
@@ -725,144 +593,77 @@ export default function AracYonetimiMUI() {
     const aktifSayisi = useMemo(() => tumAraclar.filter((a) => a.statu !== "ÇIKARILDI").length, [tumAraclar]);
     const pasifSayisi = useMemo(() => tumAraclar.filter((a) => a.statu === "ÇIKARILDI").length, [tumAraclar]);
 
-    const rows = useMemo(() => araclar.map((a, i) => ({ id: a.id ?? `${a.plaka}-${a.treyler}-${i}`, ...a })), [araclar]);
+    const rows = useMemo(
+        () => araclar.map((a, i) => ({ id: a.id ?? `${a.plaka}-${i}`, ...a })), // ✅ treyler'den bağımsız
+        [araclar]
+    );
 
+    /* ===================== Excel ===================== */
     const excelAktar = useCallback(async () => {
-        const liste = araclar;
-        if (!liste.length) return openSnack("Aktarılacak araç bulunamadı", "warning");
+        if (!araclar.length) return openSnack("Aktarılacak araç bulunamadı", "warning");
 
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet(`${tab} Araçlar`);
 
         const headerMap = {
             plaka: "Plaka",
-            treyler: "Treyler",
+            // treyler: "Treyler", // ❌ kaldırıldı
             surucu_adi: "Sürücü Adı",
             surucu_telefon: "Telefon",
             surucu_tc: "TC",
-            statu: "Statü",
-            cekici_muayene: "Çekici Muayene Bitiş",
-            dorse_muayene: "Dorse Muayene Bitiş",
-            trafik_sigorta: "Trafik Sigorta Bitiş",
-            arac_yil: "Araç Yılı",
-            dorse_yil: "Dorse Yılı",
             bolge: "Bölge",
             arac_tip: "Araç Tip",
             dorse_tip: "Dorse Tip",
-            liftmaster: "Liftmaster",
             tedarikci_isim: "Tedarikçi",
-            guncelleme_tarihi: "Son Güncelleme",
+            cekici_muayene: "Çekici Muayene",
+            dorse_muayene: "Dorse Muayene",
+            trafik_sigorta: "Trafik Sigorta",
+            statu: "Statü",
         };
 
-        const columns = Object.entries(headerMap).map(([key, header]) => ({
-            header: header,
-            key: key,
-            width: key.includes("muayene") || key.includes("sigorta") || key.includes("guncel") ? 20 : 15,
-            style: {
-                numFmt: key.includes("tarih") ? 'dd.mm.yyyy' : undefined,
-            }
+        worksheet.columns = Object.entries(headerMap).map(([key, header]) => ({
+            header,
+            key,
+            width: key.includes("muayene") || key.includes("sigorta") ? 18 : 16,
         }));
 
-        worksheet.columns = columns;
-
-        const dataToExport = liste.map((arac) => {
-            const row = {};
-            Object.keys(headerMap).forEach(key => {
-                let value = arac[key];
-
-                if (key.includes("muayene") || key.includes("sigorta") || key.includes("tarih")) {
-                    row[key] = value ? dayjs(value).toDate() : null;
-                } else if (key.includes("yil")) {
-                    row[key] = Number(value) || null;
-                } else {
-                    row[key] = value;
-                }
-            });
-            return row;
-        });
-
-        worksheet.addRows(dataToExport);
+        worksheet.addRows(araclar.map((a) => Object.fromEntries(Object.keys(headerMap).map((k) => [k, a[k] ?? ""]))));
 
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
         saveAs(blob, `arac_listesi_${tab}.xlsx`);
     }, [araclar, openSnack, tab]);
 
-
-    // GRID sütunları
-    const columns = useMemo(
+    /* ===================== Columns (Preset) ===================== */
+    const commonCols = useMemo(
         () => [
-            { field: "plaka", headerName: "Plaka", minWidth: 120, flex: 0.9 },
-            { field: "treyler", headerName: "Treyler", minWidth: 120, flex: 0.9 },
-            { field: "surucu_adi", headerName: "Sürücü", minWidth: 150, flex: 1 },
-            { field: "surucu_telefon", headerName: "Telefon", minWidth: 140, flex: 0.9 },
-            { field: "surucu_tc", headerName: "TC", minWidth: 140, flex: 0.9 },
-            {
-                field: "ikamet_adresi",
-                headerName: "İkamet",
-                minWidth: 220,
-                flex: 1.4,
-                renderCell: (p) => (
-                    <Typography noWrap title={p.value || ""} sx={{ maxWidth: "100%" }}>
-                        {p.value}
-                    </Typography>
-                ),
-                sortable: false,
-            },
-            { field: "cekici_ruhsat_no", headerName: "Çekici Ruhsat", minWidth: 160, flex: 1 },
-            { field: "dorse_ruhsat_no", headerName: "Dorse Ruhsat", minWidth: 160, flex: 1 },
-            { field: "tedarikci_isim", headerName: "Tedarikçi", minWidth: 150, flex: 1 },
-
-            // 🐞 HATA DÜZELTMESİ: Tarih formatı düzeltildi
+            { field: "plaka", headerName: "Plaka", width: 130 },
+            // { field: "treyler", headerName: "Treyler", width: 130 }, // ❌ kaldırıldı
+            { field: "surucu_adi", headerName: "Sürücü", minWidth: 160, flex: 1 },
+            { field: "surucu_telefon", headerName: "Telefon", width: 150 },
+            { field: "bolge", headerName: "Bölge", width: 140 },
             {
                 field: "cekici_muayene",
-                headerName: "Çekici Muayene Bitiş",
-                minWidth: 150,
-                flex: 1,
-                type: 'date',
-                valueGetter: (value) => value ? dayjs(value).toDate() : null,
-                valueFormatter: (value) => value ? dayjs(value).format("DD.MM.YYYY") : '-'
+                headerName: "Çekici Muayene",
+                width: 160,
+                valueFormatter: (value) => (value ? dayjs(value).format("DD.MM.YYYY") : "-"),
             },
             {
                 field: "dorse_muayene",
-                headerName: "Dorse Muayene Bitiş",
-                minWidth: 150,
-                flex: 1,
-                type: 'date',
-                valueGetter: (value) => value ? dayjs(value).toDate() : null,
-                valueFormatter: (value) => value ? dayjs(value).format("DD.MM.YYYY") : '-'
+                headerName: "Dorse Muayene",
+                width: 160,
+                valueFormatter: (value) => (value ? dayjs(value).format("DD.MM.YYYY") : "-"),
             },
             {
                 field: "trafik_sigorta",
-                headerName: "Trafik Sigorta Bitiş",
-                minWidth: 150,
-                flex: 1,
-                type: 'date',
-                valueGetter: (value) => value ? dayjs(value).toDate() : null,
-                valueFormatter: (value) => value ? dayjs(value).format("DD.MM.YYYY") : '-'
-            },
-
-            { field: "arac_yil", headerName: "Araç Yıl", minWidth: 110, flex: 0.7 },
-            { field: "dorse_yil", headerName: "Dorse Yıl", minWidth: 110, flex: 0.7 },
-            { field: "bolge", headerName: "Bölge", minWidth: 120, flex: 0.9 },
-            { field: "arac_tip", headerName: "Araç Tip", minWidth: 130, flex: 0.9 },
-            { field: "dorse_tip", headerName: "Dorse Tip", minWidth: 130, flex: 0.9 },
-            { field: "liftmaster", headerName: "Liftmaster", minWidth: 120, flex: 0.9 },
-            { field: "gps_seri_no", headerName: "GPS Seri", minWidth: 140, flex: 0.9 },
-            { field: "gps_sim_kart_no", headerName: "GPS Sim", minWidth: 140, flex: 0.9 },
-            { field: "odak_k1", headerName: "Odak K1", minWidth: 120, flex: 0.9 },
-            {
-                field: "silme_sebebi",
-                headerName: "Silme Sebebi",
-                minWidth: 200,
-                flex: 1,
-                hide: !(tab === "pasif" || tab === "tum"),
+                headerName: "Trafik Sigorta",
+                width: 160,
+                valueFormatter: (value) => (value ? dayjs(value).format("DD.MM.YYYY") : "-"),
             },
             {
                 field: "statu",
                 headerName: "Statü",
-                minWidth: 160,
-                flex: 0.9,
+                width: 180,
                 renderCell: ({ value }) => {
                     const label = value || "Aktif";
                     const isRemoved = label === "ÇIKARILDI";
@@ -885,338 +686,328 @@ export default function AracYonetimiMUI() {
                             size="small"
                             color={isRemoved ? "error" : isWarning ? "warning" : "success"}
                             variant={isRemoved ? "outlined" : "filled"}
-                            sx={{
-                                fontWeight: 600,
-                                bgcolor: isRemoved ? alpha(currentTheme.palette.error.main, 0.1) : isWarning ? alpha(currentTheme.palette.warning.main, 0.1) : alpha(currentTheme.palette.success.main, 0.1),
-                                color: isRemoved ? currentTheme.palette.error.main : isWarning ? currentTheme.palette.warning.main : currentTheme.palette.success.main,
-                                border: 'none',
-                            }}
+                            sx={{ fontWeight: 800 }}
                         />
                     );
                 },
             },
-            {
-                field: "__actions",
-                headerName: "İşlem",
-                sortable: false,
-                filterable: false,
-                minWidth: 190,
-                flex: 0.95,
-                align: "right",
-                renderCell: ({ row }) => (
-                    <Stack direction="row" spacing={1}>
-                        <Tooltip title="Bilgi">
-                            <IconButton size="small" onClick={() => handleBilgiAc(row)}>
-                                <InfoIcon fontSize="inherit" />
-                            </IconButton>
-                        </Tooltip>
-
-                        {/* 🚀 YENİ: Kopyala Butonu */}
-                        <Tooltip title={canCreate ? "Kopyala" : "Yetkiniz yok"}>
-                            <span>
-                                <IconButton size="small" color="secondary" onClick={() => handleKopyala(row)} disabled={!canCreate}>
-                                    <ContentCopyIcon fontSize="inherit" />
-                                </IconButton>
-                            </span>
-                        </Tooltip>
-
-                        <Tooltip title={canEdit ? "Düzenle" : "Yetkiniz yok"}>
-                            <span>
-                                <IconButton size="small" onClick={() => handleDuzenle(row)} disabled={!canEdit}>
-                                    <EditIcon fontSize="inherit" />
-                                </IconButton>
-                            </span>
-                        </Tooltip>
-
-                        {row.statu !== "ÇIKARILDI" && (
-                            <Tooltip title={canDelete ? "Sil" : "Yetkiniz yok"}>
-                                <span>
-                                    <IconButton size="small" color="error" onClick={() => handleSilIstegi(row.id)} disabled={!canDelete}>
-                                        <DeleteIcon fontSize="inherit" />
-                                    </IconButton>
-                                </span>
-                            </Tooltip>
-                        )}
-                    </Stack>
-                ),
-            },
         ],
-        // 🚀 Bağımlılıklar güncellendi
-        [tab, handleBilgiAc, handleDuzenle, handleKopyala, handleSilIstegi, canCreate, canEdit, canDelete, currentTheme.palette.error.main, currentTheme.palette.warning.main, currentTheme.palette.success.main]
+        []
     );
 
-    // Aktif filtre rozetleri
+    const detailCols = useMemo(
+        () => [
+            { field: "surucu_tc", headerName: "TC", width: 150 },
+            { field: "ikamet_adresi", headerName: "İkamet", minWidth: 220, flex: 1.2 },
+            { field: "cekici_ruhsat_no", headerName: "Çekici Ruhsat", width: 160 },
+            { field: "dorse_ruhsat_no", headerName: "Dorse Ruhsat", width: 160 },
+            { field: "tedarikci_isim", headerName: "Tedarikçi", minWidth: 170, flex: 1 },
+            { field: "arac_yil", headerName: "Araç Yıl", width: 120 },
+            { field: "dorse_yil", headerName: "Dorse Yıl", width: 120 },
+            { field: "arac_tip", headerName: "Araç Tip", width: 140 },
+            { field: "dorse_tip", headerName: "Dorse Tip", width: 140 },
+            { field: "liftmaster", headerName: "Liftmaster", width: 140 },
+            { field: "gps_seri_no", headerName: "GPS Seri", width: 150 },
+            { field: "gps_sim_kart_no", headerName: "GPS Sim", width: 150 },
+            { field: "odak_k1", headerName: "Odak K1", width: 140 },
+        ],
+        []
+    );
+
+    const actionCol = useMemo(
+        () => ({
+            field: "__actions",
+            headerName: "İşlem",
+            sortable: false,
+            filterable: false,
+            width: 190,
+            align: "right",
+            renderCell: ({ row }) => (
+                <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ width: "100%" }}>
+                    <Tooltip title="Bilgi">
+                        <IconButton size="small" onClick={() => handleBilgiAc(row)}>
+                            <InfoIcon fontSize="inherit" />
+                        </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title={canCreate ? "Kopyala" : "Yetkiniz yok"}>
+                        <span>
+                            <IconButton size="small" color="secondary" onClick={() => handleKopyala(row)} disabled={!canCreate}>
+                                <ContentCopyIcon fontSize="inherit" />
+                            </IconButton>
+                        </span>
+                    </Tooltip>
+
+                    <Tooltip title={canEdit ? "Düzenle" : "Yetkiniz yok"}>
+                        <span>
+                            <IconButton size="small" onClick={() => handleDuzenle(row)} disabled={!canEdit}>
+                                <EditIcon fontSize="inherit" />
+                            </IconButton>
+                        </span>
+                    </Tooltip>
+
+                    {row.statu !== "ÇIKARILDI" && (
+                        <Tooltip title={canDelete ? "Sil" : "Yetkiniz yok"}>
+                            <span>
+                                <IconButton size="small" color="error" onClick={() => handleSilIstegi(row.id)} disabled={!canDelete}>
+                                    <DeleteIcon fontSize="inherit" />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                    )}
+                </Stack>
+            ),
+        }),
+        [handleBilgiAc, handleDuzenle, handleKopyala, handleSilIstegi, canCreate, canEdit, canDelete]
+    );
+
+    const columns = useMemo(() => {
+        const cols = [...commonCols];
+        if (viewPreset === "detay") cols.push(...detailCols);
+        cols.push(actionCol);
+        return cols;
+    }, [commonCols, detailCols, actionCol, viewPreset]);
+
+    /* ===================== UI ===================== */
+    const clearFilters = () => setFilters({ bolge: "", plaka: "", surucu: "" });
+
     const activeFilterChips = useMemo(() => {
         const chips = [];
-        if (filters?.bolge) chips.push({ k: "bolge", label: `Bölge: ${filters.bolge}` });
-        if (filters?.plaka) chips.push({ k: "plaka", label: `Plaka: ${filters.plaka}` });
-        if (filters?.surucu) chips.push({ k: "surucu", label: `Sürücü: ${filters.surucu}` });
+        if (filters.bolge) chips.push({ k: "bolge", label: `Bölge: ${filters.bolge}` });
+        if (filters.plaka) chips.push({ k: "plaka", label: `Plaka: ${filters.plaka}` });
+        if (filters.surucu) chips.push({ k: "surucu", label: `Sürücü: ${filters.surucu}` });
         return chips;
     }, [filters]);
 
-    // =============================================================
-    // USEEFFECT HOOKLARI
-    // =============================================================
-
-    // Login kontrolü
-    useEffect(() => {
-        const kullanici = localStorage.getItem("kullanici");
-        if (!kullanici) navigate("/login");
-    }, [navigate]);
-
-    // İlk yükleme: veri + yetkiler
-    useEffect(() => {
-        verileriGetir();
-        (async () => {
-            try {
-                const perms = await fetchAracPerms();
-                setCanCreate(perms.canCreate);
-                setCanEdit(perms.canEdit);
-                setCanDelete(perms.canDelete);
-            } catch {
-                setCanCreate(false);
-                setCanEdit(false);
-                setCanDelete(false);
-            }
-        })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // Klavye kısayolları
-    useEffect(() => {
-        const onKey = (e) => {
-            const isMac = navigator.platform.toUpperCase().includes("MAC");
-            const metaK = (isMac && e.metaKey && e.key.toLowerCase() === "k") || (!isMac && e.ctrlKey && e.key.toLowerCase() === "k");
-            if (metaK) {
-                e.preventDefault();
-                const el = document.getElementById("global-search-input");
-                el?.focus();
-                el?.select();
-            }
-            if (e.key.toLowerCase() === "n") canCreate && handleYeniEkle();
-            if (e.key.toLowerCase() === "r") verileriGetir();
-            if (e.key === "/") {
-                const quick = document.querySelector('input[placeholder*="Quick filter"]');
-                quick?.focus();
-                e.preventDefault();
-            }
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [canCreate, verileriGetir, handleYeniEkle]);
-
-    // =============================================================
-    // RETURN / JSX BAŞLANGICI
-    // =============================================================
-
     return (
         <ThemeProvider theme={theme}>
-            {/* 🚀 LAYOUT DOKUNULMADI (Orijinal ScaleToFit yapısı) */}
-            <LocalizationProvider dateAdapter={AdapterDayjs}>
-                <ScaleToFit>
-                    <Helmet>
-                        <title>ARAÇ YÖNETİMİ</title>
-                    </Helmet>
+            <ScaleToFit>
+                <Helmet>
+                    <title>ARAÇ YÖNETİMİ</title>
+                </Helmet>
 
-                    <Stack spacing={2} sx={{ height: '100%' }}>
-
-                        {/* APP BAR */}
-                        <AppBar
-                            position="static"
-                            color="transparent"
-                            elevation={0}
-                            sx={{
-                                borderRadius: 3,
-                                ...glass(0.95, 0.8),
-                                mx: 0,
-                                mt: 0,
-                                backgroundImage: "linear-gradient(90deg, rgba(139,92,246,0.2), rgba(34,211,238,0.2))",
-                                borderBottom: '2px solid rgba(139,92,246,0.3)',
-                            }}
-                        >
-                            <Toolbar disableGutters sx={{ px: 2 }}>
-                                <Typography
-                                    variant="h5"
-                                    sx={{
-                                        flexGrow: 1,
-                                        fontWeight: 800,
-                                        background: "linear-gradient(90deg,#E879F9,#22D3EE)",
-                                        WebkitBackgroundClip: "text",
-                                        WebkitTextFillColor: "transparent",
-                                        letterSpacing: 0.5,
-                                        userSelect: "none",
-                                    }}
-                                >
-                                    🚚 Araç Filosu Yönetimi
-                                </Typography>
-
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                    {/* Yenile */}
-                                    <Tooltip title="Verileri Yenile (R)">
-                                        <span>
-                                            <IconButton onClick={verileriGetir} disabled={loading} color="secondary">
-                                                {loading ? <CircularProgress size={20} color="secondary" /> : <RefreshIcon />}
-                                            </IconButton>
-                                        </span>
-                                    </Tooltip>
-
-                                    {/* Filtreler */}
-                                    <Tooltip title="Detaylı Filtreler">
-                                        <Button onClick={() => setDrawerOpen(true)} variant="outlined" startIcon={<FilterListIcon />} size="small" color="secondary" sx={{ py: 1 }}>
-                                            Filtre
-                                        </Button>
-                                    </Tooltip>
-
-                                    {/* Excel */}
-                                    <Button variant="outlined" startIcon={<DownloadIcon />} onClick={excelAktar} size="small" sx={{ py: 1 }}>
-                                        Excel Aktar
-                                    </Button>
-
-                                    {/* Yeni */}
-                                    <Tooltip title={canCreate ? "Yeni araç ekle (N)" : "Yetkiniz yok"}>
-                                        <span>
-                                            <Button variant="contained" startIcon={<AddIcon />} onClick={handleYeniEkle} disabled={!canCreate} size="small" color="success" sx={{ boxShadow: '0 4px 10px rgba(16, 185, 129, 0.4)', py: 1 }}>
-                                                Yeni Araç
-                                            </Button>
-                                        </span>
-                                    </Tooltip>
-
-                                    <SubtleDivider orientation="vertical" flexItem sx={{ mx: 1, height: 28 }} />
-
-                                    {/* Geri & Anasayfa */}
-                                    <Tooltip title="Geri">
-                                        <IconButton size="small" onClick={() => navigate(-1)}>
-                                            <ArrowBackIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-                                    <Tooltip title="Anasayfa">
-                                        <IconButton size="small" onClick={() => navigate(HOME_PATH)}>
-                                            <HomeIcon fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-
-                                </Stack>
-                            </Toolbar>
-                        </AppBar>
-
-                        {/* KPI Kartları */}
-                        <Grid container spacing={2} sx={{ px: 0 }}>
-                            <Grid item xs={12} md={6}>
-                                <Section title="AKTİF ARAÇLAR" right={<Chip icon={<CheckIcon />} label="Aktif" size="small" color="success" />}>
-                                    <Typography variant="h4" sx={{ mt: 0.5, fontWeight: 700, color: currentTheme.palette.success.light }}>
-                                        {aktifSayisi}
-                                    </Typography>
-                                </Section>
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <Section title="ÇIKARILAN ARAÇLAR" right={<Chip icon={<RemovedIcon />} label="Pasif" color="error" variant="outlined" size="small" />}>
-                                    <Typography variant="h4" sx={{ mt: 0.5, fontWeight: 700, color: currentTheme.palette.error.light }}>
-                                        {pasifSayisi}
-                                    </Typography>
-                                </Section>
-                            </Grid>
-                        </Grid>
-
-                        {/* Sekmeler + Global Arama + Aktif Filtre Rozetleri */}
-                        <Paper sx={{ p: 2, mx: 0, borderRadius: 3, ...glass(0.06, 0.03), border: '1px solid rgba(255,255,255,0.08)' }}>
-                            <Grid container spacing={2} alignItems="center">
-                                <Grid item xs={12} md={6}>
-                                    <Tabs
-                                        value={tab}
-                                        onChange={(_, v) => setTab(v)}
-                                        sx={{
-                                            "& .MuiTab-root": { fontWeight: 700, minHeight: 40, borderRadius: 2, mr: 1, px: 2, transition: 'all 0.2s' },
-                                            "& .Mui-selected": { backgroundColor: alpha("#ffffff", 0.08), color: currentTheme.palette.primary.light },
-                                            "& .MuiTabs-indicator": { height: 3, borderRadius: 1, bgcolor: currentTheme.palette.primary.main },
-                                        }}
-                                    >
-                                        <Tab value="aktif" label={<Badge color="success" variant="dot" invisible={aktifSayisi === 0} sx={{ '& .MuiBadge-badge': { top: 6, right: 6 } }}><Box sx={{ px: 0.5 }}>Aktif</Box></Badge>} />
-                                        <Tab value="pasif" label={<Badge color="error" variant="dot" invisible={pasifSayisi === 0} sx={{ '& .MuiBadge-badge': { top: 6, right: 6 } }}><Box sx={{ px: 0.5 }}>Çıkarılan</Box></Badge>} />
-                                        <Tab value="tum" label="Tümü" />
-                                    </Tabs>
-                                </Grid>
-                                <Grid item xs={12} md={6}>
-                                    <TextField
-                                        id="global-search-input"
-                                        fullWidth
-                                        size="small"
-                                        value={globalSearch ?? ""}
-                                        onChange={(e) => setGlobalSearch(e.target.value)}
-                                        placeholder="Genel arama (⌘/Ctrl + K): plaka, sürücü, ruhsat..."
-                                        InputProps={{
-                                            startAdornment: (
-                                                <InputAdornment position="start">
-                                                    <SearchIcon color="secondary" />
-                                                </InputAdornment>
-                                            ),
-                                            endAdornment: (globalSearch?.length ?? 0) > 0 ? (
-                                                <InputAdornment position="end">
-                                                    <IconButton aria-label="temizle" edge="end" onClick={() => setGlobalSearch("")} size="small">
-                                                        <ClearIcon fontSize="small" />
-                                                    </IconButton>
-                                                </InputAdornment>
-                                            ) : null,
-                                            sx: { borderRadius: 2, backgroundColor: alpha("#ffffff", 0.04) }
-                                        }}
-                                    />
-                                </Grid>
-
-                                {/* Aktif filtre rozetleri */}
-                                {activeFilterChips.length > 0 && (
-                                    <Grid item xs={12}>
-                                        <Stack direction="row" spacing={1} flexWrap="wrap">
-                                            {activeFilterChips.map((c) => (
-                                                <Chip
-                                                    key={c.k}
-                                                    label={c.label}
-                                                    onDelete={() => setFilters((f) => ({ ...(f || {}), [c.k]: "" }))}
-                                                    variant="filled"
-                                                    size="small"
-                                                    color="primary"
-                                                    sx={{ opacity: 0.8, bgcolor: alpha(currentTheme.palette.primary.main, 0.15) }}
-                                                />
-                                            ))}
-                                            <Button size="small" onClick={clearFilters} startIcon={<ClearIcon />} sx={{ ml: 0.5, color: currentTheme.palette.error.light }}>
-                                                Filtreleri temizle
-                                            </Button>
-                                        </Stack>
-                                    </Grid>
-                                )}
-                            </Grid>
-                        </Paper>
-
-                        {/* GRID alanı */}
-                        <Box sx={{ flexGrow: 1, minHeight: 0 }}>
-                            <Paper
+                <Stack spacing={2} sx={{ height: "100%" }}>
+                    {/* APP BAR */}
+                    <AppBar
+                        position="static"
+                        color="transparent"
+                        elevation={0}
+                        sx={{
+                            borderRadius: 3,
+                            ...glass(0.95, 0.80),
+                            backgroundImage: "linear-gradient(90deg, rgba(139,92,246,0.22), rgba(34,211,238,0.18))",
+                            borderBottom: "2px solid rgba(139,92,246,0.25)",
+                        }}
+                    >
+                        <Toolbar disableGutters sx={{ px: 2 }}>
+                            <Typography
+                                variant="h5"
                                 sx={{
-                                    height: "100%",
-                                    borderRadius: 3,
-                                    overflow: "hidden",
-                                    background: "transparent",
-                                    border: "1px solid rgba(255,255,255,0.08)",
-                                    display: "flex",
-                                    flexDirection: "column",
+                                    flexGrow: 1,
+                                    fontWeight: 900,
+                                    background: "linear-gradient(90deg,#E879F9,#22D3EE)",
+                                    WebkitBackgroundClip: "text",
+                                    WebkitTextFillColor: "transparent",
+                                    letterSpacing: 0.4,
+                                    userSelect: "none",
                                 }}
                             >
-                                <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", pb: 1 }}>
+                                🚚 Araç Filosu Yönetimi
+                            </Typography>
+
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <Tooltip title="Yenile">
+                                    <span>
+                                        <IconButton onClick={verileriGetir} disabled={loading} color="secondary">
+                                            {loading ? <CircularProgress size={20} color="secondary" /> : <RefreshIcon />}
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+
+                                <Button onClick={() => setDrawerOpen(true)} variant="outlined" startIcon={<FilterListIcon />} size="small" color="secondary">
+                                    Filtre
+                                </Button>
+
+                                <Button variant="outlined" startIcon={<DownloadIcon />} onClick={excelAktar} size="small">
+                                    Excel
+                                </Button>
+
+                                <Tooltip title={canCreate ? "Yeni araç" : "Yetkiniz yok"}>
+                                    <span>
+                                        <Button
+                                            variant="contained"
+                                            startIcon={<AddIcon />}
+                                            onClick={handleYeniEkle}
+                                            disabled={!canCreate}
+                                            size="small"
+                                            color="success"
+                                            sx={{ boxShadow: "0 10px 22px rgba(16,185,129,0.22)" }}
+                                        >
+                                            Yeni
+                                        </Button>
+                                    </span>
+                                </Tooltip>
+
+                                <SubtleDivider orientation="vertical" flexItem sx={{ mx: 1, height: 28 }} />
+
+                                <Tooltip title="Geri">
+                                    <IconButton size="small" onClick={() => navigate(-1)}>
+                                        <ArrowBackIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Anasayfa">
+                                    <IconButton size="small" onClick={() => navigate(HOME_PATH)}>
+                                        <HomeIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Stack>
+                        </Toolbar>
+                    </AppBar>
+
+                    {/* KPI */}
+                    <Grid container spacing={2}>
+                        <Grid item xs={12} md={6}>
+                            <Section title="AKTİF ARAÇLAR" right={<Chip icon={<CheckIcon />} label="Aktif" size="small" color="success" />}>
+                                <Typography variant="h4" sx={{ mt: 0.5, fontWeight: 900, color: currentTheme.palette.success.light }}>
+                                    {aktifSayisi}
+                                </Typography>
+                            </Section>
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <Section title="ÇIKARILAN ARAÇLAR" right={<Chip icon={<RemovedIcon />} label="Pasif" color="error" variant="outlined" size="small" />}>
+                                <Typography variant="h4" sx={{ mt: 0.5, fontWeight: 900, color: currentTheme.palette.error.light }}>
+                                    {pasifSayisi}
+                                </Typography>
+                            </Section>
+                        </Grid>
+                    </Grid>
+
+                    {/* Kontroller */}
+                    <Paper
+                        sx={{
+                            p: 2,
+                            borderRadius: 3,
+                            ...glass(0.10, 0.04),
+                            border: "1px solid rgba(255,255,255,0.10)",
+                            boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
+                        }}
+                    >
+                        <Grid container spacing={2} alignItems="center">
+                            <Grid item xs={12} md={6}>
+                                <Tabs
+                                    value={tab}
+                                    onChange={(_, v) => setTab(v)}
+                                    sx={{
+                                        "& .MuiTab-root": { fontWeight: 900, minHeight: 40, borderRadius: 2, mr: 1, px: 2, transition: "all .2s" },
+                                        "& .Mui-selected": { backgroundColor: alpha("#ffffff", 0.08), color: currentTheme.palette.primary.light },
+                                        "& .MuiTabs-indicator": { height: 3, borderRadius: 1, bgcolor: currentTheme.palette.primary.main },
+                                    }}
+                                >
+                                    <Tab value="aktif" label={<Badge color="success" variant="dot" invisible={aktifSayisi === 0}><Box sx={{ px: 0.5 }}>Aktif</Box></Badge>} />
+                                    <Tab value="pasif" label={<Badge color="error" variant="dot" invisible={pasifSayisi === 0}><Box sx={{ px: 0.5 }}>Çıkarılan</Box></Badge>} />
+                                    <Tab value="tum" label="Tümü" />
+                                </Tabs>
+
+                                {/* Preset + Density */}
+                                <Stack direction="row" spacing={1} sx={{ mt: 1 }} alignItems="center">
+                                    <ToggleButtonGroup size="small" value={viewPreset} exclusive onChange={(_, v) => v && setViewPreset(v)}>
+                                        <ToggleButton value="minimal">
+                                            <TableIcon sx={{ fontSize: 18, mr: 0.6 }} /> Minimal
+                                        </ToggleButton>
+                                        <ToggleButton value="detay">
+                                            <TableIcon sx={{ fontSize: 18, mr: 0.6 }} /> Detay
+                                        </ToggleButton>
+                                    </ToggleButtonGroup>
+
+                                    <ToggleButtonGroup size="small" value={density} exclusive onChange={(_, v) => v && setDensity(v)}>
+                                        <ToggleButton value="compact">
+                                            <CompactIcon sx={{ fontSize: 18, mr: 0.6 }} /> Sıkı
+                                        </ToggleButton>
+                                        <ToggleButton value="standard">
+                                            <ComfyIcon sx={{ fontSize: 18, mr: 0.6 }} /> Rahat
+                                        </ToggleButton>
+                                    </ToggleButtonGroup>
+                                </Stack>
+                            </Grid>
+
+                            <Grid item xs={12} md={6}>
+                                <TextField
+                                    fullWidth
+                                    size="small"
+                                    value={globalSearch}
+                                    onChange={(e) => setGlobalSearch(e.target.value)}
+                                    placeholder="Genel arama: plaka, sürücü, ruhsat..."
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SearchIcon color="secondary" />
+                                            </InputAdornment>
+                                        ),
+                                        endAdornment: globalSearch ? (
+                                            <InputAdornment position="end">
+                                                <IconButton onClick={() => setGlobalSearch("")} size="small">
+                                                    <ClearIcon fontSize="small" />
+                                                </IconButton>
+                                            </InputAdornment>
+                                        ) : null,
+                                        sx: { borderRadius: 2, backgroundColor: alpha("#ffffff", 0.04) },
+                                    }}
+                                />
+
+                                {activeFilterChips.length > 0 && (
+                                    <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
+                                        {activeFilterChips.map((c) => (
+                                            <Chip
+                                                key={c.k}
+                                                label={c.label}
+                                                onDelete={() => setFilters((f) => ({ ...f, [c.k]: "" }))}
+                                                variant="filled"
+                                                size="small"
+                                                color="primary"
+                                                sx={{ opacity: 0.85, bgcolor: alpha(currentTheme.palette.primary.main, 0.16) }}
+                                            />
+                                        ))}
+                                        <Button size="small" onClick={clearFilters} startIcon={<ClearIcon />} sx={{ color: currentTheme.palette.error.light }}>
+                                            Temizle
+                                        </Button>
+                                    </Stack>
+                                )}
+                            </Grid>
+                        </Grid>
+                    </Paper>
+
+                    {/* GRID */}
+                    <Box sx={{ flexGrow: 1, minHeight: 0 }}>
+                        <Paper
+                            sx={{
+                                height: "100%",
+                                borderRadius: 3,
+                                overflow: "hidden",
+                                background: "transparent",
+                                border: "1px solid rgba(255,255,255,0.08)",
+                                display: "flex",
+                                flexDirection: "column",
+                                boxShadow: "0 22px 60px rgba(0,0,0,0.35)",
+                            }}
+                        >
+                            {/* ✅ çözünürlük sorunu: yatay scroll garantili */}
+                            <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+                                <Box sx={{ minWidth: 1500, height: "100%" }}>
                                     <DataGrid
                                         rows={rows}
                                         columns={columns}
                                         getRowId={(r) => r.id}
                                         density={density}
-                                        onDensityChange={(d) => setDensity(d)}
+                                        rowHeight={density === "compact" ? 42 : 52}
+                                        columnHeaderHeight={48}
                                         disableRowSelectionOnClick
                                         pagination={false}
                                         hideFooter
                                         loading={loading}
-                                        columnVisibilityModel={colVis}
-                                        onColumnVisibilityModelChange={(m) => setColVis(m)}
-                                        pinnedColumns={pinnedCols}
-                                        onPinnedColumnsChange={(m) => setPinnedCols(m)}
                                         slots={{
                                             toolbar: GridToolbar,
                                             noRowsOverlay: () => <EmptyState />,
-                                            noResultsOverlay: () => <EmptyState title="Sonuç bulunamadı" caption="Arama & filtreleri kontrol edin." />,
+                                            noResultsOverlay: () => <EmptyState title="Sonuç yok" caption="Arama/filtreleri kontrol edin." />,
                                             loadingOverlay: () => (
                                                 <Stack alignItems="center" justifyContent="center" sx={{ height: "100%" }}>
                                                     <CircularProgress />
@@ -1238,437 +1029,266 @@ export default function AracYonetimiMUI() {
                                         }}
                                         sx={{
                                             border: "none",
-                                            fontSize: 14,
                                             height: "100%",
-                                            [`& .${gridClasses.columnHeaders}`]: {
-                                                background: "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
-                                                color: "#C8D1E6",
-                                                borderBottomColor: "rgba(255,255,255,0.10)",
-                                                fontWeight: 700,
-                                                fontSize: 16,
-                                                padding: '0 10px'
+                                            fontSize: 14,
+
+                                            "& .MuiDataGrid-virtualScroller": {
+                                                background: "rgba(255,255,255,0.015)",
                                             },
-                                            "& .MuiDataGrid-columnHeaderTitle": { whiteSpace: "normal", lineHeight: 1.2 },
+                                            "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": {
+                                                outline: "none",
+                                            },
+
+                                            [`& .${gridClasses.columnHeaders}`]: {
+                                                position: "sticky",
+                                                top: 0,
+                                                zIndex: 1,
+                                                background: "linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.7) 100%)",
+                                                borderBottomColor: "rgba(255,255,255,0.10)",
+                                                fontWeight: 900,
+                                                fontSize: 15,
+                                            },
+
+                                            "& .MuiDataGrid-toolbarContainer": {
+                                                px: 1.5,
+                                                py: 1,
+                                                borderBottom: "1px solid rgba(255,255,255,0.08)",
+                                                background: "rgba(255,255,255,0.02)",
+                                                backdropFilter: "blur(10px)",
+                                            },
+
                                             "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": {
                                                 backgroundColor: "rgba(255,255,255,0.02)",
                                             },
-                                            "& .MuiDataGrid-cell": {
-                                                borderBottomColor: "rgba(255,255,255,0.06)",
-                                                whiteSpace: "nowrap",
-                                            },
                                             "& .MuiDataGrid-row:hover .MuiDataGrid-cell": {
-                                                backgroundColor: alpha(currentTheme.palette.primary.main, 0.1),
+                                                backgroundColor: alpha(currentTheme.palette.primary.main, 0.14),
                                                 transition: "background-color 120ms ease",
                                             },
-                                            "& .row-removed .MuiDataGrid-cell": {
-                                                backgroundColor: alpha("#ef4444", 0.08),
-                                            },
-                                            "& .row-warning .MuiDataGrid-cell": {
-                                                backgroundColor: alpha("#f59e0b", 0.08),
-                                            },
-                                            "& .MuiDataGrid-overlayWrapper": {
-                                                background: "transparent",
-                                            },
+
+                                            "& .MuiDataGrid-cell": { borderBottomColor: "rgba(255,255,255,0.06)" },
+                                            "& .row-removed .MuiDataGrid-cell": { backgroundColor: alpha("#ef4444", 0.08) },
+                                            "& .row-warning .MuiDataGrid-cell": { backgroundColor: alpha("#f59e0b", 0.08) },
                                         }}
                                     />
                                 </Box>
-                            </Paper>
-                        </Box>
+                            </Box>
+                        </Paper>
+                    </Box>
+                </Stack>
+
+                {/* Drawer: Filtre */}
+                <Drawer
+                    anchor="right"
+                    open={drawerOpen}
+                    onClose={() => setDrawerOpen(false)}
+                    PaperProps={{
+                        sx: {
+                            width: 380,
+                            background: "linear-gradient(180deg, rgba(15,23,42,0.95) 0%, rgba(15,23,42,0.85) 100%)",
+                            backdropFilter: "blur(8px)",
+                            borderLeft: "1px solid rgba(255,255,255,0.08)",
+                            p: 2.5,
+                        },
+                    }}
+                >
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                        <Typography variant="h5" fontWeight={900}>
+                            Detaylı Filtreler
+                        </Typography>
+                        <IconButton onClick={() => setDrawerOpen(false)} color="secondary">
+                            <CloseIcon />
+                        </IconButton>
                     </Stack>
-
-                    {/* Drawer: Filtreler (Dokunulmadı) */}
-                    <Drawer
-                        anchor="right"
-                        open={drawerOpen}
-                        onClose={() => setDrawerOpen(false)}
-                        PaperProps={{
-                            sx: {
-                                width: 380,
-                                background: "linear-gradient(180deg, rgba(15,23,42,0.95) 0%, rgba(15,23,42,0.85) 100%)",
-                                backdropFilter: "blur(8px)",
-                                color: "text.primary",
-                                borderLeft: "1px solid rgba(255,255,255,0.08)",
-                            },
-                        }}
-                    >
-                        <Box sx={{ p: 3 }}>
-                            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                                <Typography variant="h5" fontWeight={700}>Detaylı Filtreler</Typography>
-                                <IconButton onClick={() => setDrawerOpen(false)} color="secondary">
-                                    <CloseIcon />
-                                </IconButton>
-                            </Stack>
-                            <SubtleDivider />
-
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                Hızlı filtreleme için ana tablo araç çubuğunu kullanabilirsiniz.
-                            </Typography>
-
-                            {/* FİLTRE KONTROLLERİ */}
-                            <Stack spacing={3}>
-                                <TextField label="Bölge" value={filters?.bolge ?? ""} onChange={(e) => setFilters((f) => ({ ...(f || {}), bolge: e.target.value }))} fullWidth size="small" />
-                                <TextField label="Plaka" value={filters?.plaka ?? ""} onChange={(e) => setFilters((f) => ({ ...(f || {}), plaka: e.target.value }))} fullWidth size="small" />
-                                <TextField label="Sürücü" value={filters?.surucu ?? ""} onChange={(e) => setFilters((f) => ({ ...(f || {}), surucu: e.target.value }))} fullWidth size="small" />
-
-                                <Stack direction="row" spacing={1} sx={{ pt: 1 }}>
-                                    <Button variant="outlined" startIcon={<ClearIcon />} onClick={clearFilters} color="error">
-                                        Temizle
-                                    </Button>
-                                    <Box sx={{ flexGrow: 1 }} />
-                                    <Button variant="contained" onClick={() => setDrawerOpen(false)} color="secondary">
-                                        Uygula
-                                    </Button>
-                                </Stack>
-                            </Stack>
-
-                            <SubtleDivider sx={{ mt: 3 }} />
-
-                            {/* Statü efsanesi */}
-                            <Stack spacing={1}>
-                                <Typography variant="subtitle2" sx={{ opacity: 0.8 }}>
-                                    Statü Renkleri
-                                </Typography>
-                                <Stack direction="row" spacing={1} flexWrap="wrap">
-                                    <Chip size="small" color="success" label="Aktif" sx={{ bgcolor: alpha(currentTheme.palette.success.main, 0.1), color: currentTheme.palette.success.main, border: 'none' }} />
-                                    <Chip size="small" color="warning" label="Kesinti sonrası" sx={{ bgcolor: alpha(currentTheme.palette.warning.main, 0.1), color: currentTheme.palette.warning.main, border: 'none' }} />
-                                    <Chip size="small" color="error" variant="outlined" label="Çıkarıldı" sx={{ bgcolor: alpha(currentTheme.palette.error.main, 0.1), color: currentTheme.palette.error.main }} />
-                                </Stack>
-                            </Stack>
-                        </Box>
-                    </Drawer>
-
-                    {/* 🚀 DEĞİŞTİ: Dialog -> Drawer oldu */}
-                    <Drawer
-                        anchor="right"
-                        open={duzenleAcik}
-                        onClose={temizleVeKapat}
-                        PaperProps={{
-                            sx: {
-                                width: { xs: '90%', md: 800 }, // Form için daha geniş alan
-                                ...glass(0.95, 0.9), // Glass efekti
-                                p: 3,
-                                borderLeft: '1px solid rgba(255,255,255,0.1)'
-                            }
-                        }}
-                    >
-                        {/* Eski DialogTitle */}
-                        <Stack direction="row" alignItems="center" justifyContent="space-between">
-                            <Typography variant="h6" fontWeight={700}>{editId ? "Araç Bilgilerini Güncelle" : "Yeni Araç Bilgisi"}</Typography>
-                            <IconButton onClick={temizleVeKapat} color="secondary"><CloseIcon /></IconButton>
+                    <SubtleDivider />
+                    <Stack spacing={2.5}>
+                        <TextField label="Bölge" value={filters.bolge} onChange={(e) => setFilters((f) => ({ ...f, bolge: e.target.value }))} size="small" />
+                        <TextField label="Plaka" value={filters.plaka} onChange={(e) => setFilters((f) => ({ ...f, plaka: e.target.value }))} size="small" />
+                        <TextField label="Sürücü" value={filters.surucu} onChange={(e) => setFilters((f) => ({ ...f, surucu: e.target.value }))} size="small" />
+                        <Stack direction="row" spacing={1}>
+                            <Button variant="outlined" startIcon={<ClearIcon />} onClick={clearFilters} color="error" fullWidth>
+                                Temizle
+                            </Button>
+                            <Button variant="contained" onClick={() => setDrawerOpen(false)} color="secondary" fullWidth>
+                                Uygula
+                            </Button>
                         </Stack>
+                    </Stack>
+                </Drawer>
 
-                        <Divider sx={{ my: 2, borderColor: "rgba(255,255,255,0.1)" }} />
+                {/* Drawer: Ekle/Düzenle */}
+                <Drawer
+                    anchor="right"
+                    open={duzenleAcik}
+                    onClose={temizleVeKapat}
+                    PaperProps={{ sx: { width: { xs: "90%", md: 800 }, ...glass(0.95, 0.90), p: 3, borderLeft: "1px solid rgba(255,255,255,0.10)" } }}
+                >
+                    <Stack direction="row" alignItems="center" justifyContent="space-between">
+                        <Typography variant="h6" fontWeight={900}>
+                            {editId ? "Araç Güncelle" : "Yeni Araç"}
+                        </Typography>
+                        <IconButton onClick={temizleVeKapat} color="secondary">
+                            <CloseIcon />
+                        </IconButton>
+                    </Stack>
+                    <Divider sx={{ my: 2, borderColor: "rgba(255,255,255,0.10)" }} />
 
-                        {/* Eski DialogContent (Form ve Scroll eklendi) */}
-                        <Box
-                            component="form"
-                            id="arac-form" // 👈 ID eklendi
-                            onSubmit={handleSubmit}
-                            sx={{ flexGrow: 1, overflowY: 'auto', pr: 1 }} // 👈 Kaydırma çubuğu
+                    <Box component="form" id="arac-form" onSubmit={handleSubmit} sx={{ flexGrow: 1, overflowY: "auto", pr: 1 }}>
+                        <Grid container spacing={2.5}>
+                            {[
+                                { name: "plaka", label: "Plaka", required: true, err: formErrors.plaka },
+                                // { name: "treyler", label: "Treyler" }, // ❌ kaldırıldı
+                                { name: "surucu_adi", label: "Sürücü Adı" },
+                                { name: "surucu_telefon", label: "Telefon", err: formErrors.surucu_telefon },
+                                { name: "surucu_tc", label: "TC" },
+                                { name: "ikamet_adresi", label: "İkamet" },
+                                { name: "cekici_ruhsat_no", label: "Çekici Ruhsat No" },
+                                { name: "dorse_ruhsat_no", label: "Dorse Ruhsat No" },
+                                { name: "tedarikci_isim", label: "Tedarikçi" },
+                            ].map((f) => (
+                                <Grid key={f.name} item xs={12} md={4}>
+                                    <TextField
+                                        fullWidth
+                                        name={f.name}
+                                        value={form[f.name] ?? ""}
+                                        onChange={handleChange}
+                                        label={f.label}
+                                        required={!!f.required}
+                                        error={!!f.err}
+                                        helperText={f.err || ""}
+                                        size="small"
+                                    />
+                                </Grid>
+                            ))}
+
+                            {[
+                                { name: "cekici_muayene", label: "Çekici Muayene", err: formErrors.cekici_muayene },
+                                { name: "dorse_muayene", label: "Dorse Muayene", err: formErrors.dorse_muayene },
+                                { name: "trafik_sigorta", label: "Trafik Sigorta", err: formErrors.trafik_sigorta },
+                            ].map((f) => (
+                                <Grid key={f.name} item xs={12} md={4}>
+                                    <TextField
+                                        fullWidth
+                                        type="date"
+                                        name={f.name}
+                                        value={form[f.name] ?? ""}
+                                        onChange={handleChange}
+                                        label={f.label}
+                                        InputLabelProps={{ shrink: true }}
+                                        required
+                                        error={!!f.err}
+                                        helperText={f.err || " "}
+                                        size="small"
+                                    />
+                                </Grid>
+                            ))}
+
+                            {[
+                                { name: "arac_yil", label: "Araç Yılı", type: "number" },
+                                { name: "dorse_yil", label: "Dorse Yılı", type: "number" },
+                                { name: "bolge", label: "Bölge" },
+                                { name: "arac_tip", label: "Araç Tip" },
+                                { name: "dorse_tip", label: "Dorse Tip" },
+                                { name: "liftmaster", label: "Liftmaster" },
+                                { name: "gps_seri_no", label: "GPS Seri No" },
+                                { name: "gps_sim_kart_no", label: "GPS Sim Kart No" },
+                                { name: "odak_k1", label: "Odak K1" },
+                            ].map((f) => (
+                                <Grid key={f.name} item xs={12} md={4}>
+                                    <TextField fullWidth name={f.name} value={form[f.name] ?? ""} onChange={handleChange} label={f.label} type={f.type} size="small" />
+                                </Grid>
+                            ))}
+                        </Grid>
+                    </Box>
+
+                    <Box sx={{ pt: 2, mt: 2, display: "flex", justifyContent: "flex-end", gap: 1.5, borderTop: "1px solid rgba(255,255,255,0.10)" }}>
+                        <Button onClick={temizleVeKapat} variant="outlined" size="large">
+                            İptal
+                        </Button>
+                        <Button
+                            type="submit"
+                            form="arac-form"
+                            variant="contained"
+                            size="large"
+                            color={editId ? "primary" : "success"}
+                            sx={{ px: 4, py: 1.2, fontWeight: 900 }}
                         >
-                            <Grid container spacing={3}>
-                                <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        name="plaka"
-                                        value={form.plaka}
-                                        onChange={handleChange}
-                                        label="Plaka"
-                                        required
-                                        error={!!formErrors.plaka}
-                                        helperText={formErrors.plaka || "Zorunlu Alan"}
-                                        size="small"
-                                    />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="treyler" value={form.treyler} onChange={handleChange} label="Treyler" size="small" />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="surucu_adi" value={form.surucu_adi} onChange={handleChange} label="Sürücü Adı" size="small" />
-                                </Grid>
+                            {editId ? "Güncelle" : "Kaydet"}
+                        </Button>
+                    </Box>
+                </Drawer>
 
-                                <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        name="surucu_telefon"
-                                        value={form.surucu_telefon}
-                                        onChange={handleChange}
-                                        label="Telefon"
-                                        error={!!formErrors.surucu_telefon}
-                                        helperText={formErrors.surucu_telefon || "Örn: 5xx xxx xx xx"}
-                                        size="small"
-                                    />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="surucu_tc" value={form.surucu_tc} onChange={handleChange} label="TC" size="small" />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="ikamet_adresi" value={form.ikamet_adresi} onChange={handleChange} label="İkamet Adresi" size="small" />
-                                </Grid>
+                {/* Sil Modal */}
+                <Dialog open={silModalAcik} onClose={() => setSilModalAcik(false)}>
+                    <DialogTitle sx={{ color: currentTheme.palette.error.main, fontWeight: 900 }}>⚠️ Araç Çıkarılıyor</DialogTitle>
+                    <DialogContent dividers>
+                        <Stack spacing={2} sx={{ mt: 1 }}>
+                            <TextField label="Silme sebebi (Zorunlu)" value={silmeSebebi} onChange={(e) => setSilmeSebebi(e.target.value)} fullWidth multiline rows={2} required />
+                            <TextField label="Çıkarılma Tarihi" type="datetime-local" value={silinmeTarihi} onChange={(e) => setSilinmeTarihi(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} required />
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={handleSilOnayla} variant="contained" color="error" disabled={!(silmeSebebi || "").trim()}>
+                            Onayla
+                        </Button>
+                        <Button onClick={() => setSilModalAcik(false)} variant="text">
+                            İptal
+                        </Button>
+                    </DialogActions>
+                </Dialog>
 
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="cekici_ruhsat_no" value={form.cekici_ruhsat_no} onChange={handleChange} label="Çekici Ruhsat No" size="small" />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="dorse_ruhsat_no" value={form.dorse_ruhsat_no} onChange={handleChange} label="Dorse Ruhsat No" size="small" />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="tedarikci_isim" value={form.tedarikci_isim} onChange={handleChange} label="Tedarikçi İsim" size="small" />
-                                </Grid>
-
-                                <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        type="date"
-                                        name="cekici_muayene"
-                                        value={form.cekici_muayene}
-                                        onChange={handleChange}
-                                        label="Çekici Muayene Bitiş"
-                                        InputLabelProps={{ shrink: true }}
-                                        required
-                                        error={!!formErrors.cekici_muayene}
-                                        helperText={formErrors.cekici_muayene || "Zorunlu Tarih"}
-                                        size="small"
-                                    />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        type="date"
-                                        name="dorse_muayene"
-                                        value={form.dorse_muayene}
-                                        onChange={handleChange}
-                                        label="Dorse Muayene Bitiş"
-                                        InputLabelProps={{ shrink: true }}
-                                        required
-                                        error={!!formErrors.dorse_muayene}
-                                        helperText={formErrors.dorse_muayene || "Zorunlu Tarih"}
-                                        size="small"
-                                    />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField
-                                        fullWidth
-                                        type="date"
-                                        name="trafik_sigorta"
-                                        value={form.trafik_sigorta}
-                                        onChange={handleChange}
-                                        label="Trafik Sigorta Bitiş"
-                                        InputLabelProps={{ shrink: true }}
-                                        required
-                                        error={!!formErrors.trafik_sigorta}
-                                        helperText={formErrors.trafik_sigorta || "Zorunlu Tarih"}
-                                        size="small"
-                                    />
-                                </Grid>
-
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth type="number" name="arac_yil" value={form.arac_yil || ""} onChange={handleChange} label="Araç Yılı" size="small" />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth type="number" name="dorse_yil" value={form.dorse_yil || ""} onChange={handleChange} label="Dorse Yılı" size="small" />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="bolge" value={form.bolge} onChange={handleChange} label="Bölge" size="small" />
-                                </Grid>
-
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="arac_tip" value={form.arac_tip} onChange={handleChange} label="Araç Tip" size="small" />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="dorse_tip" value={form.dorse_tip} onChange={handleChange} label="Dorse Tip" size="small" />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="liftmaster" value={form.liftmaster} onChange={handleChange} label="Liftmaster" size="small" />
-                                </Grid>
-
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="gps_seri_no" value={form.gps_seri_no} onChange={handleChange} label="GPS Seri No" size="small" />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="gps_sim_kart_no" value={form.gps_sim_kart_no} onChange={handleChange} label="GPS Sim Kart No" size="small" />
-                                </Grid>
-                                <Grid item xs={12} md={4}>
-                                    <TextField fullWidth name="odak_k1" value={form.odak_k1} onChange={handleChange} label="Odak K1" size="small" />
-                                </Grid>
+                {/* Bilgi Modal */}
+                <Dialog open={bilgiModalAcik} onClose={() => setBilgiModalAcik(false)} maxWidth="md" fullWidth>
+                    <DialogTitle>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between">
+                            <Typography variant="h6" fontWeight={900}>
+                                Araç Detay
+                            </Typography>
+                            <IconButton onClick={() => setBilgiModalAcik(false)} color="secondary">
+                                <CloseIcon />
+                            </IconButton>
+                        </Stack>
+                    </DialogTitle>
+                    <DialogContent dividers>
+                        {bilgiArac ? (
+                            <Grid container spacing={2}>
+                                {[
+                                    ["Plaka", bilgiArac.plaka],
+                                    // ["Treyler", bilgiArac.treyler || "-"], // ❌ kaldırıldı
+                                    ["Sürücü", bilgiArac.surucu_adi || "-"],
+                                    ["Telefon", bilgiArac.surucu_telefon || "-"],
+                                    ["Statü", bilgiArac.statu || "-"],
+                                    ["Bölge", bilgiArac.bolge || "-"],
+                                    ["Tedarikçi", bilgiArac.tedarikci_isim || "-"],
+                                ].map(([k, v]) => (
+                                    <Grid key={k} item xs={12} md={4}>
+                                        <Typography variant="body2">
+                                            <b>{k}:</b> {v}
+                                        </Typography>
+                                    </Grid>
+                                ))}
                             </Grid>
-                        </Box>
+                        ) : (
+                            <Typography>Bilgi yok</Typography>
+                        )}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setBilgiModalAcik(false)} variant="contained" color="secondary">
+                            Kapat
+                        </Button>
+                    </DialogActions>
+                </Dialog>
 
-                        {/* Eski DialogActions (Box ile değiştirildi) */}
-                        <Box
-                            sx={{
-                                pt: 2,
-                                mt: 2,
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                gap: 1.5,
-                                background: "transparent",
-                                borderTop: "1px solid rgba(255,255,255,0.1)",
-                            }}
-                        >
-                            <Button onClick={temizleVeKapat} variant="outlined" size="large">
-                                İptal
-                            </Button>
-                            <Button
-                                type="submit" // 👈 Değişti
-                                form="arac-form" // 👈 Değişti
-                                variant="contained"
-                                size="large"
-                                color={editId ? "primary" : "success"}
-                                sx={{ px: 4, py: 1.2, fontWeight: 700 }}
-                            // onClick={handleSubmit} // 👈 Silindi
-                            >
-                                {editId ? "Güncelle" : "Kaydet"}
-                            </Button>
-                        </Box>
-                    </Drawer>
-
-                    {/* Dialog: Silme (Dokunulmadı) */}
-                    <Dialog open={silModalAcik} onClose={() => setSilModalAcik(false)}>
-                        <DialogTitle sx={{ color: currentTheme.palette.error.main, fontWeight: 700 }}>⚠️ Araç Kalıcı Olarak Çıkarılıyor</DialogTitle>
-                        <DialogContent dividers>
-                            <Stack spacing={3} sx={{ mt: 1 }}>
-                                <TextField
-                                    label="Silme sebebi (Zorunlu)"
-                                    value={silmeSebebi}
-                                    onChange={(e) => setSilmeSebebi(e.target.value)}
-                                    fullWidth
-                                    multiline
-                                    rows={2}
-                                    required
-                                    error={!(silmeSebebi || "").trim()}
-                                    helperText={!(silmeSebebi || "").trim() ? "Silme sebebini girmek zorunludur." : ""}
-                                />
-                                <TextField
-                                    label="Çıkarılma Tarihi"
-                                    type="datetime-local"
-                                    value={silinmeTarihi}
-                                    onChange={(e) => setSilinmeTarihi(e.target.value)}
-                                    fullWidth
-                                    InputLabelProps={{ shrink: true }}
-                                    required
-                                />
-                            </Stack>
-                        </DialogContent>
-                        <DialogActions>
-                            <Button
-                                onClick={handleSilOnayla}
-                                variant="contained"
-                                color="error"
-                                disabled={!(silmeSebebi || "").trim()}
-                            >
-                                Çıkarılma İşlemini Onayla
-                            </Button>
-                            <Button onClick={() => setSilModalAcik(false)} variant="text">İptal</Button>
-                        </DialogActions>
-                    </Dialog>
-
-                    {/* Dialog: Bilgi (Dokunulmadı) */}
-                    <Dialog
-                        open={bilgiModalAcik}
-                        onClose={() => setBilgiModalAcik(false)}
-                        maxWidth="md"
-                        fullWidth
-                    >
-                        <DialogTitle>
-                            <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                <Typography variant="h6" fontWeight={700}>Araç Detay & İşlem Bilgileri</Typography>
-                                <IconButton onClick={() => setBilgiModalAcik(false)} color="secondary"><CloseIcon /></IconButton>
-                            </Stack>
-                        </DialogTitle>
-                        <DialogContent dividers>
-                            {bilgiArac && (
-                                <Grid container spacing={3}>
-                                    {/* Genel Bilgiler */}
-                                    <Grid item xs={12}>
-                                        <Typography variant="h6" sx={{ color: currentTheme.palette.secondary.main }}>Genel Durum</Typography>
-                                        <SubtleDivider />
-                                    </Grid>
-                                    <Grid item xs={12} md={4}><Typography variant="body2"><b>Plaka:</b> {bilgiArac.plaka}</Typography></Grid>
-                                    <Grid item xs={12} md={4}><Typography variant="body2"><b>Treyler:</b> {bilgiArac.treyler || '-'}</Typography></Grid>
-                                    <Grid item xs={12} md={4}><Typography variant="body2"><b>Statü:</b> {bilgiArac.statu}</Typography></Grid>
-
-                                    {/* İzin / Kesinti */}
-                                    {(izinBilgisi || kesintiBilgisi) && (
-                                        <Grid item xs={12}>
-                                            <Typography variant="h6" sx={{ mt: 2, color: currentTheme.palette.primary.main }}>İzin & Kesinti</Typography>
-                                            <SubtleDivider />
-                                        </Grid>
-                                    )}
-
-                                    {izinBilgisi && (
-                                        <Grid item xs={12}>
-                                            <Paper variant="outlined" sx={{ p: 2, borderColor: alpha(currentTheme.palette.secondary.main, 0.5), background: alpha(currentTheme.palette.secondary.main, 0.05) }}>
-                                                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1, color: currentTheme.palette.secondary.light }}>İzin Kaydı (Son)</Typography>
-                                                <Grid container spacing={1}>
-                                                    <Grid item xs={12} md={4}><Typography variant="body2"><b>Tür:</b> {izinBilgisi.izin_turu}</Typography></Grid>
-                                                    <Grid item xs={12} md={4}><Typography variant="body2"><b>Başlangıç:</b> {izinBilgisi.baslangic_tarihi ? new Date(izinBilgisi.baslangic_tarihi).toLocaleDateString() : '-'}</Typography></Grid>
-                                                    <Grid item xs={12} md={4}><Typography variant="body2"><b>Bitiş:</b> {izinBilgisi.bitis_tarihi ? new Date(izinBilgisi.bitis_tarihi).toLocaleDateString() : '-'}</Typography></Grid>
-                                                    <Grid item xs={12}><Typography variant="body2"><b>Açıklama:</b> {izinBilgisi.aciklama || "-"}</Typography></Grid>
-                                                </Grid>
-                                            </Paper>
-                                        </Grid>
-                                    )}
-
-                                    {kesintiBilgisi && (
-                                        <Grid item xs={12}>
-                                            <Paper variant="outlined" sx={{ p: 2, borderColor: alpha(currentTheme.palette.warning.main, 0.5), background: alpha(currentTheme.palette.warning.main, 0.05) }}>
-                                                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1, color: currentTheme.palette.warning.light }}>Kesinti Kaydı (Son)</Typography>
-                                                <Grid container spacing={1}>
-                                                    <Grid item xs={12} md={4}><Typography variant="body2"><b>Tür:</b> {kesintiBilgisi.kesinti_turu}</Typography></Grid>
-                                                    <Grid item xs={12} md={4}><Typography variant="body2"><b>Başlangıç:</b> {kesintiBilgisi.baslangic_tarihi ? new Date(kesintiBilgisi.baslangic_tarihi).toLocaleDateString() : '-'}</Typography></Grid>
-                                                    <Grid item xs={12} md={4}><Typography variant="body2"><b>Bitiş:</b> {kesintiBilgisi.bitis_tarihi ? new Date(kesintiBilgisi.bitis_tarihi).toLocaleDateString() : '-'}</Typography></Grid>
-                                                    <Grid item xs={12}><Typography variant="body2"><b>Açıklama:</b> {kesintiBilgisi.aciklama || "-"}</Typography></Grid>
-                                                </Grid>
-                                            </Paper>
-                                        </Grid>
-                                    )}
-
-                                    {/* Audit Bilgileri */}
-                                    <Grid item xs={12}>
-                                        <Typography variant="h6" sx={{ mt: 2, color: currentTheme.palette.info.main }}>Sistem Kayıtları</Typography>
-                                        <SubtleDivider />
-                                    </Grid>
-                                    <Grid item xs={12} md={6}>
-                                        <Typography variant="body2">
-                                            <b>Ekleyen:</b> {bilgiArac.ekleyen_kullanici || "-"}
-                                        </Typography>
-                                        <Typography variant="body2">
-                                            <b>Eklenme Tarihi:</b> {bilgiArac.eklenen_tarih ? new Date(bilgiArac.eklenen_tarih).toLocaleString() : "-"}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={12} md={6}>
-                                        <Typography variant="body2">
-                                            <b>Son Güncelleyen:</b> {bilgiArac.guncelleyen_kullanici || "-"}
-                                        </Typography>
-                                        <Typography variant="body2">
-                                            <b>Son Güncelleme:</b> {bilgiArac.guncelleme_tarihi ? new Date(bilgiArac.guncelleme_tarihi).toLocaleString() : "-"}
-                                        </Typography>
-                                        {bilgiArac.guncellenen_alanlar && <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic', color: 'text.secondary' }}>Değişen Alanlar: {bilgiArac.guncellenen_alanlar}</Typography>}
-                                    </Grid>
-
-                                </Grid>
-                            )}
-                        </DialogContent>
-                        <DialogActions>
-                            <Button onClick={() => setBilgiModalAcik(false)} variant="contained" color="secondary" size="large">
-                                Kapat
-                            </Button>
-                        </DialogActions>
-                    </Dialog>
-
-                    <Snackbar
-                        open={snack.open}
-                        autoHideDuration={2500}
-                        onClose={() => setSnack((s) => ({ ...s, open: false }))}
-                        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                    >
-                        <Alert onClose={() => setSnack((s) => ({ ...s, open: false }))} severity={snack.severity} variant="filled" sx={{ width: "100%", borderRadius: 1 }}>
-                            {snack.msg}
-                        </Alert>
-                    </Snackbar>
-                </ScaleToFit>
-            </LocalizationProvider>
+                <Snackbar
+                    open={snack.open}
+                    autoHideDuration={2500}
+                    onClose={() => setSnack((s) => ({ ...s, open: false }))}
+                    anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                >
+                    <Alert onClose={() => setSnack((s) => ({ ...s, open: false }))} severity={snack.severity} variant="filled" sx={{ width: "100%", borderRadius: 2 }}>
+                        {snack.msg}
+                    </Alert>
+                </Snackbar>
+            </ScaleToFit>
         </ThemeProvider>
     );
 }

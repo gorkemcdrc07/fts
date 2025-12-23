@@ -43,6 +43,12 @@ export const APP_PAGES = [
     { title: "ETA Uyumsuzluğu", path: "/raporlar/eta-uyumsuzlugu" },
     { title: "Sefer Tamamlayan", path: "/raporlar/sefer-tamamlayan" },
     { title: "Bölgesel Analiz", path: "/raporlar/bolgesel-analiz" }, // 👈 yeni satır
+    // KPI & Raporlar (devam)
+    { title: "Araç ETA'ları", path: "/raporlar/arac-etalari" },
+    { title: "Boşta Araç", path: "/raporlar/bosta-arac" },
+    { title: "Pivot Tool", path: "/raporlar/pivot-tool" },
+    { title: "Proje Lokasyon Raporları", path: "/raporlar/proje-lokasyon-raporlari" },
+
 
     // Yönetim
     { title: "Yönetim Paneli", path: "/admin" },

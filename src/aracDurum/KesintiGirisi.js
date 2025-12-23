@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState, useLayoutEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
-// import * as XLSX from "xlsx"; // Hata veren XLSX importu kaldırıldı
-import * as ExcelJS from "exceljs"; // 👈 Yerine ExcelJS import edildi
+import * as ExcelJS from "exceljs";
 import { Helmet } from "react-helmet-async";
 import { useNavigate } from "react-router-dom";
 
@@ -34,10 +33,9 @@ import {
     DialogActions,
     Tooltip,
     Autocomplete,
-    Chip,
     Snackbar,
     Alert,
-    Divider, // <-- Kontrol edildi ve listenin sonunda bırakıldı
+    Divider,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 
@@ -114,7 +112,6 @@ function ScaleToFit({ children }) {
                 display: "grid",
                 justifyItems: "start",
                 alignItems: "start",
-                // Daha derin ve sofistike arka plan
                 background:
                     "radial-gradient(1200px 500px at 10% -10%, rgba(34,211,238,0.25), transparent 60%)," +
                     "radial-gradient(900px 400px at 90% 0%, rgba(139,92,246,0.30), transparent 70%)," +
@@ -166,14 +163,14 @@ const GRID_TR = {
 const theme = createTheme({
     palette: {
         mode: "dark",
-        primary: { main: "#8B5CF6" }, // Mor (Vibrant Purple)
-        secondary: { main: "#22D3EE" }, // Turkuaz (Cyan)
+        primary: { main: "#8B5CF6" },
+        secondary: { main: "#22D3EE" },
         background: {
-            default: "#0B1220", // Koyu mavi/lacivert arka plan
-            paper: alpha("#1E293B", 0.95), // Hafif daha açık, kadifemsi bir paper rengi
+            default: "#0B1220",
+            paper: alpha("#1E293B", 0.95),
         },
-        success: { main: "#10B981" }, // Zümrüt Yeşili
-        error: { main: "#F43F5E" }, // Gül Kırmızısı
+        success: { main: "#10B981" },
+        error: { main: "#F43F5E" },
         info: { main: "#3B82F6" },
         warning: { main: "#F59E0B" },
     },
@@ -192,7 +189,7 @@ const theme = createTheme({
                     borderRadius: "10px",
                 },
                 "*::-webkit-scrollbar-track": { backgroundColor: alpha("#1E293B", 0.7) },
-            }
+            },
         },
         MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
         MuiCard: {
@@ -201,11 +198,11 @@ const theme = createTheme({
                     boxShadow: "0 10px 30px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.05) inset",
                     backdropFilter: "blur(4px)",
                     backgroundColor: alpha("#1E293B", 0.9),
-                }
-            }
+                },
+            },
         },
         MuiButton: {
-            defaultProps: { size: 'small' },
+            defaultProps: { size: "small" },
             styleOverrides: {
                 root: {
                     borderRadius: 10,
@@ -215,7 +212,7 @@ const theme = createTheme({
                 },
                 outlined: {
                     border: "1px solid rgba(255,255,255,0.12)",
-                }
+                },
             },
         },
         MuiDialog: {
@@ -229,7 +226,7 @@ const theme = createTheme({
             },
         },
         MuiTextField: {
-            defaultProps: { variant: "outlined", size: 'small' },
+            defaultProps: { variant: "outlined", size: "small" },
             styleOverrides: {
                 root: {
                     "& .MuiOutlinedInput-root": {
@@ -238,7 +235,7 @@ const theme = createTheme({
                         "&:hover fieldset": { borderColor: `${alpha("#8B5CF6", 0.7)} !important` },
                     },
                     "& .MuiInputLabel-root.Mui-focused": { color: "#8B5CF6" },
-                }
+                },
             },
         },
         MuiDataGrid: {
@@ -260,14 +257,14 @@ const theme = createTheme({
                         backgroundColor: alpha("#8B5CF6", 0.15),
                     },
                 },
-            }
+            },
         },
     },
 });
 
 /* ===================== Helpers ===================== */
 const BOS_FORM = {
-    plaka_treyler: "",
+    plaka_treyler: "", // DB kolonu adı buysa kalsın; artık sadece PLAKA tutuyoruz
     kesinti_turu: "",
     neden: "",
     baslangic_tarihi: "",
@@ -276,65 +273,42 @@ const BOS_FORM = {
     aciklama: "",
 };
 
-const KESINTI_TURLERI = [
-    "Bakım", "Servis", "Arıza", "Kaza", "Bölgede İş Yok", "İş Başı", "İş Sonu"
-];
+const KESINTI_TURLERI = ["Bakım", "Servis", "Arıza", "Kaza", "Bölgede İş Yok", "İş Başı", "İş Sonu"];
 const KESINTI_NEDENLERI = ["Tedarikçi Kaynaklı", "Odak Kaynaklı"];
 
-const getMevcutKullanici = () =>
-    localStorage.getItem("kullanici") || "Bilinmeyen Kullanıcı";
+const getMevcutKullanici = () => localStorage.getItem("kullanici") || "Bilinmeyen Kullanıcı";
 
 const hesaplaGun = (start, end) => {
     if (!start || !end) return "";
-    const d1 = dayjs(start).startOf('day');
-    const d2 = dayjs(end).startOf('day');
-    const fark = d2.diff(d1, 'day');
-    return fark >= 0 ? fark + 1 : 0; // Başlangıç ve bitiş dahil
+    const d1 = dayjs(start).startOf("day");
+    const d2 = dayjs(end).startOf("day");
+    const fark = d2.diff(d1, "day");
+    return fark >= 0 ? fark + 1 : 0;
 };
 
-// SADECE BU YENİ BLOK KALMALI:
 const safeDateValueGetter = (arg) => {
     const v = arg?.value ?? arg;
     if (!v) return null;
-
-    // Yalnızca YYYY-MM-DD kısmını al
     const s = String(v).slice(0, 10);
-
-    // Tarihi "-" ile ayır
-    const parts = s.split('-');
-
-    // Eğer format YYYY-MM-DD değilse (örn: bozuk veri), null dön
-    if (parts.length !== 3 || isNaN(parseInt(parts[0])) || isNaN(parseInt(parts[1])) || isNaN(parseInt(parts[2]))) {
-        // Veya eski dayjs metodunu fallback olarak kullanabilirsiniz
+    const parts = s.split("-");
+    if (parts.length !== 3) {
         const d = dayjs(s);
         return d.isValid() ? d.toDate() : null;
     }
-
-    // Date.UTC(yıl, ayIndeksi (0-11), gün)
-    // Bu, tarihi YEREL SAATİNİZDE değil, doğrudan UTC 00:00:00 olarak oluşturur.
-    const utcDate = new Date(Date.UTC(
-        parseInt(parts[0], 10),
-        parseInt(parts[1], 10) - 1, // JavaScript'te aylar 0'dan başlar (Ocak=0)
-        parseInt(parts[2], 10)
-    ));
-
-    // Geçerlilik kontrolü
-    if (isNaN(utcDate.getTime())) {
-        return null;
-    }
-
-    // Artık bu Date nesnesi 2025-11-05T00:00:00Z'yi temsil ediyor.
-    // Excel bunu doğru (5 Kasım) olarak okuyacaktır.
+    const utcDate = new Date(
+        Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+    );
+    if (isNaN(utcDate.getTime())) return null;
     return utcDate;
 };
 
-// 👇 EKLENMESİ GEREKEN EKSİK FONKSİYON:
 const safeDateValueFormatter = (arg) => {
     const v = arg?.value ?? arg;
     if (!v) return "-";
     const d = dayjs(v);
     return d.isValid() ? d.format("DD.MM.YYYY") : "-";
 };
+
 /* ===================== Toolbar ===================== */
 function CustomToolbar({ onFilters, onExport, onRefresh, onReport }) {
     return (
@@ -369,7 +343,6 @@ function CustomToolbar({ onFilters, onExport, onRefresh, onReport }) {
             <Button variant="outlined" startIcon={<WarningIcon />} onClick={onReport}>
                 Rapor
             </Button>
-
         </GridToolbarContainer>
     );
 }
@@ -385,21 +358,17 @@ export default function KesintiGirisi() {
     const [filtreDrawer, setFiltreDrawer] = useState(false);
     const [raporOpen, setRaporOpen] = useState(false);
 
-    const [raporForm, setRaporForm] = useState({
-        ay: "",
-        plaka_treyler: "",
-    });
+    const [raporForm, setRaporForm] = useState({ ay: "", plaka_treyler: "" });
 
     const [raporSonuc, setRaporSonuc] = useState({
         toplamGun: 0,
         kesintiliGunler: [],
-        tumGunler: []
+        tumGunler: [],
     });
 
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
 
-    // form modu ve düzenlenen id
-    const [formMode, setFormMode] = useState("create"); // 'create' | 'edit'
+    const [formMode, setFormMode] = useState("create");
     const [editingId, setEditingId] = useState(null);
 
     const [filtreler, setFiltreler] = useState({
@@ -414,18 +383,12 @@ export default function KesintiGirisi() {
         ay: "",
     });
 
-    // Yetki Durumu
     const [permLoading, setPermLoading] = useState(true);
-    const [perms, setPerms] = useState({
-        canCreate: false,
-        canEdit: false,
-        canDelete: false,
-    });
+    const [perms, setPerms] = useState({ canCreate: false, canEdit: false, canDelete: false });
     const [loading, setLoading] = useState(false);
 
     const openSnack = (msg, severity = "success") => setSnack({ open: true, msg, severity });
 
-    /* ===================== Veri & Yetki Yükleme ===================== */
     useEffect(() => {
         verileriGetir();
         plakalarGetir();
@@ -433,10 +396,11 @@ export default function KesintiGirisi() {
             console.error("perm load error:", e);
             setPerms({ canCreate: false, canEdit: false, canDelete: false });
         });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     function coalesceOverride(overrideVal, roleVal) {
-        return (overrideVal === true || overrideVal === false) ? overrideVal : !!roleVal;
+        return overrideVal === true || overrideVal === false ? overrideVal : !!roleVal;
     }
 
     const looksLikeUUID = (s) =>
@@ -516,24 +480,27 @@ export default function KesintiGirisi() {
         setLoading(false);
     };
 
+    // ✅ SADECE PLAKA
     const plakalarGetir = async () => {
         const { data, error } = await supabase
             .from("plakalar")
-            .select("plaka, treyler")
+            .select("plaka")
             .or("statu.is.null,statu.neq.ÇIKARILDI");
+
         if (error) {
             console.error("Plakalar alınamadı:", error);
+            openSnack("Plakalar alınamadı: " + error.message, "error");
         } else {
             setPlakalar(data || []);
         }
     };
 
-    // Plaka Autocomplete seçenekleri
+    // ✅ Autocomplete seçenekleri sadece plaka
     const plakaOptions = useMemo(
         () =>
             (plakalar || [])
-                .map((p) => ({ label: `${(p.plaka || "").trim()} - ${(p.treyler || "").trim()}` }))
-                .filter((o) => o.label.trim() !== "-"),
+                .map((p) => ({ label: `${(p.plaka || "").trim()}` }))
+                .filter((o) => o.label.trim() !== ""),
         [plakalar]
     );
     const plakaOptionsSet = useMemo(() => new Set(plakaOptions.map((o) => o.label)), [plakaOptions]);
@@ -568,7 +535,7 @@ export default function KesintiGirisi() {
         });
     }, [kesintiler, filtreler]);
 
-    /* ===================== Form & CRUD Handlers ===================== */
+    /* ===================== Form & CRUD ===================== */
     const handleChange = (name, value) => {
         const next = { ...form, [name]: value };
         if (name === "baslangic_tarihi" || name === "bitis_tarihi") {
@@ -581,7 +548,6 @@ export default function KesintiGirisi() {
     const handleFormSubmit = async (e) => {
         e.preventDefault();
 
-        // Yetki kontrolü
         if (formMode === "create" && !perms.canCreate) {
             openSnack("Yeni kesinti ekleme yetkiniz yok.", "warning");
             return;
@@ -598,8 +564,9 @@ export default function KesintiGirisi() {
             return;
         }
 
+        // ✅ artık sadece plaka seçilecek
         if (!plakaOptionsSet.has(plaka_treyler)) {
-            openSnack("Plaka/treyler değeri listeden seçilmelidir.", "error");
+            openSnack("Plaka değeri listeden seçilmelidir.", "error");
             return;
         }
 
@@ -614,7 +581,7 @@ export default function KesintiGirisi() {
         let error = null;
 
         const payload = {
-            plaka_treyler,
+            plaka_treyler: String(plaka_treyler).trim(), // ✅ sadece plaka
             kesinti_turu,
             neden,
             baslangic_tarihi,
@@ -640,11 +607,9 @@ export default function KesintiGirisi() {
             return;
         }
 
-        // Plaka statüsünü güncelle
-        const [plaka, treyler] = (plaka_treyler || "-").split(" - ");
-
-        // Kesinti Bitiş Tarihi bugünden sonraysa statü KESİNTİDE olmalı.
-        const isCurrentOrFuture = dayjs(bitis_tarihi).isSameOrAfter(bugun, 'day');
+        // ✅ Plaka statüsü güncelle: sadece plaka ile
+        const plaka = String(plaka_treyler || "").trim();
+        const isCurrentOrFuture = dayjs(bitis_tarihi).isSameOrAfter(bugun, "day");
 
         await supabase
             .from("plakalar")
@@ -661,9 +626,7 @@ export default function KesintiGirisi() {
                         kesinti_bitis_tarihi: null,
                     }
             )
-            .eq("plaka", (plaka || "").trim())
-            .eq("treyler", (treyler || "").trim());
-
+            .eq("plaka", plaka);
 
         openSnack(formMode === "edit" ? "Kayıt güncellendi." : "Yeni kayıt eklendi.", "success");
         setForm(BOS_FORM);
@@ -711,23 +674,22 @@ export default function KesintiGirisi() {
             return;
         }
 
-        // Plaka statüsünü sıfırla/güncelle
-        const [plaka, treyler] = (silinecek.plaka_treyler || "-").split(" - ");
+        // ✅ Plaka statüsünü reset: sadece plaka
+        const plaka = String(silinecek.plaka_treyler || "").trim();
         await supabase
             .from("plakalar")
             .update({
-                statu: "Aktif", // Basitçe Aktif'e döner
+                statu: "Aktif",
                 kesinti_baslangic_tarihi: null,
                 kesinti_bitis_tarihi: null,
             })
-            .eq("plaka", (plaka || "").trim())
-            .eq("treyler", (treyler || "").trim());
+            .eq("plaka", plaka);
 
         openSnack("Kayıt başarıyla silindi.", "info");
         verileriGetir();
     };
 
-    // ExcelJS ile aktarımı gerçekleştiren fonksiyon
+    /* ===================== Excel Export ===================== */
     const handleExportExcel = async () => {
         if (filtrelenmisKesintiler.length === 0) {
             openSnack("Aktarılacak filtrelenmiş kayıt bulunamadı.", "warning");
@@ -743,58 +705,51 @@ export default function KesintiGirisi() {
 
         const worksheet = workbook.addWorksheet("Kesinti Kayıtları");
 
-        // Sütun Tanımları
-        const columns = [
+        worksheet.columns = [
             { header: "Plaka", key: "plaka", width: 18 },
             { header: "Tür", key: "tur", width: 15 },
             { header: "Neden", key: "neden", width: 18 },
-            { header: "Başlangıç", key: "baslangic", width: 15, style: { numFmt: 'dd.mm.yyyy' } },
-            { header: "Bitiş", key: "bitis", width: 15, style: { numFmt: 'dd.mm.yyyy' } },
+            { header: "Başlangıç", key: "baslangic", width: 15, style: { numFmt: "dd.mm.yyyy" } },
+            { header: "Bitiş", key: "bitis", width: 15, style: { numFmt: "dd.mm.yyyy" } },
             { header: "Gün", key: "gun", width: 10 },
             { header: "Açıklama", key: "aciklama", width: 40 },
             { header: "Ekleyen", key: "ekleyen", width: 15 },
-            { header: "Eklenme Tarihi", key: "eklenme_tarihi", width: 22, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
+            { header: "Eklenme Tarihi", key: "eklenme_tarihi", width: 22, style: { numFmt: "dd.mm.yyyy hh:mm" } },
         ];
-        worksheet.columns = columns;
 
-        // Verileri Satırlara Ekleme
         const rows = filtrelenmisKesintiler.map((k) => ({
             plaka: k.plaka_treyler || "-",
             tur: k.kesinti_turu || "-",
             neden: k.neden || "-",
-            baslangic: safeDateValueGetter(k.baslangic_tarihi), // Date nesnesi olarak gönder
-            bitis: safeDateValueGetter(k.bitis_tarihi), // Date nesnesi olarak gönder
+            baslangic: safeDateValueGetter(k.baslangic_tarihi),
+            bitis: safeDateValueGetter(k.bitis_tarihi),
             gun: k.gun_sayisi || 0,
             aciklama: k.aciklama || "-",
             ekleyen: k.ekleyen_kullanici || "-",
-            eklenme_tarihi: safeDateValueGetter(k.eklenme_tarihi), // Date nesnesi olarak gönder
+            eklenme_tarihi: safeDateValueGetter(k.eklenme_tarihi),
         }));
 
         worksheet.addRows(rows);
 
-        // Header Style
         worksheet.getRow(1).eachCell((cell) => {
-            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-            cell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: 'FF8B5CF6' } // Primary color
-            };
-            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF8B5CF6" } };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
             cell.border = {
-                top: { style: 'thin' },
-                left: { style: 'thin' },
-                bottom: { style: 'thin' },
-                right: { style: 'thin' }
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
             };
         });
 
-        // Excel dosyasını kaydetme
         try {
             const buffer = await workbook.xlsx.writeBuffer();
-            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const blob = new Blob([buffer], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            });
             const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
+            const a = document.createElement("a");
             a.href = url;
             a.download = `kesinti_kayitlari_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`;
             a.click();
@@ -829,7 +784,7 @@ export default function KesintiGirisi() {
             valueGetter: safeDateValueGetter,
             valueFormatter: safeDateValueFormatter,
         },
-        { field: "gun_sayisi", headerName: "GÜN", width: 90, type: 'number' },
+        { field: "gun_sayisi", headerName: "GÜN", width: 90, type: "number" },
         { field: "aciklama", headerName: "AÇIKLAMA", flex: 1.2, minWidth: 220 },
         { field: "ekleyen_kullanici", headerName: "EKLEYEN", flex: 1, minWidth: 140 },
         {
@@ -838,30 +793,20 @@ export default function KesintiGirisi() {
             width: 120,
             sortable: false,
             filterable: false,
-            align: 'center',
-            headerAlign: 'center',
+            align: "center",
+            headerAlign: "center",
             renderCell: (params) => (
                 <Stack direction="row" spacing={0.5}>
                     <Tooltip title={perms.canEdit ? "Düzenle" : "Yetkiniz yok"}>
                         <span>
-                            <IconButton
-                                size="small"
-                                color="primary"
-                                onClick={() => handleDuzenle(params.row)}
-                                disabled={!perms.canEdit}
-                            >
+                            <IconButton size="small" color="primary" onClick={() => handleDuzenle(params.row)} disabled={!perms.canEdit}>
                                 <EditIcon fontSize="small" />
                             </IconButton>
                         </span>
                     </Tooltip>
                     <Tooltip title={perms.canDelete ? "Sil" : "Yetkiniz yok"}>
                         <span>
-                            <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleSil(params.row.id)}
-                                disabled={!perms.canDelete}
-                            >
+                            <IconButton size="small" color="error" onClick={() => handleSil(params.row.id)} disabled={!perms.canDelete}>
                                 <DeleteIcon fontSize="small" />
                             </IconButton>
                         </span>
@@ -919,18 +864,12 @@ export default function KesintiGirisi() {
 
         sheet.getRow(1).eachCell((c) => {
             c.font = { bold: true, color: { argb: "FFFFFFFF" } };
-            c.fill = {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FF8B5CF6" },
-            };
+            c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF8B5CF6" } };
             c.alignment = { horizontal: "center" };
         });
 
         const buffer = await workbook.xlsx.writeBuffer();
-        const blob = new Blob([buffer], {
-            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        });
+        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
@@ -946,23 +885,14 @@ export default function KesintiGirisi() {
             <CssBaseline />
             <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <ScaleToFit>
-                    <Container
-                        maxWidth={false}
-                        disableGutters
-                        sx={{ width: 1920, height: 1080, mx: "auto", p: 3, boxSizing: "border-box" }}
-                    >
+                    <Container maxWidth={false} disableGutters sx={{ width: 1920, height: 1080, mx: "auto", p: 3, boxSizing: "border-box" }}>
                         <Helmet>
                             <title>KESİNTİ GİRİŞLERİ | ODYSSEY</title>
                         </Helmet>
 
                         <Stack spacing={3} sx={{ height: "100%", minHeight: 0 }}>
                             {/* Header + Actions */}
-                            <Stack
-                                direction={{ xs: "column", md: "row" }}
-                                alignItems={{ xs: "flex-start", md: "center" }}
-                                justifyContent="space-between"
-                                gap={2}
-                            >
+                            <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "flex-start", md: "center" }} justifyContent="space-between" gap={2}>
                                 <Stack>
                                     <Typography
                                         variant="h4"
@@ -1019,11 +949,7 @@ export default function KesintiGirisi() {
                                     { label: "Toplam Kesinti Kaydı", value: toplam, color: "primary" },
                                     { label: `Bu Ay Kesinti (Kayıt)`, value: buAy, color: "secondary" },
                                     { label: "Gösterilen Kayıt", value: filtrelenmisKesintiler.length, color: "success" },
-                                    {
-                                        label: "Yetki Durumu",
-                                        value: permLoading ? "Yükleniyor..." : "Tamam",
-                                        color: permLoading ? "warning" : "info"
-                                    },
+                                    { label: "Yetki Durumu", value: permLoading ? "Yükleniyor..." : "Tamam", color: permLoading ? "warning" : "info" },
                                 ].map((kpi, idx) => (
                                     <Grid item xs={12} sm={6} md={3} key={idx}>
                                         <Card sx={{ borderRadius: 3, height: "100%", minWidth: 200 }}>
@@ -1032,7 +958,7 @@ export default function KesintiGirisi() {
                                                     <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
                                                         {kpi.label}
                                                     </Typography>
-                                                    <Badge color={kpi.color} variant="dot" overlap="circular" sx={{ '& .MuiBadge-dot': { width: 10, height: 10, borderRadius: '50%' } }} />
+                                                    <Badge color={kpi.color} variant="dot" overlap="circular" sx={{ "& .MuiBadge-dot": { width: 10, height: 10, borderRadius: "50%" } }} />
                                                 </Stack>
                                                 <Typography variant="h4" mt={0.5} fontWeight={800} color={`${kpi.color}.main`}>
                                                     {kpi.value}
@@ -1046,14 +972,7 @@ export default function KesintiGirisi() {
 
                             {/* Grid */}
                             <Box sx={{ flexGrow: 1, minHeight: 0 }}>
-                                <Paper
-                                    sx={{
-                                        height: 750,
-                                        borderRadius: 3,
-                                        border: "1px solid rgba(255,255,255,0.12)",
-                                        overflow: 'hidden',
-                                    }}
-                                >
+                                <Paper sx={{ height: 750, borderRadius: 3, border: "1px solid rgba(255,255,255,0.12)", overflow: "hidden" }}>
                                     {(loading || permLoading) && <LinearProgress color="secondary" />}
 
                                     <Box sx={{ height: "100%", width: "100%", minHeight: 0 }}>
@@ -1063,7 +982,6 @@ export default function KesintiGirisi() {
                                             getRowId={(r) => r.id}
                                             loading={loading || permLoading}
                                             disableRowSelectionOnClick
-                                            pagination={false}
                                             hideFooter
                                             density="compact"
                                             rowHeight={40}
@@ -1078,15 +996,13 @@ export default function KesintiGirisi() {
                                                             verileriGetir();
                                                             loadPermissions().catch(() => { });
                                                         }}
-                                                        onReport={() => setRaporOpen(true)}   // ✔ DOĞRU OLAN
+                                                        onReport={() => setRaporOpen(true)}
                                                     />
                                                 ),
                                             }}
                                             sx={{
                                                 border: "none",
-                                                '& .MuiDataGrid-virtualScroller': {
-                                                    overflowX: 'auto',
-                                                },
+                                                "& .MuiDataGrid-virtualScroller": { overflowX: "auto" },
                                             }}
                                         />
                                     </Box>
@@ -1112,7 +1028,9 @@ export default function KesintiGirisi() {
                             }}
                         >
                             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-                                <Typography variant="h5" fontWeight={700} color="secondary.main">Detaylı Filtreler</Typography>
+                                <Typography variant="h5" fontWeight={700} color="secondary.main">
+                                    Detaylı Filtreler
+                                </Typography>
                                 <IconButton onClick={() => setFiltreDrawer(false)}>
                                     <CloseIcon />
                                 </IconButton>
@@ -1123,15 +1041,9 @@ export default function KesintiGirisi() {
                                 <Autocomplete
                                     size="small"
                                     options={plakaOptions}
-                                    value={
-                                        filtreler.plaka_treyler && plakaOptionsSet.has(filtreler.plaka_treyler)
-                                            ? { label: filtreler.plaka_treyler }
-                                            : null
-                                    }
-                                    onChange={(_, val) =>
-                                        setFiltreler((p) => ({ ...p, plaka_treyler: val?.label || "" }))
-                                    }
-                                    renderInput={(params) => <TextField {...params} label="Plaka - Treyler" fullWidth />}
+                                    value={filtreler.plaka_treyler && plakaOptionsSet.has(filtreler.plaka_treyler) ? { label: filtreler.plaka_treyler } : null}
+                                    onChange={(_, val) => setFiltreler((p) => ({ ...p, plaka_treyler: val?.label || "" }))}
+                                    renderInput={(params) => <TextField {...params} label="Plaka" fullWidth />}
                                     autoHighlight
                                     disablePortal
                                     isOptionEqualToValue={(o, v) => o.label === v.label}
@@ -1139,94 +1051,64 @@ export default function KesintiGirisi() {
 
                                 <FormControl fullWidth size="small">
                                     <InputLabel>Tür</InputLabel>
-                                    <Select
-                                        label="Tür"
-                                        value={filtreler.kesinti_turu}
-                                        onChange={(e) =>
-                                            setFiltreler((p) => ({ ...p, kesinti_turu: e.target.value }))
-                                        }
-                                    >
+                                    <Select label="Tür" value={filtreler.kesinti_turu} onChange={(e) => setFiltreler((p) => ({ ...p, kesinti_turu: e.target.value }))}>
                                         <MenuItem value="">(Hepsi)</MenuItem>
-                                        {KESINTI_TURLERI.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+                                        {KESINTI_TURLERI.map((t) => (
+                                            <MenuItem key={t} value={t}>
+                                                {t}
+                                            </MenuItem>
+                                        ))}
                                     </Select>
                                 </FormControl>
 
                                 <FormControl fullWidth size="small">
                                     <InputLabel>Neden</InputLabel>
-                                    <Select
-                                        label="Neden"
-                                        value={filtreler.neden}
-                                        onChange={(e) => setFiltreler((p) => ({ ...p, neden: e.target.value }))}
-                                    >
+                                    <Select label="Neden" value={filtreler.neden} onChange={(e) => setFiltreler((p) => ({ ...p, neden: e.target.value }))}>
                                         <MenuItem value="">(Hepsi)</MenuItem>
-                                        {KESINTI_NEDENLERI.map(n => <MenuItem key={n} value={n}>{n}</MenuItem>)}
+                                        {KESINTI_NEDENLERI.map((n) => (
+                                            <MenuItem key={n} value={n}>
+                                                {n}
+                                            </MenuItem>
+                                        ))}
                                     </Select>
                                 </FormControl>
 
-                                <TextField
-                                    label="Açıklama İçerik"
-                                    value={filtreler.aciklama}
-                                    onChange={(e) => setFiltreler((p) => ({ ...p, aciklama: e.target.value }))}
-                                    fullWidth
-                                />
+                                <TextField label="Açıklama İçerik" value={filtreler.aciklama} onChange={(e) => setFiltreler((p) => ({ ...p, aciklama: e.target.value }))} fullWidth />
 
                                 <TextField
                                     label="Ekleyen Kullanıcı"
                                     value={filtreler.ekleyen_kullanici}
-                                    onChange={(e) =>
-                                        setFiltreler((p) => ({ ...p, ekleyen_kullanici: e.target.value }))
-                                    }
+                                    onChange={(e) => setFiltreler((p) => ({ ...p, ekleyen_kullanici: e.target.value }))}
                                     fullWidth
                                 />
 
                                 <DatePicker
                                     label="Başlangıç Tarihi"
                                     value={filtreler.baslangic_tarihi ? dayjs(filtreler.baslangic_tarihi) : null}
-                                    onChange={(d) =>
-                                        setFiltreler((p) => ({ ...p, baslangic_tarihi: d ? d.format("YYYY-MM-DD") : "" }))
-                                    }
+                                    onChange={(d) => setFiltreler((p) => ({ ...p, baslangic_tarihi: d ? d.format("YYYY-MM-DD") : "" }))}
                                     slotProps={{ textField: { fullWidth: true, size: "small" } }}
                                 />
 
                                 <DatePicker
                                     label="Bitiş Tarihi"
                                     value={filtreler.bitis_tarihi ? dayjs(filtreler.bitis_tarihi) : null}
-                                    onChange={(d) =>
-                                        setFiltreler((p) => ({ ...p, bitis_tarihi: d ? d.format("YYYY-MM-DD") : "" }))
-                                    }
+                                    onChange={(d) => setFiltreler((p) => ({ ...p, bitis_tarihi: d ? d.format("YYYY-MM-DD") : "" }))}
                                     slotProps={{ textField: { fullWidth: true, size: "small" } }}
                                 />
 
                                 <DatePicker
                                     label="Ay (Başlangıç Ayı)"
-                                    views={['month', 'year']}
+                                    views={["month", "year"]}
                                     format="MM/YYYY"
                                     value={filtreler.ay ? dayjs(filtreler.ay) : null}
-                                    onChange={(d) =>
-                                        setFiltreler((p) => ({ ...p, ay: d ? d.format("YYYY-MM") : "" }))
-                                    }
+                                    onChange={(d) => setFiltreler((p) => ({ ...p, ay: d ? d.format("YYYY-MM") : "" }))}
                                     slotProps={{ textField: { fullWidth: true, size: "small", helperText: "Başlangıç tarihinin ayına göre filtreler" } }}
                                 />
 
-
-                                <TextField
-                                    type="number"
-                                    label="Gün Sayısı"
-                                    value={filtreler.gun_sayisi}
-                                    onChange={(e) => setFiltreler((p) => ({ ...p, gun_sayisi: e.target.value }))}
-                                    fullWidth
-                                />
+                                <TextField type="number" label="Gün Sayısı" value={filtreler.gun_sayisi} onChange={(e) => setFiltreler((p) => ({ ...p, gun_sayisi: e.target.value }))} fullWidth />
 
                                 <Stack direction="row" spacing={1.5} sx={{ pt: 1 }}>
-                                    <Button
-                                        fullWidth
-                                        variant="outlined"
-                                        color="error"
-                                        size="large"
-                                        onClick={() =>
-                                            setFiltreler({ ...BOS_FORM, ekleyen_kullanici: "", ay: "" })
-                                        }
-                                    >
+                                    <Button fullWidth variant="outlined" color="error" size="large" onClick={() => setFiltreler({ ...BOS_FORM, ekleyen_kullanici: "", ay: "" })}>
                                         Temizle
                                     </Button>
                                     <Button fullWidth variant="contained" color="primary" size="large" onClick={() => setFiltreDrawer(false)}>
@@ -1235,6 +1117,7 @@ export default function KesintiGirisi() {
                                 </Stack>
                             </Stack>
                         </Drawer>
+
                         {/* Rapor Drawer */}
                         <Drawer
                             anchor="right"
@@ -1246,9 +1129,9 @@ export default function KesintiGirisi() {
                                         width: 500,
                                         backgroundColor: "#171E2D",
                                         color: "text.primary",
-                                        p: 3
-                                    }
-                                }
+                                        p: 3,
+                                    },
+                                },
                             }}
                         >
                             <Typography variant="h5" fontWeight={700} color="secondary.main">
@@ -1261,28 +1144,20 @@ export default function KesintiGirisi() {
                                 label="Ay Seç"
                                 views={["month", "year"]}
                                 value={raporForm.ay ? dayjs(raporForm.ay) : null}
-                                onChange={(d) =>
-                                    setRaporForm(p => ({ ...p, ay: d ? d.format("YYYY-MM") : "" }))
-                                }
+                                onChange={(d) => setRaporForm((p) => ({ ...p, ay: d ? d.format("YYYY-MM") : "" }))}
                                 slotProps={{ textField: { fullWidth: true, size: "small" } }}
                             />
 
                             <Autocomplete
                                 options={plakaOptions}
                                 value={raporForm.plaka_treyler ? { label: raporForm.plaka_treyler } : null}
-                                onChange={(_, v) =>
-                                    setRaporForm(p => ({ ...p, plaka_treyler: v?.label || "" }))
-                                }
-                                renderInput={(params) => <TextField {...params} label="Plaka - Treyler" fullWidth />}
+                                onChange={(_, v) => setRaporForm((p) => ({ ...p, plaka_treyler: v?.label || "" }))}
+                                renderInput={(params) => <TextField {...params} label="Plaka" fullWidth />}
                                 sx={{ mt: 2 }}
+                                isOptionEqualToValue={(o, v) => o.label === v.label}
                             />
 
-                            <Button
-                                fullWidth
-                                variant="contained"
-                                sx={{ mt: 3 }}
-                                onClick={handleRaporExcel}
-                            >
+                            <Button fullWidth variant="contained" sx={{ mt: 3 }} onClick={handleRaporExcel}>
                                 Rapor Oluştur
                             </Button>
 
@@ -1301,7 +1176,6 @@ export default function KesintiGirisi() {
                                     <Box sx={{ mt: 1, maxHeight: 400, overflowY: "auto" }}>
                                         {raporSonuc.tumGunler.map((g) => {
                                             const kesintiVar = raporSonuc.kesintiliGunler.includes(g);
-
                                             return (
                                                 <Box
                                                     key={g}
@@ -1310,14 +1184,11 @@ export default function KesintiGirisi() {
                                                         borderRadius: 2,
                                                         my: 0.5,
                                                         backgroundColor: kesintiVar ? "#8B5CF633" : "#1E293B",
-                                                        border: kesintiVar
-                                                            ? "1px solid #8B5CF6"
-                                                            : "1px solid transparent"
+                                                        border: kesintiVar ? "1px solid #8B5CF6" : "1px solid transparent",
                                                     }}
                                                 >
                                                     <Typography>
-                                                        {dayjs(g).format("DD.MM.YYYY")} —{" "}
-                                                        {kesintiVar ? "🟥 Kesintili Gün" : "🟩 Normal Gün"}
+                                                        {dayjs(g).format("DD.MM.YYYY")} — {kesintiVar ? "🟥 Kesintili Gün" : "🟩 Normal Gün"}
                                                     </Typography>
                                                 </Box>
                                             );
@@ -1371,19 +1242,13 @@ export default function KesintiGirisi() {
                                     p: 3,
                                 }}
                             >
-                                {/* Plaka - Treyler */}
+                                {/* Plaka */}
                                 <Autocomplete
                                     options={plakaOptions}
                                     value={form.plaka_treyler ? { label: form.plaka_treyler } : null}
                                     onChange={(_, val) => handleChange("plaka_treyler", val?.label || "")}
                                     renderInput={(params) => (
-                                        <TextField
-                                            {...params}
-                                            label="Plaka - Treyler *"
-                                            placeholder="Örn: 34 ABC 123 - T123"
-                                            required
-                                            fullWidth
-                                        />
+                                        <TextField {...params} label="Plaka *" placeholder="Örn: 34ABC123" required fullWidth />
                                     )}
                                     autoHighlight
                                     openOnFocus
@@ -1395,26 +1260,24 @@ export default function KesintiGirisi() {
                                 {/* Kesinti Türü */}
                                 <FormControl required fullWidth>
                                     <InputLabel>Kesinti Türü *</InputLabel>
-                                    <Select
-                                        label="Kesinti Türü *"
-                                        value={form.kesinti_turu}
-                                        onChange={(e) => handleChange("kesinti_turu", e.target.value)}
-                                        size="small"
-                                    >
-                                        {KESINTI_TURLERI.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+                                    <Select label="Kesinti Türü *" value={form.kesinti_turu} onChange={(e) => handleChange("kesinti_turu", e.target.value)} size="small">
+                                        {KESINTI_TURLERI.map((t) => (
+                                            <MenuItem key={t} value={t}>
+                                                {t}
+                                            </MenuItem>
+                                        ))}
                                     </Select>
                                 </FormControl>
 
                                 {/* Kesinti Nedeni */}
                                 <FormControl required fullWidth>
                                     <InputLabel>Kesinti Nedeni *</InputLabel>
-                                    <Select
-                                        label="Kesinti Nedeni *"
-                                        value={form.neden}
-                                        onChange={(e) => handleChange("neden", e.target.value)}
-                                        size="small"
-                                    >
-                                        {KESINTI_NEDENLERI.map(n => <MenuItem key={n} value={n}>{n}</MenuItem>)}
+                                    <Select label="Kesinti Nedeni *" value={form.neden} onChange={(e) => handleChange("neden", e.target.value)} size="small">
+                                        {KESINTI_NEDENLERI.map((n) => (
+                                            <MenuItem key={n} value={n}>
+                                                {n}
+                                            </MenuItem>
+                                        ))}
                                     </Select>
                                 </FormControl>
 
@@ -1440,10 +1303,10 @@ export default function KesintiGirisi() {
                                     required
                                 />
 
-                                {/* Gün Sayısı (Disabled) */}
+                                {/* Gün Sayısı */}
                                 <TextField label="Gün Sayısı" value={form.gun_sayisi || 0} fullWidth disabled />
 
-                                {/* Açıklama (Geniş alan) */}
+                                {/* Açıklama */}
                                 <TextField
                                     label="Açıklama"
                                     value={form.aciklama}
@@ -1456,13 +1319,7 @@ export default function KesintiGirisi() {
                                 />
                             </DialogContent>
 
-                            <DialogActions
-                                sx={{
-                                    p: 3,
-                                    justifyContent: 'flex-end',
-                                    borderTop: "1px solid rgba(255,255,255,0.1)",
-                                }}
-                            >
+                            <DialogActions sx={{ p: 3, justifyContent: "flex-end", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
                                 <Button
                                     variant="text"
                                     onClick={() => {
@@ -1474,35 +1331,23 @@ export default function KesintiGirisi() {
                                 >
                                     Kapat
                                 </Button>
-                                <Button
-                                    variant="contained"
-                                    onClick={handleFormSubmit}
-                                    size="large"
-                                    color="primary"
-                                    sx={{ px: 4, py: 1.5 }}
-                                >
+                                <Button variant="contained" onClick={handleFormSubmit} size="large" color="primary" sx={{ px: 4, py: 1.5 }}>
                                     {formMode === "edit" ? "GÜNCELLE" : "KAYDET"}
                                 </Button>
                             </DialogActions>
                         </Dialog>
 
-                        {/* Snackbar for Notifications */}
+                        {/* Snackbar */}
                         <Snackbar
                             open={snack.open}
                             autoHideDuration={3000}
                             onClose={() => setSnack((s) => ({ ...s, open: false }))}
                             anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                         >
-                            <Alert
-                                onClose={() => setSnack((s) => ({ ...s, open: false }))}
-                                severity={snack.severity}
-                                variant="filled"
-                                sx={{ width: "100%", borderRadius: 2 }}
-                            >
+                            <Alert onClose={() => setSnack((s) => ({ ...s, open: false }))} severity={snack.severity} variant="filled" sx={{ width: "100%", borderRadius: 2 }}>
                                 {snack.msg}
                             </Alert>
                         </Snackbar>
-
                     </Container>
                 </ScaleToFit>
             </LocalizationProvider>

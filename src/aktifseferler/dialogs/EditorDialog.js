@@ -63,6 +63,7 @@ function toLocalISOString(d) {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 }
 function isISODateTimeValid(isoString) {
+    if (!isoString) return false;
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(isoString)) return false;
     const d = new Date(isoString);
     return !isNaN(d.getTime());
@@ -82,10 +83,6 @@ export const fromISOToCombined = (raw) => {
     return d ? (t ? `${d} ${t}` : d) : "";
 };
 
-
-// =================================================================
-// DateTimeSingleField
-// =================================================================
 // =================================================================
 // DateTimeSingleField
 // =================================================================
@@ -108,6 +105,7 @@ function DateTimeSingleField({
         if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
             setText(fromISOToCombined(value));
         } else {
+            // ISO değilse UI'da aynen göster (ama state'e ISO olmayan basmıyoruz)
             setText(value);
         }
     }, [value]);
@@ -118,6 +116,7 @@ function DateTimeSingleField({
         const masked = formatFromDigits(digs);
         setText(masked);
 
+        // ✅ Tamamlanınca ISO üret
         if (digs.length === 12) {
             const dd = parseInt(digs.slice(0, 2), 10);
             const MM = parseInt(digs.slice(2, 4), 10);
@@ -127,43 +126,37 @@ function DateTimeSingleField({
 
             const dt = new Date(yyyy, MM - 1, dd, HH, mm);
             if (!isNaN(dt.getTime())) {
-                onChange(toLocalISOString(dt));
+                onChange(toLocalISOString(dt)); // ✅ sadece ISO
                 return;
             }
         }
-        onChange(masked);
+
+        // ✅ Yarım/eksik girişte parent state'e ISO olmayan metin basma
+        onChange("");
     }
 
-    // >>> YENİ: Boşken tıklandığında / focus olduğunda o anki tarih-saatle doldur
+    // ✅ Boşken focus/click olunca "şimdi" (ISO) doldur
     function handleAutoFillNow() {
         if (disabled) return;
 
         const digs = normalizeFormattedToDigits(text);
-        // İçerikte zaten bir şey varsa dokunma
         if (digs.length > 0) return;
 
         const now = new Date();
+        const iso = toLocalISOString(now);
 
-        const pad = (n) => String(n).padStart(2, "0");
-        const dd = pad(now.getDate());
-        const MM = pad(now.getMonth() + 1);
-        const yyyy = now.getFullYear();
-
-        // SADECE TARİH (kullanıcı saati kendisi girecek)
-        const masked = `${dd}.${MM}.${yyyy}`;
-
-        // Inputta sadece tarihi göster
-        setText(masked);
-
-        // Parent'a da sadece tarihi gönder (ISO DEĞİL!)
-        onChange(masked);
+        setText(fromISOToCombined(iso)); // inputta gg.aa.yyyy ss:dd
+        onChange(iso);                   // parent'a ISO
     }
-    // <<< YENİ
 
     const digs = normalizeFormattedToDigits(text);
     const complete = digs.length === 12;
     const { dd, MM, yyyy, HH, mm } = validateParts(
-        digs.slice(0, 2), digs.slice(2, 4), digs.slice(4, 8), digs.slice(8, 10), digs.slice(10, 12)
+        digs.slice(0, 2),
+        digs.slice(2, 4),
+        digs.slice(4, 8),
+        digs.slice(8, 10),
+        digs.slice(10, 12)
     );
     const isValid = complete && !!dd && !!MM && !!yyyy && !!HH && !!mm;
     const showError = touched && !isValid && (required || digs.length > 0);
@@ -175,7 +168,6 @@ function DateTimeSingleField({
             value={text}
             onChange={handleChange}
             onBlur={() => setTouched(true)}
-            // YENİ: focus veya tıklamada otomatik doldur
             onFocus={handleAutoFillNow}
             onClick={handleAutoFillNow}
             placeholder="gg.aa.yyyy ss:dd"
@@ -193,14 +185,9 @@ function DateTimeSingleField({
     );
 }
 
-
 /* ----------------------------------------------------------------------------- 
     Dialog Yardımcıları 
 ----------------------------------------------------------------------------- */
-
-/** * GÜNCELLEME ZAMANINA +3 saat kayması EKLEYEN fonksiyon (13:23 -> 16:23)
- * UTC saatini yerel saati olarak gösterir.
- */
 function fromISOTooltipFixed(raw) {
     if (!raw) return "";
 
@@ -210,7 +197,6 @@ function fromISOTooltipFixed(raw) {
 
     let [y, mo, dd, hh, mi] = m.map(Number).slice(1);
 
-    // YALNIZCA BURADA 3 SAAT EKLEME YAPILIYOR (13:23 -> 16:23)
     let totalMinutes = (hh * 60) + mi + (3 * 60);
 
     const carryHours = Math.floor(totalMinutes / 60);
@@ -228,17 +214,13 @@ function fromISOTooltipFixed(raw) {
     }
 
     const pad = (n) => String(n).padStart(2, "0");
-
     return `${pad(newHH)}:${pad(newMI)} ${pad(dd)}.${pad(mo)}`;
 }
 
-
-/** * Alan Altı için gerekli bilgiyi hazırlar ve JSX Adornment'ı döndürür */
 function createFieldUpdateInfoText(row, fieldName, COLORS) {
     const logsKey = `${fieldName}_logs`;
     const logs = row[logsKey];
 
-    // Log yoksa görünmesin
     if (!Array.isArray(logs) || logs.length === 0) return null;
 
     return (
@@ -289,31 +271,22 @@ function createFieldUpdateInfoText(row, fieldName, COLORS) {
 }
 
 /* ----------------------------------------------------------------------------- 
-    YENİ DOĞRULAMA YARDIMCILARI 
+    DOĞRULAMA
 ----------------------------------------------------------------------------- */
-
-/**
- * ISO tarih/saat dizesini (örn: "2025-05-13T13:13") karşılaştırma için milisaniye cinsinden sayıya çevirir.
- * Geçersizse NaN döndürür.
- */
 function toMoment(isoString) {
     if (!isISODateTimeValid(isoString)) return NaN;
-    // Yıl, ay, gün, saat, dakika
     const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
     if (!match) return NaN;
     const [, y, m, d, h, mi] = match.map(Number);
-    // Date objesi oluştururken yerel saat dilimini kullanır
     return new Date(y, m - 1, d, h, mi).getTime();
 }
 
 /**
- * Detay satırlarındaki sıralamayı ve yıl kısıtlamasını kontrol eder.
- * @returns {Array<{type: 'sequence'|'old_year', row: number, message: string}>} Hata listesi
+ * ✅ minYear parametreli: "geçmiş yıl" kontrolü seferin yılına göre yapılır.
  */
-function getValidationErrors(detailRows) {
+function getValidationErrors(detailRows, minYear) {
     const errors = [];
-    // Anlık yılı alıyoruz.
-    const currentYear = new Date().getFullYear();
+    const yearFloor = Number.isFinite(minYear) ? minYear : new Date().getFullYear();
 
     for (let i = 0; i < detailRows.length; i++) {
         const row = detailRows[i];
@@ -331,7 +304,7 @@ function getValidationErrors(detailRows) {
             teslim_cikis: "Teslim Çıkış",
         };
 
-        // 1. Sıralama Kısıtlamaları (Bir alan kendisinden önce gelenden küçük olamaz)
+        // 1) Sıralama
         for (let j = 1; j < fields.length; j++) {
             const currentField = fields[j];
             const prevField = fields[j - 1];
@@ -339,35 +312,27 @@ function getValidationErrors(detailRows) {
             const currentMoment = moments[currentField];
             const prevMoment = moments[prevField];
 
-            // Her iki alan da doluysa ve sıralama bozuksa
             if (!isNaN(currentMoment) && !isNaN(prevMoment) && currentMoment < prevMoment) {
                 errors.push({
                     type: "sequence",
                     row: i + 1,
                     message: `${i + 1}. Satır: **${fieldLabels[currentField]}** tarihi **${fieldLabels[prevField]}** tarihinden küçük olamaz.`,
                 });
-                // Bir satırda birden fazla sıralama hatası olabilir ama bir tane bulduğumuzda uyarmak yeterli.
-                // Ancak, biz tüm sıralama hatalarını kontrol etmek istiyoruz, bu yüzden break'i kaldırıyorum.
-                // Bu kodda her alan bir öncekini kontrol ettiğinden, döngüyü tamamen kırmadan devam edelim.
-                // Eğer "Yükleme Çıkış" < "Yükleme Giriş" ise, döngü sonuna kadar devam etsin.
             }
         }
 
-        // 2. Yıl Kısıtlaması (Girilen yıl mevcut yıldan küçük olamaz)
-        fields.forEach(field => {
+        // 2) Yıl kısıtı: year < yearFloor olamaz
+        fields.forEach((field) => {
             const isoString = row[field];
             if (isISODateTimeValid(isoString)) {
-                const yearMatch = isoString.match(/^(\d{4})/);
-                if (yearMatch) {
-                    const year = parseInt(yearMatch[1], 10);
-                    if (year < currentYear) {
-                        errors.push({
-                            type: "old_year",
-                            row: i + 1,
-                            field: fieldLabels[field],
-                            message: `${i + 1}. Satır: **${fieldLabels[field]}** yılı (${year}) mevcut yıl (${currentYear}) veya daha büyük olmalıdır.`,
-                        });
-                    }
+                const year = parseInt(isoString.slice(0, 4), 10);
+                if (year < yearFloor) {
+                    errors.push({
+                        type: "old_year",
+                        row: i + 1,
+                        field: fieldLabels[field],
+                        message: `${i + 1}. Satır: **${fieldLabels[field]}** yılı (${year}) en az ${yearFloor} olmalıdır.`,
+                    });
                 }
             }
         });
@@ -377,12 +342,11 @@ function getValidationErrors(detailRows) {
 }
 
 // =================================================================
-// Hata Uyarı Diyaloğu (Modal/Panel)
+// Hata Uyarı Diyaloğu
 // =================================================================
 function ValidationAlert({ open, onClose, errors }) {
     if (!open) return null;
 
-    // Hata türlerine göre grupla
     const sequenceErrors = errors.filter(e => e.type === 'sequence');
     const oldYearErrors = errors.filter(e => e.type === 'old_year');
 
@@ -403,7 +367,6 @@ function ValidationAlert({ open, onClose, errors }) {
                         <ul>
                             {sequenceErrors.map((e, index) => (
                                 <Typography component="li" key={index} variant="body2" sx={{ my: 0.5 }}>
-                                    {/* HTML bolds are simulated with strong */}
                                     <span dangerouslySetInnerHTML={{ __html: e.message.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
                                 </Typography>
                             ))}
@@ -433,11 +396,9 @@ function ValidationAlert({ open, onClose, errors }) {
     );
 }
 
-
 /* ----------------------------------------------------------------------------- 
     Ana Bileşen: EditorDialog
 ----------------------------------------------------------------------------- */
-
 export default function EditorDialog(props) {
     const {
         open, onClose, COLORS, computeAracStatu, fromISOToCombined, baseInputSX,
@@ -448,108 +409,80 @@ export default function EditorDialog(props) {
         allSavedTimesFilled: allTimesFilled
     } = props;
 
-    // --- Hata Yönetimi State'i ve Uyarı Diyaloğu ---
     const [validationModalOpen, setValidationModalOpen] = React.useState(false);
 
-    // Yeni sefer tarihi doğrulama
     const isSeferTarihiValid = isISODateTimeValid(seferTarihiYeni);
 
-    // Kısıtlama Kontrolü (Sıralama ve Yıl)
+    // ✅ minYear = seferin kendi yılı (varsa) yoksa mevcut yıl
     const errors = useMemo(() => {
-        // Sefer tarihi kontrolü
         const seferTarihiErrors = [];
-        const currentYear = new Date().getFullYear();
+
+        const minYear =
+            (editSefer?.sefer_tarihi && isISODateTimeValid(editSefer.sefer_tarihi))
+                ? parseInt(editSefer.sefer_tarihi.slice(0, 4), 10)
+                : new Date().getFullYear();
+
         if (isISODateTimeValid(seferTarihiYeni)) {
-            const yearMatch = seferTarihiYeni.match(/^(\d{4})/);
-            if (yearMatch) {
-                const year = parseInt(yearMatch[1], 10);
-                if (year < currentYear) {
-                    seferTarihiErrors.push({
-                        type: "old_year",
-                        row: 0,
-                        field: "Sefer Tarihi (Yeni)",
-                        message: `**Sefer Tarihi (Yeni)** yılı (${yearMatch[1]}) mevcut yıl (${currentYear}) veya daha büyük olmalıdır.`,
-                    });
-                }
+            const year = parseInt(seferTarihiYeni.slice(0, 4), 10);
+            if (year < minYear) {
+                seferTarihiErrors.push({
+                    type: "old_year",
+                    row: 0,
+                    field: "Sefer Tarihi (Yeni)",
+                    message: `**Sefer Tarihi (Yeni)** yılı (${year}) en az ${minYear} olmalıdır.`,
+                });
             }
         }
 
-        return [...seferTarihiErrors, ...getValidationErrors(detailRows)];
-    }, [seferTarihiYeni, detailRows]);
+        return [...seferTarihiErrors, ...getValidationErrors(detailRows, minYear)];
+    }, [seferTarihiYeni, detailRows, editSefer]);
+
     const handleDetailChange = (rowIndex, field, newValue) => {
-        // Önce asıl değişikliği yap
         onDetailChange(rowIndex, field, newValue);
 
         const firstRow = detailRows[0];
         if (!firstRow) return;
 
-        // 1) İlk satırın yukleme_varis / yukleme_cikis'i değişirse,
-        //    aynı yukleme_noktasi'na sahip tüm satırlara yay
         if (rowIndex === 0 && (field === "yukleme_varis" || field === "yukleme_cikis")) {
             detailRows.forEach((row, idx) => {
-                if (idx === 0) return; // ilk satırı tekrar güncelleme
+                if (idx === 0) return;
                 if (row.yukleme_noktasi && row.yukleme_noktasi === firstRow.yukleme_noktasi) {
                     onDetailChange(idx, field, newValue);
                 }
             });
         }
 
-        // 2) Başka bir satırın yukleme_noktasi değeri,
-        //    ilk satırın noktasına eşit olursa: ilk satırdaki saatleri kopyala
         if (field === "yukleme_noktasi" && rowIndex > 0) {
             if (newValue && newValue === firstRow.yukleme_noktasi) {
-                if (firstRow.yukleme_varis) {
-                    onDetailChange(rowIndex, "yukleme_varis", firstRow.yukleme_varis);
-                }
-                if (firstRow.yukleme_cikis) {
-                    onDetailChange(rowIndex, "yukleme_cikis", firstRow.yukleme_cikis);
-                }
+                if (firstRow.yukleme_varis) onDetailChange(rowIndex, "yukleme_varis", firstRow.yukleme_varis);
+                if (firstRow.yukleme_cikis) onDetailChange(rowIndex, "yukleme_cikis", firstRow.yukleme_cikis);
             }
         }
     };
 
-
     const hasValidationError = errors.length > 0;
 
-    // Tüm tarih alanlarının dolu olup olmadığını kontrol eden ana mantık
     const allDatesComplete = useMemo(() => {
         if (!isSeferTarihiValid) return false;
 
         const requiredFields = ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"];
-
-        const allValid = detailRows.every(row =>
-            requiredFields.every(field =>
-                isISODateTimeValid(row[field])
-            )
-        );
-
-        return allValid;
+        return detailRows.every(row => requiredFields.every(field => isISODateTimeValid(row[field])));
     }, [isSeferTarihiValid, detailRows]);
 
-    // Kaydet butonu: Düzenleme izni varsa VE tüm tarihler tamamlanmamışsa aktif. (Hata kontrolü tıklama ile yapılır)
     const canSave = canEdit && !allDatesComplete;
 
-    // Tamamlananlara Aktar butonu: Düzenleme izni varsa VE tüm tarihler TAMAMLANMIŞSA VE hata yoksa aktif
-
-    // Buton tıklama işleyici
     const handleActionClick = (action) => {
         if (hasValidationError) {
-            // Hata varsa, uyarı diyaloğunu açar.
             setValidationModalOpen(true);
             return;
         }
 
-        if (action === 'save' && onSaveClick) {
-            onSaveClick();
-        } else if (action === 'complete' && onMoveToCompleted) {
-            onMoveToCompleted();
-        }
+        if (action === 'save' && onSaveClick) onSaveClick();
+        else if (action === 'complete' && onMoveToCompleted) onMoveToCompleted();
     };
-
 
     return (
         <>
-            {/* Doğrulama Hataları Paneli (Ekranın Ortasında) */}
             <ValidationAlert
                 open={validationModalOpen}
                 onClose={() => setValidationModalOpen(false)}
@@ -579,19 +512,12 @@ export default function EditorDialog(props) {
                 </DialogTitle>
 
                 <DialogContent dividers sx={{ backgroundColor: alpha("#fff", 0.01) }}>
-
-                    {/* Hata Uyarısı Alanı (Butonlara basmadan önce görünür) */}
                     {canEdit && hasValidationError && (
-                        <Alert
-                            severity="error"
-                            icon={<WarningIcon />}
-                            sx={{ mb: 2, fontWeight: 600 }}
-                        >
+                        <Alert severity="error" icon={<WarningIcon />} sx={{ mb: 2, fontWeight: 600 }}>
                             Tarih/saat girişlerinde **{errors.length} adet doğrulama hatası** bulunmaktadır. Kaydetmek/Aktarmak için önce hataları düzeltin.
                         </Alert>
                     )}
 
-                    {/* Sefer Tarihi Alanları */}
                     <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 1, mb: 1.2 }}>
                         <TextField
                             label="Sefer Tarihi (Eski)"
@@ -612,7 +538,6 @@ export default function EditorDialog(props) {
                         />
                     </Box>
 
-                    {/* Satır Ekle Butonu */}
                     {canEdit && (
                         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                             <Button startIcon={<AddIcon />} onClick={addDetailRow} color="info" variant="contained">
@@ -624,12 +549,10 @@ export default function EditorDialog(props) {
                         </Stack>
                     )}
 
-                    {/* Detay Satırları */}
                     <Grid container spacing={1.2}>
                         {detailRows.map((r, i) => (
                             <Grid item xs={12} key={i}>
                                 <Card variant="outlined" sx={{ borderColor: COLORS.border, background: COLORS.surface2, borderRadius: 2 }}>
-
                                     <CardHeader
                                         sx={{
                                             "& .MuiCardHeader-title": { fontWeight: 800, fontSize: 16 },
@@ -641,10 +564,18 @@ export default function EditorDialog(props) {
                                         action={canEdit && (
                                             <Stack direction="row" spacing={0.5}>
                                                 <Tooltip title="Bu satırı kopyala">
-                                                    <span><IconButton onClick={() => copyDetailRow(i)} size="small" color="info"><ContentCopyIcon fontSize="inherit" /></IconButton></span>
+                                                    <span>
+                                                        <IconButton onClick={() => copyDetailRow(i)} size="small" color="info">
+                                                            <ContentCopyIcon fontSize="inherit" />
+                                                        </IconButton>
+                                                    </span>
                                                 </Tooltip>
                                                 <Tooltip title="Satırı sil">
-                                                    <span><IconButton onClick={() => removeDetailRow(i)} size="small" color="error"><DeleteIcon fontSize="inherit" /></IconButton></span>
+                                                    <span>
+                                                        <IconButton onClick={() => removeDetailRow(i)} size="small" color="error">
+                                                            <DeleteIcon fontSize="inherit" />
+                                                        </IconButton>
+                                                    </span>
                                                 </Tooltip>
                                             </Stack>
                                         )}
@@ -652,7 +583,6 @@ export default function EditorDialog(props) {
 
                                     <CardContent sx={{ pt: 1.5, pb: 2 }}>
                                         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 1 }}>
-                                            {/* Metin Alanları (Değişmedi) */}
                                             {[
                                                 ["proje_adi", "Proje Adı"], ["yukleme_noktasi", "Yükleme Noktası"], ["yukleme_ili", "Yükleme İl"],
                                                 ["yukleme_ilcesi", "Yükleme İlçe"], ["teslim_noktasi", "Teslim Noktası"], ["teslim_ili", "Teslim İl"],
@@ -668,28 +598,20 @@ export default function EditorDialog(props) {
                                                     sx={baseInputSX}
                                                     InputProps={{ readOnly: !canEdit }}
                                                 />
-
                                             ))}
 
-                                            {/* Tarih/Saat Alanları ve Sürekli Görünür Güncelleme Bilgisi */}
                                             {[
                                                 ["yukleme_varis", "Yükleme Giriş"],
                                                 ["yukleme_cikis", "Yükleme Çıkış"],
                                                 ["teslim_varis", "Teslim Giriş"],
                                                 ["teslim_cikis", "Teslim Çıkış"],
                                             ].map(([k, l]) => {
-
                                                 const Adornment = canEdit ? createFieldUpdateInfoText(r, k, COLORS) : null;
 
                                                 const currentUser = (localStorage.getItem("kullaniciAdi") || "GENERIC").toUpperCase();
                                                 const lastUpdater = r[`${k}_guncelleyen`] || null;
 
-                                                // 🔐 KİLİT KONTROLÜ:
-                                                // 1) Alan boşsa → herkes yazabilir
-                                                // 2) Alanı ilk yazan kullanıcı (lastUpdater) biliyorsa → sadece o düzenleyebilir
-                                                const lockedForUser =
-                                                    lastUpdater &&                 // bir sahibi var
-                                                    lastUpdater !== currentUser;   // ama sahibi ben değilim
+                                                const lockedForUser = lastUpdater && lastUpdater !== currentUser;
 
                                                 return (
                                                     <Box key={k} sx={{ position: "relative" }}>
@@ -698,7 +620,7 @@ export default function EditorDialog(props) {
                                                             value={r[k] || ""}
                                                             onChange={(v) => handleDetailChange(i, k, v)}
                                                             baseInputSX={baseInputSX}
-                                                            disabled={!canEdit || lockedForUser}  // 🔐 kilit burada
+                                                            disabled={!canEdit || lockedForUser}
                                                             EndAdornment={Adornment}
                                                         />
                                                     </Box>
@@ -714,6 +636,7 @@ export default function EditorDialog(props) {
 
                 <DialogActions sx={{ px: 2.5, py: 1.5, gap: 1 }}>
                     <Button onClick={onClose} startIcon={<ArrowBackIosNewIcon />}>Kapat</Button>
+
                     {canEdit && (
                         <Stack direction="row" spacing={1}>
                             <Button
@@ -721,9 +644,6 @@ export default function EditorDialog(props) {
                                 color="primary"
                                 startIcon={<SaveIcon />}
                                 onClick={() => handleActionClick('save')}
-                                // canSave = canEdit && !allDatesComplete
-                                // Hata olsa bile Kaydet'e tıklanıp modalın açılmasına izin veriyoruz.
-                                // Sadece düzenleme izni yoksa devre dışı bırakıyoruz.
                                 disabled={!canEdit}
                             >
                                 Kaydet

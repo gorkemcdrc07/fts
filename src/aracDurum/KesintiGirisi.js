@@ -264,13 +264,21 @@ const theme = createTheme({
 
 /* ===================== Helpers ===================== */
 const BOS_FORM = {
-    plaka_treyler: "", // DB kolonu adı buysa kalsın; artık sadece PLAKA tutuyoruz
+    plaka_treyler: "", // artık sadece PLAKA tutuyoruz
     kesinti_turu: "",
     neden: "",
     baslangic_tarihi: "",
     bitis_tarihi: "",
     gun_sayisi: "",
     aciklama: "",
+
+    // ✅ YENİ: Ücret + Açıklama alanları
+    kopru_ucreti: 0,
+    kopru_aciklama: "",
+    feribot_ucreti: 0,
+    feribot_aciklama: "",
+    diger_ucreti: 0,
+    diger_aciklama: "",
 };
 
 const KESINTI_TURLERI = ["Bakım", "Servis", "Arıza", "Kaza", "Bölgede İş Yok", "İş Başı", "İş Sonu"];
@@ -286,6 +294,11 @@ const hesaplaGun = (start, end) => {
     return fark >= 0 ? fark + 1 : 0;
 };
 
+const asMoney = (v) => {
+    const n = Number(String(v ?? "").replace(",", "."));
+    return Number.isFinite(n) ? n : 0;
+};
+
 const safeDateValueGetter = (arg) => {
     const v = arg?.value ?? arg;
     if (!v) return null;
@@ -295,9 +308,7 @@ const safeDateValueGetter = (arg) => {
         const d = dayjs(s);
         return d.isValid() ? d.toDate() : null;
     }
-    const utcDate = new Date(
-        Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
-    );
+    const utcDate = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
     if (isNaN(utcDate.getTime())) return null;
     return utcDate;
 };
@@ -381,6 +392,14 @@ export default function KesintiGirisi() {
         aciklama: "",
         ekleyen_kullanici: "",
         ay: "",
+
+        // ✅ YENİ filtre alanları (istersen kullanırsın)
+        kopru_ucreti: "",
+        kopru_aciklama: "",
+        feribot_ucreti: "",
+        feribot_aciklama: "",
+        diger_ucreti: "",
+        diger_aciklama: "",
     });
 
     const [permLoading, setPermLoading] = useState(true);
@@ -412,11 +431,7 @@ export default function KesintiGirisi() {
             setPermLoading(true);
 
             const ad = getMevcutKullanici();
-            const { data: userRow, error: eU } = await supabase
-                .from("login")
-                .select("id, rol, kullanici")
-                .eq("kullanici", ad)
-                .maybeSingle();
+            const { data: userRow, error: eU } = await supabase.from("login").select("id, rol, kullanici").eq("kullanici", ad).maybeSingle();
             if (eU) throw eU;
             if (!userRow) {
                 setPerms({ canCreate: false, canEdit: false, canDelete: false });
@@ -429,11 +444,7 @@ export default function KesintiGirisi() {
                     roleId = userRow.rol;
                 } else {
                     const roleKey = String(userRow.rol).toUpperCase();
-                    const { data: roleRow, error: eR } = await supabase
-                        .from("roles")
-                        .select("id,key")
-                        .eq("key", roleKey)
-                        .maybeSingle();
+                    const { data: roleRow, error: eR } = await supabase.from("roles").select("id,key").eq("key", roleKey).maybeSingle();
                     if (eR) throw eR;
                     roleId = roleRow?.id || null;
                 }
@@ -441,21 +452,12 @@ export default function KesintiGirisi() {
 
             let rolePerm = {};
             if (roleId) {
-                const { data: rp, error: eRP } = await supabase
-                    .from("role_permissions")
-                    .select("*")
-                    .eq("screen_key", SCREEN_KEY)
-                    .eq("role_id", roleId)
-                    .maybeSingle();
+                const { data: rp, error: eRP } = await supabase.from("role_permissions").select("*").eq("screen_key", SCREEN_KEY).eq("role_id", roleId).maybeSingle();
                 if (eRP) throw eRP;
                 rolePerm = rp || {};
             }
 
-            const { data: up, error: eUP } = await supabase
-                .from("user_permissions")
-                .select("*")
-                .eq("user_id", userRow.id)
-                .maybeSingle();
+            const { data: up, error: eUP } = await supabase.from("user_permissions").select("*").eq("user_id", userRow.id).maybeSingle();
             if (eUP) throw eUP;
 
             const canCreate = coalesceOverride(up?.[USER_KEYS.create], rolePerm?.[USER_KEYS.create]);
@@ -482,11 +484,7 @@ export default function KesintiGirisi() {
 
     // ✅ SADECE PLAKA
     const plakalarGetir = async () => {
-        const { data, error } = await supabase
-            .from("plakalar")
-            .select("plaka")
-            .or("statu.is.null,statu.neq.ÇIKARILDI");
-
+        const { data, error } = await supabase.from("plakalar").select("plaka").or("statu.is.null,statu.neq.ÇIKARILDI");
         if (error) {
             console.error("Plakalar alınamadı:", error);
             openSnack("Plakalar alınamadı: " + error.message, "error");
@@ -545,6 +543,14 @@ export default function KesintiGirisi() {
         setForm(next);
     };
 
+    const requireDescIfAmount = (amount, desc, label) => {
+        if (asMoney(amount) > 0 && !String(desc || "").trim()) {
+            openSnack(`${label} için açıklama zorunludur.`, "error");
+            return false;
+        }
+        return true;
+    };
+
     const handleFormSubmit = async (e) => {
         e.preventDefault();
 
@@ -575,6 +581,15 @@ export default function KesintiGirisi() {
             return;
         }
 
+        // ✅ Ücret alanlarında açıklama zorunluluğu (ücret > 0 ise)
+        if (
+            !requireDescIfAmount(form.kopru_ucreti, form.kopru_aciklama, "Köprü") ||
+            !requireDescIfAmount(form.feribot_ucreti, form.feribot_aciklama, "Feribot") ||
+            !requireDescIfAmount(form.diger_ucreti, form.diger_aciklama, "Diğer")
+        ) {
+            return;
+        }
+
         const kullanici = getMevcutKullanici();
         const bugun = dayjs().format("YYYY-MM-DD");
 
@@ -588,6 +603,14 @@ export default function KesintiGirisi() {
             bitis_tarihi,
             gun_sayisi: Number(gun_sayisi),
             aciklama,
+
+            // ✅ YENİ: Ücret + Açıklama alanları
+            kopru_ucreti: asMoney(form.kopru_ucreti),
+            kopru_aciklama: String(form.kopru_aciklama || "").trim(),
+            feribot_ucreti: asMoney(form.feribot_ucreti),
+            feribot_aciklama: String(form.feribot_aciklama || "").trim(),
+            diger_ucreti: asMoney(form.diger_ucreti),
+            diger_aciklama: String(form.diger_aciklama || "").trim(),
         };
 
         if (formMode === "create") {
@@ -649,6 +672,14 @@ export default function KesintiGirisi() {
             bitis_tarihi: (row.bitis_tarihi || "").slice(0, 10),
             gun_sayisi: row.gun_sayisi || hesaplaGun(row.baslangic_tarihi, row.bitis_tarihi),
             aciklama: row.aciklama || "",
+
+            // ✅ YENİ
+            kopru_ucreti: row.kopru_ucreti ?? 0,
+            kopru_aciklama: row.kopru_aciklama || "",
+            feribot_ucreti: row.feribot_ucreti ?? 0,
+            feribot_aciklama: row.feribot_aciklama || "",
+            diger_ucreti: row.diger_ucreti ?? 0,
+            diger_aciklama: row.diger_aciklama || "",
         });
         setEditingId(row.id);
         setFormMode("edit");
@@ -713,6 +744,15 @@ export default function KesintiGirisi() {
             { header: "Bitiş", key: "bitis", width: 15, style: { numFmt: "dd.mm.yyyy" } },
             { header: "Gün", key: "gun", width: 10 },
             { header: "Açıklama", key: "aciklama", width: 40 },
+
+            // ✅ YENİ
+            { header: "Köprü (₺)", key: "kopru_ucreti", width: 12 },
+            { header: "Köprü Açıklama", key: "kopru_aciklama", width: 30 },
+            { header: "Feribot (₺)", key: "feribot_ucreti", width: 12 },
+            { header: "Feribot Açıklama", key: "feribot_aciklama", width: 30 },
+            { header: "Diğer (₺)", key: "diger_ucreti", width: 12 },
+            { header: "Diğer Açıklama", key: "diger_aciklama", width: 30 },
+
             { header: "Ekleyen", key: "ekleyen", width: 15 },
             { header: "Eklenme Tarihi", key: "eklenme_tarihi", width: 22, style: { numFmt: "dd.mm.yyyy hh:mm" } },
         ];
@@ -725,6 +765,15 @@ export default function KesintiGirisi() {
             bitis: safeDateValueGetter(k.bitis_tarihi),
             gun: k.gun_sayisi || 0,
             aciklama: k.aciklama || "-",
+
+            // ✅ YENİ
+            kopru_ucreti: k.kopru_ucreti ?? 0,
+            kopru_aciklama: k.kopru_aciklama || "-",
+            feribot_ucreti: k.feribot_ucreti ?? 0,
+            feribot_aciklama: k.feribot_aciklama || "-",
+            diger_ucreti: k.diger_ucreti ?? 0,
+            diger_aciklama: k.diger_aciklama || "-",
+
             ekleyen: k.ekleyen_kullanici || "-",
             eklenme_tarihi: safeDateValueGetter(k.eklenme_tarihi),
         }));
@@ -786,6 +835,15 @@ export default function KesintiGirisi() {
         },
         { field: "gun_sayisi", headerName: "GÜN", width: 90, type: "number" },
         { field: "aciklama", headerName: "AÇIKLAMA", flex: 1.2, minWidth: 220 },
+
+        // ✅ YENİ (Grid)
+        { field: "kopru_ucreti", headerName: "KÖPRÜ ₺", width: 110, type: "number" },
+        { field: "kopru_aciklama", headerName: "KÖPRÜ AÇIK.", flex: 1, minWidth: 160 },
+        { field: "feribot_ucreti", headerName: "FERİBOT ₺", width: 120, type: "number" },
+        { field: "feribot_aciklama", headerName: "FERİBOT AÇIK.", flex: 1, minWidth: 170 },
+        { field: "diger_ucreti", headerName: "DİĞER ₺", width: 110, type: "number" },
+        { field: "diger_aciklama", headerName: "DİĞER AÇIK.", flex: 1, minWidth: 170 },
+
         { field: "ekleyen_kullanici", headerName: "EKLEYEN", flex: 1, minWidth: 140 },
         {
             field: "actions",
@@ -844,6 +902,15 @@ export default function KesintiGirisi() {
             { header: "Neden", key: "neden", width: 20 },
             { header: "Gün", key: "gun", width: 10 },
             { header: "Açıklama", key: "aciklama", width: 45 },
+
+            // ✅ YENİ
+            { header: "Köprü (₺)", key: "kopru", width: 12 },
+            { header: "Köprü Açıklama", key: "kopru_acik", width: 30 },
+            { header: "Feribot (₺)", key: "feribot", width: 12 },
+            { header: "Feribot Açıklama", key: "feribot_acik", width: 30 },
+            { header: "Diğer (₺)", key: "diger", width: 12 },
+            { header: "Diğer Açıklama", key: "diger_acik", width: 30 },
+
             { header: "Ekleyen", key: "ekleyen", width: 20 },
             { header: "Başlangıç", key: "bas", width: 15, style: { numFmt: "dd.mm.yyyy" } },
             { header: "Bitiş", key: "bit", width: 15, style: { numFmt: "dd.mm.yyyy" } },
@@ -856,6 +923,15 @@ export default function KesintiGirisi() {
                 neden: k.neden,
                 gun: k.gun_sayisi,
                 aciklama: k.aciklama,
+
+                // ✅ YENİ
+                kopru: k.kopru_ucreti ?? 0,
+                kopru_acik: k.kopru_aciklama || "-",
+                feribot: k.feribot_ucreti ?? 0,
+                feribot_acik: k.feribot_aciklama || "-",
+                diger: k.diger_ucreti ?? 0,
+                diger_acik: k.diger_aciklama || "-",
+
                 ekleyen: k.ekleyen_kullanici,
                 bas: safeDateValueGetter(k.baslangic_tarihi),
                 bit: safeDateValueGetter(k.bitis_tarihi),
@@ -1247,9 +1323,7 @@ export default function KesintiGirisi() {
                                     options={plakaOptions}
                                     value={form.plaka_treyler ? { label: form.plaka_treyler } : null}
                                     onChange={(_, val) => handleChange("plaka_treyler", val?.label || "")}
-                                    renderInput={(params) => (
-                                        <TextField {...params} label="Plaka *" placeholder="Örn: 34ABC123" required fullWidth />
-                                    )}
+                                    renderInput={(params) => <TextField {...params} label="Plaka *" placeholder="Örn: 34ABC123" required fullWidth />}
                                     autoHighlight
                                     openOnFocus
                                     disablePortal
@@ -1305,6 +1379,55 @@ export default function KesintiGirisi() {
 
                                 {/* Gün Sayısı */}
                                 <TextField label="Gün Sayısı" value={form.gun_sayisi || 0} fullWidth disabled />
+
+                                {/* ✅ YENİ: Köprü / Feribot / Diğer */}
+                                <TextField
+                                    label="Köprü Ücreti (₺)"
+                                    type="number"
+                                    value={form.kopru_ucreti}
+                                    onChange={(e) => handleChange("kopru_ucreti", e.target.value)}
+                                    fullWidth
+                                    inputProps={{ step: "0.01", min: 0 }}
+                                />
+                                <TextField
+                                    label="Köprü Açıklama"
+                                    value={form.kopru_aciklama}
+                                    onChange={(e) => handleChange("kopru_aciklama", e.target.value)}
+                                    fullWidth
+                                    required={asMoney(form.kopru_ucreti) > 0}
+                                />
+
+                                <TextField
+                                    label="Feribot Ücreti (₺)"
+                                    type="number"
+                                    value={form.feribot_ucreti}
+                                    onChange={(e) => handleChange("feribot_ucreti", e.target.value)}
+                                    fullWidth
+                                    inputProps={{ step: "0.01", min: 0 }}
+                                />
+                                <TextField
+                                    label="Feribot Açıklama"
+                                    value={form.feribot_aciklama}
+                                    onChange={(e) => handleChange("feribot_aciklama", e.target.value)}
+                                    fullWidth
+                                    required={asMoney(form.feribot_ucreti) > 0}
+                                />
+
+                                <TextField
+                                    label="Diğer Ücret (₺)"
+                                    type="number"
+                                    value={form.diger_ucreti}
+                                    onChange={(e) => handleChange("diger_ucreti", e.target.value)}
+                                    fullWidth
+                                    inputProps={{ step: "0.01", min: 0 }}
+                                />
+                                <TextField
+                                    label="Diğer Açıklama"
+                                    value={form.diger_aciklama}
+                                    onChange={(e) => handleChange("diger_aciklama", e.target.value)}
+                                    fullWidth
+                                    required={asMoney(form.diger_ucreti) > 0}
+                                />
 
                                 {/* Açıklama */}
                                 <TextField

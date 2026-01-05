@@ -97,60 +97,125 @@ function DateTimeSingleField({
     errorText = "Geçersiz tarih/saat",
     EndAdornment = null,
 }) {
+    const inputRef = React.useRef(null);
+
     const [text, setText] = React.useState("");
     const [touched, setTouched] = React.useState(false);
+    const [isEditing, setIsEditing] = React.useState(false);
+
+    const countDigits = (s) => (s.match(/\d/g) || []).length;
+
+    // digitIndex(0..12) -> masked caret position
+    const caretFromDigitIndex = (di) => {
+        // mask: dd.MM.yyyy HH:mm
+        // separators: after 2 => '.', after 4 => '.', after 8 => ' ', after 10 => ':'
+        if (di <= 2) return di;
+        if (di <= 4) return di + 1;   // 1 dot
+        if (di <= 8) return di + 2;   // 2 dots
+        if (di <= 10) return di + 3;  // + space
+        return di + 4;                // + colon
+    };
 
     React.useEffect(() => {
-        if (!value) { setText(""); return; }
+        if (isEditing) return;
+
+        if (!value) {
+            setText("");
+            return;
+        }
+
         if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
             setText(fromISOToCombined(value));
         } else {
-            // ISO değilse UI'da aynen göster (ama state'e ISO olmayan basmıyoruz)
-            setText(value);
+            setText(String(value));
         }
-    }, [value]);
+    }, [value, isEditing]);
 
-    function handleChange(e) {
-        const raw = e.target.value;
-        const digs = normalizeFormattedToDigits(raw);
-        const masked = formatFromDigits(digs);
-        setText(masked);
+    function commitIfComplete(digs) {
+        if (digs.length !== 12) return;
 
-        // ✅ Tamamlanınca ISO üret
-        if (digs.length === 12) {
-            const dd = parseInt(digs.slice(0, 2), 10);
-            const MM = parseInt(digs.slice(2, 4), 10);
-            const yyyy = parseInt(digs.slice(4, 8), 10);
-            const HH = parseInt(digs.slice(8, 10), 10);
-            const mm = parseInt(digs.slice(10, 12), 10);
+        const dd = parseInt(digs.slice(0, 2), 10);
+        const MM = parseInt(digs.slice(2, 4), 10);
+        const yyyy = parseInt(digs.slice(4, 8), 10);
+        const HH = parseInt(digs.slice(8, 10), 10);
+        const mm = parseInt(digs.slice(10, 12), 10);
 
-            const dt = new Date(yyyy, MM - 1, dd, HH, mm);
-            if (!isNaN(dt.getTime())) {
-                onChange(toLocalISOString(dt)); // ✅ sadece ISO
-                return;
-            }
+        const dt = new Date(yyyy, MM - 1, dd, HH, mm);
+
+        // 31.02 gibi taşmaları engelle
+        const isSame =
+            dt.getFullYear() === yyyy &&
+            dt.getMonth() === (MM - 1) &&
+            dt.getDate() === dd &&
+            dt.getHours() === HH &&
+            dt.getMinutes() === mm;
+
+        if (!isNaN(dt.getTime()) && isSame) {
+            onChange(toLocalISOString(dt)); // sadece ISO
         }
-
-        // ✅ Yarım/eksik girişte parent state'e ISO olmayan metin basma
-        onChange("");
     }
 
-    // ✅ Boşken focus/click olunca "şimdi" (ISO) doldur
+    function handleChange(e) {
+        const el = e.target;
+        const raw = el.value;
+
+        // mevcut seçim/caret konumunu digit index olarak yakala
+        const selStart = el.selectionStart ?? raw.length;
+        const selEnd = el.selectionEnd ?? raw.length;
+        const digitStart = countDigits(raw.slice(0, selStart));
+        const digitEnd = countDigits(raw.slice(0, selEnd));
+
+        if (raw.trim() === "") {
+            setText("");
+            onChange("");
+            return;
+        }
+
+        const digs = normalizeFormattedToDigits(raw);
+        const masked = formatFromDigits(digs);
+
+        setText(masked);
+
+        // ✅ selection/caret restore
+        requestAnimationFrame(() => {
+            const node = inputRef.current;
+            if (!node) return;
+
+            // digit index -> masked caret
+            const newStart = caretFromDigitIndex(Math.min(digitStart, normalizeFormattedToDigits(masked).length));
+            const newEnd = caretFromDigitIndex(Math.min(digitEnd, normalizeFormattedToDigits(masked).length));
+            try {
+                node.setSelectionRange(newStart, newEnd);
+            } catch { }
+        });
+
+        // tamamlanınca commit
+        commitIfComplete(digs);
+    }
+
     function handleAutoFillNow() {
         if (disabled) return;
-
-        const digs = normalizeFormattedToDigits(text);
-        if (digs.length > 0) return;
+        if (value) return; // doluysa overwrite etme
+        if (normalizeFormattedToDigits(text).length > 0) return;
 
         const now = new Date();
         const iso = toLocalISOString(now);
 
-        setText(fromISOToCombined(iso)); // inputta gg.aa.yyyy ss:dd
-        onChange(iso);                   // parent'a ISO
+        setText(fromISOToCombined(iso));
+        onChange(iso);
+
+        // caret'i en sona al
+        requestAnimationFrame(() => {
+            const node = inputRef.current;
+            if (!node) return;
+            const end = (fromISOToCombined(iso) || "").length;
+            try { node.setSelectionRange(end, end); } catch { }
+        });
     }
 
     const digs = normalizeFormattedToDigits(text);
     const complete = digs.length === 12;
+
     const { dd, MM, yyyy, HH, mm } = validateParts(
         digs.slice(0, 2),
         digs.slice(2, 4),
@@ -158,6 +223,7 @@ function DateTimeSingleField({
         digs.slice(8, 10),
         digs.slice(10, 12)
     );
+
     const isValid = complete && !!dd && !!MM && !!yyyy && !!HH && !!mm;
     const showError = touched && !isValid && (required || digs.length > 0);
 
@@ -167,9 +233,15 @@ function DateTimeSingleField({
             size="small"
             value={text}
             onChange={handleChange}
-            onBlur={() => setTouched(true)}
-            onFocus={handleAutoFillNow}
-            onClick={handleAutoFillNow}
+            onFocus={() => {
+                setIsEditing(true);
+                handleAutoFillNow();
+            }}
+            onBlur={() => {
+                setTouched(true);
+                setIsEditing(false);
+                commitIfComplete(normalizeFormattedToDigits(text));
+            }}
             placeholder="gg.aa.yyyy ss:dd"
             InputLabelProps={{ shrink: true }}
             inputProps={{ inputMode: "numeric", pattern: "\\d*", maxLength: 16 }}
@@ -177,10 +249,12 @@ function DateTimeSingleField({
             disabled={disabled}
             error={showError}
             helperText={showError ? errorText : " "}
-            InputProps={EndAdornment ? {
-                endAdornment: EndAdornment,
-                sx: { pr: 1.5 }
-            } : undefined}
+            inputRef={inputRef}
+            InputProps={
+                EndAdornment
+                    ? { endAdornment: EndAdornment, sx: { pr: 1.5 } }
+                    : undefined
+            }
         />
     );
 }

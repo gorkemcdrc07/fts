@@ -25,13 +25,7 @@ function getLocalUsername() {
 }
 
 function getLocalLoginId() {
-    const candidates = [
-        "loginId",
-        "user_id",
-        "userid",
-        "kullaniciId",
-        "girisYapanKullanici", // {id: ...}
-    ];
+    const candidates = ["loginId", "user_id", "userid", "kullaniciId", "girisYapanKullanici"];
     for (const key of candidates) {
         const raw = localStorage.getItem(key);
         if (!raw) continue;
@@ -58,26 +52,24 @@ function normalizePath(path) {
 }
 
 function pathToColumn(path) {
-    // "/hakedis/arac-cari-ve-fiyat" -> "p_hakedis_arac_cari_ve_fiyat"
     const s = normalizePath(path).replace(/^\//, "");
     const core = s.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
     return "p_" + (core || "anasayfa");
 }
 
 /* ============ Alias ve APP_PAGES tabanlı map ============ */
-// Geriye dönük; yanlış/eskimiş path'leri doğru path'e çevir
 const PATH_ALIASES = {
     "/raporlar/eta-uyumsuz": "/raporlar/eta-uyumsuzlugu",
+
+    // ✅ UYGULAMADAKİ GERÇEK ROUTE -> APP_PAGES ROUTE
+    "/hakedis/filoiskontoluhakedis": "/hakedis/filo-iskontolu-hakedis",
 };
 
-// APP_PAGES'ten normalize edilmiş path -> kolon adı map'i
-const PAGE_MAP = new Map(
-    APP_PAGES.map((p) => [normalizePath(p.path), pathToColumn(p.path)])
-);
+const PAGE_MAP = new Map(APP_PAGES.map((p) => [normalizePath(p.path), pathToColumn(p.path)]));
 
 /* ===================== Hook ===================== */
 export default function usePageAccess() {
-    const [row, setRow] = useState(null); // user_page_access tek satır
+    const [row, setRow] = useState(null);
     const [loading, setLoading] = useState(true);
 
     const me = useMemo(() => getLocalUsername(), []);
@@ -85,20 +77,19 @@ export default function usePageAccess() {
 
     useEffect(() => {
         let mounted = true;
+
         (async () => {
             setLoading(true);
             try {
                 if (isAdmin) {
                     console.log("[access] admin bypass:", me);
-                    if (mounted) setRow({}); // admin her şeye erişsin
+                    if (mounted) setRow({});
                     return;
                 }
 
-                // 1) user_id localStorage'tan
                 let userId = getLocalLoginId();
                 let loginRow = null;
 
-                // 2) yoksa login tablosunda ara (case-insensitive)
                 if (!userId) {
                     const raw = getLocalUsername();
                     if (!raw) {
@@ -106,15 +97,18 @@ export default function usePageAccess() {
                         return;
                     }
 
-                    const like = raw.replace(/[%_]/g, "");
+                    const like = `%${raw.replace(/[%_]/g, "")}%`;
+
                     const { data, error } = await supabase
                         .from("login")
                         .select("id, kullaniciAdi, kullanici")
                         .or(`kullaniciAdi.ilike.${like},kullanici.ilike.${like}`)
-                        .maybeSingle();
+                        .order("id", { ascending: true })
+                        .limit(1);
 
                     if (error) throw error;
-                    loginRow = data || null;
+
+                    loginRow = Array.isArray(data) ? data[0] : null;
                     userId = loginRow?.id ? Number(loginRow.id) : null;
                 }
 
@@ -124,7 +118,6 @@ export default function usePageAccess() {
                     return;
                 }
 
-                // 3) user_page_access satırını çek
                 const { data: upa, error: e2 } = await supabase
                     .from("user_page_access")
                     .select("*")
@@ -148,17 +141,16 @@ export default function usePageAccess() {
                 if (mounted) setLoading(false);
             }
         })();
+
         return () => {
             mounted = false;
         };
     }, [isAdmin, me]);
 
-    // Serbest geçiş (ör. herkes erişebilsin)
     const whitelist = useMemo(() => new Set(["/", "/anasayfa"]), []);
 
     const hasAccess = useCallback(
         (path) => {
-            // normalize + alias
             let p = normalizePath(path);
             if (PATH_ALIASES[p]) p = PATH_ALIASES[p];
 
@@ -166,11 +158,12 @@ export default function usePageAccess() {
             if (whitelist.has(p)) return true;
             if (!row) return false;
 
-            // APP_PAGES öncelikli kolon çözümü (fallback: dinamik üret)
             const col = PAGE_MAP.get(p) || pathToColumn(p);
             const ok = row[col] === true;
 
+            console.log("[access] CHECK", { rawPath: path, normalized: p, col, val: row[col], ok });
             if (!ok) console.log("[access] BLOCK:", { path: p, col, row });
+
             return ok;
         },
         [row, whitelist, isAdmin]

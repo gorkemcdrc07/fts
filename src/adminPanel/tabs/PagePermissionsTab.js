@@ -69,12 +69,6 @@ function pathToColumn(path) {
     return "p_" + (core || "anasayfa");
 }
 
-const PAGE_COLUMNS = APP_PAGES.map((p) => ({
-    title: p.title,
-    path: normalizePath(p.path),
-    col: pathToColumn(p.path),
-    category: getCategoryByPath(p.path),
-}));
 
 async function upsertUserPageAccess(rows) {
     const { error, data } = await supabase
@@ -86,7 +80,22 @@ async function upsertUserPageAccess(rows) {
 }
 
 export default function PagePermissionsTab() {
-    const cols = useMemo(() => PAGE_COLUMNS, []);
+    const cols = useMemo(() => {
+        return APP_PAGES.map((p) => ({
+            title: p.title,
+            path: normalizePath(p.path),
+            col: pathToColumn(p.path),
+            category: getCategoryByPath(p.path),
+        }));
+    }, []);
+    console.log("[DEBUG] APP_PAGES count =", APP_PAGES.length);
+    console.log("[DEBUG] HAS FILO =",
+        APP_PAGES.some(p => p.path === "/hakedis/filo-iskontolu-hakedis")
+    );
+    console.log("[DEBUG] HAKEDIS LIST =",
+        APP_PAGES.filter(p => String(p.path).startsWith("/hakedis/")).map(p => p.path)
+    );
+
 
     // Kategori State Yönetimi
     const categories = useMemo(() => {
@@ -224,7 +233,7 @@ export default function PagePermissionsTab() {
     }, [rows, q]);
 
     return (
-        <Paper variant="outlined" sx={{ p: 0, borderRadius: 3, overflow: "hidden" }}>
+        <Paper variant="outlined" sx={{ p: 0, borderRadius: 3, overflow: "auto" }}>
             {/* Toolbar: Daha düzenli ve gruplanmış aksiyonlar */}
             <Toolbar
                 sx={{
@@ -285,7 +294,7 @@ export default function PagePermissionsTab() {
             </Toolbar>
 
             {/* Tablo: Daha minimalist stil */}
-            <TableContainer sx={{ maxHeight: 600 }}>
+            <TableContainer sx={{ maxHeight: 600, overflowX: "auto" }}>
                 <Table
                     stickyHeader
                     size="small"

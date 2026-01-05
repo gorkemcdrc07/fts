@@ -159,7 +159,7 @@ const GRID_TR = {
     columnsPanelHideAllButton: "Hepsini gizle",
 };
 
-/* ===================== Tema (Modernleştirilmiş) ===================== */
+/* ===================== Tema ===================== */
 const theme = createTheme({
     palette: {
         mode: "dark",
@@ -210,9 +210,7 @@ const theme = createTheme({
                     transition: "all 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms",
                     ":hover": { boxShadow: "0 6px 20px rgba(139,92,246,0.3)" },
                 },
-                outlined: {
-                    border: "1px solid rgba(255,255,255,0.12)",
-                },
+                outlined: { border: "1px solid rgba(255,255,255,0.12)" },
             },
         },
         MuiDialog: {
@@ -264,24 +262,32 @@ const theme = createTheme({
 
 /* ===================== Helpers ===================== */
 const BOS_FORM = {
-    plaka_treyler: "", // artık sadece PLAKA tutuyoruz
+    plaka_treyler: "",
     kesinti_turu: "",
     neden: "",
     baslangic_tarihi: "",
     bitis_tarihi: "",
     gun_sayisi: "",
     aciklama: "",
-
-    // ✅ YENİ: Ücret + Açıklama alanları
-    kopru_ucreti: 0,
-    kopru_aciklama: "",
-    feribot_ucreti: 0,
-    feribot_aciklama: "",
-    diger_ucreti: 0,
-    diger_aciklama: "",
+    ucret_tutari: 0, // sadece Köprü/Feribot/Diğer seçilince kullanılacak
 };
 
-const KESINTI_TURLERI = ["Bakım", "Servis", "Arıza", "Kaza", "Bölgede İş Yok", "İş Başı", "İş Sonu"];
+const BOS_FILTRE = {
+    plaka_treyler: "",
+    kesinti_turu: "",
+    neden: "",
+    baslangic_tarihi: "",
+    bitis_tarihi: "",
+    gun_sayisi: "",
+    aciklama: "",
+    ekleyen_kullanici: "",
+    ay: "",
+};
+
+const KESINTI_TURLERI = ["Bakım", "Servis", "Arıza", "Kaza", "Bölgede İş Yok", "İş Başı", "İş Sonu", "Köprü", "Feribot", "Diğer"];
+const UCRET_TURLERI = ["Köprü", "Feribot", "Diğer"];
+const isUcretTuru = (tur) => UCRET_TURLERI.includes(tur);
+
 const KESINTI_NEDENLERI = ["Tedarikçi Kaynaklı", "Odak Kaynaklı"];
 
 const getMevcutKullanici = () => localStorage.getItem("kullanici") || "Bilinmeyen Kullanıcı";
@@ -318,6 +324,14 @@ const safeDateValueFormatter = (arg) => {
     if (!v) return "-";
     const d = dayjs(v);
     return d.isValid() ? d.format("DD.MM.YYYY") : "-";
+};
+
+const getRowFiyat = (row) => {
+    if (!row) return 0;
+    if (row.kesinti_turu === "Köprü") return row.kopru_ucreti ?? 0;
+    if (row.kesinti_turu === "Feribot") return row.feribot_ucreti ?? 0;
+    if (row.kesinti_turu === "Diğer") return row.diger_ucreti ?? 0;
+    return 0;
 };
 
 /* ===================== Toolbar ===================== */
@@ -370,37 +384,14 @@ export default function KesintiGirisi() {
     const [raporOpen, setRaporOpen] = useState(false);
 
     const [raporForm, setRaporForm] = useState({ ay: "", plaka_treyler: "" });
-
-    const [raporSonuc, setRaporSonuc] = useState({
-        toplamGun: 0,
-        kesintiliGunler: [],
-        tumGunler: [],
-    });
+    const [raporSonuc, setRaporSonuc] = useState({ toplamGun: 0, kesintiliGunler: [], tumGunler: [] });
 
     const [snack, setSnack] = useState({ open: false, msg: "", severity: "success" });
 
     const [formMode, setFormMode] = useState("create");
     const [editingId, setEditingId] = useState(null);
 
-    const [filtreler, setFiltreler] = useState({
-        plaka_treyler: "",
-        kesinti_turu: "",
-        neden: "",
-        baslangic_tarihi: "",
-        bitis_tarihi: "",
-        gun_sayisi: "",
-        aciklama: "",
-        ekleyen_kullanici: "",
-        ay: "",
-
-        // ✅ YENİ filtre alanları (istersen kullanırsın)
-        kopru_ucreti: "",
-        kopru_aciklama: "",
-        feribot_ucreti: "",
-        feribot_aciklama: "",
-        diger_ucreti: "",
-        diger_aciklama: "",
-    });
+    const [filtreler, setFiltreler] = useState(BOS_FILTRE);
 
     const [permLoading, setPermLoading] = useState(true);
     const [perms, setPerms] = useState({ canCreate: false, canEdit: false, canDelete: false });
@@ -452,7 +443,12 @@ export default function KesintiGirisi() {
 
             let rolePerm = {};
             if (roleId) {
-                const { data: rp, error: eRP } = await supabase.from("role_permissions").select("*").eq("screen_key", SCREEN_KEY).eq("role_id", roleId).maybeSingle();
+                const { data: rp, error: eRP } = await supabase
+                    .from("role_permissions")
+                    .select("*")
+                    .eq("screen_key", SCREEN_KEY)
+                    .eq("role_id", roleId)
+                    .maybeSingle();
                 if (eRP) throw eRP;
                 rolePerm = rp || {};
             }
@@ -482,7 +478,6 @@ export default function KesintiGirisi() {
         setLoading(false);
     };
 
-    // ✅ SADECE PLAKA
     const plakalarGetir = async () => {
         const { data, error } = await supabase.from("plakalar").select("plaka").or("statu.is.null,statu.neq.ÇIKARILDI");
         if (error) {
@@ -493,12 +488,8 @@ export default function KesintiGirisi() {
         }
     };
 
-    // ✅ Autocomplete seçenekleri sadece plaka
     const plakaOptions = useMemo(
-        () =>
-            (plakalar || [])
-                .map((p) => ({ label: `${(p.plaka || "").trim()}` }))
-                .filter((o) => o.label.trim() !== ""),
+        () => (plakalar || []).map((p) => ({ label: `${(p.plaka || "").trim()}` })).filter((o) => o.label.trim() !== ""),
         [plakalar]
     );
     const plakaOptionsSet = useMemo(() => new Set(plakaOptions.map((o) => o.label)), [plakaOptions]);
@@ -515,11 +506,7 @@ export default function KesintiGirisi() {
             const metinlerTamam = Object.entries(filtreler).every(([key, deger]) => {
                 if (!deger) return true;
                 if (key === "ay") return true;
-
-                if (key === "gun_sayisi") {
-                    return String(k[key] || "") === String(deger);
-                }
-
+                if (key === "gun_sayisi") return String(k[key] || "") === String(deger);
                 return String(k[key] ?? "").toLowerCase().includes(String(deger).toLowerCase());
             });
             if (!metinlerTamam) return false;
@@ -536,19 +523,19 @@ export default function KesintiGirisi() {
     /* ===================== Form & CRUD ===================== */
     const handleChange = (name, value) => {
         const next = { ...form, [name]: value };
+
         if (name === "baslangic_tarihi" || name === "bitis_tarihi") {
             const gunSayisi = hesaplaGun(next.baslangic_tarihi, next.bitis_tarihi);
             next.gun_sayisi = gunSayisi === "" ? "" : Number(gunSayisi);
         }
-        setForm(next);
-    };
 
-    const requireDescIfAmount = (amount, desc, label) => {
-        if (asMoney(amount) > 0 && !String(desc || "").trim()) {
-            openSnack(`${label} için açıklama zorunludur.`, "error");
-            return false;
+        if (name === "kesinti_turu") {
+            if (!isUcretTuru(value)) {
+                next.ucret_tutari = 0;
+            }
         }
-        return true;
+
+        setForm(next);
     };
 
     const handleFormSubmit = async (e) => {
@@ -564,54 +551,78 @@ export default function KesintiGirisi() {
         }
 
         const { plaka_treyler, baslangic_tarihi, bitis_tarihi, kesinti_turu, neden, gun_sayisi, aciklama } = form;
+        const ucretliTur = isUcretTuru(kesinti_turu);
 
-        if (!plaka_treyler || !baslangic_tarihi || !bitis_tarihi || !kesinti_turu || !neden) {
+        if (!plaka_treyler || !kesinti_turu || !neden) {
             openSnack("Lütfen tüm gerekli (*) alanları doldurun.", "error");
             return;
         }
 
-        // ✅ artık sadece plaka seçilecek
+        // ücretli değilse tarih zorunlu
+        if (!ucretliTur) {
+            if (!baslangic_tarihi || !bitis_tarihi) {
+                openSnack("Lütfen başlangıç ve bitiş tarihini girin.", "error");
+                return;
+            }
+        }
+
         if (!plakaOptionsSet.has(plaka_treyler)) {
             openSnack("Plaka değeri listeden seçilmelidir.", "error");
             return;
         }
 
-        if (dayjs(baslangic_tarihi).isAfter(dayjs(bitis_tarihi))) {
+        if (baslangic_tarihi && bitis_tarihi && dayjs(baslangic_tarihi).isAfter(dayjs(bitis_tarihi))) {
             openSnack("Başlangıç tarihi bitiş tarihinden sonra olamaz.", "error");
             return;
         }
 
-        // ✅ Ücret alanlarında açıklama zorunluluğu (ücret > 0 ise)
-        if (
-            !requireDescIfAmount(form.kopru_ucreti, form.kopru_aciklama, "Köprü") ||
-            !requireDescIfAmount(form.feribot_ucreti, form.feribot_aciklama, "Feribot") ||
-            !requireDescIfAmount(form.diger_ucreti, form.diger_aciklama, "Diğer")
-        ) {
-            return;
+        // Köprü/Feribot/Diğer seçilirse: fiyat + açıklama zorunlu
+        if (ucretliTur) {
+            if (asMoney(form.ucret_tutari) <= 0) {
+                openSnack(`${kesinti_turu} için fiyat girilmelidir.`, "error");
+                return;
+            }
+            if (!String(aciklama || "").trim()) {
+                openSnack(`${kesinti_turu} için açıklama zorunludur.`, "error");
+                return;
+            }
         }
 
         const kullanici = getMevcutKullanici();
         const bugun = dayjs().format("YYYY-MM-DD");
 
-        let error = null;
-
         const payload = {
-            plaka_treyler: String(plaka_treyler).trim(), // ✅ sadece plaka
+            plaka_treyler: String(plaka_treyler).trim(),
             kesinti_turu,
             neden,
-            baslangic_tarihi,
-            bitis_tarihi,
-            gun_sayisi: Number(gun_sayisi),
-            aciklama,
 
-            // ✅ YENİ: Ücret + Açıklama alanları
-            kopru_ucreti: asMoney(form.kopru_ucreti),
-            kopru_aciklama: String(form.kopru_aciklama || "").trim(),
-            feribot_ucreti: asMoney(form.feribot_ucreti),
-            feribot_aciklama: String(form.feribot_aciklama || "").trim(),
-            diger_ucreti: asMoney(form.diger_ucreti),
-            diger_aciklama: String(form.diger_aciklama || "").trim(),
+            // ücretli türlerde opsiyonel
+            baslangic_tarihi: baslangic_tarihi || null,
+            bitis_tarihi: bitis_tarihi || null,
+            gun_sayisi: baslangic_tarihi && bitis_tarihi ? Number(gun_sayisi || 0) : 0,
+
+            aciklama: String(aciklama || "").trim(),
+
+            kopru_ucreti: 0,
+            kopru_aciklama: "",
+            feribot_ucreti: 0,
+            feribot_aciklama: "",
+            diger_ucreti: 0,
+            diger_aciklama: "",
         };
+
+        if (kesinti_turu === "Köprü") {
+            payload.kopru_ucreti = asMoney(form.ucret_tutari);
+            payload.kopru_aciklama = payload.aciklama;
+        } else if (kesinti_turu === "Feribot") {
+            payload.feribot_ucreti = asMoney(form.ucret_tutari);
+            payload.feribot_aciklama = payload.aciklama;
+        } else if (kesinti_turu === "Diğer") {
+            payload.diger_ucreti = asMoney(form.ucret_tutari);
+            payload.diger_aciklama = payload.aciklama;
+        }
+
+        let error = null;
 
         if (formMode === "create") {
             ({ error } = await supabase.from("kesintiler").insert([
@@ -630,26 +641,20 @@ export default function KesintiGirisi() {
             return;
         }
 
-        // ✅ Plaka statüsü güncelle: sadece plaka ile
+        // plaka statüsü sadece tarih doluysa güncelle
         const plaka = String(plaka_treyler || "").trim();
-        const isCurrentOrFuture = dayjs(bitis_tarihi).isSameOrAfter(bugun, "day");
+        if (baslangic_tarihi && bitis_tarihi) {
+            const isCurrentOrFuture = dayjs(bitis_tarihi).isSameOrAfter(bugun, "day");
 
-        await supabase
-            .from("plakalar")
-            .update(
-                isCurrentOrFuture
-                    ? {
-                        statu: "KESİNTİDE",
-                        kesinti_baslangic_tarihi: baslangic_tarihi,
-                        kesinti_bitis_tarihi: bitis_tarihi,
-                    }
-                    : {
-                        statu: "Aktif",
-                        kesinti_baslangic_tarihi: null,
-                        kesinti_bitis_tarihi: null,
-                    }
-            )
-            .eq("plaka", plaka);
+            await supabase
+                .from("plakalar")
+                .update(
+                    isCurrentOrFuture
+                        ? { statu: "KESİNTİDE", kesinti_baslangic_tarihi: baslangic_tarihi, kesinti_bitis_tarihi: bitis_tarihi }
+                        : { statu: "Aktif", kesinti_baslangic_tarihi: null, kesinti_bitis_tarihi: null }
+                )
+                .eq("plaka", plaka);
+        }
 
         openSnack(formMode === "edit" ? "Kayıt güncellendi." : "Yeni kayıt eklendi.", "success");
         setForm(BOS_FORM);
@@ -664,6 +669,7 @@ export default function KesintiGirisi() {
             openSnack("Düzenleme yetkiniz yok.", "warning");
             return;
         }
+
         setForm({
             plaka_treyler: row.plaka_treyler || "",
             kesinti_turu: row.kesinti_turu || "",
@@ -672,15 +678,9 @@ export default function KesintiGirisi() {
             bitis_tarihi: (row.bitis_tarihi || "").slice(0, 10),
             gun_sayisi: row.gun_sayisi || hesaplaGun(row.baslangic_tarihi, row.bitis_tarihi),
             aciklama: row.aciklama || "",
-
-            // ✅ YENİ
-            kopru_ucreti: row.kopru_ucreti ?? 0,
-            kopru_aciklama: row.kopru_aciklama || "",
-            feribot_ucreti: row.feribot_ucreti ?? 0,
-            feribot_aciklama: row.feribot_aciklama || "",
-            diger_ucreti: row.diger_ucreti ?? 0,
-            diger_aciklama: row.diger_aciklama || "",
+            ucret_tutari: getRowFiyat(row),
         });
+
         setEditingId(row.id);
         setFormMode("edit");
         setFormOpen(true);
@@ -705,22 +705,17 @@ export default function KesintiGirisi() {
             return;
         }
 
-        // ✅ Plaka statüsünü reset: sadece plaka
         const plaka = String(silinecek.plaka_treyler || "").trim();
         await supabase
             .from("plakalar")
-            .update({
-                statu: "Aktif",
-                kesinti_baslangic_tarihi: null,
-                kesinti_bitis_tarihi: null,
-            })
+            .update({ statu: "Aktif", kesinti_baslangic_tarihi: null, kesinti_bitis_tarihi: null })
             .eq("plaka", plaka);
 
         openSnack("Kayıt başarıyla silindi.", "info");
         verileriGetir();
     };
 
-    /* ===================== Excel Export ===================== */
+    /* ===================== Excel Export (tek Fiyat sütunu) ===================== */
     const handleExportExcel = async () => {
         if (filtrelenmisKesintiler.length === 0) {
             openSnack("Aktarılacak filtrelenmiş kayıt bulunamadı.", "warning");
@@ -743,74 +738,48 @@ export default function KesintiGirisi() {
             { header: "Başlangıç", key: "baslangic", width: 15, style: { numFmt: "dd.mm.yyyy" } },
             { header: "Bitiş", key: "bitis", width: 15, style: { numFmt: "dd.mm.yyyy" } },
             { header: "Gün", key: "gun", width: 10 },
+            { header: "Fiyat (₺)", key: "fiyat", width: 14 },
             { header: "Açıklama", key: "aciklama", width: 40 },
-
-            // ✅ YENİ
-            { header: "Köprü (₺)", key: "kopru_ucreti", width: 12 },
-            { header: "Köprü Açıklama", key: "kopru_aciklama", width: 30 },
-            { header: "Feribot (₺)", key: "feribot_ucreti", width: 12 },
-            { header: "Feribot Açıklama", key: "feribot_aciklama", width: 30 },
-            { header: "Diğer (₺)", key: "diger_ucreti", width: 12 },
-            { header: "Diğer Açıklama", key: "diger_aciklama", width: 30 },
-
             { header: "Ekleyen", key: "ekleyen", width: 15 },
             { header: "Eklenme Tarihi", key: "eklenme_tarihi", width: 22, style: { numFmt: "dd.mm.yyyy hh:mm" } },
         ];
 
-        const rows = filtrelenmisKesintiler.map((k) => ({
-            plaka: k.plaka_treyler || "-",
-            tur: k.kesinti_turu || "-",
-            neden: k.neden || "-",
-            baslangic: safeDateValueGetter(k.baslangic_tarihi),
-            bitis: safeDateValueGetter(k.bitis_tarihi),
-            gun: k.gun_sayisi || 0,
-            aciklama: k.aciklama || "-",
-
-            // ✅ YENİ
-            kopru_ucreti: k.kopru_ucreti ?? 0,
-            kopru_aciklama: k.kopru_aciklama || "-",
-            feribot_ucreti: k.feribot_ucreti ?? 0,
-            feribot_aciklama: k.feribot_aciklama || "-",
-            diger_ucreti: k.diger_ucreti ?? 0,
-            diger_aciklama: k.diger_aciklama || "-",
-
-            ekleyen: k.ekleyen_kullanici || "-",
-            eklenme_tarihi: safeDateValueGetter(k.eklenme_tarihi),
-        }));
-
-        worksheet.addRows(rows);
+        worksheet.addRows(
+            filtrelenmisKesintiler.map((k) => ({
+                plaka: k.plaka_treyler || "-",
+                tur: k.kesinti_turu || "-",
+                neden: k.neden || "-",
+                baslangic: safeDateValueGetter(k.baslangic_tarihi),
+                bitis: safeDateValueGetter(k.bitis_tarihi),
+                gun: k.gun_sayisi || 0,
+                fiyat: getRowFiyat(k),
+                aciklama: k.aciklama || "-",
+                ekleyen: k.ekleyen_kullanici || "-",
+                eklenme_tarihi: safeDateValueGetter(k.eklenme_tarihi),
+            }))
+        );
 
         worksheet.getRow(1).eachCell((cell) => {
             cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
             cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF8B5CF6" } };
             cell.alignment = { vertical: "middle", horizontal: "center" };
-            cell.border = {
-                top: { style: "thin" },
-                left: { style: "thin" },
-                bottom: { style: "thin" },
-                right: { style: "thin" },
-            };
+            cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
         });
 
-        try {
-            const buffer = await workbook.xlsx.writeBuffer();
-            const blob = new Blob([buffer], {
-                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `kesinti_kayitlari_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`;
-            a.click();
-            window.URL.revokeObjectURL(url);
-            openSnack("Excel aktarımı başarılı.", "success");
-        } catch (e) {
-            console.error("Excel aktarım hatası:", e);
-            openSnack("Excel aktarımı sırasında bir hata oluştu.", "error");
-        }
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `kesinti_kayitlari_${dayjs().format("YYYYMMDD_HHmm")}.xlsx`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+
+        openSnack("Excel aktarımı başarılı.", "success");
     };
 
-    /* ===================== Columns ===================== */
+    /* ===================== DataGrid Columns (valueGetter YOK -> renderCell var) ===================== */
     const columns = [
         { field: "plaka_treyler", headerName: "PLAKA", flex: 1, minWidth: 160 },
         { field: "kesinti_turu", headerName: "TÜR", flex: 0.8, minWidth: 120 },
@@ -834,16 +803,22 @@ export default function KesintiGirisi() {
             valueFormatter: safeDateValueFormatter,
         },
         { field: "gun_sayisi", headerName: "GÜN", width: 90, type: "number" },
-        { field: "aciklama", headerName: "AÇIKLAMA", flex: 1.2, minWidth: 220 },
 
-        // ✅ YENİ (Grid)
-        { field: "kopru_ucreti", headerName: "KÖPRÜ ₺", width: 110, type: "number" },
-        { field: "kopru_aciklama", headerName: "KÖPRÜ AÇIK.", flex: 1, minWidth: 160 },
-        { field: "feribot_ucreti", headerName: "FERİBOT ₺", width: 120, type: "number" },
-        { field: "feribot_aciklama", headerName: "FERİBOT AÇIK.", flex: 1, minWidth: 170 },
-        { field: "diger_ucreti", headerName: "DİĞER ₺", width: 110, type: "number" },
-        { field: "diger_aciklama", headerName: "DİĞER AÇIK.", flex: 1, minWidth: 170 },
+        // ✅ FİYAT: renderCell ile hesaplanıyor (runtime error biter)
+        {
+            field: "fiyat",
+            headerName: "FİYAT (₺)",
+            width: 120,
+            sortable: false,
+            filterable: false,
+            renderCell: (params) => {
+                const r = params?.row;
+                const fiyat = getRowFiyat(r);
+                return <span>{Number(fiyat || 0).toLocaleString("tr-TR")}</span>;
+            },
+        },
 
+        { field: "aciklama", headerName: "AÇIKLAMA", flex: 1.4, minWidth: 260 },
         { field: "ekleyen_kullanici", headerName: "EKLEYEN", flex: 1, minWidth: 140 },
         {
             field: "actions",
@@ -874,6 +849,7 @@ export default function KesintiGirisi() {
         },
     ];
 
+    /* ===================== Rapor Excel (tek Fiyat sütunu) ===================== */
     const handleRaporExcel = async () => {
         if (!raporForm.ay || !raporForm.plaka_treyler) {
             openSnack("Lütfen ay ve plaka seçin.", "warning");
@@ -883,10 +859,7 @@ export default function KesintiGirisi() {
         const hedefAy = raporForm.ay;
         const hedefPlaka = raporForm.plaka_treyler;
 
-        const liste = kesintiler.filter((k) => {
-            const kayitAy = String(k.baslangic_tarihi).substring(0, 7);
-            return kayitAy === hedefAy && k.plaka_treyler === hedefPlaka;
-        });
+        const liste = kesintiler.filter((k) => String(k.baslangic_tarihi || "").substring(0, 7) === hedefAy && k.plaka_treyler === hedefPlaka);
 
         if (liste.length === 0) {
             openSnack("Bu ay için kayıt bulunamadı.", "info");
@@ -901,16 +874,8 @@ export default function KesintiGirisi() {
             { header: "Tür", key: "tur", width: 18 },
             { header: "Neden", key: "neden", width: 20 },
             { header: "Gün", key: "gun", width: 10 },
+            { header: "Fiyat (₺)", key: "fiyat", width: 14 },
             { header: "Açıklama", key: "aciklama", width: 45 },
-
-            // ✅ YENİ
-            { header: "Köprü (₺)", key: "kopru", width: 12 },
-            { header: "Köprü Açıklama", key: "kopru_acik", width: 30 },
-            { header: "Feribot (₺)", key: "feribot", width: 12 },
-            { header: "Feribot Açıklama", key: "feribot_acik", width: 30 },
-            { header: "Diğer (₺)", key: "diger", width: 12 },
-            { header: "Diğer Açıklama", key: "diger_acik", width: 30 },
-
             { header: "Ekleyen", key: "ekleyen", width: 20 },
             { header: "Başlangıç", key: "bas", width: 15, style: { numFmt: "dd.mm.yyyy" } },
             { header: "Bitiş", key: "bit", width: 15, style: { numFmt: "dd.mm.yyyy" } },
@@ -918,21 +883,13 @@ export default function KesintiGirisi() {
 
         liste.forEach((k) =>
             sheet.addRow({
-                plaka: k.plaka_treyler,
-                tur: k.kesinti_turu,
-                neden: k.neden,
-                gun: k.gun_sayisi,
-                aciklama: k.aciklama,
-
-                // ✅ YENİ
-                kopru: k.kopru_ucreti ?? 0,
-                kopru_acik: k.kopru_aciklama || "-",
-                feribot: k.feribot_ucreti ?? 0,
-                feribot_acik: k.feribot_aciklama || "-",
-                diger: k.diger_ucreti ?? 0,
-                diger_acik: k.diger_aciklama || "-",
-
-                ekleyen: k.ekleyen_kullanici,
+                plaka: k.plaka_treyler || "-",
+                tur: k.kesinti_turu || "-",
+                neden: k.neden || "-",
+                gun: k.gun_sayisi || 0,
+                fiyat: getRowFiyat(k),
+                aciklama: k.aciklama || "-",
+                ekleyen: k.ekleyen_kullanici || "-",
                 bas: safeDateValueGetter(k.baslangic_tarihi),
                 bit: safeDateValueGetter(k.bitis_tarihi),
             })
@@ -1184,7 +1141,7 @@ export default function KesintiGirisi() {
                                 <TextField type="number" label="Gün Sayısı" value={filtreler.gun_sayisi} onChange={(e) => setFiltreler((p) => ({ ...p, gun_sayisi: e.target.value }))} fullWidth />
 
                                 <Stack direction="row" spacing={1.5} sx={{ pt: 1 }}>
-                                    <Button fullWidth variant="outlined" color="error" size="large" onClick={() => setFiltreler({ ...BOS_FORM, ekleyen_kullanici: "", ay: "" })}>
+                                    <Button fullWidth variant="outlined" color="error" size="large" onClick={() => setFiltreler(BOS_FILTRE)}>
                                         Temizle
                                     </Button>
                                     <Button fullWidth variant="contained" color="primary" size="large" onClick={() => setFiltreDrawer(false)}>
@@ -1236,42 +1193,6 @@ export default function KesintiGirisi() {
                             <Button fullWidth variant="contained" sx={{ mt: 3 }} onClick={handleRaporExcel}>
                                 Rapor Oluştur
                             </Button>
-
-                            {raporSonuc.tumGunler.length > 0 && (
-                                <>
-                                    <Divider sx={{ my: 3 }} />
-
-                                    <Typography variant="h6" color="primary.main">
-                                        Toplam Kesintili Gün: {raporSonuc.toplamGun}
-                                    </Typography>
-
-                                    <Typography variant="subtitle2" sx={{ mt: 2 }}>
-                                        Gün Listesi:
-                                    </Typography>
-
-                                    <Box sx={{ mt: 1, maxHeight: 400, overflowY: "auto" }}>
-                                        {raporSonuc.tumGunler.map((g) => {
-                                            const kesintiVar = raporSonuc.kesintiliGunler.includes(g);
-                                            return (
-                                                <Box
-                                                    key={g}
-                                                    sx={{
-                                                        p: 1,
-                                                        borderRadius: 2,
-                                                        my: 0.5,
-                                                        backgroundColor: kesintiVar ? "#8B5CF633" : "#1E293B",
-                                                        border: kesintiVar ? "1px solid #8B5CF6" : "1px solid transparent",
-                                                    }}
-                                                >
-                                                    <Typography>
-                                                        {dayjs(g).format("DD.MM.YYYY")} — {kesintiVar ? "🟥 Kesintili Gün" : "🟩 Normal Gün"}
-                                                    </Typography>
-                                                </Box>
-                                            );
-                                        })}
-                                    </Box>
-                                </>
-                            )}
                         </Drawer>
 
                         {/* Form Dialog */}
@@ -1355,89 +1276,53 @@ export default function KesintiGirisi() {
                                     </Select>
                                 </FormControl>
 
-                                {/* Başlangıç Tarihi */}
+                                {/* Başlangıç */}
                                 <TextField
                                     type="date"
-                                    label="Başlangıç *"
+                                    label={isUcretTuru(form.kesinti_turu) ? "Başlangıç" : "Başlangıç *"}
                                     InputLabelProps={{ shrink: true }}
                                     value={form.baslangic_tarihi}
                                     onChange={(e) => handleChange("baslangic_tarihi", e.target.value)}
                                     fullWidth
-                                    required
+                                    required={!isUcretTuru(form.kesinti_turu)}
                                 />
 
-                                {/* Bitiş Tarihi */}
+                                {/* Bitiş */}
                                 <TextField
                                     type="date"
-                                    label="Bitiş *"
+                                    label={isUcretTuru(form.kesinti_turu) ? "Bitiş" : "Bitiş *"}
                                     InputLabelProps={{ shrink: true }}
                                     value={form.bitis_tarihi}
                                     onChange={(e) => handleChange("bitis_tarihi", e.target.value)}
                                     fullWidth
-                                    required
+                                    required={!isUcretTuru(form.kesinti_turu)}
                                 />
 
                                 {/* Gün Sayısı */}
                                 <TextField label="Gün Sayısı" value={form.gun_sayisi || 0} fullWidth disabled />
 
-                                {/* ✅ YENİ: Köprü / Feribot / Diğer */}
-                                <TextField
-                                    label="Köprü Ücreti (₺)"
-                                    type="number"
-                                    value={form.kopru_ucreti}
-                                    onChange={(e) => handleChange("kopru_ucreti", e.target.value)}
-                                    fullWidth
-                                    inputProps={{ step: "0.01", min: 0 }}
-                                />
-                                <TextField
-                                    label="Köprü Açıklama"
-                                    value={form.kopru_aciklama}
-                                    onChange={(e) => handleChange("kopru_aciklama", e.target.value)}
-                                    fullWidth
-                                    required={asMoney(form.kopru_ucreti) > 0}
-                                />
+                                {/* Fiyat (sadece Köprü/Feribot/Diğer) */}
+                                {isUcretTuru(form.kesinti_turu) && (
+                                    <TextField
+                                        label="Fiyat (₺) *"
+                                        type="number"
+                                        value={form.ucret_tutari}
+                                        onChange={(e) => handleChange("ucret_tutari", e.target.value)}
+                                        fullWidth
+                                        inputProps={{ step: "0.01", min: 0 }}
+                                    />
+                                )}
 
+                                {/* Açıklama (ortak) */}
                                 <TextField
-                                    label="Feribot Ücreti (₺)"
-                                    type="number"
-                                    value={form.feribot_ucreti}
-                                    onChange={(e) => handleChange("feribot_ucreti", e.target.value)}
-                                    fullWidth
-                                    inputProps={{ step: "0.01", min: 0 }}
-                                />
-                                <TextField
-                                    label="Feribot Açıklama"
-                                    value={form.feribot_aciklama}
-                                    onChange={(e) => handleChange("feribot_aciklama", e.target.value)}
-                                    fullWidth
-                                    required={asMoney(form.feribot_ucreti) > 0}
-                                />
-
-                                <TextField
-                                    label="Diğer Ücret (₺)"
-                                    type="number"
-                                    value={form.diger_ucreti}
-                                    onChange={(e) => handleChange("diger_ucreti", e.target.value)}
-                                    fullWidth
-                                    inputProps={{ step: "0.01", min: 0 }}
-                                />
-                                <TextField
-                                    label="Diğer Açıklama"
-                                    value={form.diger_aciklama}
-                                    onChange={(e) => handleChange("diger_aciklama", e.target.value)}
-                                    fullWidth
-                                    required={asMoney(form.diger_ucreti) > 0}
-                                />
-
-                                {/* Açıklama */}
-                                <TextField
-                                    label="Açıklama"
+                                    label={isUcretTuru(form.kesinti_turu) ? "Açıklama *" : "Açıklama"}
                                     value={form.aciklama}
                                     onChange={(e) => handleChange("aciklama", e.target.value)}
                                     fullWidth
                                     multiline
                                     minRows={6}
                                     placeholder="Gerekçe ve notlar..."
+                                    required={isUcretTuru(form.kesinti_turu)}
                                     sx={{ gridColumn: { xs: "1", md: "1 / -1" } }}
                                 />
                             </DialogContent>
@@ -1461,12 +1346,7 @@ export default function KesintiGirisi() {
                         </Dialog>
 
                         {/* Snackbar */}
-                        <Snackbar
-                            open={snack.open}
-                            autoHideDuration={3000}
-                            onClose={() => setSnack((s) => ({ ...s, open: false }))}
-                            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                        >
+                        <Snackbar open={snack.open} autoHideDuration={3000} onClose={() => setSnack((s) => ({ ...s, open: false }))} anchorOrigin={{ vertical: "bottom", horizontal: "right" }}>
                             <Alert onClose={() => setSnack((s) => ({ ...s, open: false }))} severity={snack.severity} variant="filled" sx={{ width: "100%", borderRadius: 2 }}>
                                 {snack.msg}
                             </Alert>

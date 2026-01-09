@@ -278,7 +278,7 @@ export default function Sidebar(props) {
     const hakedisAltMenuler = useMemo(
         () => [
             { ad: "Frigo Yakıt Hakediş", yol: "/hakedis/frigo-yakit-hakedis", ikon: <LocalGasStationIcon /> }, // ✅ yeni
-            { ad: "Frigo Hakediş Seferleri", yol: "/hakedis/hakedis-seferleri", ikon: <ReceiptLongIcon /> },
+            { ad: "Frigo - Filo Kira ve Sürücü", yol: "/hakedis/hakedis-seferleri", ikon: <ReceiptLongIcon /> },
             { ad: "Filo-Frigo Araç Cari & Fiyat", yol: "/hakedis/arac-cari-ve-fiyat", ikon: <CreditCardIcon /> },
             { ad: "Filo %9 İskontolu Yakıt Hakedişi", yol: "/hakedis/FiloIskontoluHakedis", ikon: <PaidIcon /> },
             { ad: "Tedarikçi Masraf", yol: "/hakedis/tedarikci-masraf", ikon: <PaidIcon /> },

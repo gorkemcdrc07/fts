@@ -148,7 +148,6 @@ const parseDMY = (str) => {
 };
 /* ------------------------------------------------- */
 
-
 /** Date -> "YYYY-MM-DDTHH:mm:ss+03:00" (yerel offset ile) */
 const toLocalOffsetISO = (d) => {
     if (!(d instanceof Date)) return null;
@@ -223,7 +222,15 @@ const StepCard = ({ step }) => {
     const mm = totalMin % 60;
     const durTxt = hh <= 0 ? `${mm} dk` : mm === 0 ? `${hh} saat` : `${hh} saat ${mm} dk`;
     return (
-        <Paper variant="outlined" sx={{ p: 1.25, borderRadius: 2, borderLeft: `4px solid ${s.borderLeftColor}`, background: "linear-gradient(90deg, rgba(99,102,241,0.06), rgba(59,130,246,0.06))" }}>
+        <Paper
+            variant="outlined"
+            sx={{
+                p: 1.25,
+                borderRadius: 2,
+                borderLeft: `4px solid ${s.borderLeftColor}`,
+                background: "linear-gradient(90deg, rgba(99,102,241,0.06), rgba(59,130,246,0.06))"
+            }}
+        >
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.25 }}>
                 {s.icon}
                 <Chip size="small" label={s.chip.label} color={s.chip.color} />
@@ -258,6 +265,9 @@ export default function ETAEditor({
     const [kalanSaved, setKalanSaved] = useState(false);
     const [initialKalanHours, setInitialKalanHours] = useState(null);
     const [kalanColumnMissing, setKalanColumnMissing] = useState(false);
+
+    // ✅ YENİ: kaydedilmiş değer varken düzenleme moduna izin ver
+    const [editKalan, setEditKalan] = useState(false);
 
     const effectiveIlkNokta = useMemo(
         () => ilkNokta ?? (Array.isArray(sefer?.noktalar) ? sefer.noktalar[0] : null) ?? null,
@@ -421,6 +431,7 @@ export default function ETAEditor({
                         setInitialKalanHours(null);
                         setKalanSurusStr("");
                         setKalanSaved(false);
+                        setEditKalan(false);
                         return;
                     }
                     throw error;
@@ -435,16 +446,19 @@ export default function ETAEditor({
                     const mm = mmTotal % 60;
                     setKalanSurusStr(`${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
                     setKalanSaved(true);
+                    setEditKalan(false);
                 } else if (!cancelled) {
                     setInitialKalanHours(null);
                     setKalanSurusStr("");
                     setKalanSaved(false);
+                    setEditKalan(false);
                 }
             } catch (e) {
                 console.error("eta_kalan_surus load error:", e);
                 setInitialKalanHours(null);
                 setKalanSurusStr("");
                 setKalanSaved(false);
+                setEditKalan(false);
             }
         };
         load();
@@ -588,7 +602,6 @@ export default function ETAEditor({
 
     // -------------------- ETA DURUMU HESABI --------------------
     const computeEtaStatus = useCallback(() => {
-
         // 🔥 DEBUG LOG BURAYA EKLENİYOR
         console.log("teslimVarisRaw =", teslimVarisRaw);
         console.log("typeof teslimVarisRaw =", typeof teslimVarisRaw);
@@ -605,7 +618,6 @@ export default function ETAEditor({
             realArrive = parseDMY(teslimVarisRaw);
         }
 
-
         if (!realArrive) {
             return { status: "notArrived", label: "Henüz varmamış" };
         }
@@ -616,7 +628,6 @@ export default function ETAEditor({
         if (diffMin > 15) return { status: "late", label: `Gecikme (${diffMin} dk)` };
         return { status: "ontime", label: "Zamanında" };
     }, [plan?.eta, teslimVarisRaw]);
-
 
     /* -------------------- AUTO-SAVE ETA (opsiyonel) -------------------- */
     useEffect(() => {
@@ -671,12 +682,19 @@ export default function ETAEditor({
 
             // Ne kaydedilebilir?
             const parsedKalan = parseHoursInput(kalanSurusStr);
+
+            // ✅ YENİ: kayıtlı olsa bile düzenle modunda değiştiyse kaydet
+            const kalanChanged =
+                parsedKalan != null &&
+                initialKalanHours != null &&
+                Math.abs(Number(parsedKalan) - Number(initialKalanHours)) > 1e-9;
+
             const canSaveKalan =
                 !kalanColumnMissing &&
-                !kalanSaved &&
                 parsedKalan != null &&
                 parsedKalan >= 0 &&
-                parsedKalan <= 9;
+                parsedKalan <= 9 &&
+                (initialKalanHours == null || (editKalan && kalanChanged));
 
             const canSaveEtaNote = !yuklemeCikisRaw;
             const canSaveEtaVaris = Boolean(yuklemeCikisRaw && hasDistance && plan?.eta);
@@ -722,6 +740,7 @@ export default function ETAEditor({
                 if (canSaveKalan) {
                     setInitialKalanHours(parsedKalan);
                     setKalanSaved(true);
+                    setEditKalan(false); // ✅ tekrar kilitle
                 }
 
                 const pieces = [
@@ -820,12 +839,19 @@ export default function ETAEditor({
 
     // Alttaki tek “Kaydet” için dinamik enable/tooltip
     const parsedKalan = parseHoursInput(kalanSurusStr);
+
+    const kalanChangedUi =
+        parsedKalan != null &&
+        initialKalanHours != null &&
+        Math.abs(Number(parsedKalan) - Number(initialKalanHours)) > 1e-9;
+
+    // ✅ YENİ: initial yoksa kaydet; initial varsa sadece edit modunda ve değiştiyse kaydet
     const canSaveKalan =
         !kalanColumnMissing &&
-        !kalanSaved &&
         parsedKalan != null &&
         parsedKalan >= 0 &&
-        parsedKalan <= 9;
+        parsedKalan <= 9 &&
+        (initialKalanHours == null || (editKalan && kalanChangedUi));
 
     const canSaveEtaNote = !yuklemeCikisRaw; // çıkış yoksa not yazabiliriz
     const canSaveEtaVaris = Boolean(yuklemeCikisRaw && hasDistance && plan?.eta);
@@ -966,7 +992,8 @@ export default function ETAEditor({
                             size="small"
                             value={kalanSurusStr}
                             onChange={(e) => setKalanSurusStr(e.target.value)}
-                            disabled={kalanSaved || kalanColumnMissing}
+                            // ✅ YENİ: kayıtlıysa normalde kilitli; Düzenle ile açılır
+                            disabled={kalanColumnMissing || (kalanSaved && !editKalan)}
                             helperText="Maksimum 9 saat. Örn: 1:45, 4.5, 03:00"
                             error={
                                 Boolean(kalanSurusStr) &&
@@ -979,9 +1006,47 @@ export default function ETAEditor({
                         />
                     </Stack>
 
-                    {kalanSaved && (
+                    {/* ✅ YENİ: Düzenle / İptal */}
+                    {kalanSaved && !kalanColumnMissing && (
+                        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                            {!editKalan ? (
+                                <Button size="small" variant="outlined" onClick={() => setEditKalan(true)}>
+                                    Düzenle
+                                </Button>
+                            ) : (
+                                <Button
+                                    size="small"
+                                    variant="text"
+                                    onClick={() => {
+                                        // değişiklikten vazgeç -> başlangıç değerine geri dön
+                                        if (initialKalanHours != null && Number.isFinite(Number(initialKalanHours))) {
+                                            const mmTotal = Math.round(Number(initialKalanHours) * 60);
+                                            const hh = Math.floor(mmTotal / 60);
+                                            const mm = mmTotal % 60;
+                                            setKalanSurusStr(`${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+                                        } else {
+                                            setKalanSurusStr("");
+                                        }
+                                        setEditKalan(false);
+                                    }}
+                                >
+                                    İptal
+                                </Button>
+                            )}
+
+                            {editKalan && (
+                                <Chip
+                                    size="small"
+                                    color={kalanChangedUi ? "warning" : "default"}
+                                    label={kalanChangedUi ? "Değiştirildi" : "Değişiklik yok"}
+                                />
+                            )}
+                        </Stack>
+                    )}
+
+                    {kalanSaved && !editKalan && (
                         <Typography variant="caption" sx={{ mt: 1, color: "text.secondary", display: "block" }}>
-                            Bu sefer için kalan sürüş değeri kaydedildi ve kilitlendi.
+                            Bu sefer için kalan sürüş değeri kaydedildi ve kilitlendi. Değiştirmek için “Düzenle”.
                         </Typography>
                     )}
                 </Paper>

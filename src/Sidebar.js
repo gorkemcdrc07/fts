@@ -307,7 +307,7 @@ export default function Sidebar(props) {
             if (badge > 0 && onRead) onRead();
         };
         return (
-            <Tooltip title={!open ? label : null} placement="right" arrow>
+            <Tooltip title={label} placement="right" arrow>
                 <StyledNavItem onClick={handleClick} active={active ? 1 : 0} open={open ? 1 : 0}>
                     <ListItemIcon
                         sx={{
@@ -343,7 +343,7 @@ export default function Sidebar(props) {
     };
 
     const Category = ({ icon, label, openState, setOpenState, endAdornment }) => (
-        <Tooltip title={!open ? label : null} placement="right" arrow>
+        <Tooltip title={label} placement="right" arrow>
             <StyledCategory
                 onClick={() => {
                     setOpenState((p) => !p);

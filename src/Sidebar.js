@@ -50,7 +50,7 @@ import AirportShuttleOutlinedIcon from "@mui/icons-material/AirportShuttleOutlin
 import PivotTableChartIcon from "@mui/icons-material/PivotTableChart";
 import LocalGasStationIcon from "@mui/icons-material/LocalGasStation"; // ✅ Frigo Yakıt Hakediş
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
-
+import SpeedIcon from "@mui/icons-material/Speed"; // ✅ KM Kayıt
 
 export const DRAWER_WIDTH_OPEN = 280;
 export const DRAWER_WIDTH_CLOSED = 72;
@@ -74,10 +74,10 @@ const StyledNavItem = styled(ListItemButton)(({ theme, active, open }) => ({
         color: NEON_COLOR_1,
     },
     ...(active && {
-        background: `linear-gradient(90deg, ${alpha(
-            NEON_COLOR_2,
-            0.3
-        )}, ${alpha(NEON_COLOR_1, 0.15)})`,
+        background: `linear-gradient(90deg, ${alpha(NEON_COLOR_2, 0.3)}, ${alpha(
+            NEON_COLOR_1,
+            0.15
+        )})`,
         color: theme.palette.common.white,
         fontWeight: 700,
         boxShadow: `0 0 15px ${alpha(NEON_COLOR_2, 0.6)}, inset 0 0 8px ${alpha(
@@ -88,10 +88,10 @@ const StyledNavItem = styled(ListItemButton)(({ theme, active, open }) => ({
         border: `1px solid ${alpha(NEON_COLOR_1, 0.5)}`,
         "&:hover": {
             backgroundColor: "transparent",
-            boxShadow: `0 0 20px ${alpha(
-                NEON_COLOR_2,
-                0.8
-            )}, inset 0 0 10px ${alpha(NEON_COLOR_1, 0.5)}`,
+            boxShadow: `0 0 20px ${alpha(NEON_COLOR_2, 0.8)}, inset 0 0 10px ${alpha(
+                NEON_COLOR_1,
+                0.5
+            )}`,
             transform: "translateY(-2px)",
         },
     }),
@@ -128,8 +128,7 @@ export default function Sidebar(props) {
     const [internalOpen, setInternalOpen] = useState(true);
 
     const isControlled =
-        typeof controlledOpen === "boolean" &&
-        typeof setControlledOpen === "function";
+        typeof controlledOpen === "boolean" && typeof setControlledOpen === "function";
     const open = isControlled ? controlledOpen : internalOpen;
 
     const toggle = () => {
@@ -153,6 +152,9 @@ export default function Sidebar(props) {
     const [afyonMenuAcik, setAfyonMenuAcik] = useState(false);
     const [hakedisMenuAcik, setHakedisMenuAcik] = useState(false);
 
+    // ✅ YENİ: Kayıt İşlemleri
+    const [kayitMenuAcik, setKayitMenuAcik] = useState(false);
+
     // Bildirim sayacı örnekleri
     const [okunmamisGorevSayisi, setOkunmamisGorevSayisi] = useState(3);
     const [gorevBildirimSayisi, setGorevBildirimSayisi] = useState(5);
@@ -170,49 +172,36 @@ export default function Sidebar(props) {
         msg: "",
         severity: "info",
     });
-    const handleCloseSnack = () =>
-        setSnack((s) => ({ ...s, open: false }));
-    const showPopup = (msg, severity = "info") =>
-        setSnack({ open: true, msg, severity });
+    const handleCloseSnack = () => setSnack((s) => ({ ...s, open: false }));
+    const showPopup = (msg, severity = "info") => setSnack({ open: true, msg, severity });
 
     // Aktif route’a göre ilgili kategoriyi otomatik aç
     useEffect(() => {
         const p = location.pathname || "";
-        const anyStartsWith = (arr) =>
-            arr.some((x) => p === x || p.startsWith(x + "/"));
+        const anyStartsWith = (arr) => arr.some((x) => p === x || p.startsWith(x + "/"));
 
         setKullaniciMenuAcik(
-            anyStartsWith([
-                "/planlama",
-                "/plaka-onerisi",
-                "/seferler",
-                "/tamamlanan-seferler",
-            ])
+            anyStartsWith(["/planlama", "/plaka-onerisi", "/seferler", "/tamamlanan-seferler"])
         );
         setAracMenuAcik(
-            anyStartsWith([
-                "/arac/yonetim",
-                "/arac/izin-girisi",
-                "/arac/kesinti-girisi",
-                "/arac/durumlari",
-            ])
+            anyStartsWith(["/arac/yonetim", "/arac/izin-girisi", "/arac/kesinti-girisi", "/arac/durumlari"])
         );
 
-        // RAPORLAR (Yüklemede Gecikme path'i kaldırıldı)
+        // RAPORLAR
         setRaporMenuAcik(
             anyStartsWith([
                 "/raporlar/kpi-olcumu",
                 "/raporlar/lokasyon-rapor",
                 "/raporlar/yuklemede-bekleme",
                 "/raporlar/teslimde-bekleme",
-                // "/raporlar/yuklemede-gecikme", <-- KALDIRILDI
                 "/raporlar/sefer-sureleri",
                 "/raporlar/plaka-bazli",
                 "/raporlar/tools",
                 "/raporlar/eta-uyumsuz",
                 "/raporlar/sefer-tamamlayan",
-                "/raporlar/bolgesel-analiz", // ✅ eklendi
-                "/raporlar/arac-etalari",   // ✔️ BURAYI EKLEDİK
+                "/raporlar/bolgesel-analiz",
+                "/raporlar/arac-etalari",
+                "/raporlar/bosta-arac",
             ])
         );
 
@@ -223,13 +212,16 @@ export default function Sidebar(props) {
                 "/hakedis/arac-cari-ve-fiyat",
                 "/hakedis/hakedis-seferleri",
                 "/hakedis/hamaliye",
-                "/hakedis/frigo-yakit-hakedis", // ✅ yeni yol
-
+                "/hakedis/frigo-yakit-hakedis",
+                "/hakedis/FiloIskontoluHakedis",
             ])
         );
 
         setAfyonMenuAcik(anyStartsWith(["/afyon/seferler", "/afyon/araclar"]));
         setGorevMenuAcik(anyStartsWith(["/gorevler/tum", "/gorevler/ata", "/gorevler/benim"]));
+
+        // ✅ YENİ: KAYIT İŞLEMLERİ otomatik aç
+        setKayitMenuAcik(anyStartsWith(["/kayit-islemleri/km-kayit"]));
     }, [location.pathname]);
 
     // Menü tanımları
@@ -264,10 +256,7 @@ export default function Sidebar(props) {
             { ad: "Boşta Araç", yol: "/raporlar/bosta-arac", ikon: <DirectionsCarIcon /> },
             { ad: "Sefer Süreleri", yol: "/raporlar/sefer-sureleri", ikon: <AirportShuttleIcon /> },
             { ad: "Plaka Bazlı", yol: "/raporlar/plaka-bazli", ikon: <AirportShuttleOutlinedIcon /> },
-
-            // ✔️ YENİ EKLENEN — ACTIF ARAÇ ETA RAPORU
             { ad: "Araç ETAları", yol: "/raporlar/arac-etalari", ikon: <AccessTimeIcon /> },
-
             { ad: "Sefer Tamamlayan", yol: "/raporlar/sefer-tamamlayan", ikon: <TaskAltIcon /> },
             { ad: "Bölgesel Analiz", yol: "/raporlar/bolgesel-analiz", ikon: <QueryStatsIcon /> },
         ],
@@ -277,24 +266,47 @@ export default function Sidebar(props) {
     // ✅ Frigo Yakıt Hakediş HAKEDİŞLER altında
     const hakedisAltMenuler = useMemo(
         () => [
-            { ad: "Frigo Yakıt Hakediş", yol: "/hakedis/frigo-yakit-hakedis", ikon: <LocalGasStationIcon /> }, // ✅ yeni
+            { ad: "Frigo Yakıt Hakediş", yol: "/hakedis/frigo-yakit-hakedis", ikon: <LocalGasStationIcon /> },
             { ad: "Frigo - Filo Kira ve Sürücü", yol: "/hakedis/hakedis-seferleri", ikon: <ReceiptLongIcon /> },
             { ad: "Filo-Frigo Araç Cari & Fiyat", yol: "/hakedis/arac-cari-ve-fiyat", ikon: <CreditCardIcon /> },
             { ad: "Filo %9 İskontolu Yakıt Hakedişi", yol: "/hakedis/FiloIskontoluHakedis", ikon: <PaidIcon /> },
             { ad: "Tedarikçi Masraf", yol: "/hakedis/tedarikci-masraf", ikon: <PaidIcon /> },
             { ad: "Hamaliye", yol: "/hakedis/hamaliye", ikon: <PaidIcon /> },
-
         ],
         []
     );
 
     const gorevAltMenuler = useMemo(
         () => [
-            { ad: "Tüm Görevler", yol: "/gorevler/tum", ikon: <AssignmentIcon />, badge: gorevBildirimSayisi, onRead: readAllTasks },
+            {
+                ad: "Tüm Görevler",
+                yol: "/gorevler/tum",
+                ikon: <AssignmentIcon />,
+                badge: gorevBildirimSayisi,
+                onRead: readAllTasks,
+            },
             { ad: "Görev Ata", yol: "/gorevler/ata", ikon: <AddTaskIcon />, sadeceRol: "YÖNETİCİ" },
-            { ad: "Benim Görevlerim", yol: "/gorevler/benim", ikon: <PushPinIcon />, badge: okunmamisGorevSayisi, onRead: readMyTasks },
+            {
+                ad: "Benim Görevlerim",
+                yol: "/gorevler/benim",
+                ikon: <PushPinIcon />,
+                badge: okunmamisGorevSayisi,
+                onRead: readMyTasks,
+            },
         ],
         [okunmamisGorevSayisi, gorevBildirimSayisi]
+    );
+
+    // ✅ YENİ: Kayıt İşlemleri alt menü
+    const kayitAltMenuler = useMemo(
+        () => [
+            {
+                ad: "KM Kayıt",
+                yol: "/kayit-islemleri/km-kayit",
+                ikon: <SpeedIcon />,
+            },
+        ],
+        []
     );
 
     const isActivePath = (path) =>
@@ -532,17 +544,25 @@ export default function Sidebar(props) {
                         setOpenState={setHakedisMenuAcik}
                         endAdornment={
                             bildirimSayisi > 0 ? (
-                                <Chip
-                                    size="small"
-                                    color="error"
-                                    label={bildirimSayisi}
-                                    sx={{ height: 20, fontWeight: 700 }}
-                                />
+                                <Chip size="small" color="error" label={bildirimSayisi} sx={{ height: 20, fontWeight: 700 }} />
                             ) : null
                         }
                     />
                     <Collapse in={hakedisMenuAcik} timeout="auto" unmountOnExit>
                         {hakedisAltMenuler.map((m) => (
+                            <NavItem key={m.yol} label={m.ad} icon={m.ikon} to={m.yol} onClick={go} />
+                        ))}
+                    </Collapse>
+
+                    {/* ✅ YENİ: KAYIT İŞLEMLERİ */}
+                    <Category
+                        icon={<AssignmentIcon />}
+                        label="KAYIT İŞLEMLERİ"
+                        openState={kayitMenuAcik}
+                        setOpenState={setKayitMenuAcik}
+                    />
+                    <Collapse in={kayitMenuAcik} timeout="auto" unmountOnExit>
+                        {kayitAltMenuler.map((m) => (
                             <NavItem key={m.yol} label={m.ad} icon={m.ikon} to={m.yol} onClick={go} />
                         ))}
                     </Collapse>

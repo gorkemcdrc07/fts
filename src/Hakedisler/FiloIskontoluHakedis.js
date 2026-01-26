@@ -54,6 +54,47 @@ export default function FiloHakedisWizard() {
     const [hakedisFilters, setHakedisFilters] = useState({});
     const [summaryFilters, setSummaryFilters] = useState({});
     const [seferlerFilters, setSeferlerFilters] = useState({});
+    // ✅ Hakediş şablonu indir (boş excel)
+    const downloadHakedisTemplate = useCallback(() => {
+        const headers = [
+            "Plate Number",
+            "Invoice Current Account Id",
+            "Invoice Current Account",
+            "Iskontosuz Birim Fiyat",
+            "Litre Farki",
+        ];
+
+        // Tamamen boş istiyorsan [] bırakıyoruz
+        const ws = XLSX.utils.json_to_sheet([], { header: headers });
+        XLSX.utils.sheet_add_aoa(ws, [headers], { origin: "A1" });
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Hakediş Şablonu");
+
+        XLSX.writeFile(wb, "Hakedis_Sablon.xlsx");
+    }, []);
+
+    // ✅ Seferler şablonu indir (boş excel)
+    const downloadSeferlerTemplate = useCallback(() => {
+        const headers = [
+            "Sefer Tarihi",
+            "Sefer No",
+            "TMSDespatchId",
+            "Plaka",
+            "Toplam KM",
+        ];
+
+        const ws = XLSX.utils.json_to_sheet([], { header: headers });
+        XLSX.utils.sheet_add_aoa(ws, [headers], { origin: "A1" });
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Seferler Şablonu");
+
+        XLSX.writeFile(wb, "Seferler_Sablon.xlsx");
+    }, []);
+
+
+
 
     // ✅ Yeni adım eklendi
     const steps = ['Hakediş Yükle', 'TL Hesapla', 'Seferler Yükle', 'KM Dağıt & Sağlama', 'Çıktı Al ve Sayfaya Yönlendir'];
@@ -187,7 +228,7 @@ export default function FiloHakedisWizard() {
 
         setExcelData(prev => prev.map(row => ({
             ...row,
-            hakedisTL: (toNumberTR(row[uCol.key]) / 1.09) * toNumberTR(row[lCol.key])
+            hakedisTL: (toNumberTR(row[uCol.key]) / 1.12) * toNumberTR(row[lCol.key])
         })));
 
         setActiveStep(2);
@@ -367,17 +408,45 @@ export default function FiloHakedisWizard() {
 
                 <Paper sx={{ p: 2, mb: 3, display: 'flex', gap: 2, background: theme.card, borderRadius: '15px', border: `1px solid ${theme.border}` }}>
                     {activeStep === 0 && (
-                        <Button component="label" variant="contained">
-                            Hakediş Yükle
-                            <input type="file" hidden onChange={e => readExcel(e.target.files[0], 'hakedis')} />
-                        </Button>
+                        <>
+                            <Button
+                                variant="outlined"
+                                startIcon={<DownloadIcon />}
+                                onClick={downloadHakedisTemplate}
+                            >
+                                Hakediş Şablonu İndir
+                            </Button>
+
+                            <Button component="label" variant="contained">
+                                Hakediş Yükle
+                                <input
+                                    type="file"
+                                    hidden
+                                    onChange={(e) => readExcel(e.target.files?.[0], "hakedis")}
+                                />
+                            </Button>
+                        </>
                     )}
                     {activeStep === 1 && <Button variant="contained" onClick={calculateStep1}>TL Hesapla</Button>}
                     {activeStep === 2 && (
-                        <Button component="label" variant="contained">
-                            Seferler Yükle
-                            <input type="file" hidden onChange={e => readExcel(e.target.files[0], 'seferler')} />
-                        </Button>
+                        <>
+                            <Button
+                                variant="outlined"
+                                startIcon={<DownloadIcon />}
+                                onClick={downloadSeferlerTemplate}
+                            >
+                                Seferler Şablonu İndir
+                            </Button>
+
+                            <Button component="label" variant="contained">
+                                Seferler Yükle
+                                <input
+                                    type="file"
+                                    hidden
+                                    onChange={(e) => readExcel(e.target.files?.[0], "seferler")}
+                                />
+                            </Button>
+                        </>
                     )}
                     {activeStep === 3 && <Button variant="contained" color="success" onClick={distributeHakedisByKM}>Dağıtımı Başlat</Button>}
 

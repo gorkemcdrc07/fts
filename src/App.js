@@ -1,3 +1,5 @@
+// src/App.js (veya App.jsx - sende hangisiyse aynı dosya)
+// ✅ KM Kayıt route'u eklendi + lazy import eklendi
 import React, { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
@@ -56,12 +58,13 @@ const ETAUyumsuzlugu = lazy(() => import("./raporlar/ETAUyumsuzlugu"));
 const FrigoYakitHakedis = lazy(() => import("./Hakedisler/FrigoYakitHakedis"));
 
 // ✔ Yeni lazy import – DOĞRU HALİ
-const FiloIskontoluHakedis = lazy(() =>
-    import("./Hakedisler/FiloIskontoluHakedis")
-);
+const FiloIskontoluHakedis = lazy(() => import("./Hakedisler/FiloIskontoluHakedis"));
 
 const SeferTamamlayan = lazy(() => import("./raporlar/SeferTamamlayan"));
 const BolgeselAnaliz = lazy(() => import("./raporlar/BolgeselAnaliz"));
+
+// ✅ YENİ: KM Kayıt (Kayıt İşlemleri)
+const KmKayit = lazy(() => import("./kayit-islemleri/km-kayit"));
 
 // Test Data
 const TEST_VERILERI = {
@@ -86,19 +89,37 @@ function App() {
                 <CssBaseline />
                 <Router>
                     <Routes>
-
                         <Route path="/" element={<Login />} />
 
                         <Route element={<AppLayout />}>
                             <Route path="anasayfa" element={<Anasayfa />} />
 
-                            <Route element={<RequirePageAccess><Outlet /></RequirePageAccess>}>
-
+                            <Route
+                                element={
+                                    <RequirePageAccess>
+                                        <Outlet />
+                                    </RequirePageAccess>
+                                }
+                            >
                                 {/* Kullanıcı İşlemleri */}
                                 <Route path="planlama" element={<Planlama />} />
                                 <Route path="plaka-onerisi" element={<PlakaOnerisi />} />
-                                <Route path="seferler" element={<Suspense fallback={<div>Yükleniyor...</div>}><ReelAtananSeferler /></Suspense>} />
-                                <Route path="aktifseferler/gorunum" element={<Suspense fallback={<div>Yükleniyor...</div>}><GorunumDuzenle /></Suspense>} />
+                                <Route
+                                    path="seferler"
+                                    element={
+                                        <Suspense fallback={<div>Yükleniyor...</div>}>
+                                            <ReelAtananSeferler />
+                                        </Suspense>
+                                    }
+                                />
+                                <Route
+                                    path="aktifseferler/gorunum"
+                                    element={
+                                        <Suspense fallback={<div>Yükleniyor...</div>}>
+                                            <GorunumDuzenle />
+                                        </Suspense>
+                                    }
+                                />
                                 <Route path="siparisler" element={<Siparisler />} />
                                 <Route path="tamamlanan-seferler" element={<TamamlananlarPage />} />
 
@@ -122,7 +143,6 @@ function App() {
                                         </Suspense>
                                     }
                                 />
-
                                 <Route path="hakedis/tedarikci-masraf" element={<TedarikciMasraf />} />
                                 <Route path="hakedis/arac-cari-ve-fiyat" element={<AracCariVeFiyat />} />
                                 <Route path="hakedis/hakedis-seferleri" element={<HakedisSeferleri />} />
@@ -143,23 +163,96 @@ function App() {
                                 <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
                                 <Route path="raporlar/teslimde-bekleme" element={<TeslimdeBekleme />} />
                                 <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
-                                <Route path="raporlar/eta-uyumsuz" element={<Suspense fallback={<div>ETA Uyumsuzluğu yükleniyor...</div>}><ETAUyumsuzlugu /></Suspense>} />
+                                <Route
+                                    path="raporlar/eta-uyumsuz"
+                                    element={
+                                        <Suspense fallback={<div>ETA Uyumsuzluğu yükleniyor...</div>}>
+                                            <ETAUyumsuzlugu />
+                                        </Suspense>
+                                    }
+                                />
                                 <Route path="raporlar/bosta-arac" element={<BostaArac />} />
-                                <Route path="raporlar/tools" element={<Suspense fallback={<div>Pivot Yükleniyor...</div>}><PivotTool datasets={TEST_VERILERI} defaultDataset="Sefer Performansı" /></Suspense>} />
-                                <Route path="raporlar/sefer-tamamlayan" element={<Suspense fallback={<div>Sefer Tamamlayan yükleniyor...</div>}><SeferTamamlayan /></Suspense>} />
-                                <Route path="raporlar/bolgesel-analiz" element={<Suspense fallback={<div>Bölgesel Analiz yükleniyor...</div>}><BolgeselAnaliz /></Suspense>} />
-                                <Route path="raporlar/arac-etalari" element={<Suspense fallback={<div>Araç ETAları yükleniyor...</div>}><AracEtalari /></Suspense>} />
+                                <Route
+                                    path="raporlar/tools"
+                                    element={
+                                        <Suspense fallback={<div>Pivot Yükleniyor...</div>}>
+                                            <PivotTool datasets={TEST_VERILERI} defaultDataset="Sefer Performansı" />
+                                        </Suspense>
+                                    }
+                                />
+                                <Route
+                                    path="raporlar/sefer-tamamlayan"
+                                    element={
+                                        <Suspense fallback={<div>Sefer Tamamlayan yükleniyor...</div>}>
+                                            <SeferTamamlayan />
+                                        </Suspense>
+                                    }
+                                />
+                                <Route
+                                    path="raporlar/bolgesel-analiz"
+                                    element={
+                                        <Suspense fallback={<div>Bölgesel Analiz yükleniyor...</div>}>
+                                            <BolgeselAnaliz />
+                                        </Suspense>
+                                    }
+                                />
+                                <Route
+                                    path="raporlar/arac-etalari"
+                                    element={
+                                        <Suspense fallback={<div>Araç ETAları yükleniyor...</div>}>
+                                            <AracEtalari />
+                                        </Suspense>
+                                    }
+                                />
 
                                 {/* Sipariş Analiz */}
-                                <Route path="siparis-analiz" element={<Suspense fallback={<div>Yükleniyor...</div>}><SiparisAnaliz /></Suspense>} />
+                                <Route
+                                    path="siparis-analiz"
+                                    element={
+                                        <Suspense fallback={<div>Yükleniyor...</div>}>
+                                            <SiparisAnaliz />
+                                        </Suspense>
+                                    }
+                                />
+
+                                {/* ✅ YENİ: Kayıt İşlemleri -> KM Kayıt */}
+                                <Route
+                                    path="kayit-islemleri/km-kayit"
+                                    element={
+                                        <Suspense fallback={<div>KM Kayıt yükleniyor...</div>}>
+                                            <KmKayit />
+                                        </Suspense>
+                                    }
+                                />
 
                                 {/* Admin */}
-                                <Route path="admin" element={<Suspense fallback={<div>Yükleniyor...</div>}><AdminPanel /></Suspense>} />
-                                <Route path="admin/permissions" element={<Suspense fallback={<div>Yükleniyor...</div>}><PagePermissionsPage /></Suspense>} />
+                                <Route
+                                    path="admin"
+                                    element={
+                                        <Suspense fallback={<div>Yükleniyor...</div>}>
+                                            <AdminPanel />
+                                        </Suspense>
+                                    }
+                                />
+                                <Route
+                                    path="admin/permissions"
+                                    element={
+                                        <Suspense fallback={<div>Yükleniyor...</div>}>
+                                            <PagePermissionsPage />
+                                        </Suspense>
+                                    }
+                                />
                             </Route>
 
-                            <Route path="*" element={<Navigate to="/anasayfa" replace />} />
+                            {/* ✅ ÖNEMLİ:
+                  Sidebar'da sen /kayit-islemleri/km-kayit şeklinde ABSOLUTE (başında / var) navigate ediyorsun.
+                  Route path'leri burada relative ("kayit-islemleri/km-kayit") olduğu için bu doğru çalışır.
+                  Yine de biri /kayit-islemleri yazarsa anasayfaya atmasın diye ekstra güvenlik:
+              */}
+                            <Route path="kayit-islemleri" element={<Navigate to="/kayit-islemleri/km-kayit" replace />} />
 
+                            {/* catch-all */}
+                            <Route path="*" element={<Navigate to="/anasayfa" replace />} />
                         </Route>
                     </Routes>
                 </Router>

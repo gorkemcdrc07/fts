@@ -61,6 +61,7 @@ import {
     ViewCompact as CompactIcon,
     ViewComfy as ComfyIcon,
     TableChart as TableIcon,
+    Undo as UndoIcon,
 } from "@mui/icons-material";
 
 import { DataGrid, GridToolbar, gridClasses } from "@mui/x-data-grid";
@@ -152,11 +153,7 @@ function ScaleToFit({ children }) {
                     overflow: "hidden",
                 }}
             >
-                <Container
-                    maxWidth={false}
-                    disableGutters
-                    sx={{ width: BASE_WIDTH, height: BASE_HEIGHT, p: 2, boxSizing: "border-box" }}
-                >
+                <Container maxWidth={false} disableGutters sx={{ width: BASE_WIDTH, height: BASE_HEIGHT, p: 2, boxSizing: "border-box" }}>
                     {children}
                 </Container>
             </Box>
@@ -167,7 +164,6 @@ function ScaleToFit({ children }) {
 /* ===================== Helpers ===================== */
 const BOS_FORM = {
     plaka: "",
-    // treyler: "", // ❌ kaldırıldı (UI+export+form+search)
     surucu_adi: "",
     surucu_telefon: "",
     surucu_tc: "",
@@ -273,9 +269,7 @@ async function fetchAracPerms() {
 
     const userHasAny =
         up &&
-        (typeof up?.ayon_create === "boolean" ||
-            typeof up?.ayon_edit === "boolean" ||
-            typeof up?.ayon_delete === "boolean");
+        (typeof up?.ayon_create === "boolean" || typeof up?.ayon_edit === "boolean" || typeof up?.ayon_delete === "boolean");
 
     if (userHasAny) return { canCreate: !!up?.ayon_create, canEdit: !!up?.ayon_edit, canDelete: !!up?.ayon_delete };
 
@@ -350,15 +344,21 @@ export default function AracYonetimiMUI() {
             if (error) throw error;
 
             const bugun = new Date();
+
+            // ✅ FIX: DB'deki `statu` ASLA override edilmez.
+            // UI için ayrı bir alan: `statu_ui`
             const guncelData = (data || []).map((arac) => {
-                if (arac.kesinti_bitis_tarihi) {
+                let statu_ui = arac?.statu || "Aktif";
+
+                if (arac?.statu !== "ÇIKARILDI" && arac?.kesinti_bitis_tarihi) {
                     const bitis = new Date(arac.kesinti_bitis_tarihi);
                     if (bitis < bugun) {
                         const farkGun = Math.floor((+bugun - +bitis) / (1000 * 60 * 60 * 24));
-                        return { ...arac, statu: `${farkGun} gün kesintiden yeni çıktı` };
+                        statu_ui = `${farkGun} gün kesintiden yeni çıktı`;
                     }
                 }
-                return arac;
+
+                return { ...arac, statu_ui };
             });
 
             setTumAraclar(guncelData);
@@ -427,12 +427,11 @@ export default function AracYonetimiMUI() {
     const handleDuzenle = useCallback(
         (arac) => {
             if (!canEdit) return openSnack("Düzenleme yetkiniz yok.", "warning");
-            if (!arac?.id) return openSnack("HATA: ID eksik.", "error");
+            if (!arac?.id || typeof arac.id !== "number") return openSnack("HATA: Bu kaydın DB ID'si yok. Düzenlenemez.", "error");
 
             setForm({
                 ...BOS_FORM,
                 ...arac,
-                // treyler alanını UI'da göstermiyoruz, ama DB'de kalsa da problem değil.
                 cekici_muayene: arac.cekici_muayene ? String(arac.cekici_muayene).slice(0, 10) : "",
                 dorse_muayene: arac.dorse_muayene ? String(arac.dorse_muayene).slice(0, 10) : "",
                 trafik_sigorta: arac.trafik_sigorta ? String(arac.trafik_sigorta).slice(0, 10) : "",
@@ -450,11 +449,12 @@ export default function AracYonetimiMUI() {
     const handleKopyala = useCallback(
         (arac) => {
             if (!canCreate) return openSnack("Yeni araç ekleme yetkiniz yok.", "warning");
+            if (!arac?.id || typeof arac.id !== "number") return openSnack("Bu kaydın DB ID'si yok. Kopyalama güvenli değil.", "warning");
+
             setForm({
                 ...BOS_FORM,
                 ...arac,
                 plaka: "",
-                // treyler: "", // kaldırıldı
                 cekici_ruhsat_no: "",
                 dorse_ruhsat_no: "",
                 gps_seri_no: "",
@@ -512,6 +512,8 @@ export default function AracYonetimiMUI() {
     const handleSilIstegi = useCallback(
         (id) => {
             if (!canDelete) return openSnack("Silme yetkiniz yok.", "warning");
+            if (!id || typeof id !== "number") return openSnack("Bu kaydın DB ID'si yok. Silinemez.", "error");
+
             setSeciliAracId(id);
             setSilmeSebebi("");
             setSilinmeTarihi(dayjs().format("YYYY-MM-DDTHH:mm"));
@@ -522,18 +524,30 @@ export default function AracYonetimiMUI() {
 
     const handleSilOnayla = useCallback(async () => {
         if (!canDelete) return openSnack("Silme yetkiniz yok.", "warning");
+        if (!seciliAracId || typeof seciliAracId !== "number") return openSnack("Geçersiz ID. Silme iptal.", "error");
         if (!(silmeSebebi || "").trim() || !silinmeTarihi) return openSnack("Sebep ve tarih girin.", "warning");
 
         const kullanici = getMevcutKullanici();
 
         try {
-            const { error } = await supabase
+            const { data, error } = await supabase
                 .from("plakalar")
-                .update({ statu: "ÇIKARILDI", silme_sebebi: silmeSebebi, silinme_tarihi: silinmeTarihi, silen_kullanici: kullanici })
-                .eq("id", seciliAracId);
+                .update({
+                    statu: "ÇIKARILDI",
+                    silme_sebebi: silmeSebebi,
+                    silinme_tarihi: silinmeTarihi,
+                    silen_kullanici: kullanici,
+                })
+                .eq("id", seciliAracId)
+                .select();
             if (error) throw error;
 
-            openSnack("Araç çıkarıldı");
+            if (!data || data.length === 0) {
+                openSnack("Silme işlemi DB'de güncelleme yapmadı (ID/policy kontrol edin).", "warning");
+            } else {
+                openSnack("Araç çıkarıldı");
+            }
+
             setSilModalAcik(false);
             setSeciliAracId(null);
             verileriGetir();
@@ -541,6 +555,46 @@ export default function AracYonetimiMUI() {
             openSnack(err?.message || "Silme işlemi başarısız", "error");
         }
     }, [canDelete, openSnack, seciliAracId, silinmeTarihi, silmeSebebi, verileriGetir]);
+
+    // ✅ YENİ: Çıkarılan aracı tekrar aktife al
+    const handleGeriAl = useCallback(
+        async (id) => {
+            if (!canEdit) return openSnack("Geri alma yetkiniz yok.", "warning");
+            if (!id || typeof id !== "number") return openSnack("Geçersiz ID.", "error");
+
+            const kullanici = getMevcutKullanici();
+
+            try {
+                const { data, error } = await supabase
+                    .from("plakalar")
+                    .update({
+                        statu: "Aktif",
+                        silme_sebebi: null,
+                        silinme_tarihi: null,
+                        silen_kullanici: null,
+                        guncelleyen_kullanici: kullanici,
+                        guncelleme_tarihi: turkiyeSaatISOString(),
+                        guncellenen_alanlar: "çıkarılandan geri alındı",
+                    })
+                    .eq("id", id)
+                    .select();
+
+                if (error) throw error;
+
+                if (!data || data.length === 0) {
+                    openSnack("Geri alma DB'de güncelleme yapmadı (policy/ID kontrol edin).", "warning");
+                } else {
+                    openSnack("Araç tekrar aktife alındı ✅");
+                    setTab("aktif");
+                }
+
+                verileriGetir();
+            } catch (err) {
+                openSnack(err?.message || "Geri alma başarısız", "error");
+            }
+        },
+        [canEdit, openSnack, verileriGetir]
+    );
 
     const handleBilgiAc = useCallback((arac) => {
         setBilgiArac(arac);
@@ -550,6 +604,7 @@ export default function AracYonetimiMUI() {
     /* ===================== Derived Lists ===================== */
     const araclar = useMemo(() => {
         let liste = [...tumAraclar];
+
         if (tab === "aktif") liste = liste.filter((a) => a.statu !== "ÇIKARILDI");
         if (tab === "pasif") liste = liste.filter((a) => a.statu === "ÇIKARILDI");
 
@@ -566,7 +621,6 @@ export default function AracYonetimiMUI() {
             liste = liste.filter((a) =>
                 [
                     a.plaka,
-                    // a.treyler, // ❌ kaldırıldı
                     a.surucu_adi,
                     a.surucu_telefon,
                     a.surucu_tc,
@@ -582,6 +636,7 @@ export default function AracYonetimiMUI() {
                     a.gps_sim_kart_no,
                     a.odak_k1,
                     a.statu,
+                    a.statu_ui,
                 ]
                     .map((v) => safeLower(v))
                     .some((v) => v.includes(q))
@@ -593,10 +648,7 @@ export default function AracYonetimiMUI() {
     const aktifSayisi = useMemo(() => tumAraclar.filter((a) => a.statu !== "ÇIKARILDI").length, [tumAraclar]);
     const pasifSayisi = useMemo(() => tumAraclar.filter((a) => a.statu === "ÇIKARILDI").length, [tumAraclar]);
 
-    const rows = useMemo(
-        () => araclar.map((a, i) => ({ id: a.id ?? `${a.plaka}-${i}`, ...a })), // ✅ treyler'den bağımsız
-        [araclar]
-    );
+    const rows = useMemo(() => araclar.map((a) => ({ id: a.id, ...a })), [araclar]);
 
     /* ===================== Excel ===================== */
     const excelAktar = useCallback(async () => {
@@ -607,7 +659,6 @@ export default function AracYonetimiMUI() {
 
         const headerMap = {
             plaka: "Plaka",
-            // treyler: "Treyler", // ❌ kaldırıldı
             surucu_adi: "Sürücü Adı",
             surucu_telefon: "Telefon",
             surucu_tc: "TC",
@@ -618,7 +669,7 @@ export default function AracYonetimiMUI() {
             cekici_muayene: "Çekici Muayene",
             dorse_muayene: "Dorse Muayene",
             trafik_sigorta: "Trafik Sigorta",
-            statu: "Statü",
+            statu_export: "Statü",
         };
 
         worksheet.columns = Object.entries(headerMap).map(([key, header]) => ({
@@ -627,7 +678,22 @@ export default function AracYonetimiMUI() {
             width: key.includes("muayene") || key.includes("sigorta") ? 18 : 16,
         }));
 
-        worksheet.addRows(araclar.map((a) => Object.fromEntries(Object.keys(headerMap).map((k) => [k, a[k] ?? ""]))));
+        worksheet.addRows(
+            araclar.map((a) => ({
+                plaka: a.plaka ?? "",
+                surucu_adi: a.surucu_adi ?? "",
+                surucu_telefon: a.surucu_telefon ?? "",
+                surucu_tc: a.surucu_tc ?? "",
+                bolge: a.bolge ?? "",
+                arac_tip: a.arac_tip ?? "",
+                dorse_tip: a.dorse_tip ?? "",
+                tedarikci_isim: a.tedarikci_isim ?? "",
+                cekici_muayene: a.cekici_muayene ?? "",
+                dorse_muayene: a.dorse_muayene ?? "",
+                trafik_sigorta: a.trafik_sigorta ?? "",
+                statu_export: a.statu === "ÇIKARILDI" ? "ÇIKARILDI" : a.statu_ui || a.statu || "Aktif",
+            }))
+        );
 
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -638,7 +704,6 @@ export default function AracYonetimiMUI() {
     const commonCols = useMemo(
         () => [
             { field: "plaka", headerName: "Plaka", width: 130 },
-            // { field: "treyler", headerName: "Treyler", width: 130 }, // ❌ kaldırıldı
             { field: "surucu_adi", headerName: "Sürücü", minWidth: 160, flex: 1 },
             { field: "surucu_telefon", headerName: "Telefon", width: 150 },
             { field: "bolge", headerName: "Bölge", width: 140 },
@@ -661,13 +726,14 @@ export default function AracYonetimiMUI() {
                 valueFormatter: (value) => (value ? dayjs(value).format("DD.MM.YYYY") : "-"),
             },
             {
-                field: "statu",
+                field: "statu_ui",
                 headerName: "Statü",
-                width: 180,
-                renderCell: ({ value }) => {
-                    const label = value || "Aktif";
-                    const isRemoved = label === "ÇIKARILDI";
-                    const isWarning = /kesintiden/.test(label || "");
+                width: 220,
+                renderCell: ({ row }) => {
+                    const isRemoved = row?.statu === "ÇIKARILDI";
+                    const label = isRemoved ? "ÇIKARILDI" : row?.statu_ui || row?.statu || "Aktif";
+                    const isWarning = !isRemoved && /kesintiden/.test(label || "");
+
                     const icon = isRemoved ? (
                         <RemovedIcon sx={{ fontSize: 16, mr: 0.5 }} />
                     ) : isWarning ? (
@@ -675,6 +741,7 @@ export default function AracYonetimiMUI() {
                     ) : (
                         <CheckIcon sx={{ fontSize: 16, mr: 0.5 }} />
                     );
+
                     return (
                         <Chip
                             label={
@@ -720,45 +787,62 @@ export default function AracYonetimiMUI() {
             headerName: "İşlem",
             sortable: false,
             filterable: false,
-            width: 190,
+            width: 240,
             align: "right",
-            renderCell: ({ row }) => (
-                <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ width: "100%" }}>
-                    <Tooltip title="Bilgi">
-                        <IconButton size="small" onClick={() => handleBilgiAc(row)}>
-                            <InfoIcon fontSize="inherit" />
-                        </IconButton>
-                    </Tooltip>
+            renderCell: ({ row }) => {
+                const hasDbId = !!row?.id && typeof row.id === "number";
+                const isRemoved = row?.statu === "ÇIKARILDI";
 
-                    <Tooltip title={canCreate ? "Kopyala" : "Yetkiniz yok"}>
-                        <span>
-                            <IconButton size="small" color="secondary" onClick={() => handleKopyala(row)} disabled={!canCreate}>
-                                <ContentCopyIcon fontSize="inherit" />
+                return (
+                    <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ width: "100%" }}>
+                        <Tooltip title="Bilgi">
+                            <IconButton size="small" onClick={() => handleBilgiAc(row)}>
+                                <InfoIcon fontSize="inherit" />
                             </IconButton>
-                        </span>
-                    </Tooltip>
+                        </Tooltip>
 
-                    <Tooltip title={canEdit ? "Düzenle" : "Yetkiniz yok"}>
-                        <span>
-                            <IconButton size="small" onClick={() => handleDuzenle(row)} disabled={!canEdit}>
-                                <EditIcon fontSize="inherit" />
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-
-                    {row.statu !== "ÇIKARILDI" && (
-                        <Tooltip title={canDelete ? "Sil" : "Yetkiniz yok"}>
+                        <Tooltip title={canCreate ? "Kopyala" : "Yetkiniz yok"}>
                             <span>
-                                <IconButton size="small" color="error" onClick={() => handleSilIstegi(row.id)} disabled={!canDelete}>
-                                    <DeleteIcon fontSize="inherit" />
+                                <IconButton size="small" color="secondary" onClick={() => handleKopyala(row)} disabled={!canCreate || !hasDbId}>
+                                    <ContentCopyIcon fontSize="inherit" />
                                 </IconButton>
                             </span>
                         </Tooltip>
-                    )}
-                </Stack>
-            ),
+
+                        <Tooltip title={canEdit ? "Düzenle" : "Yetkiniz yok"}>
+                            <span>
+                                <IconButton size="small" onClick={() => handleDuzenle(row)} disabled={!canEdit || !hasDbId}>
+                                    <EditIcon fontSize="inherit" />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+
+                        {/* ✅ YENİ: Çıkarılandan geri al */}
+                        {isRemoved && (
+                            <Tooltip title={canEdit ? "İşe Geri Al" : "Yetkiniz yok"}>
+                                <span>
+                                    <IconButton size="small" color="success" onClick={() => handleGeriAl(row.id)} disabled={!canEdit || !hasDbId}>
+                                        <UndoIcon fontSize="inherit" />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                        )}
+
+                        {/* Sil sadece aktiflerde */}
+                        {!isRemoved && (
+                            <Tooltip title={canDelete ? "Sil" : "Yetkiniz yok"}>
+                                <span>
+                                    <IconButton size="small" color="error" onClick={() => handleSilIstegi(row.id)} disabled={!canDelete || !hasDbId}>
+                                        <DeleteIcon fontSize="inherit" />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                        )}
+                    </Stack>
+                );
+            },
         }),
-        [handleBilgiAc, handleDuzenle, handleKopyala, handleSilIstegi, canCreate, canEdit, canDelete]
+        [handleBilgiAc, handleDuzenle, handleKopyala, handleSilIstegi, handleGeriAl, canCreate, canEdit, canDelete]
     );
 
     const columns = useMemo(() => {
@@ -903,8 +987,22 @@ export default function AracYonetimiMUI() {
                                         "& .MuiTabs-indicator": { height: 3, borderRadius: 1, bgcolor: currentTheme.palette.primary.main },
                                     }}
                                 >
-                                    <Tab value="aktif" label={<Badge color="success" variant="dot" invisible={aktifSayisi === 0}><Box sx={{ px: 0.5 }}>Aktif</Box></Badge>} />
-                                    <Tab value="pasif" label={<Badge color="error" variant="dot" invisible={pasifSayisi === 0}><Box sx={{ px: 0.5 }}>Çıkarılan</Box></Badge>} />
+                                    <Tab
+                                        value="aktif"
+                                        label={
+                                            <Badge color="success" variant="dot" invisible={aktifSayisi === 0}>
+                                                <Box sx={{ px: 0.5 }}>Aktif</Box>
+                                            </Badge>
+                                        }
+                                    />
+                                    <Tab
+                                        value="pasif"
+                                        label={
+                                            <Badge color="error" variant="dot" invisible={pasifSayisi === 0}>
+                                                <Box sx={{ px: 0.5 }}>Çıkarılan</Box>
+                                            </Badge>
+                                        }
+                                    />
                                     <Tab value="tum" label="Tümü" />
                                 </Tabs>
 
@@ -990,7 +1088,6 @@ export default function AracYonetimiMUI() {
                                 boxShadow: "0 22px 60px rgba(0,0,0,0.35)",
                             }}
                         >
-                            {/* ✅ çözünürlük sorunu: yatay scroll garantili */}
                             <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
                                 <Box sx={{ minWidth: 1500, height: "100%" }}>
                                     <DataGrid
@@ -1022,9 +1119,10 @@ export default function AracYonetimiMUI() {
                                             },
                                         }}
                                         getRowClassName={(params) => {
-                                            const s = params.row?.statu || "";
-                                            if (s === "ÇIKARILDI") return "row-removed";
-                                            if (/kesintiden/.test(s)) return "row-warning";
+                                            const isRemoved = params.row?.statu === "ÇIKARILDI";
+                                            const label = params.row?.statu_ui || params.row?.statu || "";
+                                            if (isRemoved) return "row-removed";
+                                            if (/kesintiden/.test(label)) return "row-warning";
                                             return "";
                                         }}
                                         sx={{
@@ -1032,12 +1130,8 @@ export default function AracYonetimiMUI() {
                                             height: "100%",
                                             fontSize: 14,
 
-                                            "& .MuiDataGrid-virtualScroller": {
-                                                background: "rgba(255,255,255,0.015)",
-                                            },
-                                            "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": {
-                                                outline: "none",
-                                            },
+                                            "& .MuiDataGrid-virtualScroller": { background: "rgba(255,255,255,0.015)" },
+                                            "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": { outline: "none" },
 
                                             [`& .${gridClasses.columnHeaders}`]: {
                                                 position: "sticky",
@@ -1057,9 +1151,7 @@ export default function AracYonetimiMUI() {
                                                 backdropFilter: "blur(10px)",
                                             },
 
-                                            "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": {
-                                                backgroundColor: "rgba(255,255,255,0.02)",
-                                            },
+                                            "& .MuiDataGrid-row:nth-of-type(2n) .MuiDataGrid-cell": { backgroundColor: "rgba(255,255,255,0.02)" },
                                             "& .MuiDataGrid-row:hover .MuiDataGrid-cell": {
                                                 backgroundColor: alpha(currentTheme.palette.primary.main, 0.14),
                                                 transition: "background-color 120ms ease",
@@ -1136,7 +1228,6 @@ export default function AracYonetimiMUI() {
                         <Grid container spacing={2.5}>
                             {[
                                 { name: "plaka", label: "Plaka", required: true, err: formErrors.plaka },
-                                // { name: "treyler", label: "Treyler" }, // ❌ kaldırıldı
                                 { name: "surucu_adi", label: "Sürücü Adı" },
                                 { name: "surucu_telefon", label: "Telefon", err: formErrors.surucu_telefon },
                                 { name: "surucu_tc", label: "TC" },
@@ -1204,14 +1295,7 @@ export default function AracYonetimiMUI() {
                         <Button onClick={temizleVeKapat} variant="outlined" size="large">
                             İptal
                         </Button>
-                        <Button
-                            type="submit"
-                            form="arac-form"
-                            variant="contained"
-                            size="large"
-                            color={editId ? "primary" : "success"}
-                            sx={{ px: 4, py: 1.2, fontWeight: 900 }}
-                        >
+                        <Button type="submit" form="arac-form" variant="contained" size="large" color={editId ? "primary" : "success"} sx={{ px: 4, py: 1.2, fontWeight: 900 }}>
                             {editId ? "Güncelle" : "Kaydet"}
                         </Button>
                     </Box>
@@ -1253,10 +1337,9 @@ export default function AracYonetimiMUI() {
                             <Grid container spacing={2}>
                                 {[
                                     ["Plaka", bilgiArac.plaka],
-                                    // ["Treyler", bilgiArac.treyler || "-"], // ❌ kaldırıldı
                                     ["Sürücü", bilgiArac.surucu_adi || "-"],
                                     ["Telefon", bilgiArac.surucu_telefon || "-"],
-                                    ["Statü", bilgiArac.statu || "-"],
+                                    ["Statü", bilgiArac.statu === "ÇIKARILDI" ? "ÇIKARILDI" : bilgiArac.statu_ui || bilgiArac.statu || "-"],
                                     ["Bölge", bilgiArac.bolge || "-"],
                                     ["Tedarikçi", bilgiArac.tedarikci_isim || "-"],
                                 ].map(([k, v]) => (
@@ -1278,12 +1361,7 @@ export default function AracYonetimiMUI() {
                     </DialogActions>
                 </Dialog>
 
-                <Snackbar
-                    open={snack.open}
-                    autoHideDuration={2500}
-                    onClose={() => setSnack((s) => ({ ...s, open: false }))}
-                    anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                >
+                <Snackbar open={snack.open} autoHideDuration={2500} onClose={() => setSnack((s) => ({ ...s, open: false }))} anchorOrigin={{ vertical: "bottom", horizontal: "right" }}>
                     <Alert onClose={() => setSnack((s) => ({ ...s, open: false }))} severity={snack.severity} variant="filled" sx={{ width: "100%", borderRadius: 2 }}>
                         {snack.msg}
                     </Alert>

@@ -105,6 +105,40 @@ const chunkArray = (arr, size) => {
 };
 
 // ======================================================
+// ✅ LIMITSİZ GİBİ DAVRANAN "TÜM SATIRLARI ÇEK" HELPER'I
+// PostgREST/Supabase tek seferde limitsiz dönmez.
+// Bu helper sayfalama ile ne kadar satır varsa hepsini biriktirir.
+// ======================================================
+async function fetchAllDetails({ startISO, endISO, pageSize = 1000 }) {
+    let from = 0;
+    let all = [];
+
+    while (true) {
+        const { data, error } = await supabase
+            .from(DETAIL_TABLE)
+            .select("sefer_no, yukleme_varis, yukleme_cikis")
+            .gte("yukleme_varis", startISO)
+            .lte("yukleme_varis", endISO)
+            // pagination için stabil sıralama şart
+            .order("yukleme_varis", { ascending: true })
+            .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) break;
+
+        all = all.concat(data);
+
+        // son sayfa geldiyse bitir
+        if (data.length < pageSize) break;
+
+        from += pageSize;
+    }
+
+    return all;
+}
+
+// ======================================================
 // Modern KPI Card
 // ======================================================
 const KPICard = ({ title, value, icon: Icon, color, subtitle }) => (
@@ -219,11 +253,7 @@ function PlatePerformanceRow({ p, idx }) {
                     <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
                         {p.plaka} — Tüm Seferler ({seferler.length})
                     </Typography>
-                    <Chip
-                        size="small"
-                        label={`İhlal sınırı: ${minToHM(MINIMUM_WAIT_TIME_MINUTES)}`}
-                        variant="outlined"
-                    />
+                    <Chip size="small" label={`İhlal sınırı: ${minToHM(MINIMUM_WAIT_TIME_MINUTES)}`} variant="outlined" />
                 </Stack>
 
                 <Table size="small">
@@ -427,6 +457,7 @@ export default function CleanFetcherModern() {
 
     // ======================================================
     // (2) Gün / Haftalık / Aylık — VERİ ÇEK (KURAL: yukleme_varis aralık içinde)
+    // ✅ details pagination ile TÜM satırlar
     // ======================================================
     const fetchDailyViolations = useCallback(async () => {
         setLoadingDaily(true);
@@ -437,14 +468,8 @@ export default function CleanFetcherModern() {
         const endISO = range.end.toISOString();
 
         try {
-            // Detay (KURAL: varış zamanı aralık içinde)
-            const { data: details, error: e1 } = await supabase
-                .from(DETAIL_TABLE)
-                .select("sefer_no, yukleme_varis, yukleme_cikis")
-                .gte("yukleme_varis", startISO)
-                .lte("yukleme_varis", endISO);
-
-            if (e1) throw e1;
+            // ✅ Detayları limitsiz gibi: sayfalayarak hepsini al
+            const details = await fetchAllDetails({ startISO, endISO, pageSize: 1000 });
 
             if (!details?.length) {
                 setDailyViolationRows([]);
@@ -526,6 +551,7 @@ export default function CleanFetcherModern() {
 
     // ======================================================
     // (3) RANGE PERFORMANS (KURAL: yukleme_varis aralık içinde)
+    // ✅ details pagination ile TÜM satırlar
     // ======================================================
     const fetchRangePerformance = useCallback(async () => {
         setLoadingRange(true);
@@ -535,13 +561,9 @@ export default function CleanFetcherModern() {
         const dayEnd = dayjs(endDate).endOf("day").toISOString();
 
         try {
-            const { data: details, error: e1 } = await supabase
-                .from(DETAIL_TABLE)
-                .select("sefer_no, yukleme_varis, yukleme_cikis")
-                .gte("yukleme_varis", dayStart)
-                .lte("yukleme_varis", dayEnd);
+            // ✅ Detayları limitsiz gibi: sayfalayarak hepsini al
+            const details = await fetchAllDetails({ startISO: dayStart, endISO: dayEnd, pageSize: 1000 });
 
-            if (e1) throw e1;
             if (!details?.length) {
                 setLoadingRange(false);
                 return;
@@ -560,7 +582,9 @@ export default function CleanFetcherModern() {
             for (const part of chunkArray(seferNos, 500)) {
                 const { data: summary, error: e2 } = await supabase
                     .from(SUMMARY_TABLE)
-                    .select("sefer_no, plaka, treyler, surucu_ad_soyad, sefer_tarihi, yukleme_ili, yukleme_ilcesi, musteri_adi, yukleme_noktasi, proje_adi, teslim_ilcesi, teslim_ili, teslim_noktasi")
+                    .select(
+                        "sefer_no, plaka, treyler, surucu_ad_soyad, sefer_tarihi, yukleme_ili, yukleme_ilcesi, musteri_adi, yukleme_noktasi, proje_adi, teslim_ilcesi, teslim_ili, teslim_noktasi"
+                    )
                     .in("sefer_no", part);
 
                 if (e2) throw e2;
@@ -631,8 +655,7 @@ export default function CleanFetcherModern() {
 
             const scores = aggregatedList
                 .map((item) => {
-                    const cezaPuani =
-                        (item.toplamIhlalSuresi / maxIhlalSure) * 5 + (item.ihlalOrani / maxIhlalOrani) * 5;
+                    const cezaPuani = (item.toplamIhlalSuresi / maxIhlalSure) * 5 + (item.ihlalOrani / maxIhlalOrani) * 5;
 
                     const finalCeza = Math.min(10, cezaPuani).toFixed(1);
                     const perf = (10 - finalCeza).toFixed(1);
@@ -716,8 +739,7 @@ export default function CleanFetcherModern() {
 
     const rangeKpis = useMemo(() => {
         const totalPlates = performanceData.length;
-        const avgPerformance =
-            performanceData.reduce((sum, p) => sum + parseFloat(p.performans), 0) / (totalPlates || 1);
+        const avgPerformance = performanceData.reduce((sum, p) => sum + parseFloat(p.performans), 0) / (totalPlates || 1);
         const totalViolationTime = performanceData.reduce((sum, p) => sum + p.toplamIhlalSuresi, 0);
 
         return {
@@ -775,7 +797,6 @@ export default function CleanFetcherModern() {
 
         ws.addRows(data);
 
-        // Header style
         ws.getRow(1).eachCell((cell) => {
             cell.font = { bold: true };
         });
@@ -882,7 +903,12 @@ export default function CleanFetcherModern() {
                             </Typography>
                             <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75, flexWrap: "wrap" }}>
                                 <Chip size="small" color="error" label={`İhlal sınırı: ${minToHM(MINIMUM_WAIT_TIME_MINUTES)}`} />
-                                <Chip size="small" variant="outlined" icon={<DateRangeIcon />} label={tabValue === 0 ? dailyRangeLabel : `${startDate} → ${endDate}`} />
+                                <Chip
+                                    size="small"
+                                    variant="outlined"
+                                    icon={<DateRangeIcon />}
+                                    label={tabValue === 0 ? dailyRangeLabel : `${startDate} → ${endDate}`}
+                                />
                             </Stack>
                         </Box>
 
@@ -911,12 +937,9 @@ export default function CleanFetcherModern() {
                     {(loadingDaily || loadingRange) && <LinearProgress />}
                 </Paper>
 
-                {/* ======================================================
-            TAB 0 — Gün / Haftalık / Aylık
-        ====================================================== */}
+                {/* TAB 0 */}
                 {tabValue === 0 && (
                     <Stack spacing={2.5}>
-                        {/* Controls */}
                         <Paper
                             elevation={0}
                             sx={{
@@ -936,13 +959,7 @@ export default function CleanFetcherModern() {
 
                                 <Grid container spacing={2}>
                                     <Grid item xs={12} md={4}>
-                                        <TextField
-                                            select
-                                            fullWidth
-                                            label="Mod"
-                                            value={dailyMode}
-                                            onChange={(e) => setDailyMode(e.target.value)}
-                                        >
+                                        <TextField select fullWidth label="Mod" value={dailyMode} onChange={(e) => setDailyMode(e.target.value)}>
                                             <MenuItem value="day">Günlük</MenuItem>
                                             <MenuItem value="week">Haftalık (Ay + İlk N Hafta)</MenuItem>
                                             <MenuItem value="month">Aylık (Tüm Ay)</MenuItem>
@@ -964,13 +981,7 @@ export default function CleanFetcherModern() {
 
                                     {dailyMode === "week" && (
                                         <Grid item xs={12} md={4}>
-                                            <TextField
-                                                select
-                                                fullWidth
-                                                label="Kaç Haftası"
-                                                value={selectedWeekCount}
-                                                onChange={(e) => setSelectedWeekCount(e.target.value)}
-                                            >
+                                            <TextField select fullWidth label="Kaç Haftası" value={selectedWeekCount} onChange={(e) => setSelectedWeekCount(e.target.value)}>
                                                 <MenuItem value="1">İlk 1 Hafta</MenuItem>
                                                 <MenuItem value="2">İlk 2 Hafta</MenuItem>
                                                 <MenuItem value="3">İlk 3 Hafta</MenuItem>
@@ -1034,7 +1045,6 @@ export default function CleanFetcherModern() {
                             </Stack>
                         </Paper>
 
-                        {/* KPI */}
                         {!loadingDaily && dailyPlateAnalysis.length > 0 && (
                             <Grid container spacing={2.5}>
                                 <Grid item xs={12} md={3}>
@@ -1076,12 +1086,8 @@ export default function CleanFetcherModern() {
                             </Grid>
                         )}
 
-                        {/* Loading */}
                         {loadingDaily && (
-                            <Paper
-                                elevation={0}
-                                sx={{ p: 2.5, borderRadius: 3, border: "1px solid", borderColor: "divider" }}
-                            >
+                            <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, border: "1px solid", borderColor: "divider" }}>
                                 <Stack spacing={1.5}>
                                     <Typography sx={{ fontWeight: 800 }}>Veriler analiz ediliyor…</Typography>
                                     <Skeleton variant="rounded" height={44} />
@@ -1091,24 +1097,14 @@ export default function CleanFetcherModern() {
                             </Paper>
                         )}
 
-                        {/* Empty */}
                         {!loadingDaily && dailyViolationRows.length === 0 && (
                             <Alert severity="success" sx={{ borderRadius: 3 }}>
                                 Seçilen aralıkta <b>4 saat üzeri</b> bekleme ihlali tespit edilmemiştir.
                             </Alert>
                         )}
 
-                        {/* Table */}
                         {!loadingDaily && dailyPlateAnalysis.length > 0 && (
-                            <Paper
-                                elevation={0}
-                                sx={{
-                                    borderRadius: 3,
-                                    border: "1px solid",
-                                    borderColor: "divider",
-                                    overflow: "hidden",
-                                }}
-                            >
+                            <Paper elevation={0} sx={{ borderRadius: 3, border: "1px solid", borderColor: "divider", overflow: "hidden" }}>
                                 <Box sx={{ p: 2, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                                     <Box>
                                         <Typography variant="h6" sx={{ fontWeight: 900 }}>
@@ -1146,11 +1142,7 @@ export default function CleanFetcherModern() {
                                                 </TableCell>
                                             </TableRow>
                                         </TableHead>
-                                        <TableBody>
-                                            {filteredDailyPlateAnalysis.map((p, idx) => (
-                                                <PlateRow p={p} idx={idx} key={p.plaka} />
-                                            ))}
-                                        </TableBody>
+                                        <TableBody>{filteredDailyPlateAnalysis.map((p, idx) => <PlateRow p={p} idx={idx} key={p.plaka} />)}</TableBody>
                                     </Table>
                                 </TableContainer>
                             </Paper>
@@ -1158,12 +1150,9 @@ export default function CleanFetcherModern() {
                     </Stack>
                 )}
 
-                {/* ======================================================
-            TAB 1 — Tarih Aralığı Performans
-        ====================================================== */}
+                {/* TAB 1 */}
                 {tabValue === 1 && (
                     <Stack spacing={2.5}>
-                        {/* Controls */}
                         <Paper
                             elevation={0}
                             sx={{
@@ -1240,7 +1229,6 @@ export default function CleanFetcherModern() {
                             </Grid>
                         </Paper>
 
-                        {/* KPI */}
                         {!loadingRange && performanceData.length > 0 && (
                             <Grid container spacing={2.5}>
                                 <Grid item xs={12} md={3}>
@@ -1282,12 +1270,8 @@ export default function CleanFetcherModern() {
                             </Grid>
                         )}
 
-                        {/* Loading */}
                         {loadingRange && (
-                            <Paper
-                                elevation={0}
-                                sx={{ p: 2.5, borderRadius: 3, border: "1px solid", borderColor: "divider" }}
-                            >
+                            <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, border: "1px solid", borderColor: "divider" }}>
                                 <Stack spacing={1.5}>
                                     <Typography sx={{ fontWeight: 800 }}>Performans verileri analiz ediliyor…</Typography>
                                     <Skeleton variant="rounded" height={44} />
@@ -1297,24 +1281,14 @@ export default function CleanFetcherModern() {
                             </Paper>
                         )}
 
-                        {/* Empty */}
                         {!loadingRange && performanceData.length === 0 && (
                             <Alert severity="info" sx={{ borderRadius: 3 }}>
                                 Seçilen aralıkta yükleme kaydı olan sefer bulunamadı veya analiz için yeterli veri yok.
                             </Alert>
                         )}
 
-                        {/* Table */}
                         {!loadingRange && performanceData.length > 0 && (
-                            <Paper
-                                elevation={0}
-                                sx={{
-                                    borderRadius: 3,
-                                    border: "1px solid",
-                                    borderColor: "divider",
-                                    overflow: "hidden",
-                                }}
-                            >
+                            <Paper elevation={0} sx={{ borderRadius: 3, border: "1px solid", borderColor: "divider", overflow: "hidden" }}>
                                 <Box sx={{ p: 2, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                                     <Box>
                                         <Typography variant="h6" sx={{ fontWeight: 900 }}>
@@ -1359,9 +1333,7 @@ export default function CleanFetcherModern() {
                                                 </TableCell>
                                                 <TableCell align="right" sx={{ fontWeight: 900 }}>
                                                     Ceza (10)
-                                                </TableCell>teslim_ili
-                                                teslim_ilcesi
-
+                                                </TableCell>
                                                 <TableCell align="right" sx={{ fontWeight: 900 }}>
                                                     Performans (10)
                                                 </TableCell>

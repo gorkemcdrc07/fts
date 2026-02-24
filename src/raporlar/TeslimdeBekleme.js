@@ -1,5 +1,5 @@
 // ===============================================
-// TeslimdeBekleme.jsx — GÜNCEL (Haftalık + Aylık + Günlük Mod Eklendi)
+// TeslimdeBekleme.jsx — GÜNCEL (pagination + deterministic order + count verify + IN chunk)
 // ===============================================
 
 import React, { useState, useCallback, useEffect } from "react";
@@ -33,7 +33,6 @@ import {
     TableCell,
     Tooltip,
     Collapse,
-    IconButton,
     LinearProgress,
     MenuItem,
 } from "@mui/material";
@@ -76,7 +75,8 @@ const SUMMARY_COLS = `
   proje_adi,
   teslim_ili,
   teslim_ilcesi,
-  sefer_tarihi
+  sefer_tarihi,
+  yukleme_ili
 `;
 
 // --------------------------------------------------------------
@@ -100,6 +100,12 @@ const minToHM = (m) => {
     if (h) return `${h} sa`;
     if (r) return `${r} dk`;
     return "0 dk";
+};
+
+const chunkArray = (arr, size) => {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
 };
 
 // --------------------------------------------------------------
@@ -171,9 +177,7 @@ const calculateScore = (trips, nonComp, delayMin) => {
 const exportExcel = async (rows) => {
     if (!rows.length) return;
 
-    // Sadece ihlalli kayıtları filtrele
     const filtered = rows.filter((r) => r.rule.compliant === false && r.rule.delay > 0);
-
     if (!filtered.length) {
         alert("İhlalli kayıt bulunamadı.");
         return;
@@ -217,7 +221,6 @@ const exportExcel = async (rows) => {
 // ======================================================================
 const DetailedRow = ({ row }) => {
     const [open, setOpen] = useState(false);
-
     const nonCompliantTrips = row.trips.filter((t) => t.rule.compliant === false);
 
     return (
@@ -293,28 +296,17 @@ const DetailedRow = ({ row }) => {
 export default function TeslimdeBekleme() {
     const theme = useTheme();
 
-    // ✅ YENİ: Gün / Haftalık / Ay Modu
-    // day | week | month
-    const [mode, setMode] = useState("day");
-
-    // Günlük
+    const [mode, setMode] = useState("day"); // day | week | month
     const [date, setDate] = useState(dayjs().format("YYYY-MM-DD"));
-
-    // Haftalık/Aylık için ay
     const [dailyMonth, setDailyMonth] = useState(dayjs().format("YYYY-MM"));
-
-    // Haftalık için “ilk kaç hafta”
-    // 1 | 2 | 3 | all
-    const [weekCount, setWeekCount] = useState("1");
+    const [weekCount, setWeekCount] = useState("1"); // 1|2|3|all
 
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    // Progress ve zaman takibi
     const [progressMessage, setProgressMessage] = useState(null);
     const [progressValue, setProgressValue] = useState(0);
 
-    // ANALİZ
     const [startDate, setStartDate] = useState(dayjs().subtract(7, "day").format("YYYY-MM-DD"));
     const [endDate, setEndDate] = useState(dayjs().format("YYYY-MM-DD"));
     const [detailedAnalysis, setDetailedAnalysis] = useState([]);
@@ -322,23 +314,7 @@ export default function TeslimdeBekleme() {
 
     const [error, setError] = useState(null);
 
-    /**
-     * Tek bir aralık için detay verisi çeken yardımcı fonksiyon
-     */
-    const fetchByDayRange = async (startISO, endISO) => {
-        const { data: detail, error: detailError } = await supabase
-            .from(DETAIL_TABLE)
-            .select(DETAIL_COLS)
-            .gte("teslim_varis", startISO)
-            .lte("teslim_varis", endISO);
-
-        if (detailError) throw detailError;
-        return detail;
-    };
-
-    /**
-     * ✅ YENİ: Mod’a göre aralık üretir
-     */
+    // ✅ Mod’a göre aralık üretir
     const computeRange = useCallback(() => {
         if (mode === "day") {
             const s = dayjs(date).startOf("day");
@@ -353,11 +329,9 @@ export default function TeslimdeBekleme() {
             return { start: monthStart, end: monthEnd, label: dayjs(dailyMonth).format("MMMM YYYY") };
         }
 
-        // mode === "week" => ayın başından itibaren ilk N hafta / tüm ay
         let end;
-        if (weekCount === "all") {
-            end = monthEnd;
-        } else {
+        if (weekCount === "all") end = monthEnd;
+        else {
             end = monthStart.add(Number(weekCount) * 7, "day").endOf("day");
             if (end.isAfter(monthEnd)) end = monthEnd;
         }
@@ -372,8 +346,68 @@ export default function TeslimdeBekleme() {
         };
     }, [mode, date, dailyMonth, weekCount]);
 
+    // ✅ COUNT: aralıkta kaç detail var (gerçek beklenen)
+    const getDetailCount = useCallback(async (startISO, endISO) => {
+        const { count, error: e } = await supabase
+            .from(DETAIL_TABLE)
+            .select("sefer_no", { count: "exact", head: true })
+            .gte("teslim_varis", startISO)
+            .lte("teslim_varis", endISO);
+
+        if (e) throw e;
+        return count || 0;
+    }, []);
+
+    // ✅ Pagination ile tüm detail
+    const fetchDetailsUnlimited = useCallback(
+        async (startISO, endISO, pageSize = 1000, onTick) => {
+            let from = 0;
+            let all = [];
+
+            while (true) {
+                const { data, error: e } = await supabase
+                    .from(DETAIL_TABLE)
+                    .select(DETAIL_COLS)
+                    .gte("teslim_varis", startISO)
+                    .lte("teslim_varis", endISO)
+                    // ✅ deterministic order (aynı teslim_varis -> sefer_no tie-break)
+                    .order("teslim_varis", { ascending: true })
+                    .order("sefer_no", { ascending: true })
+                    .range(from, from + pageSize - 1);
+
+                if (e) throw e;
+                if (!data || data.length === 0) break;
+
+                all = all.concat(data);
+                if (onTick) onTick(all.length);
+
+                if (data.length < pageSize) break;
+                from += pageSize;
+            }
+
+            return all;
+        },
+        []
+    );
+
+    // ✅ Summary IN chunk
+    const fetchSummariesBySeferNos = useCallback(async (seferNos, onPart) => {
+        let summaryAll = [];
+        const parts = chunkArray(seferNos, 500);
+
+        for (let i = 0; i < parts.length; i++) {
+            const { data, error } = await supabase.from(SUMMARY_TABLE).select(SUMMARY_COLS).in("sefer_no", parts[i]);
+            if (error) throw error;
+
+            summaryAll = summaryAll.concat(data || []);
+            if (onPart) onPart(i + 1, parts.length, summaryAll.length);
+        }
+
+        return summaryAll;
+    }, []);
+
     // --------------------------------------------------------------
-    // GÜNLÜK / HAFTALIK / AYLIK VERİ ÇEK (HAFTA HAFTA ÇEKİP BİRLEŞTİRİR)
+    // GÜNLÜK / HAFTALIK / AYLIK VERİ ÇEK
     // --------------------------------------------------------------
     const fetchDaily = useCallback(async () => {
         setLoading(true);
@@ -382,108 +416,113 @@ export default function TeslimdeBekleme() {
         setProgressMessage("Veri çekimi başlatılıyor...");
         setProgressValue(0);
 
-        const fetchStartTime = Date.now();
-
-        let allDetails = [];
+        const startedAt = Date.now();
 
         try {
             const range = computeRange();
             const startOfRange = range.start.clone().startOf("day");
             const endOfRange = range.end.clone().endOf("day");
 
-            // ✅ Haftalık/Aylık modlarda: büyük aralıkta tek sefer yerine hafta hafta çek
             const shouldChunkByWeek = mode !== "day";
+            let allDetails = [];
+
+            // ✅ detay count doğrulama (ay/hafta/gün)
+            const expectedTotal = await getDetailCount(startOfRange.toISOString(), endOfRange.toISOString());
+            console.log("[VERIFY] Detail expected total:", expectedTotal);
 
             if (!shouldChunkByWeek) {
-                // Günlük tek sorgu
-                setProgressValue(50);
-                allDetails = await fetchByDayRange(startOfRange.toISOString(), endOfRange.toISOString());
-                setProgressMessage(`'${range.label}' için ${allDetails.length} detay kaydı çekildi.`);
-                setProgressValue(95);
+                setProgressValue(10);
+                setProgressMessage(`Detay çekiliyor (${range.label})...`);
+
+                allDetails = await fetchDetailsUnlimited(
+                    startOfRange.toISOString(),
+                    endOfRange.toISOString(),
+                    1000,
+                    (fetched) => {
+                        // 10 → 60 arası
+                        const pct = expectedTotal > 0 ? Math.min(60, 10 + Math.round((fetched / expectedTotal) * 50)) : 30;
+                        setProgressValue(pct);
+                        setProgressMessage(`Detay çekiliyor (${range.label})... ${fetched}/${expectedTotal}`);
+                    }
+                );
             } else {
-                // Haftalık/Aylık: hafta hafta çekip birleştir
                 let currentDate = startOfRange.clone();
                 const endDateLocal = endOfRange.clone();
 
-                // Tahmini hafta sayısı
                 let totalWeeks = Math.ceil(endDateLocal.diff(currentDate, "week", true));
                 if (totalWeeks <= 0) totalWeeks = 1;
 
                 let weekCounter = 0;
-                let totalDetailsCount = 0;
+                let fetchedTotal = 0;
 
                 while (currentDate.isSameOrBefore(endDateLocal, "day")) {
                     weekCounter++;
 
-                    // Haftanın sonu
                     let weekEnd = currentDate.clone().endOf("week");
                     if (weekEnd.isAfter(endDateLocal)) weekEnd = endDateLocal.clone();
-
-                    const progress = Math.round((weekCounter / totalWeeks) * 90);
-                    setProgressValue(progress);
 
                     const startISO = currentDate.startOf("day").toISOString();
                     const endISO = weekEnd.endOf("day").toISOString();
 
-                    const details = await fetchByDayRange(startISO, endISO);
+                    setProgressMessage(`Detay çekiliyor (${range.label}): ${weekCounter}/${totalWeeks} hafta...`);
 
-                    allDetails = allDetails.concat(details);
-                    totalDetailsCount += details.length;
+                    // her haftayı da limitsiz çek
+                    const weekDetails = await fetchDetailsUnlimited(startISO, endISO, 1000, (weekFetched) => {
+                        // kaba progress: 5 → 60
+                        const base = 5 + Math.round((weekCounter / totalWeeks) * 55);
+                        setProgressValue(Math.min(60, base));
+                    });
 
-                    const elapsed = Date.now() - fetchStartTime;
-                    const timePerWeek = elapsed / weekCounter;
-                    const remainingTimeMs = timePerWeek * (totalWeeks - weekCounter);
-                    const remainingTimeSec = Math.max(0, Math.round(remainingTimeMs / 1000));
-
-                    setProgressMessage(
-                        `Veri çekiliyor (${range.label}): ${weekCounter}/${totalWeeks} hafta — ${totalDetailsCount} kayıt. Kalan ~${remainingTimeSec} sn.`
-                    );
+                    allDetails = allDetails.concat(weekDetails);
+                    fetchedTotal += weekDetails.length;
 
                     currentDate = weekEnd.add(1, "day").startOf("day");
                 }
 
-                setProgressValue(95);
-                setProgressMessage(`Detay kayıtları çekildi (${allDetails.length}). Özet veriler alınıyor...`);
+                console.log("[VERIFY] Detail fetched total:", allDetails.length, "expected:", expectedTotal);
+                setProgressValue(60);
             }
 
-            if (!allDetails || allDetails.length === 0) {
-                setRows([]);
-                setLoading(false);
+            // ✅ verify
+            console.log("[VERIFY] Detail fetched total:", allDetails.length, "expected:", expectedTotal);
+
+            if (!allDetails.length) {
                 setProgressMessage("Kayıt bulunamadı.");
                 setProgressValue(0);
+                setLoading(false);
                 return;
             }
 
-            // Summary verilerini tek seferde çek
             const seferNos = [...new Set(allDetails.map((d) => d.sefer_no))];
 
-            setProgressValue(98);
-            setProgressMessage(`Özet veri alınıyor (${seferNos.length} sefer)...`);
+            setProgressValue(65);
+            setProgressMessage(`Özet çekiliyor... (${seferNos.length} sefer)`);
 
-            const { data: summary, error: summaryError } = await supabase
-                .from(SUMMARY_TABLE)
-                .select(SUMMARY_COLS)
-                .in("sefer_no", seferNos);
+            const summaryAll = await fetchSummariesBySeferNos(seferNos, (i, total, soFar) => {
+                // 65 → 85
+                setProgressValue(65 + Math.round((i / total) * 20));
+                setProgressMessage(`Özet çekiliyor... ${i}/${total} parça (toplam ${soFar})`);
+            });
 
-            if (summaryError) throw summaryError;
-
-            // Summary Map
             const summaryMap = new Map();
-            (summary || []).forEach((s) => summaryMap.set(s.sefer_no, s));
+            summaryAll.forEach((s) => summaryMap.set(s.sefer_no, s));
 
-            // ✅ Sefer bazında “en kötü ihlali” konsolide et
+            // ✅ summary eksiklerini say
+            let missingSummary = 0;
+            for (const sn of seferNos) if (!summaryMap.get(sn)) missingSummary++;
+            console.log("[VERIFY] Missing summary for sefer_no:", missingSummary);
+
+            // ✅ Sefer bazında en kötü ihlal
             const consolidatedMap = new Map();
 
             allDetails.forEach((d) => {
-                const seferNo = d.sefer_no;
-                const s = summaryMap.get(seferNo);
+                const s = summaryMap.get(d.sefer_no);
                 if (!s) return;
 
                 const rule = calcRule(d.teslim_varis, d.teslim_cikis);
 
-                // ihlal veya eksikse al
                 if (rule.compliant === false || rule.compliant === null) {
-                    const currentRecord = {
+                    const rec = {
                         ...s,
                         teslim_noktasi: d.teslim_noktasi,
                         teslim_varis: d.teslim_varis,
@@ -491,19 +530,16 @@ export default function TeslimdeBekleme() {
                         rule,
                     };
 
-                    if (consolidatedMap.has(seferNo)) {
-                        const existing = consolidatedMap.get(seferNo);
+                    if (consolidatedMap.has(d.sefer_no)) {
+                        const ex = consolidatedMap.get(d.sefer_no);
 
-                        // mevcut null ise, false veya daha büyük gecikme ile değiştir
-                        if (existing.rule.compliant === null) {
-                            if (rule.compliant === false || rule.delay > existing.rule.delay) {
-                                consolidatedMap.set(seferNo, currentRecord);
-                            }
-                        } else if (rule.delay > existing.rule.delay) {
-                            consolidatedMap.set(seferNo, currentRecord);
+                        if (ex.rule.compliant === null) {
+                            if (rule.compliant === false || rule.delay > ex.rule.delay) consolidatedMap.set(d.sefer_no, rec);
+                        } else if (rule.delay > ex.rule.delay) {
+                            consolidatedMap.set(d.sefer_no, rec);
                         }
                     } else {
-                        consolidatedMap.set(seferNo, currentRecord);
+                        consolidatedMap.set(d.sefer_no, rec);
                     }
                 }
             });
@@ -511,9 +547,11 @@ export default function TeslimdeBekleme() {
             const final = Array.from(consolidatedMap.values());
             setRows(final);
 
-            const totalElapsed = (Date.now() - fetchStartTime) / 1000;
-            setProgressMessage(`İşlem ${totalElapsed.toFixed(1)} sn’de tamamlandı. ${final.length} ihlal kaydı bulundu.`);
+            const elapsed = (Date.now() - startedAt) / 1000;
             setProgressValue(100);
+            setProgressMessage(
+                `Bitti (${elapsed.toFixed(1)} sn). Detail: ${allDetails.length}/${expectedTotal}, Sefer: ${seferNos.length}, İhlal satırı: ${final.length}, Summary eksik: ${missingSummary}`
+            );
         } catch (err) {
             setError(err?.message || "Bilinmeyen hata");
             setProgressMessage("Hata oluştu.");
@@ -521,15 +559,15 @@ export default function TeslimdeBekleme() {
         }
 
         setLoading(false);
-    }, [mode, date, dailyMonth, weekCount, computeRange]);
+    }, [mode, computeRange, getDetailCount, fetchDetailsUnlimited, fetchSummariesBySeferNos]);
 
-    // ✅ Otomatik tetikleme: mod/date/month/weekCount değişince
+    // ✅ Otomatik tetikleme
     useEffect(() => {
         fetchDaily();
     }, [mode, date, dailyMonth, weekCount, fetchDaily]);
 
     // --------------------------------------------------------------
-    // DETAYLI ANALİZ VERİSİ ÇEK
+    // DETAYLI ANALİZ VERİSİ ÇEK (pagination + IN chunk)
     // --------------------------------------------------------------
     const runAnalysis = useCallback(async () => {
         setAnalysisLoading(true);
@@ -537,36 +575,30 @@ export default function TeslimdeBekleme() {
         setError(null);
 
         try {
-            const start = dayjs(startDate).startOf("day").toISOString();
-            const end = dayjs(endDate).endOf("day").toISOString();
+            const startISO = dayjs(startDate).startOf("day").toISOString();
+            const endISO = dayjs(endDate).endOf("day").toISOString();
 
-            const { data: detail, error: detailError } = await supabase
-                .from(DETAIL_TABLE)
-                .select(DETAIL_COLS)
-                .gte("teslim_varis", start)
-                .lte("teslim_varis", end);
+            const expected = await getDetailCount(startISO, endISO);
+            console.log("[VERIFY][ANALYSIS] expected detail:", expected);
 
-            if (detailError) throw detailError;
+            const detail = await fetchDetailsUnlimited(startISO, endISO, 1000);
+            console.log("[VERIFY][ANALYSIS] fetched detail:", detail.length);
 
-            if (!detail || !detail.length) {
-                setDetailedAnalysis([]);
+            if (!detail.length) {
                 setAnalysisLoading(false);
                 return;
             }
 
             const seferNos = [...new Set(detail.map((d) => d.sefer_no))];
+            const summaryAll = await fetchSummariesBySeferNos(seferNos);
 
-            const { data: summary, error: summaryError } = await supabase
-                .from(SUMMARY_TABLE)
-                .select(SUMMARY_COLS)
-                .in("sefer_no", seferNos);
-
-            if (summaryError) throw summaryError;
+            const summaryMap = new Map();
+            summaryAll.forEach((s) => summaryMap.set(s.sefer_no, s));
 
             const map = new Map();
 
             detail.forEach((d) => {
-                const s = summary.find((x) => x.sefer_no === d.sefer_no);
+                const s = summaryMap.get(d.sefer_no);
                 if (!s) return;
 
                 const plaka = s.plaka;
@@ -594,7 +626,6 @@ export default function TeslimdeBekleme() {
                 });
 
                 if (rule.compliant !== null) item.totalTrips++;
-
                 if (rule.compliant === false) {
                     item.nonCompliantCount++;
                     item.totalDelayMinutes += rule.delay;
@@ -606,8 +637,7 @@ export default function TeslimdeBekleme() {
 
                 return {
                     ...item,
-                    violationRate:
-                        item.totalTrips > 0 ? ((item.nonCompliantCount / item.totalTrips) * 100).toFixed(1) : 0,
+                    violationRate: item.totalTrips > 0 ? ((item.nonCompliantCount / item.totalTrips) * 100).toFixed(1) : 0,
                     totalDelay: minToHM(item.totalDelayMinutes),
                     score,
                     penalty,
@@ -620,7 +650,7 @@ export default function TeslimdeBekleme() {
         }
 
         setAnalysisLoading(false);
-    }, [startDate, endDate]);
+    }, [startDate, endDate, getDetailCount, fetchDetailsUnlimited, fetchSummariesBySeferNos]);
 
     // --------------------------------------------------------------
     // RENDER
@@ -633,32 +663,20 @@ export default function TeslimdeBekleme() {
 
             {error && <Alert severity="error">{error}</Alert>}
 
-            {/* ========================================================= */}
-            {/* 1️⃣ GÜNLÜK / HAFTALIK / AYLIK TABLO */}
-            {/* ========================================================= */}
             <Paper sx={{ p: 3, mb: 4 }} elevation={6}>
                 <Typography variant="h6" sx={{ mb: 2 }}>
                     📅 İhlal Detay Tablosu ({rows.length} İhlal Kaydı)
                 </Typography>
 
                 <Grid container spacing={2} alignItems="center">
-                    {/* MOD */}
                     <Grid item xs={12} md={3}>
-                        <TextField
-                            select
-                            fullWidth
-                            label="Mod"
-                            value={mode}
-                            onChange={(e) => setMode(e.target.value)}
-                            disabled={loading}
-                        >
+                        <TextField select fullWidth label="Mod" value={mode} onChange={(e) => setMode(e.target.value)} disabled={loading}>
                             <MenuItem value="day">Günlük</MenuItem>
                             <MenuItem value="week">Haftalık (Ay + İlk N Hafta)</MenuItem>
                             <MenuItem value="month">Aylık (Tüm Ay)</MenuItem>
                         </TextField>
                     </Grid>
 
-                    {/* GÜNLÜK TARİH */}
                     {mode === "day" && (
                         <Grid item xs={12} md={3}>
                             <TextField
@@ -673,7 +691,6 @@ export default function TeslimdeBekleme() {
                         </Grid>
                     )}
 
-                    {/* AY SEÇ */}
                     {(mode === "week" || mode === "month") && (
                         <Grid item xs={12} md={3}>
                             <TextField
@@ -688,17 +705,9 @@ export default function TeslimdeBekleme() {
                         </Grid>
                     )}
 
-                    {/* HAFTA SAYISI */}
                     {mode === "week" && (
                         <Grid item xs={12} md={3}>
-                            <TextField
-                                select
-                                fullWidth
-                                label="Kaç Haftası"
-                                value={weekCount}
-                                onChange={(e) => setWeekCount(e.target.value)}
-                                disabled={loading}
-                            >
+                            <TextField select fullWidth label="Kaç Haftası" value={weekCount} onChange={(e) => setWeekCount(e.target.value)} disabled={loading}>
                                 <MenuItem value="1">İlk 1 Hafta</MenuItem>
                                 <MenuItem value="2">İlk 2 Hafta</MenuItem>
                                 <MenuItem value="3">İlk 3 Hafta</MenuItem>
@@ -707,24 +716,16 @@ export default function TeslimdeBekleme() {
                         </Grid>
                     )}
 
-                    {/* YENİLE */}
                     <Grid item xs={12} md={3}>
                         <Tooltip title="Seçimler değişince otomatik güncellenir, yine de manuel yenileyebilirsin.">
                             <span>
-                                <Button
-                                    fullWidth
-                                    variant="contained"
-                                    startIcon={<SearchIcon />}
-                                    onClick={fetchDaily}
-                                    disabled={loading}
-                                >
+                                <Button fullWidth variant="contained" startIcon={<SearchIcon />} onClick={fetchDaily} disabled={loading}>
                                     {loading ? "Yükleniyor..." : "Yenile"}
                                 </Button>
                             </span>
                         </Tooltip>
                     </Grid>
 
-                    {/* EXCEL */}
                     <Grid item xs={12} md={3}>
                         <Button
                             fullWidth
@@ -739,7 +740,6 @@ export default function TeslimdeBekleme() {
                     </Grid>
                 </Grid>
 
-                {/* Progress */}
                 {loading && (
                     <Box sx={{ mt: 2, p: 1, backgroundColor: theme.palette.action.hover, borderRadius: 1 }}>
                         <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
@@ -752,7 +752,6 @@ export default function TeslimdeBekleme() {
                     </Box>
                 )}
 
-                {/* Tablo */}
                 <TableContainer sx={{ mt: 3, maxHeight: "60vh" }}>
                     <Table stickyHeader size="small">
                         <TableHead>
@@ -801,9 +800,7 @@ export default function TeslimdeBekleme() {
                                             )}
                                             {r.rule.appliedRule}
                                         </TableCell>
-                                        <TableCell sx={{ fontWeight: r.rule.delay > 0 ? "bold" : "normal" }}>
-                                            {minToHM(r.rule.delay)}
-                                        </TableCell>
+                                        <TableCell sx={{ fontWeight: r.rule.delay > 0 ? "bold" : "normal" }}>{minToHM(r.rule.delay)}</TableCell>
                                     </TableRow>
                                 ))
                             ) : (
@@ -820,9 +817,6 @@ export default function TeslimdeBekleme() {
                 </TableContainer>
             </Paper>
 
-            {/* ========================================================= */}
-            {/* 2️⃣ TARİH ARALIĞI ANALİZİ */}
-            {/* ========================================================= */}
             <Paper sx={{ p: 3, mb: 4 }} elevation={6}>
                 <Typography variant="h6" sx={{ mb: 2 }}>
                     📊 Tarih Aralığı Analizi (Performans Puanı)
@@ -830,33 +824,15 @@ export default function TeslimdeBekleme() {
 
                 <Grid container spacing={3} alignItems="center">
                     <Grid item>
-                        <TextField
-                            type="date"
-                            label="Başlangıç"
-                            value={startDate}
-                            InputLabelProps={{ shrink: true }}
-                            onChange={(e) => setStartDate(e.target.value)}
-                        />
+                        <TextField type="date" label="Başlangıç" value={startDate} InputLabelProps={{ shrink: true }} onChange={(e) => setStartDate(e.target.value)} />
                     </Grid>
 
                     <Grid item>
-                        <TextField
-                            type="date"
-                            label="Bitiş"
-                            value={endDate}
-                            InputLabelProps={{ shrink: true }}
-                            onChange={(e) => setEndDate(e.target.value)}
-                        />
+                        <TextField type="date" label="Bitiş" value={endDate} InputLabelProps={{ shrink: true }} onChange={(e) => setEndDate(e.target.value)} />
                     </Grid>
 
                     <Grid item>
-                        <Button
-                            variant="contained"
-                            color="secondary"
-                            startIcon={<SearchIcon />}
-                            disabled={analysisLoading}
-                            onClick={runAnalysis}
-                        >
+                        <Button variant="contained" color="secondary" startIcon={<SearchIcon />} disabled={analysisLoading} onClick={runAnalysis}>
                             {analysisLoading ? "Analiz Ediliyor..." : "Analiz Et"}
                         </Button>
                     </Grid>
@@ -872,9 +848,6 @@ export default function TeslimdeBekleme() {
                 )}
             </Paper>
 
-            {/* ========================================================= */}
-            {/* 3️⃣ ANALİZ TABLOSU */}
-            {/* ========================================================= */}
             {detailedAnalysis.length > 0 && (
                 <Paper sx={{ p: 3 }} elevation={6}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
@@ -895,11 +868,7 @@ export default function TeslimdeBekleme() {
                                 </TableRow>
                             </TableHead>
 
-                            <TableBody>
-                                {detailedAnalysis.map((row) => (
-                                    <DetailedRow key={row.plaka} row={row} />
-                                ))}
-                            </TableBody>
+                            <TableBody>{detailedAnalysis.map((row) => <DetailedRow key={row.plaka} row={row} />)}</TableBody>
                         </Table>
                     </TableContainer>
                 </Paper>

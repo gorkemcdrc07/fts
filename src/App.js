@@ -1,7 +1,12 @@
-// src/App.js (veya App.jsx - sende hangisiyse aynı dosya)
-// ✅ KM Kayıt route'u eklendi + lazy import eklendi
+// src/App.js (veya App.jsx)
 import React, { Suspense, lazy } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import {
+    BrowserRouter as Router,
+    Routes,
+    Route,
+    Navigate,
+    Outlet,
+} from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 
 // MUI Tema
@@ -48,23 +53,35 @@ import AracEtalari from "./raporlar/AracEtalari";
 import AppLayout from "./layout/AppLayout";
 
 // Lazy sayfalar
-const ReelAtananSeferler = lazy(() => import("./aktifseferler/ReelAtananSeferler"));
-const SiparisAnaliz = lazy(() => import("./kullanıcıIslemleri/planlamaDetay/SiparisAnaliz"));
+const ReelAtananSeferler = lazy(() =>
+    import("./aktifseferler/ReelAtananSeferler")
+);
+const SiparisAnaliz = lazy(() =>
+    import("./kullanıcıIslemleri/planlamaDetay/SiparisAnaliz")
+);
 const AdminPanel = lazy(() => import("./adminPanel/adminPanel"));
 const GorunumDuzenle = lazy(() => import("./aktifseferler/GorunumDuzenle"));
-const PagePermissionsPage = lazy(() => import("./adminPanel/PagePermissionsPage"));
+const PagePermissionsPage = lazy(() =>
+    import("./adminPanel/PagePermissionsPage")
+);
 const PivotTool = lazy(() => import("./raporlar/PivotTool"));
 const ETAUyumsuzlugu = lazy(() => import("./raporlar/ETAUyumsuzlugu"));
-const FrigoYakitHakedis = lazy(() => import("./Hakedisler/FrigoYakitHakedis"));
 
-// ✔ Yeni lazy import – DOĞRU HALİ
-const FiloIskontoluHakedis = lazy(() => import("./Hakedisler/FiloIskontoluHakedis"));
+const FrigoYakitHakedis = lazy(() => import("./Hakedisler/FrigoYakitHakedis"));
+const FiloIskontoluHakedis = lazy(() =>
+    import("./Hakedisler/FiloIskontoluHakedis")
+);
 
 const SeferTamamlayan = lazy(() => import("./raporlar/SeferTamamlayan"));
 const BolgeselAnaliz = lazy(() => import("./raporlar/BolgeselAnaliz"));
 
 // ✅ YENİ: KM Kayıt (Kayıt İşlemleri)
 const KmKayit = lazy(() => import("./kayit-islemleri/km-kayit"));
+
+// ✅ YENİ: Hayat Kimya Yakıt Hakediş (Hakediş)
+const HayatKimyaYakitHakedis = lazy(() =>
+    import("./Hakedisler/HayatKimyaYakitHakedis")
+);
 
 // Test Data
 const TEST_VERILERI = {
@@ -121,7 +138,10 @@ function App() {
                                     }
                                 />
                                 <Route path="siparisler" element={<Siparisler />} />
-                                <Route path="tamamlanan-seferler" element={<TamamlananlarPage />} />
+                                <Route
+                                    path="tamamlanan-seferler"
+                                    element={<TamamlananlarPage />}
+                                />
 
                                 {/* Araç Yönetimi */}
                                 <Route path="arac/durumlari" element={<AracDurumlari />} />
@@ -138,31 +158,80 @@ function App() {
                                 <Route
                                     path="hakedis/frigo-yakit-hakedis"
                                     element={
-                                        <Suspense fallback={<div>Frigo Yakıt Hakediş yükleniyor...</div>}>
+                                        <Suspense
+                                            fallback={<div>Frigo Yakıt Hakediş yükleniyor...</div>}
+                                        >
                                             <FrigoYakitHakedis />
                                         </Suspense>
                                     }
                                 />
-                                <Route path="hakedis/tedarikci-masraf" element={<TedarikciMasraf />} />
-                                <Route path="hakedis/arac-cari-ve-fiyat" element={<AracCariVeFiyat />} />
-                                <Route path="hakedis/hakedis-seferleri" element={<HakedisSeferleri />} />
+                                <Route
+                                    path="hakedis/tedarikci-masraf"
+                                    element={<TedarikciMasraf />}
+                                />
+                                <Route
+                                    path="hakedis/arac-cari-ve-fiyat"
+                                    element={<AracCariVeFiyat />}
+                                />
+                                <Route
+                                    path="hakedis/hakedis-seferleri"
+                                    element={<HakedisSeferleri />}
+                                />
                                 <Route path="hakedis/hamaliye" element={<Hamaliye />} />
 
-                                {/* ✔ EKLENEN YENİ SAYFA */}
                                 <Route
                                     path="hakedis/FiloIskontoluHakedis"
                                     element={
-                                        <Suspense fallback={<div>Filo İskontolu Hakediş yükleniyor...</div>}>
+                                        <Suspense
+                                            fallback={<div>Filo İskontolu Hakediş yükleniyor...</div>}
+                                        >
                                             <FiloIskontoluHakedis />
+                                        </Suspense>
+                                    }
+                                />
+
+                                {/* ✅ Hayat Kimya Yakıt Hakediş (ASIL PATH) */}
+                                <Route
+                                    path="hakedis/hayat-kimya-yakit-hakedis"
+                                    element={
+                                        <Suspense
+                                            fallback={
+                                                <div>Hayat Kimya Yakıt Hakediş yükleniyor...</div>
+                                            }
+                                        >
+                                            <HayatKimyaYakitHakedis />
+                                        </Suspense>
+                                    }
+                                />
+
+                                {/* ✅ ALIAS: Sidebar eski yol ile de açsın diye */}
+                                <Route
+                                    path="hakedis/hayat-kimya-yhh"
+                                    element={
+                                        <Suspense
+                                            fallback={
+                                                <div>Hayat Kimya Yakıt Hakediş yükleniyor...</div>
+                                            }
+                                        >
+                                            <HayatKimyaYakitHakedis />
                                         </Suspense>
                                     }
                                 />
 
                                 {/* Raporlar */}
                                 <Route path="raporlar/kpi-olcumu" element={<KpiOlcumu />} />
-                                <Route path="raporlar/yuklemede-bekleme" element={<YuklemedeBekleme />} />
-                                <Route path="raporlar/teslimde-bekleme" element={<TeslimdeBekleme />} />
-                                <Route path="raporlar/lokasyon-rapor" element={<ProjeLokasyonRaporlari />} />
+                                <Route
+                                    path="raporlar/yuklemede-bekleme"
+                                    element={<YuklemedeBekleme />}
+                                />
+                                <Route
+                                    path="raporlar/teslimde-bekleme"
+                                    element={<TeslimdeBekleme />}
+                                />
+                                <Route
+                                    path="raporlar/lokasyon-rapor"
+                                    element={<ProjeLokasyonRaporlari />}
+                                />
                                 <Route
                                     path="raporlar/eta-uyumsuz"
                                     element={
@@ -176,7 +245,10 @@ function App() {
                                     path="raporlar/tools"
                                     element={
                                         <Suspense fallback={<div>Pivot Yükleniyor...</div>}>
-                                            <PivotTool datasets={TEST_VERILERI} defaultDataset="Sefer Performansı" />
+                                            <PivotTool
+                                                datasets={TEST_VERILERI}
+                                                defaultDataset="Sefer Performansı"
+                                            />
                                         </Suspense>
                                     }
                                 />
@@ -215,7 +287,7 @@ function App() {
                                     }
                                 />
 
-                                {/* ✅ YENİ: Kayıt İşlemleri -> KM Kayıt */}
+                                {/* ✅ Kayıt İşlemleri -> KM Kayıt */}
                                 <Route
                                     path="kayit-islemleri/km-kayit"
                                     element={
@@ -244,12 +316,11 @@ function App() {
                                 />
                             </Route>
 
-                            {/* ✅ ÖNEMLİ:
-                  Sidebar'da sen /kayit-islemleri/km-kayit şeklinde ABSOLUTE (başında / var) navigate ediyorsun.
-                  Route path'leri burada relative ("kayit-islemleri/km-kayit") olduğu için bu doğru çalışır.
-                  Yine de biri /kayit-islemleri yazarsa anasayfaya atmasın diye ekstra güvenlik:
-              */}
-                            <Route path="kayit-islemleri" element={<Navigate to="/kayit-islemleri/km-kayit" replace />} />
+                            {/* /kayit-islemleri base */}
+                            <Route
+                                path="kayit-islemleri"
+                                element={<Navigate to="/kayit-islemleri/km-kayit" replace />}
+                            />
 
                             {/* catch-all */}
                             <Route path="*" element={<Navigate to="/anasayfa" replace />} />

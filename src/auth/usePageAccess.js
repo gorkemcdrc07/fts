@@ -60,13 +60,15 @@ function pathToColumn(path) {
 /* ============ Alias ve APP_PAGES tabanlı map ============ */
 const PATH_ALIASES = {
     "/raporlar/eta-uyumsuz": "/raporlar/eta-uyumsuzlugu",
-
-    // ✅ UYGULAMADAKİ GERÇEK ROUTE -> APP_PAGES ROUTE
     "/hakedis/filoiskontoluhakedis": "/hakedis/filo-iskontolu-hakedis",
+
+    // ✅ bunu ekle
+    "/hakedis/hayat-kimya-yhh": "/hakedis/hayat-kimya-yakit-hakedis",
 };
 
-const PAGE_MAP = new Map(APP_PAGES.map((p) => [normalizePath(p.path), pathToColumn(p.path)]));
-
+const PAGE_MAP = new Map(
+    APP_PAGES.map((p) => [normalizePath(p.path), pathToColumn(p.path)])
+);
 /* ===================== Hook ===================== */
 export default function usePageAccess() {
     const [row, setRow] = useState(null);

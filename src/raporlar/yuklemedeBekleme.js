@@ -715,6 +715,8 @@ export default function CleanFetcherModern() {
                 varis: r.ilk_yukleme_varis,
                 cikis: r.son_yukleme_cikis,
                 sure: r.toplam_bekleme_dk,
+                sefer_tarihi: r.sefer_tarihi,     // ✅ eklendi
+                musteri_adi: r.musteri_adi,       // ✅ eklendi
             });
         });
 
@@ -775,6 +777,8 @@ export default function CleanFetcherModern() {
                 cikis_zamani: fmtDateTR(d.cikis),
                 bekleme_suresi: minToHM(d.sure),
                 bekleme_dk: d.sure,
+                sefer_tarihi: d.sefer_tarihi ? dayjs(d.sefer_tarihi).format("DD.MM.YYYY") : "",
+                musteri_adi: d.musteri_adi || "",
             }))
         );
 
@@ -793,6 +797,8 @@ export default function CleanFetcherModern() {
             { header: "SON ÇIKIŞ", key: "cikis_zamani", width: 20 },
             { header: "BEKLEME SÜRESİ", key: "bekleme_suresi", width: 20 },
             { header: "BEKLEME (DK)", key: "bekleme_dk", width: 12, hidden: true },
+            { header: "SEFER TARİHİ", key: "sefer_tarihi", width: 14 },
+            { header: "MÜŞTERİ", key: "musteri_adi", width: 24 },
         ];
 
         ws.addRows(data);

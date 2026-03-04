@@ -51,6 +51,7 @@ import PivotTableChartIcon from "@mui/icons-material/PivotTableChart";
 import LocalGasStationIcon from "@mui/icons-material/LocalGasStation"; // ✅ Frigo Yakıt Hakediş
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import SpeedIcon from "@mui/icons-material/Speed"; // ✅ KM Kayıt
+import FactoryIcon from "@mui/icons-material/Factory"; // ✅ Hayat Kimya YHH
 
 export const DRAWER_WIDTH_OPEN = 280;
 export const DRAWER_WIDTH_CLOSED = 72;
@@ -128,7 +129,8 @@ export default function Sidebar(props) {
     const [internalOpen, setInternalOpen] = useState(true);
 
     const isControlled =
-        typeof controlledOpen === "boolean" && typeof setControlledOpen === "function";
+        typeof controlledOpen === "boolean" &&
+        typeof setControlledOpen === "function";
     const open = isControlled ? controlledOpen : internalOpen;
 
     const toggle = () => {
@@ -173,7 +175,8 @@ export default function Sidebar(props) {
         severity: "info",
     });
     const handleCloseSnack = () => setSnack((s) => ({ ...s, open: false }));
-    const showPopup = (msg, severity = "info") => setSnack({ open: true, msg, severity });
+    const showPopup = (msg, severity = "info") =>
+        setSnack({ open: true, msg, severity });
 
     // Aktif route’a göre ilgili kategoriyi otomatik aç
     useEffect(() => {
@@ -181,10 +184,20 @@ export default function Sidebar(props) {
         const anyStartsWith = (arr) => arr.some((x) => p === x || p.startsWith(x + "/"));
 
         setKullaniciMenuAcik(
-            anyStartsWith(["/planlama", "/plaka-onerisi", "/seferler", "/tamamlanan-seferler"])
+            anyStartsWith([
+                "/planlama",
+                "/plaka-onerisi",
+                "/seferler",
+                "/tamamlanan-seferler",
+            ])
         );
         setAracMenuAcik(
-            anyStartsWith(["/arac/yonetim", "/arac/izin-girisi", "/arac/kesinti-girisi", "/arac/durumlari"])
+            anyStartsWith([
+                "/arac/yonetim",
+                "/arac/izin-girisi",
+                "/arac/kesinti-girisi",
+                "/arac/durumlari",
+            ])
         );
 
         // RAPORLAR
@@ -205,9 +218,10 @@ export default function Sidebar(props) {
             ])
         );
 
-        // HAKEDİŞLER: Frigo burada ✅
+        // HAKEDİŞLER: Frigo + Hayat Kimya YHH burada ✅
         setHakedisMenuAcik(
             anyStartsWith([
+                "/hakedis/hayat-kimya-yhh",
                 "/hakedis/tedarikci-masraf",
                 "/hakedis/arac-cari-ve-fiyat",
                 "/hakedis/hakedis-seferleri",
@@ -230,7 +244,11 @@ export default function Sidebar(props) {
             { ad: "Planlama", yol: "/planlama", ikon: <CalendarMonthIcon /> },
             { ad: "Plaka Önerisi", yol: "/plaka-onerisi", ikon: <AssignmentIcon /> },
             { ad: "Aktif Seferler", yol: "/seferler", ikon: <LocalShippingIcon /> },
-            { ad: "Tamamlanan Seferler", yol: "/tamamlanan-seferler", ikon: <CheckCircleIcon /> },
+            {
+                ad: "Tamamlanan Seferler",
+                yol: "/tamamlanan-seferler",
+                ikon: <CheckCircleIcon />,
+            },
         ],
         []
     );
@@ -263,9 +281,10 @@ export default function Sidebar(props) {
         []
     );
 
-    // ✅ Frigo Yakıt Hakediş HAKEDİŞLER altında
+    // ✅ HAKEDİŞLER: Hayat Kimya YHH eklendi
     const hakedisAltMenuler = useMemo(
         () => [
+            { ad: "Hayat Kimya YHH", yol: "/hakedis/hayat-kimya-yhh", ikon: <FactoryIcon /> },
             { ad: "Frigo Yakıt Hakediş", yol: "/hakedis/frigo-yakit-hakedis", ikon: <LocalGasStationIcon /> },
             { ad: "Frigo - Filo Kira ve Sürücü", yol: "/hakedis/hakedis-seferleri", ikon: <ReceiptLongIcon /> },
             { ad: "Filo-Frigo Araç Cari & Fiyat", yol: "/hakedis/arac-cari-ve-fiyat", ikon: <CreditCardIcon /> },
@@ -544,7 +563,12 @@ export default function Sidebar(props) {
                         setOpenState={setHakedisMenuAcik}
                         endAdornment={
                             bildirimSayisi > 0 ? (
-                                <Chip size="small" color="error" label={bildirimSayisi} sx={{ height: 20, fontWeight: 700 }} />
+                                <Chip
+                                    size="small"
+                                    color="error"
+                                    label={bildirimSayisi}
+                                    sx={{ height: 20, fontWeight: 700 }}
+                                />
                             ) : null
                         }
                     />

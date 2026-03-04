@@ -73,12 +73,12 @@ const SUMMARY_COLS = `
   sefer_no,
   plaka,
   proje_adi,
+  musteri_adi,
   teslim_ili,
   teslim_ilcesi,
   sefer_tarihi,
   yukleme_ili
 `;
-
 // --------------------------------------------------------------
 // YARDIMCI FONKSİYONLAR
 // --------------------------------------------------------------
@@ -196,6 +196,9 @@ const exportExcel = async (rows) => {
         { header: "Teslim Varış", key: "teslim_varis", width: 20 },
         { header: "Teslim Çıkış", key: "teslim_cikis", width: 20 },
         { header: "Gecikme Süresi", key: "gecikme", width: 18 },
+        { header: "Sefer No", key: "sefer_no", width: 12 },
+        { header: "Sefer Tarihi", key: "sefer_tarihi", width: 16 },
+        { header: "Müşteri", key: "musteri_adi", width: 24 },
     ];
 
     filtered.forEach((r) =>
@@ -209,6 +212,9 @@ const exportExcel = async (rows) => {
             teslim_varis: fmt(r.teslim_varis),
             teslim_cikis: fmt(r.teslim_cikis),
             gecikme: minToHM(r.rule.delay),
+            sefer_no: r.sefer_no,
+            sefer_tarihi: dayjs(r.sefer_tarihi).format("DD.MM.YYYY"),
+            musteri_adi: r.musteri_adi || "",
         })
     );
 

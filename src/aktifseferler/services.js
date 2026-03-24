@@ -86,7 +86,7 @@ export async function syncFromTMS({ start, end }) {
             TMSDespatchId: 0,
             VehicleId: 0,
             DocumentPrint: "",
-            WorkingTypesId: [3, 4],
+            WorkingTypesId: [3, 4, 33],
         }),
     });
 
@@ -105,15 +105,37 @@ export async function syncFromTMS({ start, end }) {
 }
 
 export function filterIncoming(list) {
+    // 🔧 Normalize fonksiyonu (Türkçe karakter + case + trim fix)
+    const normalizeTip = (s) =>
+        (s || "")
+            .toUpperCase()
+            .replace(/İ/g, "I")
+            .replace(/İ/g, "I")
+            .replace(/Ş/g, "S")
+            .replace(/Ğ/g, "G")
+            .replace(/Ü/g, "U")
+            .replace(/Ö/g, "O")
+            .replace(/Ç/g, "C")
+            .trim();
+
+    const allowed = [
+        "FILO",
+        "OZMAL",
+        "HAYAT KIMYA KIRALIK"
+    ];
+
     return list
         .filter((item) => {
-            const tip = (item?.VehicleWorkingTypeName || "").toUpperCase().trim();
-            return tip === "FİLO" || tip === "ÖZMAL";
+            const tip = normalizeTip(item?.VehicleWorkingTypeName);
+            return allowed.includes(tip);
         })
-        .filter((item) => (item?.DocumentNo || "").toUpperCase().startsWith("SFR"))
-        .filter((item) => !EXCLUDED_PLAKAS.has(normalizePlate(item?.PlateNumber)));
+        .filter((item) =>
+            (item?.DocumentNo || "").toUpperCase().startsWith("SFR")
+        )
+        .filter((item) =>
+            !EXCLUDED_PLAKAS.has(normalizePlate(item?.PlateNumber))
+        );
 }
-
 export async function upsertSeferler(rows) {
     if (!rows?.length) return;
     const { error } = await supabase

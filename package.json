@@ -11,7 +11,7 @@
     "@mui/icons-material": "^7.3.4",
     "@mui/material": "^7.3.4",
     "@mui/x-charts": "^8.17.0",
-    "@mui/x-data-grid": "^7.11.3",
+    "@mui/x-data-grid": "^8.28.0",
     "@mui/x-date-pickers": "^7.10.0",
     "@react-leaflet/core": "^2.1.0",
     "@supabase/supabase-js": "^2.50.0",

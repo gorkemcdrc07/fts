@@ -1728,6 +1728,11 @@ export default function FrigoYakitHakedis() {
                 <Typography variant="h4" fontWeight={800}>
                     Frigo Yakıt Hakediş
                 </Typography>
+
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    SFR ile başlayan seferler için yakma oranı %37; BOS ile başlayan seferler için ise %30 yakma oranı uygulanarak hesaplama yapılır.
+                </Typography>
+
                 <Chip
                     size="small"
                     label="Beta"

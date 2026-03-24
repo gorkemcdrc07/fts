@@ -83,6 +83,10 @@ const HayatKimyaYakitHakedis = lazy(() =>
     import("./Hakedisler/HayatKimyaYakitHakedis")
 );
 
+// ✅ YENİ: Pepsi Yakıt Hakediş
+const PepsiYakitHakedis = lazy(() =>
+    import("./Hakedisler/PepsiYakitHakedis")
+);
 // Test Data
 const TEST_VERILERI = {
     "Sefer Performansı": [
@@ -214,6 +218,20 @@ function App() {
                                             }
                                         >
                                             <HayatKimyaYakitHakedis />
+                                        </Suspense>
+                                    }
+                                />
+
+                                {/* ✅ Pepsi Yakıt Hakediş */}
+                                <Route
+                                    path="hakedis/pepsi-yakit-hakedis"
+                                    element={
+                                        <Suspense
+                                            fallback={
+                                                <div>Pepsi Yakıt Hakediş yükleniyor...</div>
+                                            }
+                                        >
+                                            <PepsiYakitHakedis />
                                         </Suspense>
                                     }
                                 />

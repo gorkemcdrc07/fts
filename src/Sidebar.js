@@ -53,7 +53,7 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import SpeedIcon from "@mui/icons-material/Speed"; // ✅ KM Kayıt
 import FactoryIcon from "@mui/icons-material/Factory"; // ✅ Hayat Kimya YHH
 
-export const DRAWER_WIDTH_OPEN = 280;
+export const DRAWER_WIDTH_OPEN = 350;
 export const DRAWER_WIDTH_CLOSED = 72;
 
 // --- STİL SABİTLERİ ---
@@ -218,10 +218,12 @@ export default function Sidebar(props) {
             ])
         );
 
+
         // HAKEDİŞLER: Frigo + Hayat Kimya YHH burada ✅
         setHakedisMenuAcik(
             anyStartsWith([
                 "/hakedis/hayat-kimya-yhh",
+                "/hakedis/pepsi-yakit-hakedis",
                 "/hakedis/tedarikci-masraf",
                 "/hakedis/arac-cari-ve-fiyat",
                 "/hakedis/hakedis-seferleri",
@@ -230,7 +232,6 @@ export default function Sidebar(props) {
                 "/hakedis/FiloIskontoluHakedis",
             ])
         );
-
         setAfyonMenuAcik(anyStartsWith(["/afyon/seferler", "/afyon/araclar"]));
         setGorevMenuAcik(anyStartsWith(["/gorevler/tum", "/gorevler/ata", "/gorevler/benim"]));
 
@@ -285,10 +286,11 @@ export default function Sidebar(props) {
     const hakedisAltMenuler = useMemo(
         () => [
             { ad: "Hayat Kimya YHH", yol: "/hakedis/hayat-kimya-yhh", ikon: <FactoryIcon /> },
-            { ad: "Frigo Yakıt Hakediş", yol: "/hakedis/frigo-yakit-hakedis", ikon: <LocalGasStationIcon /> },
-            { ad: "Frigo - Filo Kira ve Sürücü", yol: "/hakedis/hakedis-seferleri", ikon: <ReceiptLongIcon /> },
-            { ad: "Filo-Frigo Araç Cari & Fiyat", yol: "/hakedis/arac-cari-ve-fiyat", ikon: <CreditCardIcon /> },
-            { ad: "Filo %9 İskontolu Yakıt Hakedişi", yol: "/hakedis/FiloIskontoluHakedis", ikon: <PaidIcon /> },
+            { ad: "Pepsi YHH", yol: "/hakedis/pepsi-yakit-hakedis", ikon: <FactoryIcon /> },
+            { ad: "Frigo YHH", yol: "/hakedis/frigo-yakit-hakedis", ikon: <LocalGasStationIcon /> },
+            { ad: "Sefer Kira ve Sürücü Hakediş", yol: "/hakedis/hakedis-seferleri", ikon: <ReceiptLongIcon /> },
+            { ad: "Plaka | Kira ve Sürücü Tutarları", yol: "/hakedis/arac-cari-ve-fiyat", ikon: <CreditCardIcon /> },
+            { ad: "Filo %12 İskontolu Yakıt Hakedişi", yol: "/hakedis/FiloIskontoluHakedis", ikon: <PaidIcon /> },
             { ad: "Tedarikçi Masraf", yol: "/hakedis/tedarikci-masraf", ikon: <PaidIcon /> },
             { ad: "Hamaliye", yol: "/hakedis/hamaliye", ikon: <PaidIcon /> },
         ],

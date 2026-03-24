@@ -119,7 +119,6 @@ async function fetchAllDetails({ startISO, endISO, pageSize = 1000 }) {
             .select("sefer_no, yukleme_varis, yukleme_cikis")
             .gte("yukleme_varis", startISO)
             .lte("yukleme_varis", endISO)
-            // pagination için stabil sıralama şart
             .order("yukleme_varis", { ascending: true })
             .range(from, from + pageSize - 1);
 
@@ -129,16 +128,13 @@ async function fetchAllDetails({ startISO, endISO, pageSize = 1000 }) {
 
         all = all.concat(data);
 
-        // son sayfa geldiyse bitir
         if (data.length < pageSize) break;
 
         from += pageSize;
     }
 
     return all;
-}
-
-// ======================================================
+}// ======================================================
 // Modern KPI Card
 // ======================================================
 const KPICard = ({ title, value, icon: Icon, color, subtitle }) => (
@@ -422,24 +418,23 @@ export default function CleanFetcherModern() {
             };
         }
 
-        if (dailyMode === "month") {
-            const m = dayjs(selectedDailyMonth);
-            return {
-                start: m.startOf("month"),
-                end: m.endOf("month"),
-                label: m.format("MMMM YYYY"),
-            };
-        }
-
-        // week: ayın başından itibaren ilk N hafta / tüm ay
         const monthStart = dayjs(selectedDailyMonth).startOf("month");
         const monthEnd = dayjs(selectedDailyMonth).endOf("month");
 
+        if (dailyMode === "month") {
+            return {
+                start: monthStart,
+                end: monthEnd,
+                label: monthStart.format("MMMM YYYY"),
+            };
+        }
+
+        // week: ay başından itibaren ilk N hafta / tüm ay
         let end;
         if (selectedWeekCount === "all") {
             end = monthEnd;
         } else {
-            end = monthStart.add(Number(selectedWeekCount) * 7, "day").endOf("day");
+            end = monthStart.add(Number(selectedWeekCount) * 7 - 1, "day").endOf("day");
             if (end.isAfter(monthEnd)) end = monthEnd;
         }
 

@@ -1,7 +1,21 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
-    Box, Typography, CircularProgress, Alert, Stack, Paper, Button,
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, InputAdornment, Grid
+    Box,
+    Typography,
+    CircularProgress,
+    Alert,
+    Stack,
+    Paper,
+    Button,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    TextField,
+    InputAdornment,
+    Grid
 } from "@mui/material";
 import { createTheme, ThemeProvider, useTheme } from "@mui/material/styles";
 import dayjs from "dayjs";
@@ -13,26 +27,24 @@ import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import EventIcon from "@mui/icons-material/Event";
 import SearchIcon from "@mui/icons-material/Search";
 import FilterListIcon from "@mui/icons-material/FilterList";
-import TollIcon from '@mui/icons-material/Toll'; // Özet kart ikonu
-import AccessTimeIcon from '@mui/icons-material/AccessTime'; // Özet kart ikonu
-import AttachMoneyIcon from '@mui/icons-material/AttachMoney'; // Özet kart ikonu
+import TollIcon from "@mui/icons-material/Toll";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
-// dayjs eklentileri ve locale
+// dayjs
 dayjs.extend(isSameOrBefore);
 dayjs.extend(isSameOrAfter);
 dayjs.locale("tr");
 
-// --- Supabase Client ---
-// DİKKAT: Bu kısmı kendi gerçek değerlerinizle doldurun!
+// Supabase
 const supabase = createClient(
     process.env.REACT_APP_SUPABASE_URL || "https://dummy.supabase.co",
     process.env.REACT_APP_SUPABASE_ANON_KEY || "dummy-anon-key"
 );
 
-// --- Helper Fonksiyonlar ---
+// Helpers
 const formatDateTime = (timestamp) => {
     if (!timestamp) return "—";
     const d = dayjs(timestamp);
@@ -45,7 +57,6 @@ const formatDate = (timestamp) => {
     return d.isValid() ? d.format("DD.MM.YYYY") : "—";
 };
 
-// ... aggregateSeferler fonksiyonu aynı kaldı ...
 const aggregateSeferler = (data) => {
     if (!data || data.length === 0) return [];
 
@@ -65,17 +76,35 @@ const aggregateSeferler = (data) => {
 
         const existing = acc[key];
 
-        if (current.yukleme_varis && (!existing.yukleme_varis_min || dayjs(current.yukleme_varis).isSameOrBefore(existing.yukleme_varis_min))) {
+        if (
+            current.yukleme_varis &&
+            (!existing.yukleme_varis_min ||
+                dayjs(current.yukleme_varis).isSameOrBefore(existing.yukleme_varis_min))
+        ) {
             existing.yukleme_varis_min = current.yukleme_varis;
         }
-        if (current.yukleme_cikis && (!existing.yukleme_cikis_min || dayjs(current.yukleme_cikis).isSameOrBefore(existing.yukleme_cikis_min))) {
+
+        if (
+            current.yukleme_cikis &&
+            (!existing.yukleme_cikis_min ||
+                dayjs(current.yukleme_cikis).isSameOrBefore(existing.yukleme_cikis_min))
+        ) {
             existing.yukleme_cikis_min = current.yukleme_cikis;
         }
 
-        if (current.teslim_varis && (!existing.teslim_varis_max || dayjs(current.teslim_varis).isSameOrAfter(existing.teslim_varis_max))) {
+        if (
+            current.teslim_varis &&
+            (!existing.teslim_varis_max ||
+                dayjs(current.teslim_varis).isSameOrAfter(existing.teslim_varis_max))
+        ) {
             existing.teslim_varis_max = current.teslim_varis;
         }
-        if (current.teslim_cikis && (!existing.teslim_cikis_max || dayjs(current.teslim_cikis).isSameOrAfter(existing.teslim_cikis_max))) {
+
+        if (
+            current.teslim_cikis &&
+            (!existing.teslim_cikis_max ||
+                dayjs(current.teslim_cikis).isSameOrAfter(existing.teslim_cikis_max))
+        ) {
             existing.teslim_cikis_max = current.teslim_cikis;
         }
 
@@ -91,7 +120,33 @@ const aggregateSeferler = (data) => {
     }));
 };
 
-// --- Tablo kolonları ---
+// Pagination helper
+async function fetchAllCompletedTrips({ startDate, endDate, pageSize = 1000 }) {
+    let from = 0;
+    let all = [];
+
+    while (true) {
+        const { data, error } = await supabase
+            .from("tamamlanan_detaylar_view")
+            .select("*")
+            .gte("sefer_tarihi", startDate)
+            .lte("sefer_tarihi", endDate)
+            .order("sefer_no", { ascending: false })
+            .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        all = all.concat(data);
+
+        if (data.length < pageSize) break;
+        from += pageSize;
+    }
+
+    return all;
+}
+
+// Table config
 const headersConfig = [
     { key: "sefer_tarihi", label: "Tarih 📅", isDate: true, minWidth: 110 },
     { key: "sefer_no", label: "Sefer No", minWidth: 100 },
@@ -115,35 +170,34 @@ const headersConfig = [
     { key: "teslim_cikis", label: "Teslim Çıkış", isDateTime: true, minWidth: 150 },
 ];
 
-// --- Tema (Ultra Modern Dark Mode) ---
+// Theme
 const modernTheme = createTheme({
     palette: {
         mode: "dark",
-        // Daha çarpıcı, enerjik bir vurgu rengi
-        primary: { main: "#ff5722" }, // Deep Orange
-        secondary: { main: "#4caf50" }, // Yeşil (Success/Export)
+        primary: { main: "#ff5722" },
+        secondary: { main: "#4caf50" },
         background: {
-            default: "#0d1117", // Github dark mode'a yakın, daha derin zemin
-            paper: "#1a202c", // Kartlar için koyu metalik gri
+            default: "#0d1117",
+            paper: "#1a202c",
         },
         text: {
             primary: "#ffffff",
-            secondary: "#94a3b8", // Hafif gri metin
+            secondary: "#94a3b8",
         },
         divider: "#374151",
     },
     typography: {
         fontFamily: "Poppins, Inter, Arial, sans-serif",
-        h4: { fontWeight: 700, fontSize: '1.75rem' },
-        h6: { fontWeight: 600, fontSize: '1rem' },
+        h4: { fontWeight: 700, fontSize: "1.75rem" },
+        h6: { fontWeight: 600, fontSize: "1rem" },
         body1: { fontSize: "0.9rem" }
     },
     components: {
         MuiPaper: {
             styleOverrides: {
                 root: {
-                    borderRadius: 16, // Ultra yumuşak köşeler
-                    boxShadow: '0 8px 16px rgba(0, 0, 0, 0.4)', // Daha derin gölge
+                    borderRadius: 16,
+                    boxShadow: "0 8px 16px rgba(0, 0, 0, 0.4)",
                 },
             },
         },
@@ -154,11 +208,11 @@ const modernTheme = createTheme({
             styleOverrides: {
                 root: {
                     borderRadius: 12,
-                    textTransform: 'none',
+                    textTransform: "none",
                     fontWeight: 600,
-                    transition: 'transform 0.2s',
-                    '&:hover': {
-                        transform: 'translateY(-1px)',
+                    transition: "transform 0.2s",
+                    "&:hover": {
+                        transform: "translateY(-1px)",
                     },
                 },
             },
@@ -166,49 +220,50 @@ const modernTheme = createTheme({
         MuiTableCell: {
             styleOverrides: {
                 head: {
-                    backgroundColor: '#2d3748', // Başlık için farklı arka plan
-                    color: '#e2e8f0',
+                    backgroundColor: "#2d3748",
+                    color: "#e2e8f0",
                     fontWeight: 700,
-                    borderBottom: '3px solid #ff5722', // Ana renkte kalın alt çizgi
-                    padding: '10px 14px', // Daha ferah başlık
+                    borderBottom: "3px solid #ff5722",
+                    padding: "10px 14px",
                 },
                 body: {
-                    fontSize: '0.85rem',
-                    color: '#cbd5e1',
-                    padding: '8px 14px', // Daha ferah satırlar
+                    fontSize: "0.85rem",
+                    color: "#cbd5e1",
+                    padding: "8px 14px",
                 }
             }
         },
     }
 });
 
-// --- Dashboard Özet Kartı ---
 function SummaryCard({ title, value, icon: Icon, color }) {
     return (
-        <Paper elevation={4} sx={{
-            p: 2,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            borderRadius: 3,
-            borderLeft: `5px solid ${color}`,
-            bgcolor: '#1f2937' // Kart arka planı
-        }}>
+        <Paper
+            elevation={4}
+            sx={{
+                p: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                borderRadius: 3,
+                borderLeft: `5px solid ${color}`,
+                bgcolor: "#1f2937"
+            }}
+        >
             <Box>
-                <Typography variant="h6" color="text.secondary" sx={{ fontSize: '0.9rem', mb: 0.5 }}>
+                <Typography variant="h6" color="text.secondary" sx={{ fontSize: "0.9rem", mb: 0.5 }}>
                     {title}
                 </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: color }}>
+                <Typography variant="h4" sx={{ fontWeight: 700, color }}>
                     {value}
                 </Typography>
             </Box>
-            <Icon sx={{ fontSize: 40, color: color, opacity: 0.7 }} />
+            <Icon sx={{ fontSize: 40, color, opacity: 0.7 }} />
         </Paper>
     );
 }
 
-// --- Excel Toolbar (Modernize Edildi) ---
-function CustomToolbar({ rows }) {
+function CustomToolbar({ rows, rawRowCount, aggregatedRowCount }) {
     const theme = useTheme();
 
     const handleExportExcel = () => {
@@ -223,11 +278,9 @@ function CustomToolbar({ rows }) {
             { key: "plaka", label: "Plaka" },
             { key: "treyler", label: "Treyler" },
             { key: "musteri_adi", label: "Müşteri" },
-
             { key: "yukleme_noktasi", label: "Yükleme Noktası" },
             { key: "yukleme_varis", label: "Yükleme Varış" },
             { key: "yukleme_cikis", label: "Yükleme Çıkış" },
-
             { key: "teslim_noktasi", label: "Teslim Noktası" },
             { key: "teslim_ili", label: "Teslim İl" },
             { key: "teslim_ilcesi", label: "Teslim İlçe" },
@@ -243,12 +296,9 @@ function CustomToolbar({ rows }) {
 
                 if (col.key === "sefer_tarihi") value = formatDate(value);
 
-                if ([
-                    "yukleme_varis",
-                    "yukleme_cikis",
-                    "teslim_varis",
-                    "teslim_cikis"
-                ].includes(col.key)) {
+                if (
+                    ["yukleme_varis", "yukleme_cikis", "teslim_varis", "teslim_cikis"].includes(col.key)
+                ) {
                     value = formatDateTime(value);
                 }
 
@@ -268,7 +318,6 @@ function CustomToolbar({ rows }) {
         saveAs(blob, `Seferler_${dayjs().format("YYYYMMDD_HHmmss")}.xlsx`);
     };
 
-
     return (
         <Box
             sx={{
@@ -276,13 +325,21 @@ function CustomToolbar({ rows }) {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                flexWrap: "wrap",
+                gap: 1.5,
                 bgcolor: theme.palette.background.paper,
-                borderTop: `1px solid ${theme.palette.divider}` // Tabloyu üstten ayırma
+                borderTop: `1px solid ${theme.palette.divider}`
             }}
         >
-            <Typography variant="subtitle1" color="text.secondary" sx={{ fontWeight: 600 }}>
-                Gösterilen Kayıt: **{rows.length}**
-            </Typography>
+            <Stack spacing={0.5}>
+                <Typography variant="subtitle1" color="text.secondary" sx={{ fontWeight: 600 }}>
+                    Gösterilen Kayıt: {rows.length}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                    Ham satır: {rawRowCount} • Birleştirilmiş sefer: {aggregatedRowCount}
+                </Typography>
+            </Stack>
+
             <Button
                 startIcon={<GetAppIcon />}
                 color="secondary"
@@ -295,40 +352,43 @@ function CustomToolbar({ rows }) {
     );
 }
 
-// --- ANA BİLEŞEN ---
 function SeferTamamlayanContent() {
     const [allRows, setAllRows] = useState([]);
+    const [rawRowCount, setRawRowCount] = useState(0);
+    const [aggregatedRowCount, setAggregatedRowCount] = useState(0);
     const [filters, setFilters] = useState({});
-    const [globalSearch, setGlobalSearch] = useState(""); // Global arama alanı
+    const [globalSearch, setGlobalSearch] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
     const today = dayjs().format("YYYY-MM-DD");
-    const [startDate, setStartDate] = useState(dayjs().subtract(7, 'day').format("YYYY-MM-DD")); // Son 7 gün varsayılan
+    const [startDate, setStartDate] = useState(dayjs().subtract(7, "day").format("YYYY-MM-DD"));
     const [endDate, setEndDate] = useState(today);
 
     const theme = useTheme();
 
-    // --- Veri Çekme ---
     const fetchData = useCallback(async () => {
         setLoading(true);
         setError(null);
 
-        // Supabase sorgusu
-        const { data, error } = await supabase
-            .from("tamamlanan_detaylar_view")
-            .select("*")
-            .gte("sefer_tarihi", startDate)
-            .lte("sefer_tarihi", endDate)
-            .order("sefer_no", { ascending: false });
+        try {
+            const data = await fetchAllCompletedTrips({
+                startDate,
+                endDate,
+                pageSize: 1000
+            });
 
-        if (error) {
-            setError(`⚠️ Veri çekilirken hata oluştu: ${error.message}`);
-            setAllRows([]);
-        } else {
             const aggregated = aggregateSeferler(data || []);
+
+            setRawRowCount(data.length);
+            setAggregatedRowCount(aggregated.length);
             setAllRows(aggregated);
             setFilters({});
+        } catch (err) {
+            setError(`⚠️ Veri çekilirken hata oluştu: ${err.message}`);
+            setRawRowCount(0);
+            setAggregatedRowCount(0);
+            setAllRows([]);
         }
 
         setLoading(false);
@@ -338,7 +398,6 @@ function SeferTamamlayanContent() {
         fetchData();
     }, [fetchData]);
 
-    // --- Filtreleme ---
     const handleFilterChange = (key, value) => {
         setFilters((prev) => ({ ...prev, [key]: value }));
     };
@@ -347,15 +406,13 @@ function SeferTamamlayanContent() {
         setGlobalSearch(value);
     };
 
-    // Filtrelenmiş satırları hesaplamak için useMemo
     const filteredRows = useMemo(() => {
         let rows = allRows;
 
-        // 1. Global Arama
         const globalValue = globalSearch.trim().toLowerCase();
         if (globalValue) {
             rows = rows.filter((row) => {
-                return headersConfig.some(h => {
+                return headersConfig.some((h) => {
                     let cell = row[h.key];
                     if (h.isDate) cell = formatDate(cell);
                     if (h.isDateTime) cell = formatDateTime(cell);
@@ -364,12 +421,12 @@ function SeferTamamlayanContent() {
             });
         }
 
-        // 2. Sütun Filtreleri
         Object.entries(filters).forEach(([key, filterValue]) => {
             const value = filterValue.trim().toLowerCase();
             if (!value) return;
 
             const header = headersConfig.find((h) => h.key === key);
+            if (!header) return;
 
             rows = rows.filter((row) => {
                 let cell = row[key];
@@ -382,20 +439,23 @@ function SeferTamamlayanContent() {
         return rows;
     }, [allRows, filters, globalSearch]);
 
-    // --- Özet Veriler (Dummy) ---
     const summaryData = useMemo(() => ({
         totalTrips: filteredRows.length,
-        totalKilometers: (filteredRows.length * 534).toLocaleString('tr-TR'), // Örnek Hesaplama
-        avgDuration: `${Math.round(filteredRows.length > 0 ? (filteredRows.length * 15) / filteredRows.length : 0)} saat`, // Örnek Hesaplama
+        totalKilometers: (filteredRows.length * 534).toLocaleString("tr-TR"),
+        avgDuration: `${Math.round(filteredRows.length > 0 ? (filteredRows.length * 15) / filteredRows.length : 0)} saat`,
     }), [filteredRows]);
 
-
-    // --- UI Render ---
     return (
         <Box sx={{ p: 4, minHeight: "100vh", bgcolor: "background.default" }}>
-
-            {/* --- Başlık ve Kontrol Paneli Kartı --- */}
-            <Paper elevation={8} sx={{ p: 2, mb: 2, borderRadius: 4, borderLeft: `5px solid ${theme.palette.primary.main}` }}>
+            <Paper
+                elevation={8}
+                sx={{
+                    p: 2,
+                    mb: 2,
+                    borderRadius: 4,
+                    borderLeft: `5px solid ${theme.palette.primary.main}`
+                }}
+            >
                 <Typography variant="h4" sx={{ color: "text.primary", mb: 3 }}>
                     <LocalShippingIcon sx={{ mr: 1, fontSize: "1.2em", color: theme.palette.primary.main }} />
                     Tamamlanan Seferler Yönetim Dashboard'u
@@ -404,7 +464,6 @@ function SeferTamamlayanContent() {
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
                 <Grid container spacing={3} alignItems="flex-end">
-                    {/* Tarih Filtreleri */}
                     <Grid item xs={12} sm={6} md={2.5}>
                         <TextField
                             label="Başlangıç Tarihi"
@@ -416,7 +475,11 @@ function SeferTamamlayanContent() {
                             onChange={(e) => setStartDate(e.target.value)}
                             InputLabelProps={{ shrink: true }}
                             InputProps={{
-                                startAdornment: (<InputAdornment position="start"><EventIcon color="primary" /></InputAdornment>),
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <EventIcon color="primary" />
+                                    </InputAdornment>
+                                ),
                             }}
                         />
                     </Grid>
@@ -432,12 +495,15 @@ function SeferTamamlayanContent() {
                             onChange={(e) => setEndDate(e.target.value)}
                             InputLabelProps={{ shrink: true }}
                             InputProps={{
-                                startAdornment: (<InputAdornment position="start"><EventIcon color="primary" /></InputAdornment>),
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <EventIcon color="primary" />
+                                    </InputAdornment>
+                                ),
                             }}
                         />
                     </Grid>
 
-                    {/* Sorgula ve Bugün Butonları */}
                     <Grid item xs={12} sm={6} md={3}>
                         <Stack direction="row" spacing={1}>
                             <Button
@@ -448,8 +514,9 @@ function SeferTamamlayanContent() {
                                 disabled={loading}
                                 fullWidth
                             >
-                                {loading ? <CircularProgress size={20} color="inherit" /> : 'Sorgula'}
+                                {loading ? <CircularProgress size={20} color="inherit" /> : "Sorgula"}
                             </Button>
+
                             <Button
                                 variant="outlined"
                                 color="primary"
@@ -464,7 +531,6 @@ function SeferTamamlayanContent() {
                         </Stack>
                     </Grid>
 
-                    {/* Global Arama */}
                     <Grid item xs={12} sm={6} md={4}>
                         <TextField
                             label="Hızlı Arama (Tüm Sütunlar)"
@@ -474,14 +540,17 @@ function SeferTamamlayanContent() {
                             value={globalSearch}
                             onChange={(e) => handleGlobalSearchChange(e.target.value)}
                             InputProps={{
-                                startAdornment: (<InputAdornment position="start"><SearchIcon color="secondary" /></InputAdornment>),
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon color="secondary" />
+                                    </InputAdornment>
+                                ),
                             }}
                         />
                     </Grid>
                 </Grid>
             </Paper>
 
-            {/* --- Özet Dashboard Kartları --- */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12} md={4}>
                     <SummaryCard
@@ -491,6 +560,7 @@ function SeferTamamlayanContent() {
                         color={theme.palette.primary.main}
                     />
                 </Grid>
+
                 <Grid item xs={12} md={4}>
                     <SummaryCard
                         title="Tahmini Toplam KM"
@@ -499,6 +569,7 @@ function SeferTamamlayanContent() {
                         color={theme.palette.text.secondary}
                     />
                 </Grid>
+
                 <Grid item xs={12} md={4}>
                     <SummaryCard
                         title="Ort. Sefer Süresi"
@@ -509,20 +580,19 @@ function SeferTamamlayanContent() {
                 </Grid>
             </Grid>
 
-            {/* --- Ana Tablo Kartı --- */}
             <Paper elevation={8} sx={{ flexGrow: 1, borderRadius: 4, overflow: "hidden" }}>
-
                 {loading ? (
                     <Box sx={{ textAlign: "center", p: 8 }}>
                         <CircularProgress color="primary" size={60} />
-                        <Typography sx={{ mt: 2 }} color="text.secondary">Veriler yükleniyor...</Typography>
+                        <Typography sx={{ mt: 2 }} color="text.secondary">
+                            Veriler yükleniyor...
+                        </Typography>
                     </Box>
                 ) : (
                     <>
-                        <TableContainer sx={{ maxHeight: 'calc(100vh - 260px)' }}>
+                        <TableContainer sx={{ maxHeight: "calc(100vh - 260px)" }}>
                             <Table stickyHeader size="medium">
                                 <TableHead>
-                                    {/* Sütun Başlıkları */}
                                     <TableRow>
                                         {headersConfig.map((h) => (
                                             <TableCell
@@ -534,13 +604,12 @@ function SeferTamamlayanContent() {
                                         ))}
                                     </TableRow>
 
-                                    {/* Sütun Bazlı Filtre Satırı */}
-                                    <TableRow sx={{ bgcolor: '#2d3748' }}>
+                                    <TableRow sx={{ bgcolor: "#2d3748" }}>
                                         {headersConfig.map((h) => (
-                                            <TableCell key={`filter-${h.key}`} sx={{ p: '6px 14px' }}>
+                                            <TableCell key={`filter-${h.key}`} sx={{ p: "6px 14px" }}>
                                                 <TextField
                                                     size="small"
-                                                    variant="standard" // Daha sade bir input stili
+                                                    variant="standard"
                                                     placeholder="Filtrele..."
                                                     fullWidth
                                                     value={filters[h.key] || ""}
@@ -549,10 +618,18 @@ function SeferTamamlayanContent() {
                                                         disableUnderline: true,
                                                         startAdornment: (
                                                             <InputAdornment position="start">
-                                                                <FilterListIcon fontSize="small" sx={{ color: theme.palette.primary.main }} />
+                                                                <FilterListIcon
+                                                                    fontSize="small"
+                                                                    sx={{ color: theme.palette.primary.main }}
+                                                                />
                                                             </InputAdornment>
                                                         ),
-                                                        sx: { color: 'white', bgcolor: '#374151', borderRadius: 1, p: '4px 8px' } // Input arka planı
+                                                        sx: {
+                                                            color: "white",
+                                                            bgcolor: "#374151",
+                                                            borderRadius: 1,
+                                                            p: "4px 8px"
+                                                        }
                                                     }}
                                                 />
                                             </TableCell>
@@ -563,23 +640,32 @@ function SeferTamamlayanContent() {
                                 <TableBody>
                                     {filteredRows.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={headersConfig.length} sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
+                                            <TableCell
+                                                colSpan={headersConfig.length}
+                                                sx={{ textAlign: "center", py: 4, color: "text.secondary" }}
+                                            >
                                                 Veri bulunamadı. Lütfen tarih aralığını veya filtreleri kontrol edin.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         filteredRows.map((row, index) => (
                                             <TableRow
-                                                key={index}
+                                                key={`${row.sefer_no}-${index}`}
                                                 hover
                                                 sx={{
-                                                    // Daha yumuşak satır ayrımı
-                                                    bgcolor: index % 2 === 0 ? '#1a202c' : '#1f2937',
-                                                    transition: 'background-color 0.3s'
+                                                    bgcolor: index % 2 === 0 ? "#1a202c" : "#1f2937",
+                                                    transition: "background-color 0.3s"
                                                 }}
                                             >
                                                 {headersConfig.map((h) => (
-                                                    <TableCell key={h.key} sx={{ color: h.key === 'sefer_no' ? theme.palette.primary.main : 'inherit' }}>
+                                                    <TableCell
+                                                        key={h.key}
+                                                        sx={{
+                                                            color: h.key === "sefer_no"
+                                                                ? theme.palette.primary.main
+                                                                : "inherit"
+                                                        }}
+                                                    >
                                                         {h.isDate
                                                             ? formatDate(row[h.key])
                                                             : h.isDateTime
@@ -593,7 +679,12 @@ function SeferTamamlayanContent() {
                                 </TableBody>
                             </Table>
                         </TableContainer>
-                        <CustomToolbar rows={filteredRows} />
+
+                        <CustomToolbar
+                            rows={filteredRows}
+                            rawRowCount={rawRowCount}
+                            aggregatedRowCount={aggregatedRowCount}
+                        />
                     </>
                 )}
             </Paper>

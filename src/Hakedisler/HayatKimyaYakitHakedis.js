@@ -1718,8 +1718,8 @@ export default function HayatKimyaYakitHakedis() {
             <Box sx={{ position: "relative", zIndex: 1 }}>
                 <SectionTitle
                     icon={<AssessmentIcon sx={{ color: DARK.primary, fontSize: 28 }} />}
-                    title="HAYAT KİMYA Yakıt Hakediş"
-                    subtitle="Yakıt & Sefer dosyalarını yükleyin, oranları müşteri adına göre (%36 / %37) hesaplayın, raporları indirin."
+                    title="Hayat Kimya Yakıt Hakediş"
+                    subtitle="Hayat Kimya ve Odak Lojistik carileri için %36; diğer tüm müşteri carilerine ait seferler için ise %37 yakma oranı uygulanacak şekilde hesaplama yapılmaktadır."
                     right={
                         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
                             <Button

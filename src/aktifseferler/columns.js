@@ -9,18 +9,25 @@ import {
 import EditIcon from "@mui/icons-material/EditNote";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle"; // <<< EKLENDİ
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { fromISOToCombined } from "./utils/datetime";
 
 export default function buildColumns({
     openEtaEditor,
     openEditor,
+    openIkazEditor,
     onDeleteRow,
     COLORS,
     perms,
     userOrder = [],
 }) {
-    const { loading = false, mayOpenEdit = false, canEdit = false, canDelete = false } = perms || {};
+    const {
+        loading = false,
+        mayOpenEdit = false,
+        canEdit = false,
+        canDelete = false,
+    } = perms || {};
 
     const txt = (f, t, w = 170) => ({
         field: f,
@@ -32,7 +39,7 @@ export default function buildColumns({
     const actionsCol = {
         field: "actions",
         headerName: "İşlem",
-        width: 230, // biraz genişlettim (ikon eklendi)
+        width: 280,
         sortable: false,
         filterable: false,
         renderCell: (p) => {
@@ -44,7 +51,6 @@ export default function buildColumns({
 
             return (
                 <Stack direction="row" spacing={0.5} alignItems="center">
-                    {/* ETA girildi rozeti */}
                     {hasEtaKalan && (
                         <Tooltip title={`ETA girildi • Kalan sürüş: ${Number(etaKalan).toFixed(2)} saat`}>
                             <CheckCircleIcon fontSize="small" color="success" />
@@ -65,10 +71,30 @@ export default function buildColumns({
                         </span>
                     </Tooltip>
 
+                    <Tooltip title="İkaz Açıklama Ekle">
+                        <span>
+                            <IconButton
+                                size="small"
+                                onClick={() => {
+                                    openIkazEditor && openIkazEditor(p.row);
+                                }}
+                                disabled={loading || !canEdit}
+                            >
+                                <WarningAmberIcon
+                                    fontSize="small"
+                                    color={p.row?.ikaz_aciklama ? "error" : "inherit"}
+                                />
+                            </IconButton>
+                        </span>
+                    </Tooltip>
                     {(mayOpenEdit || canEdit || loading) && (
                         <Tooltip
                             title={
-                                loading ? "Yükleniyor..." : canEdit ? "Detayları Düzenle" : "Düzenleme yetkiniz yok"
+                                loading
+                                    ? "Yükleniyor..."
+                                    : canEdit
+                                        ? "Detayları Düzenle"
+                                        : "Düzenleme yetkiniz yok"
                             }
                         >
                             <span>
@@ -173,11 +199,17 @@ export default function buildColumns({
                                             fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                                         }}
                                     >
-                                        <Typography sx={{ fontSize: 11, fontWeight: 800 }}>{i + 1}</Typography>
+                                        <Typography sx={{ fontSize: 11, fontWeight: 800 }}>
+                                            {i + 1}
+                                        </Typography>
 
                                         <Stack direction="row" spacing={1} alignItems="center">
-                                            <Typography sx={{ fontSize: 11 }}>G{enter ? "✓" : "–"}</Typography>
-                                            <Typography sx={{ fontSize: 11 }}>Ç{exit ? "✓" : "–"}</Typography>
+                                            <Typography sx={{ fontSize: 11 }}>
+                                                G{enter ? "✓" : "–"}
+                                            </Typography>
+                                            <Typography sx={{ fontSize: 11 }}>
+                                                Ç{exit ? "✓" : "–"}
+                                            </Typography>
                                         </Stack>
                                     </Box>
                                 </Tooltip>
@@ -197,12 +229,19 @@ export default function buildColumns({
     };
 
     const noteCol = {
-        field: "_note",
-        headerName: "Açıklama Rozeti",
-        width: 140,
-        renderCell: () => <Chip size="small" label="—" />,
+        field: "ikaz_aciklama",
+        headerName: "İkaz Açıklama",
+        width: 160,
+        sortable: true,
+        renderCell: (p) => (
+            <Chip
+                size="small"
+                label={p.row.ikaz_aciklama || "—"}
+                color={p.row.ikaz_aciklama ? "error" : "default"}
+                sx={{ fontWeight: 700 }}
+            />
+        ),
     };
-
     let baseCols = [
         {
             field: "reel_durum",
@@ -235,9 +274,6 @@ export default function buildColumns({
         txt("yukleme_ili", "Yükleme İl", 160),
         txt("yukleme_ilcesi", "Yükleme İlçe", 160),
         txt("bolge", "Bölge", 160),
-
-
-        // >>> ETA VARIŞ SÜTUNU
         {
             field: "eta_varis",
             headerName: "ETA Varış",
@@ -251,7 +287,6 @@ export default function buildColumns({
             },
             sortComparator: (a, b) => new Date(a) - new Date(b),
         },
-
         txt("teslim_ili", "Teslim İl", 160),
         txt("teslim_ilcesi", "Teslim İlçe", 160),
         txt("treyler", "Treyler", 160),
@@ -294,7 +329,6 @@ export default function buildColumns({
         noteCol,
     ];
 
-    // Kullanıcı özel sıralaması varsa uygula
     let all = [...baseCols];
     if (Array.isArray(userOrder) && userOrder.length) {
         const byId = new Map(all.map((c) => [c.field, c]));

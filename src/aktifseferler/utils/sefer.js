@@ -3,7 +3,7 @@ export const EXCLUDED_PLAKAS = new Set([
     "34NHF811", "34NHF868", "34NHF916", "34NHF964",
     "34NHG120", "34NHG208", "06CFZ391", "33ADV488",
     "54AEH576", "26ADN765", "06GD7290", "33ABF523",
-    "33AIM809", "33AVC168", "33ACR730",
+    "33AIM809", "33AVC168", "33ACR730", "34EYJ582",
 ]);
 
 export const normalizePlate = (s) => (s ?? "").toString().toUpperCase().replace(/[\s-]/g, "");

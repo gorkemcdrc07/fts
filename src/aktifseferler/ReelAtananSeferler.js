@@ -279,6 +279,8 @@ export default function ReelAtananSeferler() {
     const [etaEditorOpen, setEtaEditorOpen] = useState(false);
     const [etaSefer, setEtaSefer] = useState(null);
 
+    const IKAZ_METNI =
+        "Operasyon verimsizlik konusunda ikaz edildi ama yine de araç bulamadıkları için filo ataması yapıldı";
     // --- MESAFE: Supabase 'mesafeler' tablosundan km çek ---
     const fetchDistance = useCallback(async ({ from, to, timeoutMs = 8000 }) => {
         const first = (v) => {
@@ -693,7 +695,7 @@ export default function ReelAtananSeferler() {
 
                 // 🆕 ETA TAM BURAYA EKLENECEK
                 eta_varis: seferAna.eta_varis ?? null,
-            };
+                ikaz_aciklama: seferAna.ikaz_aciklama ?? null,            };
             const detPayload = detailRows.map((d, i) => ({
                 sefer_no: seferAna.sefer_no,
                 nokta_sirasi: i,
@@ -713,7 +715,7 @@ export default function ReelAtananSeferler() {
 
                 // 🆕 BURAYA ETA EKLENİYOR
                 eta: clean(d.eta) || seferAna.eta_varis || null,
-
+                ikaz_aciklama: clean(d.ikaz_aciklama) || seferAna.ikaz_aciklama || null,
                 yukleme_varis_guncelleyen: d.yukleme_varis_guncelleyen || null,
                 yukleme_varis_guncelleme_tarihi: clean(d.yukleme_varis_guncelleme_tarihi) || null,
                 yukleme_cikis_guncelleyen: d.yukleme_cikis_guncelleyen || null,
@@ -871,11 +873,85 @@ export default function ReelAtananSeferler() {
         setEtaEditorOpen(true);
     }, []);
 
+    const handleIkazClick = useCallback(async (row) => {
+        try {
+            const id = row?.id || await getSeferIdByNo(row);
+            if (!id) {
+                setSnack({
+                    open: true,
+                    msg: "Sefer ID bulunamadı.",
+                    severity: "error",
+                });
+                return;
+            }
+
+            const mevcutIkaz = String(row?.ikaz_aciklama || "").trim();
+            const yeniDeger = mevcutIkaz ? null : IKAZ_METNI;
+
+            // ✅ ANA TABLO
+            await updateSefer(id, {
+                ikaz_aciklama: yeniDeger,
+            });
+
+            // ✅ DETAY TABLOSU
+            const { error: detayError } = await supabase
+                .from("sefer_detaylari")
+                .update({ ikaz_aciklama: yeniDeger })
+                .eq("sefer_id", id);
+
+            if (detayError) throw detayError;
+
+            // ✅ açık editör varsa detay state'ini de güncelle
+            if (editSefer && String(editSefer.id) === String(id)) {
+                setDetailRows((prev) =>
+                    prev.map((d) => ({ ...d, ikaz_aciklama: yeniDeger }))
+                );
+                setDetailRowsOrig((prev) =>
+                    prev.map((d) => ({ ...d, ikaz_aciklama: yeniDeger }))
+                );
+            }
+
+            // ✅ grid güncelle
+            setRows((prev) =>
+                prev.map((r) =>
+                    String(r.id) === String(id)
+                        ? { ...r, ikaz_aciklama: yeniDeger }
+                        : r
+                )
+            );
+
+            setSnack({
+                open: true,
+                msg: yeniDeger
+                    ? "İkaz açıklama eklendi."
+                    : "İkaz açıklama kaldırıldı.",
+                severity: "success",
+            });
+
+            addLog({
+                action: yeniDeger ? "İkaz açıklama eklendi" : "İkaz açıklama kaldırıldı",
+                sefer_no: row?.sefer_no || "-",
+                fields: ["ikaz_aciklama"],
+                changes: {
+                    ikaz_aciklama: {
+                        old: mevcutIkaz || "-",
+                        new: yeniDeger || "-",
+                    },
+                },
+            });
+        } catch (e) {
+            console.error(e);
+            setSnack({
+                open: true,
+                msg: "İkaz kaydedilemedi.",
+                severity: "error",
+            });
+        }
+    }, [IKAZ_METNI, addLog, editSefer]);
     const closeEtaEditor = useCallback(() => {
         setEtaEditorOpen(false);
         setEtaSefer(null);
     }, []);
-
     /* grid columns */
     const columns = useMemo(() => {
         let userOrder = [];
@@ -891,17 +967,16 @@ export default function ReelAtananSeferler() {
 
         let cols = buildColumns({
             openEditor,
-            openEtaEditor, // ETA butonu buradan çağrılır
+            openEtaEditor,
+            openIkazEditor: handleIkazClick,
             onDeleteRow: deleteSefer,
             COLORS,
             perms: { loading: permsLoading, mayOpenEdit, canEdit, canDelete },
             userOrder,
             hasUserOrder,
         });
-
         return cols;
-    }, [permsLoading, mayOpenEdit, canEdit, canDelete, openEditor, openEtaEditor, deleteSefer, viewBump, ORDER_KEY, GENERIC_ORDER_KEY]);
-
+    }, [permsLoading, mayOpenEdit, canEdit, canDelete, openEditor, openEtaEditor, handleIkazClick, deleteSefer, viewBump, ORDER_KEY, GENERIC_ORDER_KEY]);
     /* --------------- RENDER --------------- */
     return (
         <Box

@@ -666,6 +666,16 @@ export default function ReelAtananSeferler() {
         setSaving(true);
         try {
             const seferAna = rows.find((r) => r.id === editSefer.id) || editSefer;
+            // 🔥 DB'den taze veri çek (ETA için kritik)
+            const { data: freshSefer, error: freshErr } = await supabase
+                .from("seferler")
+                .select("*")
+                .eq("id", seferAna.id)
+                .single();
+
+            if (freshErr) throw freshErr;
+
+            const finalSefer = freshSefer || seferAna;
             const seferTarihiFinal = seferTarihiYeni || seferAna.sefer_tarihi || null;
 
             const anaPayload = {
@@ -694,8 +704,9 @@ export default function ReelAtananSeferler() {
                 atama_tarihi: seferAna.atama_tarihi ?? null,
 
                 // 🆕 ETA TAM BURAYA EKLENECEK
-                eta_varis: seferAna.eta_varis ?? null,
-                ikaz_aciklama: seferAna.ikaz_aciklama ?? null,            };
+                eta_varis: finalSefer.eta_varis ?? null,
+                ikaz_aciklama: seferAna.ikaz_aciklama ?? null,
+            };
             const detPayload = detailRows.map((d, i) => ({
                 sefer_no: seferAna.sefer_no,
                 nokta_sirasi: i,
@@ -714,7 +725,7 @@ export default function ReelAtananSeferler() {
                 arac_statu: seferAna.arac_statu ?? null,
 
                 // 🆕 BURAYA ETA EKLENİYOR
-                eta: clean(d.eta) || seferAna.eta_varis || null,
+                eta: clean(d.eta) || finalSefer.eta_varis || null,
                 ikaz_aciklama: clean(d.ikaz_aciklama) || seferAna.ikaz_aciklama || null,
                 yukleme_varis_guncelleyen: d.yukleme_varis_guncelleyen || null,
                 yukleme_varis_guncelleme_tarihi: clean(d.yukleme_varis_guncelleme_tarihi) || null,

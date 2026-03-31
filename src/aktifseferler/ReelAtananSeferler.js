@@ -624,7 +624,7 @@ export default function ReelAtananSeferler() {
                     }
 
                     /* ETA Hesapla */
-                    if (cleaned_d.yukleme_cikis && cleaned_d.eta) {
+                    if (cleaned_d.yukleme_cikis) {
                         const { km } = await fetchDistance({
                             from: { il: cleaned_d.yukleme_ili, ilce: cleaned_d.yukleme_ilcesi },
                             to: { il: cleaned_d.teslim_ili, ilce: cleaned_d.teslim_ilcesi }
@@ -632,12 +632,12 @@ export default function ReelAtananSeferler() {
 
                         if (km > 0) {
                             const start = new Date(cleaned_d.yukleme_cikis);
-                            const hours = km / 70;
-                            start.setHours(start.getHours() + hours);
-                            updatedRow.eta = start.toISOString();
+                            const etaDate = new Date(start.getTime() + (km / 70) * 60 * 60 * 1000);
+                            updatedRow.eta = etaDate.toISOString();
+                        } else {
+                            updatedRow.eta = null;
                         }
                     }
-
                     return updatedRow;
                 })
             );
@@ -645,8 +645,8 @@ export default function ReelAtananSeferler() {
             const upsertResult = await upsertDetaylar(upserts);
             if (upsertResult && upsertResult.error) throw upsertResult.error;
 
-            setDetailRows(detailRows);
-            setDetailRowsOrig(detailRows);
+            setDetailRows(upserts);
+            setDetailRowsOrig(upserts);
             setSnack({ open: true, msg: "Detaylar kaydedildi.", severity: "success" });
 
         } catch (e) {
@@ -678,6 +678,84 @@ export default function ReelAtananSeferler() {
             const finalSefer = freshSefer || seferAna;
             const seferTarihiFinal = seferTarihiYeni || seferAna.sefer_tarihi || null;
 
+            const { data: freshDetaylar, error: freshDetayErr } = await supabase
+                .from("sefer_detaylari")
+                .select("*")
+                .eq("sefer_id", seferAna.id)
+                .order("nokta_sirasi", { ascending: true });
+
+            if (freshDetayErr) throw freshDetayErr;
+
+            const detayKaynak = freshDetaylar?.length ? freshDetaylar : detailRows;
+
+            const etaCandidates = detayKaynak.map((d, i) => {
+                const yuklemeCikis = clean(d?.yukleme_cikis) || null;
+                const teslimVaris = clean(d?.teslim_varis) || null;
+                const eta = clean(d?.eta) || null;
+
+                return {
+                    index: i,
+                    sefer_no: seferAna?.sefer_no || null,
+                    yukleme_ili: clean(d?.yukleme_ili) || null,
+                    yukleme_ilcesi: clean(d?.yukleme_ilcesi) || null,
+                    teslim_ili: clean(d?.teslim_ili) || null,
+                    teslim_ilcesi: clean(d?.teslim_ilcesi) || null,
+                    yukleme_cikis: yuklemeCikis,
+                    teslim_varis: teslimVaris,
+                    eta,
+                };
+            });
+
+            const etaList = etaCandidates.map((x) => x.eta).filter(Boolean);
+            const teslimVarisList = etaCandidates.map((x) => x.teslim_varis).filter(Boolean);
+
+            const lastEta =
+                (etaList.length ? etaList[etaList.length - 1] : null) ||
+                (teslimVarisList.length ? teslimVarisList[teslimVarisList.length - 1] : null) ||
+                null;
+
+            const etaYokNedenleri = [];
+
+            if (!detayKaynak?.length) {
+                etaYokNedenleri.push("Detay kaydı yok");
+            }
+
+            if (detayKaynak?.length && !detayKaynak.some((d) => clean(d?.yukleme_cikis))) {
+                etaYokNedenleri.push("Hiçbir detay satırında yukleme_cikis yok");
+            }
+
+            if (detayKaynak?.length && !detayKaynak.some((d) => clean(d?.eta))) {
+                etaYokNedenleri.push("Hiçbir detay satırında eta yok");
+            }
+
+            if (detayKaynak?.length && !detayKaynak.some((d) => clean(d?.teslim_varis))) {
+                etaYokNedenleri.push("Hiçbir detay satırında teslim_varis yok");
+            }
+
+            if (!lastEta) {
+                console.group("Tamamlananlara Aktar - ETA bulunamadi");
+                console.warn("eta_varis bos oldugu icin aktarim durduruldu");
+                console.log("Sefer No:", seferAna?.sefer_no || null);
+                console.log("Sefer ID:", seferAna?.id || null);
+                console.log("Nedenler:", etaYokNedenleri);
+                console.log("freshSefer:", freshSefer);
+                console.log("freshDetaylar:", freshDetaylar);
+                console.log("detailRows(state):", detailRows);
+                console.table(etaCandidates);
+                console.log("etaList:", etaList);
+                console.log("teslimVarisList:", teslimVarisList);
+                console.log("Kullanilan lastEta:", lastEta);
+                console.groupEnd();
+
+                setSnack({
+                    open: true,
+                    msg: `ETA / teslim_varis bulunamadı, aktarım iptal edildi. ${etaYokNedenleri.join(" • ") || "Sebep tespit edilemedi."}`,
+                    severity: "warning",
+                });
+
+                setSaving(false);
+                return;
+            }
             const anaPayload = {
                 arac_statu: seferAna.arac_statu ?? null,
                 sefer_tarihi: seferTarihiFinal,
@@ -702,12 +780,10 @@ export default function ReelAtananSeferler() {
                 kayit_zamani: new Date().toISOString(),
                 atama_yapan_kullanici: seferAna.atama_yapan_kullanici ?? null,
                 atama_tarihi: seferAna.atama_tarihi ?? null,
-
-                // 🆕 ETA TAM BURAYA EKLENECEK
-                eta_varis: finalSefer.eta_varis ?? null,
+                eta_varis: lastEta,
                 ikaz_aciklama: seferAna.ikaz_aciklama ?? null,
             };
-            const detPayload = detailRows.map((d, i) => ({
+            const detPayload = detayKaynak.map((d, i) => ({
                 sefer_no: seferAna.sefer_no,
                 nokta_sirasi: i,
                 proje_adi: clean(d.proje_adi) || null,
@@ -723,9 +799,7 @@ export default function ReelAtananSeferler() {
                 teslim_cikis: clean(d.teslim_cikis) || null,
                 kayit_zamani: new Date().toISOString(),
                 arac_statu: seferAna.arac_statu ?? null,
-
-                // 🆕 BURAYA ETA EKLENİYOR
-                eta: clean(d.eta) || finalSefer.eta_varis || null,
+                eta: clean(d.eta) || lastEta || null,
                 ikaz_aciklama: clean(d.ikaz_aciklama) || seferAna.ikaz_aciklama || null,
                 yukleme_varis_guncelleyen: d.yukleme_varis_guncelleyen || null,
                 yukleme_varis_guncelleme_tarihi: clean(d.yukleme_varis_guncelleme_tarihi) || null,
@@ -848,6 +922,7 @@ export default function ReelAtananSeferler() {
                     yukleme_cikis: d.yukleme_cikis ?? "",
                     teslim_varis: d.teslim_varis ?? "",
                     teslim_cikis: d.teslim_cikis ?? "",
+                    eta: d.eta ?? "",
 
                     yukleme_varis_guncelleyen: fix(d.yukleme_varis_guncelleyen),
                     yukleme_varis_guncelleme_tarihi: fix(d.yukleme_varis_guncelleme_tarihi),

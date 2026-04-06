@@ -39,6 +39,7 @@ export const APP_PAGES = [
     { title: "Frigo Yakıt Hakediş", path: "/hakedis/frigo-yakit-hakedis" },
     { title: "Filo İskontolu Hakediş", path: "/hakedis/filo-iskontolu-hakedis" },
     { title: "Hayat Kimya Yakıt Hakediş", path: "/hakedis/hayat-kimya-yakit-hakedis" },
+    { title: "Pepsi Yakıt Hakediş", path: "/hakedis/pepsi-yakit-hakedis" },
 
     // KPI & Raporlar
     { title: "KPI Ölçümü", path: "/raporlar/kpi-olcumu" },

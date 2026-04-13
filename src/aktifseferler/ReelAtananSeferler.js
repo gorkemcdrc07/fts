@@ -246,6 +246,7 @@ export default function ReelAtananSeferler() {
     const [successCount, setSuccessCount] = useState(0);
     const [showSuccess, setShowSuccess] = useState(false);
     const [dense, setDense] = useState(false);
+    const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 100 });
 
     /* dialog (Edit) */
     const [editOpen, setEditOpen] = useState(false);
@@ -449,6 +450,30 @@ export default function ReelAtananSeferler() {
         () => filtered.reduce((n, x) => n + ((x.sefer_no || "").toUpperCase().startsWith("SFR") ? 1 : 0), 0),
         [filtered]
     );
+
+    const visibleStart = filtered.length === 0 ? 0 : paginationModel.page * paginationModel.pageSize + 1;
+    const visibleEnd = Math.min(
+        (paginationModel.page + 1) * paginationModel.pageSize,
+        filtered.length
+    );
+
+    useEffect(() => {
+        setPaginationModel((prev) => ({ ...prev, page: 0 }));
+    }, [
+        startDate,
+        endDate,
+        seferNoTipi,
+        quick,
+        plaka,
+        musteri,
+        proje,
+        yuklemeIl,
+        teslimIl,
+        aracStatu,
+        noktaSayisi,
+        surucu,
+    ]);
+
 
     /* ------- editor helper'ları ------- */
     const closeEditor = useCallback(() => {
@@ -1068,6 +1093,7 @@ export default function ReelAtananSeferler() {
         <Box
             sx={{
                 height: "100dvh",
+                minHeight: 0,            // 🔥 EKLE
                 overflow: "hidden",
                 display: "grid",
                 gridTemplateRows: "auto auto auto 1fr",
@@ -1079,7 +1105,7 @@ export default function ReelAtananSeferler() {
         >
             <Helmet>
                 <title>AKTİF SEFERLER</title>
-                <style>{`html, body { height: 100%; overflow: hidden; } #root { height: 100%; }`}</style>
+                <style>{`html, body { height: 100%; } #root { height: 100%; }`}</style>
             </Helmet>
 
             {/* Başlık + aksiyonlar */}
@@ -1112,6 +1138,8 @@ export default function ReelAtananSeferler() {
                     <Button size="small" variant="text" startIcon={<HomeOutlinedIcon />} onClick={() => navigate("/anasayfa")}>Anasayfa</Button>
                     <FormControlLabel control={<Switch checked={dense} onChange={() => setDense((v) => !v)} size="small" />} label="Sıkı satırlar" sx={{ color: COLORS.textMuted }} />
                     <Chip label={`SFR: ${sfrCount}`} size="small" color="info" sx={{ fontWeight: 800 }} />
+                    <Chip label={`Kayıt: ${filtered.length}/${rows.length}`} size="small" variant="outlined" sx={{ fontWeight: 800 }} />
+                    <Chip label={`Gösterilen: ${visibleStart}-${visibleEnd}`} size="small" variant="outlined" sx={{ fontWeight: 800 }} />
                     <Button size="small" variant="outlined" onClick={() => navigate("/aktifseferler/gorunum")}>Görünümü Düzenle</Button>
 
                     <ListeleButton
@@ -1180,7 +1208,7 @@ export default function ReelAtananSeferler() {
                     border: `1px solid ${COLORS.border}`,
                     background: COLORS.surface,
                     flexGrow: 1,
-                    height: "1000px",
+                    minHeight: 0, // 🔥 önemli
                     overflow: "hidden",
                 }}
             >
@@ -1220,7 +1248,10 @@ export default function ReelAtananSeferler() {
                     getRowId={(r) => r._rid}
                     loading={loading}
                     disableRowSelectionOnClick
-                    hideFooter
+                    pagination
+                    paginationModel={paginationModel}
+                    onPaginationModelChange={setPaginationModel}
+                    pageSizeOptions={[25, 50, 100, 200, 500]}
                     density={dense ? "compact" : "standard"}
                     rowHeight={dense ? 34 : 40}
                     columnHeaderHeight={dense ? 40 : 46}

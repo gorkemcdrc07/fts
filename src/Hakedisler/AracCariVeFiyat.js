@@ -2843,6 +2843,22 @@ export default function AracCariVeFiyat() {
 
                             <Grid item xs={12} sm={4}>
                                 <TextField
+                                    label="Anlaşılan Yakma Oranı (%)"
+                                    fullWidth
+                                    size="small"
+                                    value={editForm.anlasilan_yakma_orani}
+                                    onChange={(e) =>
+                                        handleEditChange(
+                                            "anlasilan_yakma_orani",
+                                            e.target.value.replace(/[^\d,%.]/g, "")
+                                        )
+                                    }
+                                    placeholder="Örn: 12,50"
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={4}>
+                                <TextField
                                     label="Çalışma Günü"
                                     fullWidth
                                     size="small"

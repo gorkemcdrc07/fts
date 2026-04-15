@@ -1,100 +1,226 @@
-/* Sayfa ve panel yapı */
-.planlama-sayfasi {
-    padding: 32px;
-    background: #f4f6f8;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+/* ============================================================ */
+/* planlama.css — Sidebar ile uyumlu modern dark görünüm        */
+/* ============================================================ */
+
+:root {
+    --c1: #6dd5ed;
+    --c2: #2193b0;
+    --c3: #1a2535;
+    --bg-page: #0b1120;
+    --bg-page-2: #0d1627;
+    --bg-panel: rgba(17, 24, 39, 0.92);
+    --bg-panel-strong: #0f172a;
+    --bg-soft: rgba(255, 255, 255, 0.03);
+    --bg-soft-2: rgba(109, 213, 237, 0.06);
+    --bg-hover: rgba(109, 213, 237, 0.08);
+    --font-color-primary: #e5eef8;
+    --font-color-secondary: rgba(229, 238, 248, 0.72);
+    --font-color-muted: rgba(229, 238, 248, 0.55);
+    --border-color: rgba(109, 213, 237, 0.12);
+    --border-color-strong: rgba(109, 213, 237, 0.28);
+    --input-bg: rgba(255, 255, 255, 0.03);
+    --input-border: rgba(109, 213, 237, 0.14);
+    --input-color: #e5eef8;
+    --input-placeholder: rgba(229, 238, 248, 0.5);
+    --button-bg: linear-gradient(135deg, rgba(109, 213, 237, 0.18), rgba(33, 147, 176, 0.1));
+    --button-bg-hover: linear-gradient(135deg, rgba(109, 213, 237, 0.26), rgba(33, 147, 176, 0.16));
+    --button-color: #f8fbff;
+    --shadow-light: rgba(0, 0, 0, 0.28);
+    --shadow-medium: rgba(0, 0, 0, 0.4);
+    --shadow-panel: 0 12px 40px rgba(0, 0, 0, 0.36);
+    --shadow-glow: 0 0 0 1px rgba(109, 213, 237, 0.08), 0 10px 30px rgba(33, 147, 176, 0.12);
+    --modal-bg: rgba(15, 23, 42, 0.96);
+    --modal-overlay-bg: rgba(3, 7, 18, 0.72);
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --radius-xl: 22px;
+    --trans-fast: 0.18s ease;
+    --trans-mid: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Başlık */
+/* ── Global Scrollbar ─────────────────────────────────────── */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(109, 213, 237, 0.22) transparent;
+}
+
+    *::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    *::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    *::-webkit-scrollbar-thumb {
+        background: rgba(109, 213, 237, 0.22);
+        border-radius: 999px;
+    }
+
+        *::-webkit-scrollbar-thumb:hover {
+            background: rgba(109, 213, 237, 0.42);
+        }
+
+/* ── Sayfa ────────────────────────────────────────────────── */
+.planlama-sayfasi {
+    padding: 24px;
+    min-height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: var(--font-color-primary);
+    background: radial-gradient(circle at top left, rgba(109, 213, 237, 0.08), transparent 24%), radial-gradient(circle at top right, rgba(33, 147, 176, 0.08), transparent 22%), linear-gradient(180deg, var(--bg-page) 0%, var(--bg-page-2) 45%, var(--bg-page) 100%);
+}
+
+/* ── Başlık ───────────────────────────────────────────────── */
 .baslik {
     font-size: 30px;
-    font-weight: 700;
-    color: #1e2a38;
+    font-weight: 800;
+    color: var(--font-color-primary);
+    margin-bottom: 20px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(109, 213, 237, 0.18);
+}
+
+/* ── Üst butonlar ─────────────────────────────────────────── */
+.butonlar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
     margin-bottom: 20px;
 }
 
-/* Buton grubu */
-.butonlar {
-    display: flex;
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
     .butonlar button {
-        padding: 10px 20px;
-        background-color: #2563eb;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-weight: 500;
+        padding: 10px 18px;
+        background: var(--button-bg);
+        color: var(--button-color);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        font-weight: 700;
         font-size: 14px;
         cursor: pointer;
-        transition: 0.2s ease;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        transition: all var(--trans-mid);
+        box-shadow: var(--shadow-glow);
+        backdrop-filter: blur(10px);
     }
 
         .butonlar button:hover {
-            background-color: #1d4ed8;
+            background: var(--button-bg-hover);
+            border-color: var(--border-color-strong);
             transform: translateY(-1px);
+            color: #ffffff;
         }
 
-/* Filtre alanı */
+        .butonlar button:active {
+            transform: translateY(0);
+        }
+
+/* ── Filtre alanı ─────────────────────────────────────────── */
 .filtre-alani {
-    margin-bottom: 24px;
+    margin-bottom: 22px;
     display: flex;
-    gap: 1rem;
+    gap: 12px;
     flex-wrap: wrap;
+    padding: 14px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-panel);
+    backdrop-filter: blur(14px);
 }
 
     .filtre-alani input,
     .filtre-alani select {
-        padding: 8px 12px;
-        font-size: 1rem;
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        background-color: #ffffff;
+        padding: 10px 12px;
+        font-size: 14px;
+        border: 1px solid var(--input-border);
+        border-radius: var(--radius-sm);
+        background: var(--input-bg);
+        color: var(--input-color);
         min-width: 200px;
+        transition: all var(--trans-fast);
+        outline: none;
     }
 
-/* Tablo sarmalayıcı */
+        .filtre-alani input::placeholder {
+            color: var(--input-placeholder);
+        }
+
+        .filtre-alani input:focus,
+        .filtre-alani select:focus {
+            border-color: rgba(109, 213, 237, 0.4);
+            box-shadow: 0 0 0 3px rgba(109, 213, 237, 0.12);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+/* ── Tablo sarmalayıcı ────────────────────────────────────── */
 .planlama-wrapper {
-    overflow-x: auto;
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    max-height: 70vh;
+    overflow: auto;
+    background: var(--bg-panel);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-panel);
+    max-height: 72vh;
+    backdrop-filter: blur(16px);
+    position: relative;
 }
 
-/* Tablo */
+/* ── Tablo ────────────────────────────────────────────────── */
 .planlama-tablo {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     table-layout: fixed;
 }
 
     .planlama-tablo th,
     .planlama-tablo td {
         padding: 12px 10px;
-        font-size: 15px;
-        border: 1px solid #e2e8f0;
-        background-color: #fff;
+        font-size: 14px;
+        color: var(--font-color-primary);
         text-align: left;
         vertical-align: middle;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        border-bottom: 1px solid rgba(109, 213, 237, 0.08);
     }
 
     .planlama-tablo thead th {
-        background-color: #1e293b;
-        color: white;
         position: sticky;
         top: 0;
-        z-index: 2;
-        font-size: 16px;
+        z-index: 3;
+        background: linear-gradient(180deg, rgba(16, 26, 44, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+        color: var(--c1);
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        border-bottom: 1px solid var(--border-color-strong);
+        text-shadow: 0 0 6px rgba(109, 213, 237, 0.28);
+        box-shadow: inset 0 -1px 0 rgba(109, 213, 237, 0.1);
     }
 
-    /* Sütun genişlikleri (örnekler) */
+    .planlama-tablo tbody tr td {
+        background: transparent;
+        transition: background-color var(--trans-fast), color var(--trans-fast);
+    }
+
+    .planlama-tablo tbody tr:nth-child(even) td {
+        background: rgba(255, 255, 255, 0.015);
+    }
+
+    .planlama-tablo tbody tr:hover td {
+        background: var(--bg-hover);
+    }
+
+    .planlama-tablo td + td,
+    .planlama-tablo th + th {
+        border-left: 1px solid rgba(109, 213, 237, 0.04);
+    }
+
+    /* Sütun genişlikleri */
     .planlama-tablo th:nth-child(1),
     .planlama-tablo td:nth-child(1) {
         width: 100px;
@@ -175,74 +301,85 @@
         width: 150px;
     }
 
-    /* Input alanları */
-    .planlama-tablo input {
+    /* ── Input alanları ───────────────────────────────────────── */
+    .planlama-tablo input,
+    .planlama-tablo select,
+    .planlama-tablo textarea {
         width: 100%;
-        padding: 6px 8px;
-        font-size: 15px;
+        padding: 8px 10px;
+        font-size: 14px;
         border: 1px solid transparent;
-        border-radius: 4px;
+        border-radius: 8px;
         background-color: transparent;
-        transition: 0.2s ease;
+        color: var(--input-color);
+        transition: all var(--trans-fast);
         font-family: inherit;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
-        .planlama-tablo input:focus {
-            border-color: #2563eb;
-            background-color: #fff;
-            outline: none;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        .planlama-tablo input::placeholder,
+        .planlama-tablo textarea::placeholder {
+            color: var(--input-placeholder);
         }
 
+        .planlama-tablo input:focus,
+        .planlama-tablo select:focus,
+        .planlama-tablo textarea:focus {
+            border-color: rgba(109, 213, 237, 0.35);
+            background-color: rgba(255, 255, 255, 0.04);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(109, 213, 237, 0.1);
+        }
+
+    /* ── Hücre içi buton ─────────────────────────────────────── */
     .planlama-tablo td button {
-        background-color: #3b82f6;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 6px 12px;
-        font-size: 14px;
-        font-weight: 500;
+        background: var(--button-bg);
+        color: var(--button-color);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 7px 12px;
+        font-size: 13px;
+        font-weight: 700;
         cursor: pointer;
-        transition: all 0.25s ease;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: all var(--trans-mid);
+        box-shadow: var(--shadow-glow);
     }
 
         .planlama-tablo td button:hover {
-            background-color: #2563eb;
-            transform: scale(1.05);
+            background: var(--button-bg-hover);
+            transform: scale(1.03);
+            border-color: var(--border-color-strong);
         }
 
         .planlama-tablo td button:active {
-            transform: scale(0.97);
-            background-color: #1d4ed8;
+            transform: scale(0.98);
         }
 
-/* Kaydetme sırasında overlay */
+/* ── Loading overlay ──────────────────────────────────────── */
 .loading-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.8);
+    inset: 0;
+    background: rgba(8, 15, 28, 0.78);
+    backdrop-filter: blur(8px);
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
+    gap: 10px;
     z-index: 9999;
+    color: var(--font-color-primary);
 }
 
 .spinner {
-    border: 6px solid #ddd;
-    border-top: 6px solid #333;
+    border: 6px solid rgba(109, 213, 237, 0.14);
+    border-top: 6px solid var(--c1);
     border-radius: 50%;
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
     animation: spin 0.8s linear infinite;
-    margin-bottom: 10px;
+    box-shadow: 0 0 20px rgba(109, 213, 237, 0.18);
 }
 
 @keyframes spin {
@@ -251,338 +388,65 @@
     }
 }
 
-/* ✅ GÜNCELLE onay modali */
+/* ── Modal ────────────────────────────────────────────────── */
 .modal-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-}
-
-.modal-content {
-    background: white;
-    padding: 24px 32px;
-    border-radius: 10px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-    text-align: center;
-    width: 90%;
-    max-width: 400px;
-}
-
-.modal-buttons {
-    margin-top: 20px;
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-}
-
-    .modal-buttons button {
-        flex: 1;
-        padding: 10px;
-        border: none;
-        border-radius: 6px;
-        font-weight: bold;
-        cursor: pointer;
-        font-size: 14px;
-        transition: background-color 0.2s ease;
-    }
-
-        .modal-buttons button:first-child {
-            background-color: #2563eb;
-            color: white;
-        }
-
-        .modal-buttons button:last-child {
-            background-color: #e5e7eb;
-            color: #1f2937;
-        }
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 999;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.modal-content {
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    width: 300px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-    .modal-content input {
-        padding: 6px;
-        font-size: 14px;
-    }
-
-.modal-buttons {
-    display: flex;
-    justify-content: space-between;
-}
-/* --- Temel Değişkenler (Light Mode) --- */
-:root {
-    --bg-page: #f4f6f8;
-    --font-color-primary: #1e2a38;
-    --bg-panel: #ffffff;
-    --border-color: #e2e8f0;
-    --input-bg: #ffffff;
-    --input-border: #ccc;
-    --input-color: #000000;
-    --button-bg: #2563eb;
-    --button-bg-hover: #1d4ed8;
-    --button-color: #ffffff;
-    --shadow-light: rgba(0, 0, 0, 0.1);
-    --shadow-medium: rgba(0, 0, 0, 0.08);
-    --modal-bg: #ffffff;
-    --modal-overlay-bg: rgba(0, 0, 0, 0.5);
-}
-
-    /* --- Koyu Mod Değişkenleri --- */
-    :root[data-theme="dark"] {
-        --bg-page: #0f172a; /* koyu mavi-gri */
-        --font-color-primary: #cbd5e1; /* açık gri */
-        --bg-panel: #1e293b; /* koyu panel arkaplan */
-        --border-color: #334155;
-        --input-bg: #334155;
-        --input-border: #475569;
-        --input-color: #e0e7ff;
-        --button-bg: #2563eb;
-        --button-bg-hover: #1e40af;
-        --button-color: #e0e7ff;
-        --shadow-light: rgba(0, 0, 0, 0.4);
-        --shadow-medium: rgba(0, 0, 0, 0.3);
-        --modal-bg: #1e293b;
-        --modal-overlay-bg: rgba(0, 0, 0, 0.7);
-    }
-
-/* Sayfa ve panel yapı */
-.planlama-sayfasi {
-    padding: 32px;
-    background: var(--bg-page);
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    color: var(--font-color-primary);
-}
-
-/* Başlık */
-.baslik {
-    font-size: 30px;
-    font-weight: 700;
-    color: var(--font-color-primary);
-    margin-bottom: 20px;
-}
-
-/* Buton grubu */
-.butonlar {
-    display: flex;
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
-    .butonlar button {
-        padding: 10px 20px;
-        background-color: var(--button-bg);
-        color: var(--button-color);
-        border: none;
-        border-radius: 8px;
-        font-weight: 500;
-        font-size: 14px;
-        cursor: pointer;
-        transition: 0.2s ease;
-        box-shadow: 0 2px 6px var(--shadow-light);
-    }
-
-        .butonlar button:hover {
-            background-color: var(--button-bg-hover);
-            transform: translateY(-1px);
-        }
-
-/* Filtre alanı */
-.filtre-alani {
-    margin-bottom: 24px;
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
-    .filtre-alani input,
-    .filtre-alani select {
-        padding: 8px 12px;
-        font-size: 1rem;
-        border: 1px solid var(--input-border);
-        border-radius: 8px;
-        background-color: var(--input-bg);
-        color: var(--input-color);
-        min-width: 200px;
-        transition: border-color 0.3s ease, background-color 0.3s ease;
-    }
-
-        .filtre-alani input:focus,
-        .filtre-alani select:focus {
-            border-color: #3b82f6;
-            outline: none;
-            box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
-        }
-
-/* Tablo sarmalayıcı */
-.planlama-wrapper {
-    overflow-x: auto;
-    background: var(--bg-panel);
-    border-radius: 12px;
-    box-shadow: 0 4px 12px var(--shadow-medium);
-    max-height: 70vh;
-}
-
-/* Tablo */
-.planlama-tablo {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-}
-
-    .planlama-tablo th,
-    .planlama-tablo td {
-        padding: 12px 10px;
-        font-size: 15px;
-        border: 1px solid var(--border-color);
-        background-color: var(--bg-panel);
-        color: var(--font-color-primary);
-        text-align: left;
-        vertical-align: middle;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .planlama-tablo thead th {
-        background-color: #334155; /* biraz koyu ama okunabilir */
-        color: var(--input-color);
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        font-size: 16px;
-    }
-
-    /* Sütun genişlikleri aynen kalabilir */
-
-    /* Input alanları */
-    .planlama-tablo input {
-        width: 100%;
-        padding: 6px 8px;
-        font-size: 15px;
-        border: 1px solid transparent;
-        border-radius: 4px;
-        background-color: transparent;
-        color: var(--input-color);
-        transition: 0.2s ease;
-        font-family: inherit;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-        .planlama-tablo input:focus {
-            border-color: #3b82f6;
-            background-color: var(--input-bg);
-            outline: none;
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
-        }
-
-    .planlama-tablo td button {
-        background-color: var(--button-bg);
-        color: var(--button-color);
-        border: none;
-        border-radius: 8px;
-        padding: 6px 12px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.25s ease;
-        box-shadow: 0 2px 8px var(--shadow-light);
-    }
-
-        .planlama-tablo td button:hover {
-            background-color: var(--button-bg-hover);
-            transform: scale(1.05);
-        }
-
-        .planlama-tablo td button:active {
-            transform: scale(0.97);
-            background-color: #1d4ed8;
-        }
-
-/* Kaydetme sırasında overlay */
-.loading-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.8);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-}
-
-:root[data-theme="dark"] .loading-overlay {
-    background: rgba(15, 23, 42, 0.8);
-}
-
-.spinner {
-    border: 6px solid #ddd;
-    border-top: 6px solid #333;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 0.8s linear infinite;
-    margin-bottom: 10px;
-}
-
-:root[data-theme="dark"] .spinner {
-    border: 6px solid #475569;
-    border-top: 6px solid #93c5fd;
-}
-
-/* ✅ GÜNCELLE onay modali */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    inset: 0;
     background: var(--modal-overlay-bg);
+    backdrop-filter: blur(10px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 9999;
+    padding: 20px;
 }
 
 .modal-content {
     background: var(--modal-bg);
-    padding: 24px 32px;
-    border-radius: 10px;
-    box-shadow: 0 4px 16px var(--shadow-medium);
+    padding: 24px 28px;
+    border-radius: 18px;
+    box-shadow: var(--shadow-panel);
     text-align: center;
-    width: 90%;
-    max-width: 400px;
-    color: var(--input-color);
+    width: 100%;
+    max-width: 420px;
+    color: var(--font-color-primary);
+    border: 1px solid var(--border-color);
 }
+
+    .modal-content h2,
+    .modal-content h3,
+    .modal-content h4 {
+        margin-top: 0;
+        color: var(--font-color-primary);
+    }
+
+    .modal-content p {
+        color: var(--font-color-secondary);
+    }
+
+    .modal-content input,
+    .modal-content select,
+    .modal-content textarea {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 14px;
+        border-radius: 10px;
+        border: 1px solid var(--input-border);
+        background: var(--input-bg);
+        color: var(--input-color);
+        margin-top: 8px;
+        outline: none;
+        transition: all var(--trans-fast);
+        box-sizing: border-box;
+    }
+
+        .modal-content input:focus,
+        .modal-content select:focus,
+        .modal-content textarea:focus {
+            border-color: rgba(109, 213, 237, 0.4);
+            box-shadow: 0 0 0 3px rgba(109, 213, 237, 0.12);
+            background: rgba(255, 255, 255, 0.05);
+        }
 
 .modal-buttons {
     margin-top: 20px;
@@ -593,46 +457,98 @@
 
     .modal-buttons button {
         flex: 1;
-        padding: 10px;
-        border: none;
-        border-radius: 6px;
-        font-weight: bold;
+        padding: 10px 14px;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        font-weight: 700;
         cursor: pointer;
         font-size: 14px;
-        transition: background-color 0.2s ease;
+        transition: all var(--trans-mid);
+        background: var(--button-bg);
+        color: var(--button-color);
+        box-shadow: var(--shadow-glow);
     }
 
-        .modal-buttons button:first-child {
-            background-color: var(--button-bg);
-            color: var(--button-color);
+        .modal-buttons button:hover {
+            background: var(--button-bg-hover);
+            border-color: var(--border-color-strong);
         }
 
         .modal-buttons button:last-child {
-            background-color: #e5e7eb;
-            color: #1f2937;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--font-color-primary);
         }
 
-:root[data-theme="dark"] .modal-buttons button:last-child {
-    background-color: #475569;
-    color: var(--input-color);
-}
-
-/* Modal içerik inputları */
-.modal-content input {
-    padding: 6px;
-    font-size: 14px;
-    border-radius: 4px;
+/* ── Yardımcı kart/panel görünümü ─────────────────────────── */
+.panel-kart,
+.planlama-panel,
+.planlama-card {
+    background: var(--bg-panel);
     border: 1px solid var(--border-color);
-    background-color: var(--input-bg);
-    color: var(--input-color);
-    transition: border-color 0.3s ease;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-panel);
+    backdrop-filter: blur(14px);
 }
 
-    .modal-content input:focus {
-        border-color: #3b82f6;
-        outline: none;
-        box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+/* ── Mobil uyum ───────────────────────────────────────────── */
+@media (max-width: 1024px) {
+    .planlama-sayfasi {
+        padding: 18px;
     }
 
+    .baslik {
+        font-size: 24px;
+    }
 
+    .filtre-alani {
+        padding: 12px;
+        gap: 10px;
+    }
 
+        .filtre-alani input,
+        .filtre-alani select {
+            min-width: 180px;
+        }
+}
+
+@media (max-width: 768px) {
+    .planlama-sayfasi {
+        padding: 14px;
+    }
+
+    .baslik {
+        font-size: 20px;
+        letter-spacing: 0.04em;
+    }
+
+    .butonlar {
+        gap: 8px;
+    }
+
+        .butonlar button {
+            width: 100%;
+        }
+
+    .filtre-alani {
+        flex-direction: column;
+    }
+
+        .filtre-alani input,
+        .filtre-alani select {
+            width: 100%;
+            min-width: 100%;
+        }
+
+    .planlama-wrapper {
+        border-radius: 14px;
+        max-height: 68vh;
+    }
+
+    .modal-content {
+        padding: 20px;
+    }
+
+    .modal-buttons {
+        flex-direction: column;
+    }
+}

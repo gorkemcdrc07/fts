@@ -4,8 +4,7 @@ import Navbar from "./Navbar";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "./supabaseClient";
 
-// UI IMPORTS
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
     Box,
     Paper,
@@ -27,7 +26,6 @@ import {
 } from "@mui/material";
 import { alpha, styled, useTheme } from "@mui/material/styles";
 import {
-    // İKONLAR
     Refresh as RefreshIcon,
     CheckCircleOutline as CheckIcon,
     LocalShipping as TruckIcon,
@@ -35,235 +33,273 @@ import {
     AccessTime as TimeIcon,
     CalendarToday as CalendarIcon,
     Person as PersonIcon,
+    TrendingUp as TrendingUpIcon,
 } from "@mui/icons-material";
 
+// ─── Renk Sabitleri ───────────────────────────────────────────
+const ACCENT = "#6dd5ed";
+const ACCENT_DARK = "#2193b0";
 
-// Renk Sabitleri
-const PRIMARY_NEON = "#6dd5ed"; // Açık Mavi (Cyan)
-const SECONDARY_NEON = "#2193b0"; // Koyu Mavi
-
-/* ----------------- GEREKSİZ COMPONENTLER KALDIRILDI ----------------- */
-// function LogisticsHero() { return null; } // Artık kullanılmıyor
-
-// Yeni: Tablo paneli için başlık stili
-const TablePanelTitle = styled(Typography)(({ theme }) => ({
-    display: 'flex',
-    alignItems: 'center',
+// ─── Styled: Tablo paneli başlığı ─────────────────────────────
+const PanelTitle = styled(Typography)(({ theme }) => ({
+    display: "flex",
+    alignItems: "center",
     gap: theme.spacing(1),
-    fontWeight: 800,
-    fontSize: '1.2rem',
+    fontWeight: 700,
+    fontSize: "0.95rem",
     marginBottom: theme.spacing(2),
-    color: PRIMARY_NEON,
+    color: ACCENT,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
 }));
 
-// **********************************************************
-// MAIN METRIC CARD TANIMI
-// **********************************************************
+// ─── Kart arka planı yardımcısı ───────────────────────────────
+const cardBg = (t) =>
+    t.palette.mode === "dark"
+        ? alpha("#0d1520", 0.96)
+        : alpha("#ffffff", 0.97);
 
-const MainMetricCard = ({ title, value, unit, icon, color, subTitle, isLoading }) => {
+// ─── Yardımcı: tema rengini çöz ───────────────────────────────
+const resolveColor = (colorKey, theme) => {
+    if (!colorKey) return ACCENT;
+    if (colorKey.includes(".")) {
+        const [main, shade] = colorKey.split(".");
+        return theme.palette[main]?.[shade] || ACCENT;
+    }
+    return colorKey;
+};
+
+// ══════════════════════════════════════════════════════════════
+// METRİK KARTI
+// ══════════════════════════════════════════════════════════════
+const MetricCard = ({ title, value, unit, icon, color, subTitle, isLoading, index = 0 }) => {
     const theme = useTheme();
-
-    const resolveColor = (colorKey) => {
-        if (typeof colorKey === 'string' && colorKey.includes('.')) {
-            const [main, shade] = colorKey.split('.');
-            // Tema paletindeki rengi döndür
-            return theme.palette[main]?.[shade] || PRIMARY_NEON;
-        }
-        // Eğer renk stringi değilse, doğrudan kullan
-        return colorKey || PRIMARY_NEON;
-    };
-
-    const resolvedColor = resolveColor(color);
+    const clr = resolveColor(color, theme);
 
     return (
-        <Paper
-            component={motion.div}
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 100, duration: 0.5 }}
-            sx={{
-                p: 3, // Padding azaltıldı
-                borderRadius: 3, // Köşeler yumuşatıldı
-                bgcolor: (t) => t.palette.mode === "dark" ? alpha('#111827', 0.95) : alpha('#FFFFFF', 0.95),
-                backdropFilter: 'blur(5px)',
-
-                border: `2px solid ${alpha(resolvedColor, 0.4)}`, // Border hafifletildi
-                textAlign: 'left', // Metin sola yaslandı (daha profesyonel)
-                minHeight: 180, // Minimum yükseklik azaltıldı
-                boxShadow: (t) => `0 0 25px ${alpha(resolvedColor, 0.3)}`, // Gölge hafifletildi
-                position: 'relative',
-            }}
+        <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: index * 0.07, ease: "easeOut" }}
+            style={{ height: "100%" }}
         >
-            <Box sx={{ color: resolvedColor, position: 'absolute', top: 15, right: 15, fontSize: 48, mb: 1, filter: `drop-shadow(0 0 8px ${alpha(resolvedColor, 0.6)})` }}>
-                {icon}
-            </Box>
-            <Stack spacing={0.5} alignItems="flex-start"> {/* Sol tarafa yaslandı */}
-                <Typography variant="overline" fontWeight={700} sx={{ color: resolvedColor, letterSpacing: 1.5, fontSize: 13 }}>
-                    {title}
-                </Typography>
-                {isLoading ? (
-                    <Box sx={{ pt: 1 }}><CircularProgress size={30} sx={{ color: resolvedColor }} /></Box>
-                ) : (
-                    <Typography variant="h3" fontWeight={900} sx={{ mt: 0.5, lineHeight: 1.1 }}>
-                        {value}
-                        <Typography component="span" variant="h6" sx={{ ml: 1, opacity: 0.8, color: 'text.secondary' }}>{unit}</Typography>
+            <Paper
+                elevation={0}
+                sx={{
+                    p: 3,
+                    height: "100%",
+                    borderRadius: 3,
+                    bgcolor: cardBg,
+                    border: `1px solid ${alpha(clr, 0.22)}`,
+                    position: "relative",
+                    overflow: "hidden",
+                    transition: "border-color 0.2s, transform 0.2s",
+                    "&:hover": {
+                        borderColor: alpha(clr, 0.5),
+                        transform: "translateY(-2px)",
+                    },
+                    // Üst çizgi vurgusu
+                    "&::before": {
+                        content: '""',
+                        position: "absolute",
+                        top: 0, left: 0, right: 0,
+                        height: "3px",
+                        background: `linear-gradient(90deg, ${clr}, ${alpha(clr, 0.3)})`,
+                        borderRadius: "12px 12px 0 0",
+                    },
+                }}
+            >
+                {/* İkon – sağ üst köşe */}
+                <Box
+                    sx={{
+                        position: "absolute",
+                        top: 18, right: 18,
+                        color: alpha(clr, 0.18),
+                        fontSize: 56,
+                        lineHeight: 1,
+                        "& svg": { fontSize: "inherit" },
+                    }}
+                >
+                    {icon}
+                </Box>
+
+                <Stack spacing={0.5}>
+                    <Typography
+                        variant="overline"
+                        sx={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            letterSpacing: "0.1em",
+                            color: "text.secondary",
+                        }}
+                    >
+                        {title}
                     </Typography>
-                )}
-                {subTitle && (
-                    <Typography variant="body2" sx={{ opacity: 0.7, mt: 1, color: 'text.secondary' }}>
-                        {subTitle}
-                    </Typography>
-                )}
-            </Stack>
-        </Paper>
+
+                    {isLoading ? (
+                        <Box sx={{ pt: 1 }}>
+                            <CircularProgress size={28} sx={{ color: clr }} />
+                        </Box>
+                    ) : (
+                        <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.75 }}>
+                            <Typography
+                                sx={{
+                                    fontSize: 38,
+                                    fontWeight: 800,
+                                    lineHeight: 1.05,
+                                    color: clr,
+                                    fontVariantNumeric: "tabular-nums",
+                                }}
+                            >
+                                {value ?? 0}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: "text.secondary", fontWeight: 500 }}>
+                                {unit}
+                            </Typography>
+                        </Box>
+                    )}
+
+                    {subTitle && (
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                color: "text.secondary",
+                                lineHeight: 1.5,
+                                display: "block",
+                                pt: 0.5,
+                                borderTop: `1px solid ${alpha(clr, 0.12)}`,
+                                mt: 1,
+                            }}
+                        >
+                            {subTitle}
+                        </Typography>
+                    )}
+                </Stack>
+            </Paper>
+        </motion.div>
     );
 };
 
-
-// **********************************************************
+// ══════════════════════════════════════════════════════════════
 // YARDIMCI FONKSİYONLAR
-// **********************************************************
-
-// Tablo Satır Stili
-const rowSX = {
-    "& td, & th": {
-        borderBottomColor: "rgba(255,255,255,0.08)",
-        verticalAlign: "middle",
-        paddingTop: 0.8,
-        paddingBottom: 0.8,
-        lineHeight: 1.3,
-    },
-};
-
+// ══════════════════════════════════════════════════════════════
 const getTodayDate = () => new Date().toISOString().slice(0, 10);
-const fmtTR = (iso) => iso ? new Date(iso).toLocaleDateString("tr-TR") : '—';
-// const getDateAny = (r) => { /* ...kullanılmadığı için kaldırıldı */ };
+const fmtTR = (iso) => (iso ? new Date(iso).toLocaleDateString("tr-TR") : "—");
 
-// Sadece limitli fetch fonksiyonu
-async function fetchLimitedData(table, limit = 50) {
-    // order() parametresi kaldırıldı.
-    const { data, error } = await supabase.from(table).select('*').limit(limit);
-    if (error) return { rows: [], warn: error.message || "Sorgu hatası" };
-    return { rows: data || [], warn: "" };
+async function fetchLimited(table, limit = 50) {
+    const { data, error } = await supabase.from(table).select("*").limit(limit);
+    return { rows: data || [], warn: error?.message || "" };
 }
 
-// Yeni: Log oluşturmak için yardımcı fonksiyon
-const createLogEntry = (r, type, color, icon) => {
-    const date = r.created_at || r.baslangic_tarihi || r.sefer_tarihi;
-    return {
-        id: `${type}-${r.id || r.sefer_no || Math.random()}`,
-        type,
-        color,
-        icon,
-        message: r.sefer_no
-            ? `Sefer: ${r.sefer_no} - ${r.musteri_adi || 'Bilinmeyen Müşteri'}`
-            : r.izin_turu
-                ? `İzin: ${r.surucu_adi} için ${r.izin_turu}`
-                : r.kesinti_turu
-                    ? `Kesinti: ${r.plaka_treyler || r.surucu_adi} - ${r.neden || r.kesinti_turu}`
-                    : `Kayıt: ${r.kullaniciAdi || 'Bilinmeyen kullanıcı'} tarafından eklendi.`,
-        date: date ? new Date(date) : new Date(),
-    };
-};
-
 const UPDATE_FIELDS = [
-    'yukleme_varis_guncelleyen',
-    'yukleme_cikis_guncelleyen',
-    'teslim_varis_guncelleyen',
-    'teslim_cikis_guncelleyen',
+    "yukleme_varis_guncelleyen",
+    "yukleme_cikis_guncelleyen",
+    "teslim_varis_guncelleyen",
+    "teslim_cikis_guncelleyen",
 ];
 const DATE_FIELDS = [
-    'yukleme_varis_guncelleme_tarihi',
-    'yukleme_cikis_guncelleme_tarihi',
-    'teslim_varis_guncelleme_tarihi',
-    'teslim_cikis_guncelleme_tarihi',
+    "yukleme_varis_guncelleme_tarihi",
+    "yukleme_cikis_guncelleme_tarihi",
+    "teslim_varis_guncelleme_tarihi",
+    "teslim_cikis_guncelleme_tarihi",
 ];
 
 function getSeferDetayUpdates(detaylar, targetDate) {
     const counts = {};
-    const targetDateISO = targetDate.slice(0, 10);
-
-    for (const detay of detaylar) {
+    const targetISO = targetDate.slice(0, 10);
+    for (const d of detaylar) {
         for (let i = 0; i < UPDATE_FIELDS.length; i++) {
-            const userField = UPDATE_FIELDS[i];
-            const dateField = DATE_FIELDS[i];
-            const updateKey = userField.replace('_guncelleyen', '');
-
-            const username = detay[userField];
-            const updateDate = detay[dateField] ? detay[dateField].slice(0, 10) : null;
-
-            if (username && updateDate === targetDateISO) {
-                const user = username.toString().trim() || 'Bilinmeyen Kullanıcı';
-
-                if (!counts[user]) {
-                    counts[user] = { total: 0, updates: {} };
-                    UPDATE_FIELDS.forEach(f => {
-                        counts[user].updates[f.replace('_guncelleyen', '')] = 0;
-                    });
+            const username = d[UPDATE_FIELDS[i]];
+            const dateStr = d[DATE_FIELDS[i]]?.slice(0, 10);
+            if (username && dateStr === targetISO) {
+                const key = username.toString().trim() || "Bilinmeyen";
+                if (!counts[key]) {
+                    counts[key] = {
+                        total: 0,
+                        updates: Object.fromEntries(UPDATE_FIELDS.map(f => [f.replace("_guncelleyen", ""), 0])),
+                    };
                 }
-
-                counts[user].total++;
-                counts[user].updates[updateKey]++;
+                counts[key].total++;
+                counts[key].updates[UPDATE_FIELDS[i].replace("_guncelleyen", "")]++;
             }
         }
     }
-
-    return Object.keys(counts)
-        .map(username => ({ username, ...counts[username] }))
+    return Object.entries(counts)
+        .map(([username, data]) => ({ username, ...data }))
         .sort((a, b) => b.total - a.total);
 }
-// Diğer yardımcı fonksiyonların yer tutucuları kaldırıldı (BarList, monthBounds, vb.)
 
+const createLogEntry = (r, type, color, icon) => {
+    const date = r.created_at || r.baslangic_tarihi || r.sefer_tarihi;
+    const message = r.sefer_no
+        ? `Sefer: ${r.sefer_no} — ${r.musteri_adi || "Bilinmeyen Müşteri"}`
+        : r.izin_turu
+            ? `İzin: ${r.surucu_adi} → ${r.izin_turu}`
+            : r.kesinti_turu
+                ? `Kesinti: ${r.plaka_treyler || r.surucu_adi} — ${r.neden || r.kesinti_turu}`
+                : `Kayıt eklendi.`;
+    return {
+        id: `${type}-${r.id || r.sefer_no || Math.random()}`,
+        type, color, icon, message,
+        date: date ? new Date(date) : new Date(),
+    };
+};
 
-/* ----------------- Page ----------------- */
+const rowSX = {
+    "& td, & th": {
+        borderBottomColor: "rgba(255,255,255,0.06)",
+        py: 0.9,
+        lineHeight: 1.4,
+    },
+};
+
+// ══════════════════════════════════════════════════════════════
+// SAYFA BİLEŞENİ
+// ══════════════════════════════════════════════════════════════
 export default function Anasayfa() {
+    const theme = useTheme();
+    const today = getTodayDate();
+
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState("");
-    const today = getTodayDate();
-    const theme = useTheme();
-    const themePalette = theme.palette;
-
-    // State'ler
+    const [selectedDate, setSelectedDate] = useState(today);
+    const [dailyKPIs, setDailyKPIs] = useState({ totalActive: 0, totalCompleted: 0, totalIzin: 0, totalKesinti: 0 });
     const [tamamlanan, setTamamlanan] = useState([]);
     const [seferler, setSeferler] = useState([]);
     const [izinler, setIzinler] = useState([]);
     const [kesintiler, setKesintiler] = useState([]);
     const [seferDetaylari, setSeferDetaylari] = useState([]);
 
-    const [selectedDate, setSelectedDate] = useState(today);
-    const [dailyKPIs, setDailyKPIs] = useState({ totalActive: 0, totalCompleted: 0, totalIzin: 0, totalKesinti: 0 });
-
     const allActiveCount = seferler.length;
 
-    // fetch data fonksiyonu (useCallback ile sarmalandı)
     const fetchData = useCallback(async () => {
         try {
-            setLoading(true); setErr("");
+            setLoading(true);
+            setErr("");
 
-            // KPI COUNT'ları için TEK SEFERLİK ÇEKİM
             const [cActive, cCompleted, cIzin, cKesinti] = await Promise.all([
-                // Filtreli sayımlar
-                supabase.from("seferler").select('id', { count: 'exact', head: true }).eq('sefer_tarihi', today),
-                supabase.from("tamamlanan_seferler").select('id', { count: 'exact', head: true }).eq('tamamlanma_tarihi', today),
-                supabase.from("izinler").select('id', { count: 'exact', head: true }).gte('bitis_tarihi', today).lte('baslangic_tarihi', today),
-                supabase.from("kesintiler").select('id', { count: 'exact', head: true }).gte('bitis_tarihi', today).lte('baslangic_tarihi', today),
+                supabase.from("seferler").select("id", { count: "exact", head: true }).eq("sefer_tarihi", today),
+                supabase.from("tamamlanan_seferler").select("id", { count: "exact", head: true }).eq("tamamlanma_tarihi", today),
+                supabase.from("izinler").select("id", { count: "exact", head: true }).gte("bitis_tarihi", today).lte("baslangic_tarihi", today),
+                supabase.from("kesintiler").select("id", { count: "exact", head: true }).gte("bitis_tarihi", today).lte("baslangic_tarihi", today),
             ]);
 
-            // KPI Değerleri
-            const totalActive = cActive.count ?? 0;
-            const totalCompleted = cCompleted.count ?? 0;
-            const totalIzin = cIzin.count ?? 0;
-            const totalKesinti = cKesinti.count ?? 0;
+            setDailyKPIs({
+                totalActive: cActive.count ?? 0,
+                totalCompleted: cCompleted.count ?? 0,
+                totalIzin: cIzin.count ?? 0,
+                totalKesinti: cKesinti.count ?? 0,
+            });
 
-            setDailyKPIs({ totalActive, totalCompleted, totalIzin, totalKesinti });
-
-            // LOG ve ANALİZ Verileri için limitli çekim
             const [tTam, tSef, tIzn, tKes, tDetay] = await Promise.all([
-                fetchLimitedData("tamamlanan_seferler", 50),
-                fetchLimitedData("seferler", 50),
-                fetchLimitedData("izinler", 50),
-                fetchLimitedData("kesintiler", 50),
-                supabase.from("sefer_detaylari").select(`id, ${UPDATE_FIELDS.join(', ')}, ${DATE_FIELDS.join(', ')}`).limit(200),
+                fetchLimited("tamamlanan_seferler", 50),
+                fetchLimited("seferler", 50),
+                fetchLimited("izinler", 50),
+                fetchLimited("kesintiler", 50),
+                supabase
+                    .from("sefer_detaylari")
+                    .select(`id, ${UPDATE_FIELDS.join(", ")}, ${DATE_FIELDS.join(", ")}`)
+                    .limit(200),
             ]);
 
             const warns = [tTam.warn, tSef.warn, tIzn.warn, tKes.warn, tDetay.error?.message].filter(Boolean);
@@ -274,272 +310,405 @@ export default function Anasayfa() {
             setIzinler(tIzn.rows);
             setKesintiler(tKes.rows);
             setSeferDetaylari(tDetay.data || []);
-
         } catch (e) {
-            console.error(e);
-            setErr("Veri alınırken bir hata oluştu: " + (e?.message || "Bilinmeyen Hata"));
+            setErr("Veri alınırken hata: " + (e?.message || "Bilinmeyen hata"));
         } finally {
             setLoading(false);
         }
-    }, [today]); // today değişkeni dışarıdan geldiği için bağımlılık olarak eklendi.
+    }, [today]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
     const lastUpdated = useMemo(
-        // Artık sadece anlık zamanı döndürüyor, bağımlılıklar kaldırıldı.
         () => new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-        []
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [loading],
     );
 
-    // **********************************************************
-    // SEFER DETAY GÜNCELLEME ANALİZİ
-    // **********************************************************
-    const currentDay = selectedDate;
-    const currentDayTR = fmtTR(currentDay);
+    const tp = theme.palette;
 
-    // CANLI AKIŞ (LOG)
     const liveFeed = useMemo(() => {
         const logs = [];
-        // themePalette kullanılarak renk stringleri çözüldü
-        tamamlanan.forEach(r => logs.push(createLogEntry(r, 'Tamamlandı', themePalette.success.main, <CheckIcon />)));
-        seferler.forEach(r => logs.push(createLogEntry(r, 'Yeni Sefer', themePalette.primary.main, <TruckIcon />)));
-        izinler.forEach(r => logs.push(createLogEntry(r, 'İzin Girişi', themePalette.warning.main, <CalendarIcon />)));
-        kesintiler.forEach(r => logs.push(createLogEntry(r, 'Kesinti/Hata', themePalette.error.main, <AlertIcon />)));
+        tamamlanan.forEach(r => logs.push(createLogEntry(r, "Tamamlandı", tp.success.main, <CheckIcon fontSize="small" />)));
+        seferler.forEach(r => logs.push(createLogEntry(r, "Yeni Sefer", tp.primary.main, <TruckIcon fontSize="small" />)));
+        izinler.forEach(r => logs.push(createLogEntry(r, "İzin Girişi", tp.warning.main, <CalendarIcon fontSize="small" />)));
+        kesintiler.forEach(r => logs.push(createLogEntry(r, "Kesinti/Hata", tp.error.main, <AlertIcon fontSize="small" />)));
+        return logs.sort((a, b) => b.date - a.date).slice(0, 15);
+    }, [tamamlanan, seferler, izinler, kesintiler, tp]);
 
-        return logs.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 15);
-    }, [tamamlanan, seferler, izinler, kesintiler, themePalette.success.main, themePalette.primary.main, themePalette.warning.main, themePalette.error.main]);
+    const userUpdateCounts = useMemo(
+        () => getSeferDetayUpdates(seferDetaylari, selectedDate),
+        [seferDetaylari, selectedDate],
+    );
 
-    // SEFER DETAY GÜNCELLEME ANALİZİ
-    const userUpdateCounts = useMemo(() => {
-        return getSeferDetayUpdates(seferDetaylari, currentDay);
-    }, [seferDetaylari, currentDay]);
-    // **********************************************************
+    const currentDayTR = fmtTR(selectedDate);
 
+    // ── KPI kart tanımları ──
+    const kpiCards = [
+        {
+            title: "Aktif Sefer",
+            value: dailyKPIs.totalActive,
+            unit: "adet",
+            icon: <TruckIcon />,
+            color: ACCENT,
+            subTitle: `Toplam kayıtlı: ${allActiveCount} adet`,
+        },
+        {
+            title: "Tamamlanan",
+            value: dailyKPIs.totalCompleted,
+            unit: "teslimat",
+            icon: <CheckIcon />,
+            color: "success.main",
+            subTitle: "Bugün başarıyla kapanan seferler",
+        },
+        {
+            title: "İzinli Şoför",
+            value: dailyKPIs.totalIzin,
+            unit: "kayıt",
+            icon: <CalendarIcon />,
+            color: "warning.main",
+            subTitle: "Aktif izin kaydı sayısı",
+        },
+        {
+            title: "Kritik Kesinti",
+            value: dailyKPIs.totalKesinti,
+            unit: "arıza",
+            icon: <AlertIcon />,
+            color: "error.main",
+            subTitle: "Bugün aktif arıza/kesinti",
+        },
+    ];
 
-    /* ----------------- RETURN ----------------- */
+    // ── Sayfa iskelet rengi ──
+    const pageBg = theme.palette.mode === "dark" ? "#080e1a" : "#f2f5f9";
+
     return (
-        <Box sx={{
-            display: "flex",
-            minHeight: "100dvh",
-            // Dark Mode Arka Plan
-            bgcolor: (t) => (t.palette.mode === "dark" ? "#0a101d" : "#f0f4f8")
-        }}>
+        <Box sx={{ display: "flex", minHeight: "100dvh", bgcolor: pageBg }}>
             <Helmet><title>Dashboard | FTS Analiz</title></Helmet>
             <Sidebar />
 
-            {/* ANA İÇERİK KUTUSU */}
-            <Box sx={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                pl: 'var(--sidebar-w, 72px)',
-            }}>
+            <Box sx={{ flex: 1, display: "flex", flexDirection: "column", pl: "var(--sidebar-w, 72px)" }}>
                 <Navbar />
 
                 <Box
                     component={motion.div}
-                    initial={{ opacity: 0, y: 15 }}
+                    initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45, ease: "easeOut" }}
+                    transition={{ duration: 0.35, ease: "easeOut" }}
                     sx={{
-                        // YUKARI KAYDIRMA: Top Padding (Navbar altına yaslama)
-                        pt: { xs: 2, md: 3 },
-                        pb: { xs: 2, md: 4 },
-                        px: { xs: 2, md: 3 }, // Soldan padding
                         flexGrow: 1,
-                        width: '100%',
-                        display: 'flex',
-                        // Sol/Yukarı hizalama
-                        alignItems: 'flex-start',
-                        justifyContent: 'flex-start',
-                        flexDirection: 'column',
-                        minHeight: 'calc(100vh - 60px)'
+                        pt: { xs: 2, md: 3 },
+                        pb: { xs: 3, md: 5 },
+                        px: { xs: 2, md: 3 },
                     }}
                 >
-                    {/* Container'ı kaldırıp Box'ı direkt kullanmak, sol boşluğu Navbar altına daha iyi yaslar. */}
-                    <Box sx={{ width: '100%' }}>
-                        {err && <Alert severity="error" sx={{ mb: 4 }}>{err}</Alert>}
+                    {/* ── Hata ── */}
+                    <AnimatePresence>
+                        {err && (
+                            <motion.div
+                                key="err"
+                                initial={{ opacity: 0, y: -8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0 }}
+                            >
+                                <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{err}</Alert>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
-                        {/* GÜNLÜK METRİK BAŞLIK VE KONTROLLERİ */}
-                        <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "flex-start", md: "center" }}
-                            justifyContent="space-between" spacing={2} sx={{ mb: 4, width: '100%' }}>
-
-                            <Box>
-                                <Typography variant="h4" fontWeight={900} sx={{
-                                    mb: 0.5,
-                                    // YENİ BAŞLIK STİLİ
-                                    background: `linear-gradient(90deg, ${PRIMARY_NEON}, ${SECONDARY_NEON})`,
+                    {/* ── Başlık + Kontroller ── */}
+                    <Stack
+                        direction={{ xs: "column", md: "row" }}
+                        alignItems={{ xs: "flex-start", md: "center" }}
+                        justifyContent="space-between"
+                        spacing={2}
+                        sx={{ mb: 4 }}
+                    >
+                        {/* Sol: Başlık */}
+                        <Box>
+                            <Typography
+                                variant="h5"
+                                fontWeight={800}
+                                sx={{
+                                    background: `linear-gradient(100deg, ${ACCENT} 0%, ${ACCENT_DARK} 100%)`,
                                     WebkitBackgroundClip: "text",
                                     WebkitTextFillColor: "transparent",
-                                    // Başlıkta "Operasyon Nabzı" yerine sadece tarih kaldı
-                                }}>
-                                    {currentDayTR} - Günlük Operasyon Metrikleri
-                                </Typography>
-                            </Box>
+                                    lineHeight: 1.2,
+                                }}
+                            >
+                                Günlük Operasyon
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.3 }}>
+                                {currentDayTR} tarihli anlık özet
+                            </Typography>
+                        </Box>
 
-                            {/* TARİH SEÇİCİ & YENİLE BUTONLARI */}
-                            <Stack direction="row" spacing={2} alignItems="center" sx={{ flexShrink: 0 }}>
+                        {/* Sağ: Tarih + Yenile */}
+                        <Stack direction="row" spacing={1.5} alignItems="center">
+                            {/* Tarih Seçici */}
+                            <Paper
+                                elevation={0}
+                                sx={{
+                                    position: "relative",
+                                    px: 1.5, py: 0.75,
+                                    borderRadius: 2,
+                                    border: `1px solid ${alpha(ACCENT, 0.3)}`,
+                                    bgcolor: cardBg,
+                                    cursor: "pointer",
+                                }}
+                            >
+                                <Stack direction="row" alignItems="center" spacing={0.75}>
+                                    <CalendarIcon sx={{ fontSize: 16, color: ACCENT }} />
+                                    <Typography variant="body2" fontWeight={600} sx={{ color: "text.primary" }}>
+                                        {currentDayTR}
+                                    </Typography>
+                                </Stack>
+                                <Box
+                                    component="input"
+                                    type="date"
+                                    value={selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                    max={getTodayDate()}
+                                    sx={{
+                                        position: "absolute", inset: 0,
+                                        opacity: 0, cursor: "pointer", width: "100%",
+                                    }}
+                                />
+                            </Paper>
 
-                                {/* Tarih Seçici */}
-                                <Paper sx={{ position: 'relative', p: 1, borderRadius: 2, bgcolor: 'transparent', border: `1px solid ${alpha(PRIMARY_NEON, 0.4)}` }}>
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        <CalendarIcon sx={{ color: PRIMARY_NEON }} />
-                                        <Typography variant="body1" fontWeight={700}>{currentDayTR}</Typography>
+                            <Tooltip title="Yenile">
+                                <IconButton
+                                    onClick={fetchData}
+                                    disabled={loading}
+                                    size="small"
+                                    sx={{
+                                        color: ACCENT,
+                                        border: `1px solid ${alpha(ACCENT, 0.3)}`,
+                                        borderRadius: 2,
+                                        bgcolor: cardBg,
+                                        "&:hover": { bgcolor: alpha(ACCENT, 0.08) },
+                                    }}
+                                >
+                                    {loading
+                                        ? <CircularProgress size={16} sx={{ color: ACCENT }} />
+                                        : <RefreshIcon fontSize="small" />}
+                                </IconButton>
+                            </Tooltip>
 
-                                        {/* Gizli Tarih Inputu */}
-                                        <Box
-                                            component="input"
-                                            type="date"
-                                            value={currentDay}
-                                            onChange={(e) => setSelectedDate(e.target.value)}
-                                            sx={{
-                                                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer',
-                                            }}
-                                            max={getTodayDate()}
-                                        />
-                                    </Stack>
-                                </Paper>
-
-                                <Tooltip title="Verileri Yenile">
-                                    <IconButton onClick={fetchData} disabled={loading} sx={{ color: PRIMARY_NEON, '&:hover': { bgcolor: alpha(PRIMARY_NEON, 0.1) } }}>
-                                        {loading ? <CircularProgress size={24} sx={{ color: PRIMARY_NEON }} /> : <RefreshIcon />}
-                                    </IconButton>
-                                </Tooltip>
-                                <Chip size="small" variant="outlined" label={`Son Güncelleme: ${lastUpdated}`} sx={{ color: 'text.secondary' }} />
-                            </Stack>
+                            <Chip
+                                size="small"
+                                label={`Güncellendi: ${lastUpdated}`}
+                                sx={{ fontSize: 11, color: "text.secondary", bgcolor: cardBg, border: `1px solid ${alpha(ACCENT, 0.15)}` }}
+                            />
                         </Stack>
+                    </Stack>
 
-
-                        {/* METRİK KARTLARI VE LOG ANALİZİ */}
-                        <Grid container spacing={4}>
-
-                            {/* 1. KPI KARTLARI */}
-                            <Grid item xs={12}>
-                                <Grid container spacing={4}>
-                                    <Grid item xs={12} sm={6} lg={3}>
-                                        <MainMetricCard
-                                            title="Bugün Aktif Sefer"
-                                            value={dailyKPIs.totalActive || 0}
-                                            unit="Adet"
-                                            icon={<TruckIcon />}
-                                            color={PRIMARY_NEON}
-                                            subTitle={`Toplam aktif sefer sayısı: ${allActiveCount} adet.`}
-                                            isLoading={loading}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6} lg={3}>
-                                        <MainMetricCard
-                                            title="Bugün Tamamlanan"
-                                            value={dailyKPIs.totalCompleted || 0}
-                                            unit="Teslimat"
-                                            icon={<CheckIcon />}
-                                            color="success.main"
-                                            subTitle={`Bugün başarıyla tamamlanan teslimat sayısıdır.`}
-                                            isLoading={loading}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6} lg={3}>
-                                        <MainMetricCard
-                                            title="İzinli Şoför Sayısı"
-                                            value={dailyKPIs.totalIzin || 0}
-                                            unit="Kayıt"
-                                            icon={<CalendarIcon />}
-                                            color="warning.main"
-                                            subTitle={`Bugün izni devam eden/başlayan şoför kaydı.`}
-                                            isLoading={loading}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6} lg={3}>
-                                        <MainMetricCard
-                                            title="Kritik Kesinti"
-                                            value={dailyKPIs.totalKesinti || 0}
-                                            unit="Arıza"
-                                            icon={<AlertIcon />}
-                                            color="error.main"
-                                            subTitle={`Bugün aktif olan arıza/kesinti sayısıdır.`}
-                                            isLoading={loading}
-                                        />
-                                    </Grid>
-                                </Grid>
+                    {/* ── KPI Kartları ── */}
+                    <Grid container spacing={2.5} sx={{ mb: 4 }}>
+                        {kpiCards.map((card, i) => (
+                            <Grid item xs={12} sm={6} lg={3} key={card.title}>
+                                <MetricCard {...card} index={i} isLoading={loading} />
                             </Grid>
+                        ))}
+                    </Grid>
 
-                            {/* 2. OPERASYON VE ANALİZ KARTLARI */}
-                            <Grid item xs={12}>
-                                <Stack direction={{ xs: "column", md: "row" }} spacing={3} sx={{ mt: 3 }}>
+                    {/* ── Alt Paneller ── */}
+                    <Grid container spacing={2.5}>
+                        {/* Detay Güncelleme Tablosu */}
+                        <Grid item xs={12} md={7}>
+                            <Paper
+                                elevation={0}
+                                sx={{
+                                    p: 3,
+                                    borderRadius: 3,
+                                    bgcolor: cardBg,
+                                    border: `1px solid ${alpha(ACCENT, 0.18)}`,
+                                    height: "100%",
+                                }}
+                            >
+                                <PanelTitle>
+                                    <TrendingUpIcon sx={{ fontSize: 16 }} />
+                                    {currentDayTR} — Güncelleme Performansı
+                                </PanelTitle>
+                                <Divider sx={{ mb: 2, borderColor: alpha(ACCENT, 0.12) }} />
 
-                                    {/* SEFER DETAY GÜNCELLEYEN ANALİZİ */}
-                                    <Paper sx={{ p: 4, borderRadius: 4, flex: 2, minWidth: { xs: '100%', md: 400 }, bgcolor: (t) => t.palette.mode === "dark" ? alpha('#111827', 0.95) : alpha('#FFFFFF', 0.95), border: `1px solid ${alpha(PRIMARY_NEON, 0.2)}` }}>
-                                        <TablePanelTitle>
-                                            <PersonIcon /> {currentDayTR} - Detay Güncelleme Performansı
-                                        </TablePanelTitle>
-                                        <Divider sx={{ mb: 2, borderColor: alpha(PRIMARY_NEON, 0.3) }} />
-
-                                        <Box sx={{ maxHeight: 350, overflowY: 'auto' }}>
-                                            <Table stickyHeader size="small">
-                                                <TableHead>
-                                                    <TableRow sx={{ '& th': { bgcolor: (t) => t.palette.mode === "dark" ? alpha('#2A2A2A', 0.9) : alpha('#f0f4f8', 0.9), color: 'text.secondary' } }}>
-                                                        <TableCell sx={{ fontWeight: 900, width: '30%' }}>Kullanıcı</TableCell>
-                                                        <TableCell sx={{ fontWeight: 900 }} align="right">Toplam</TableCell>
-                                                        <TableCell sx={{ fontWeight: 900 }} align="right">Yük V. + Ç.</TableCell>
-                                                        <TableCell sx={{ fontWeight: 900 }} align="right">Teslim V. + Ç.</TableCell>
+                                <Box sx={{ maxHeight: 340, overflowY: "auto" }}>
+                                    <Table stickyHeader size="small">
+                                        <TableHead>
+                                            <TableRow sx={{
+                                                "& th": {
+                                                    bgcolor: theme.palette.mode === "dark"
+                                                        ? alpha("#1a2235", 0.95)
+                                                        : alpha("#f0f4f8", 0.95),
+                                                    color: "text.secondary",
+                                                    fontSize: 11,
+                                                    fontWeight: 700,
+                                                    letterSpacing: "0.06em",
+                                                    textTransform: "uppercase",
+                                                    borderBottom: `1px solid ${alpha(ACCENT, 0.1)}`,
+                                                },
+                                            }}>
+                                                <TableCell>Kullanıcı</TableCell>
+                                                <TableCell align="right">Toplam</TableCell>
+                                                <TableCell align="right">Yükleme</TableCell>
+                                                <TableCell align="right">Teslimat</TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {userUpdateCounts.map((u) => {
+                                                const yukUpdates = u.updates.yukleme_varis + u.updates.yukleme_cikis;
+                                                const teslimUpdates = u.updates.teslim_varis + u.updates.teslim_cikis;
+                                                return (
+                                                    <TableRow key={u.username} hover sx={rowSX}>
+                                                        <TableCell>
+                                                            <Stack direction="row" alignItems="center" spacing={1}>
+                                                                <Box sx={{
+                                                                    width: 28, height: 28, borderRadius: "50%",
+                                                                    bgcolor: alpha(ACCENT, 0.12),
+                                                                    color: ACCENT,
+                                                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                                                    fontSize: 11, fontWeight: 700,
+                                                                    flexShrink: 0,
+                                                                }}>
+                                                                    {u.username.slice(0, 2).toUpperCase()}
+                                                                </Box>
+                                                                <Typography variant="body2" fontWeight={600}>{u.username}</Typography>
+                                                            </Stack>
+                                                        </TableCell>
+                                                        <TableCell align="right">
+                                                            <Chip
+                                                                size="small"
+                                                                label={u.total}
+                                                                sx={{
+                                                                    bgcolor: alpha(ACCENT, 0.12),
+                                                                    color: ACCENT,
+                                                                    fontWeight: 700,
+                                                                    fontSize: 12,
+                                                                    height: 22,
+                                                                }}
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell align="right">
+                                                            <Typography variant="body2" fontWeight={600} sx={{ color: tp.info.main }}>
+                                                                {yukUpdates}
+                                                            </Typography>
+                                                        </TableCell>
+                                                        <TableCell align="right">
+                                                            <Typography variant="body2" fontWeight={600} sx={{ color: tp.success.main }}>
+                                                                {teslimUpdates}
+                                                            </Typography>
+                                                        </TableCell>
                                                     </TableRow>
-                                                </TableHead>
-                                                <TableBody>
-                                                    {userUpdateCounts.map((u) => {
-                                                        const yukUpdates = u.updates.yukleme_varis + u.updates.yukleme_cikis;
-                                                        const teslimUpdates = u.updates.teslim_varis + u.updates.teslim_cikis;
-                                                        return (
-                                                            <TableRow key={u.username} hover sx={rowSX}>
-                                                                <TableCell sx={{ fontWeight: 700 }}>{u.username}</TableCell>
-                                                                <TableCell align="right"><Chip size="small" label={u.total} color="primary" sx={{ fontWeight: 700 }} /></TableCell>
-                                                                <TableCell align="right"><Chip size="small" label={yukUpdates} color="info" /></TableCell>
-                                                                <TableCell align="right"><Chip size="small" label={teslimUpdates} color="success" /></TableCell>
-                                                            </TableRow>
-                                                        );
-                                                    })}
-                                                    {userUpdateCounts.length === 0 && (
-                                                        <TableRow>
-                                                            <TableCell colSpan={4}><Typography sx={{ opacity: .7, textAlign: 'center', py: 3 }}>Bu tarihte sefer detay kaydı güncellenmedi.</Typography></TableCell>
-                                                        </TableRow>
-                                                    )}
-                                                </TableBody>
-                                            </Table>
-                                        </Box>
-                                        <Typography variant="caption" sx={{ opacity: 0.6, mt: 2, display: 'block' }}>* V. = Varış, Ç. = Çıkış güncelleme sayılarıdır.</Typography>
-                                    </Paper>
+                                                );
+                                            })}
+                                            {userUpdateCounts.length === 0 && (
+                                                <TableRow>
+                                                    <TableCell colSpan={4}>
+                                                        <Typography variant="body2" sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
+                                                            Bu tarihte güncelleme yapılmamış.
+                                                        </Typography>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </Box>
 
+                                <Typography variant="caption" sx={{ display: "block", mt: 2, color: "text.disabled" }}>
+                                    * V. = Varış &nbsp;·&nbsp; Ç. = Çıkış güncelleme sayılarıdır.
+                                </Typography>
+                            </Paper>
+                        </Grid>
 
-                                    {/* CANLI AKTİVİTE AKIŞI (LOG) */}
-                                    <Paper sx={{ p: 4, borderRadius: 4, flex: 1, minWidth: { xs: '100%', md: 250 }, bgcolor: (t) => t.palette.mode === "dark" ? alpha('#111827', 0.95) : alpha('#FFFFFF', 0.95), border: `1px solid ${alpha(PRIMARY_NEON, 0.2)}` }}>
-                                        <TablePanelTitle>
-                                            <TimeIcon /> Son Aktivite Akışı (Log)
-                                        </TablePanelTitle>
-                                        <Divider sx={{ mb: 2, borderColor: alpha(PRIMARY_NEON, 0.3) }} />
+                        {/* Canlı Aktivite Akışı */}
+                        <Grid item xs={12} md={5}>
+                            <Paper
+                                elevation={0}
+                                sx={{
+                                    p: 3,
+                                    borderRadius: 3,
+                                    bgcolor: cardBg,
+                                    border: `1px solid ${alpha(ACCENT, 0.18)}`,
+                                    height: "100%",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                }}
+                            >
+                                <PanelTitle>
+                                    <TimeIcon sx={{ fontSize: 16 }} />
+                                    Son Aktiviteler
+                                </PanelTitle>
+                                <Divider sx={{ mb: 2, borderColor: alpha(ACCENT, 0.12) }} />
 
-                                        <List dense sx={{ maxHeight: 350, overflowY: 'auto' }}>
-                                            {liveFeed.map((log) => (
+                                <List dense disablePadding sx={{ overflowY: "auto", maxHeight: 320, flex: 1 }}>
+                                    <AnimatePresence>
+                                        {liveFeed.map((log, i) => (
+                                            <motion.div
+                                                key={log.id}
+                                                initial={{ opacity: 0, x: -10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: i * 0.03 }}
+                                            >
                                                 <ListItem
-                                                    key={log.id}
                                                     disablePadding
-                                                    sx={{ py: 0.5, borderBottom: '1px solid rgba(255,255,255,0.03)', '&:last-child': { borderBottom: 'none' } }}
+                                                    sx={{
+                                                        py: 0.75,
+                                                        px: 1,
+                                                        borderRadius: 1.5,
+                                                        mb: 0.25,
+                                                        "&:hover": { bgcolor: alpha(ACCENT, 0.05) },
+                                                    }}
                                                 >
-                                                    <ListItemIcon sx={{ minWidth: 35, color: log.color }}>{log.icon}</ListItemIcon>
+                                                    <ListItemIcon sx={{ minWidth: 32, color: log.color }}>
+                                                        {log.icon}
+                                                    </ListItemIcon>
                                                     <ListItemText
-                                                        primary={<Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>{log.message}</Typography>}
-                                                        secondary={<Typography variant="caption" sx={{ opacity: 0.7, color: 'text.secondary' }}>{log.date.toLocaleTimeString('tr-TR')}</Typography>}
+                                                        primary={
+                                                            <Typography variant="body2" fontWeight={600} noWrap>
+                                                                {log.message}
+                                                            </Typography>
+                                                        }
+                                                        secondary={
+                                                            <Typography variant="caption" sx={{ color: "text.disabled" }}>
+                                                                {log.date.toLocaleTimeString("tr-TR")}
+                                                            </Typography>
+                                                        }
                                                     />
                                                 </ListItem>
-                                            ))}
-                                            {liveFeed.length === 0 && <Typography sx={{ p: 2, opacity: 0.7, color: 'text.secondary' }}>Son 15 aktivite yok.</Typography>}
-                                        </List>
-                                        <Button fullWidth variant="outlined" href="/seferler" startIcon={<TruckIcon />} sx={{ mt: 2, py: 1, borderRadius: 3, fontWeight: 600, borderColor: PRIMARY_NEON, color: PRIMARY_NEON }}>
-                                            Tüm Seferlere Git
-                                        </Button>
-                                    </Paper>
-                                </Stack>
-                            </Grid>
+                                            </motion.div>
+                                        ))}
+                                    </AnimatePresence>
+
+                                    {liveFeed.length === 0 && (
+                                        <Typography variant="body2" sx={{ p: 3, color: "text.secondary", textAlign: "center" }}>
+                                            Henüz aktivite yok.
+                                        </Typography>
+                                    )}
+                                </List>
+
+                                <Button
+                                    fullWidth
+                                    variant="outlined"
+                                    href="/seferler"
+                                    startIcon={<TruckIcon />}
+                                    sx={{
+                                        mt: 2,
+                                        py: 1,
+                                        borderRadius: 2,
+                                        fontWeight: 600,
+                                        borderColor: alpha(ACCENT, 0.4),
+                                        color: ACCENT,
+                                        "&:hover": {
+                                            borderColor: ACCENT,
+                                            bgcolor: alpha(ACCENT, 0.06),
+                                        },
+                                    }}
+                                >
+                                    Tüm Seferlere Git
+                                </Button>
+                            </Paper>
                         </Grid>
-                    </Box>
+                    </Grid>
                 </Box>
             </Box>
         </Box>

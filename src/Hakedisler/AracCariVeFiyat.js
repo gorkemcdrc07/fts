@@ -91,11 +91,11 @@ const emptyForm = {
     odak_arac_calisma_tipi: "",
     aylik_kira: "",
     aylik_surucu: "",
+    anlasilan_yakma_orani: "",
     calisma_gunu: "",
     pasif: false,
     aciklama: "",
 };
-
 /* ===================== Helpers ===================== */
 function formatTL(value) {
     if (value === null || value === undefined || value === "") return "—";
@@ -118,6 +118,17 @@ function formatTLCompact(value) {
     });
 }
 
+function formatPercent(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    const num = Number(value);
+    if (Number.isNaN(num)) return String(value);
+
+    return `%${num.toLocaleString("tr-TR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`;
+}
+
 function formatDate(value) {
     if (!value) return "—";
     const d = new Date(value);
@@ -138,14 +149,42 @@ function toNumberLoose(v) {
 
 function parseTLToNumber(v) {
     if (v === "" || v === null || v === undefined) return null;
-    const s = String(v)
-        .replace(/[^\d,.-]/g, "")
-        .replace(/\./g, "")
-        .replace(",", ".");
+
+    // Excel hücresi zaten sayıysa direkt dön
+    if (typeof v === "number") {
+        return Number.isFinite(v) ? v : null;
+    }
+
+    // ExcelJS bazen obje döndürebilir
+    if (typeof v === "object") {
+        if (typeof v.result === "number") {
+            return Number.isFinite(v.result) ? v.result : null;
+        }
+        if (typeof v.text === "string") {
+            v = v.text;
+        } else {
+            v = String(v);
+        }
+    }
+
+    let s = String(v).trim();
+
+    // Para sembolü ve boşlukları temizle
+    s = s.replace(/[₺\s]/g, "");
+
+    // TR format: 252.126,56 -> 252126.56
+    if (s.includes(".") && s.includes(",")) {
+        s = s.replace(/\./g, "").replace(",", ".");
+    }
+    // 252126,56 -> 252126.56
+    else if (s.includes(",")) {
+        s = s.replace(",", ".");
+    }
+    // 252126.56 ise olduğu gibi bırak
+
     const n = Number(s);
     return Number.isNaN(n) ? null : n;
 }
-
 function addThousandDots(intStr) {
     const normalized = String(intStr || "").replace(/^0+(?=\d)/, "");
     return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -206,6 +245,21 @@ function toCellText(value) {
     return String(value);
 }
 
+function getExcelNumericValue(cell) {
+    const v = cell?.value;
+
+    if (v === null || v === undefined || v === "") return null;
+
+    if (typeof v === "number") return v;
+
+    if (typeof v === "object") {
+        if (typeof v.result === "number") return v.result;
+        if (typeof v.text === "string") return v.text;
+    }
+
+    return String(v);
+}
+
 const normalizeHeader = (v) =>
     String(v || "")
         .toLocaleLowerCase("tr-TR")
@@ -234,6 +288,15 @@ const headerAliases = {
         "aylik sürücü",
         "aylik_surucu",
     ],
+    anlasilan_yakma_orani: [
+        "anlaşılan yakma oranı",
+        "anlasilan yakma orani",
+        "anlaşılan yakma oran",
+        "anlasilan yakma oran",
+        "yakma oranı",
+        "yakma orani",
+        "anlasilan_yakma_orani",
+    ],
     calisma_gunu: [
         "gün",
         "gun",
@@ -245,7 +308,6 @@ const headerAliases = {
     pasif: ["pasif", "durum"],
     aciklama: ["açıklama", "aciklama"],
 };
-
 const getHeaderColumnMap = (worksheet) => {
     const map = {};
     const headerRow = worksheet.getRow(1);
@@ -793,6 +855,7 @@ export default function AracCariVeFiyat() {
             odak_arac_calisma_tipi: row.odak_arac_calisma_tipi || "",
             aylik_kira: formatTLCompact(row.aylik_kira),
             aylik_surucu: formatTLCompact(row.aylik_surucu),
+            anlasilan_yakma_orani: row.anlasilan_yakma_orani ?? "",
             calisma_gunu: row.calisma_gunu ?? "",
             pasif: !!row.pasif,
             aciklama: row.aciklama || "",
@@ -823,11 +886,21 @@ export default function AracCariVeFiyat() {
                 payload.odak_arac_calisma_tipi = editForm.odak_arac_calisma_tipi?.trim() || null;
             if (perms.fields.aylik_kira) payload.aylik_kira = parseTLToNumber(editForm.aylik_kira);
             if (perms.fields.aylik_surucu) payload.aylik_surucu = parseTLToNumber(editForm.aylik_surucu);
+
+            payload.anlasilan_yakma_orani =
+                editForm.anlasilan_yakma_orani === "" || editForm.anlasilan_yakma_orani == null
+                    ? null
+                    : Number(
+                        String(editForm.anlasilan_yakma_orani)
+                            .replace("%", "")
+                            .replace(/\./g, "")
+                            .replace(",", ".")
+                    );
+
             if (perms.fields.calisma_gunu)
                 payload.calisma_gunu =
                     editForm.calisma_gunu === "" || editForm.calisma_gunu == null ? null : Number(editForm.calisma_gunu);
             if (perms.fields.pasif) payload.pasif = !!editForm.pasif;
-
             payload.aciklama = editForm.aciklama?.trim() || null;
             payload.duzenleme_yapan_kullanici = localStorage.getItem("kullanici") || "Admin";
             payload.duzenleme_yapilan_tarih = new Date().toISOString();
@@ -882,13 +955,21 @@ export default function AracCariVeFiyat() {
                 odak_arac_calisma_tipi: addForm.odak_arac_calisma_tipi?.trim() || null,
                 aylik_kira: parseTLToNumber(addForm.aylik_kira),
                 aylik_surucu: parseTLToNumber(addForm.aylik_surucu),
+                anlasilan_yakma_orani:
+                    addForm.anlasilan_yakma_orani === "" || addForm.anlasilan_yakma_orani == null
+                        ? null
+                        : Number(
+                            String(addForm.anlasilan_yakma_orani)
+                                .replace("%", "")
+                                .replace(/\./g, "")
+                                .replace(",", ".")
+                        ),
                 calisma_gunu: parseTLToNumber(addForm.calisma_gunu),
                 pasif: !!addForm.pasif,
                 aciklama: addForm.aciklama?.trim() || null,
                 duzenleme_yapan_kullanici: localStorage.getItem("kullanici") || "Admin",
                 duzenleme_yapilan_tarih: new Date().toISOString(),
             };
-
             const { error } = await supabase.from("arac_cari_ve_fiyat").insert([payload]);
             if (error) throw error;
 
@@ -916,6 +997,7 @@ export default function AracCariVeFiyat() {
             { header: "Odak Araç Çalışma Tipi", key: "odak_arac_calisma_tipi", width: 24 },
             { header: "Aylık Kira", key: "aylik_kira", width: 16 },
             { header: "Aylık Sürücü", key: "aylik_surucu", width: 16 },
+            { header: "Anlaşılan Yakma Oranı", key: "anlasilan_yakma_orani", width: 20 },
             { header: "Toplam Tutar", key: "toplam_tutar", width: 16 },
             { header: "Çalışma Günü", key: "calisma_gunu", width: 14 },
             { header: "Pasif", key: "pasif", width: 10 },
@@ -923,7 +1005,6 @@ export default function AracCariVeFiyat() {
             { header: "Düzenleyen", key: "duzenleyen", width: 18 },
             { header: "Düzenleme Tarihi", key: "duzenleme_yapilan_tarih", width: 24 },
         ];
-
         worksheet.getRow(1).font = { bold: true };
 
         gridRows.forEach((r) => {
@@ -935,6 +1016,10 @@ export default function AracCariVeFiyat() {
                 odak_arac_calisma_tipi: r.odak_arac_calisma_tipi ?? "",
                 aylik_kira: toNumberLoose(r.aylik_kira),
                 aylik_surucu: toNumberLoose(r.aylik_surucu),
+                anlasilan_yakma_orani:
+                    r.anlasilan_yakma_orani === null || r.anlasilan_yakma_orani === undefined
+                        ? ""
+                        : Number(r.anlasilan_yakma_orani) / 100,
                 toplam_tutar: toNumberLoose(r.toplam_tutar),
                 calisma_gunu: r.calisma_gunu ?? "",
                 pasif: r.pasif ? "Evet" : "Hayır",
@@ -953,10 +1038,12 @@ export default function AracCariVeFiyat() {
         });
         totalRow.font = { bold: true };
 
-        [6, 7, 8].forEach((idx) => {
+        [6, 7].forEach((idx) => {
             worksheet.getColumn(idx).numFmt = '#,##0.00 [$₺-tr-TR]';
         });
 
+        worksheet.getColumn(8).numFmt = '0.00%';
+        worksheet.getColumn(9).numFmt = '#,##0.00 [$₺-tr-TR]';
         const buffer = await workbook.xlsx.writeBuffer();
         saveAs(
             new Blob([buffer], {
@@ -978,6 +1065,7 @@ export default function AracCariVeFiyat() {
             "çalışma tipi",
             "aylık kira",
             "aylık sürücü",
+            "anlaşılan yakma oranı",
             "gün",
             "pasif",
             "açıklama",
@@ -991,6 +1079,7 @@ export default function AracCariVeFiyat() {
             "ODAK",
             "10.000,00",
             "6.500,00",
+            "12,50",
             26,
             "Hayır",
             "Toplu güncelleme örneği",
@@ -1005,6 +1094,7 @@ export default function AracCariVeFiyat() {
             "çalışma tipi",
             "aylık kira",
             "aylık sürücü",
+            "anlaşılan yakma oranı",
             "gün",
             "pasif",
             "açıklama",
@@ -1018,11 +1108,11 @@ export default function AracCariVeFiyat() {
             "GÜNLÜK",
             "15.000,00",
             "8.000,00",
+            "10,75",
             30,
             "Hayır",
             "Toplu aktarım örneği",
         ]);
-
         workbook.worksheets.forEach((ws) => {
             ws.columns.forEach((c) => {
                 c.width = 22;
@@ -1073,13 +1163,15 @@ export default function AracCariVeFiyat() {
                 odak_arac_calisma_tipi: headerMap.odak_arac_calisma_tipi
                     ? toCellText(row.getCell(headerMap.odak_arac_calisma_tipi).value)
                     : undefined,
-                aylik_kira: headerMap.aylik_kira ? row.getCell(headerMap.aylik_kira).value : undefined,
-                aylik_surucu: headerMap.aylik_surucu ? row.getCell(headerMap.aylik_surucu).value : undefined,
+                aylik_kira: headerMap.aylik_kira ? getExcelNumericValue(row.getCell(headerMap.aylik_kira)) : undefined,
+                aylik_surucu: headerMap.aylik_surucu ? getExcelNumericValue(row.getCell(headerMap.aylik_surucu)) : undefined,
+                anlasilan_yakma_orani: headerMap.anlasilan_yakma_orani
+                    ? getExcelNumericValue(row.getCell(headerMap.anlasilan_yakma_orani))
+                    : undefined,
                 calisma_gunu: headerMap.calisma_gunu ? row.getCell(headerMap.calisma_gunu).value : undefined,
                 pasif: headerMap.pasif ? row.getCell(headerMap.pasif).value : undefined,
                 aciklama: headerMap.aciklama ? toCellText(row.getCell(headerMap.aciklama).value) : undefined,
             };
-
             records.push(record);
         });
 
@@ -1155,6 +1247,26 @@ export default function AracCariVeFiyat() {
             }
         }
 
+        if (excelRow.anlasilan_yakma_orani !== undefined) {
+            const raw = excelRow.anlasilan_yakma_orani;
+            const newVal =
+                raw === "" || raw === null || raw === undefined
+                    ? null
+                    : Number(
+                        String(raw)
+                            .replace("%", "")
+                            .replace(/\./g, "")
+                            .replace(",", ".")
+                    );
+
+            const normalizedNewVal = Number.isFinite(newVal) ? newVal : null;
+
+            if (!isSameValue(normalizedNewVal, dbRow.anlasilan_yakma_orani)) {
+                payload.anlasilan_yakma_orani = normalizedNewVal;
+                changedFields.push("anlasilan_yakma_orani");
+            }
+        }
+
         if (perms.fields.calisma_gunu && excelRow.calisma_gunu !== undefined) {
             const raw = excelRow.calisma_gunu;
             const newVal =
@@ -1187,7 +1299,6 @@ export default function AracCariVeFiyat() {
 
         return { payload, changedFields };
     };
-
     const startProgress = (title, fileName) => {
         setBulkProgressTitle(title);
         setBulkProgressOpen(true);
@@ -1436,6 +1547,15 @@ export default function AracCariVeFiyat() {
                             : null,
                     aylik_kira: row.aylik_kira !== undefined ? parseTLToNumber(row.aylik_kira) : null,
                     aylik_surucu: row.aylik_surucu !== undefined ? parseTLToNumber(row.aylik_surucu) : null,
+                    anlasilan_yakma_orani:
+                        row.anlasilan_yakma_orani === "" || row.anlasilan_yakma_orani === null || row.anlasilan_yakma_orani === undefined
+                            ? null
+                            : Number(
+                                String(row.anlasilan_yakma_orani)
+                                    .replace("%", "")
+                                    .replace(/\./g, "")
+                                    .replace(",", ".")
+                            ),
                     calisma_gunu:
                         row.calisma_gunu === "" || row.calisma_gunu === null || row.calisma_gunu === undefined
                             ? null
@@ -1445,7 +1565,6 @@ export default function AracCariVeFiyat() {
                     duzenleme_yapan_kullanici: user,
                     duzenleme_yapilan_tarih: new Date().toISOString(),
                 };
-
                 const { error } = await supabase.from("arac_cari_ve_fiyat").insert([payload]);
 
                 processed += 1;
@@ -1699,6 +1818,22 @@ export default function AracCariVeFiyat() {
                 ),
             },
             {
+                field: "anlasilan_yakma_orani",
+                headerName: "Anlaşılan Yakma Oranı",
+                type: "number",
+                minWidth: 180,
+                flex: 0.9,
+                valueGetter: (_, row) =>
+                    row.anlasilan_yakma_orani === null || row.anlasilan_yakma_orani === undefined
+                        ? null
+                        : Number(row.anlasilan_yakma_orani),
+                renderCell: (params) => (
+                    <Typography fontWeight={700}>
+                        {formatPercent(params.value)}
+                    </Typography>
+                ),
+            },
+            {
                 field: "toplam_tutar",
                 headerName: "Toplam Tutar",
                 type: "number",
@@ -1780,7 +1915,6 @@ export default function AracCariVeFiyat() {
             },
         ];
     }, [perms.canEditAny, permLoading]);
-
     return (
         <Container maxWidth={false} sx={{ py: 2.5 }}>
             <Stack spacing={2}>

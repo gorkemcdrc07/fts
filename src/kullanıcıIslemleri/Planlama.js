@@ -1790,65 +1790,132 @@ export default function PlanlamaDeluxe() {
                 <DataGrid
                     rows={filteredRows}
                     columns={orderedColumns}
-                    getRowId={(r) => r._rowId}
+                    getRowId={(row) => row._rowId}
                     loading={loading}
                     disableRowSelectionOnClick
-                    density="compact"
-                    rowHeight={42}
-                    columnHeaderHeight={44}
-                    checkboxSelection={false}
-                    editMode="row"
                     processRowUpdate={processRowUpdate}
-                    onProcessRowUpdateError={(e) => {
-                        console.error(e);
-                        setSnack({ open: true, msg: "Satır güncellenemedi.", severity: "error" });
+                    onProcessRowUpdateError={(error) => {
+                        console.error(error);
+                        setSnack({ open: true, msg: "Satır güncellenirken hata oluştu.", severity: "error" });
                     }}
-                    onRowUpdateCommit={handleRowUpdateCommit}
-                    disableColumnMenu={false}
-                    disableColumnReorder={false}
                     onColumnOrderChange={onColumnOrderChange}
-                    getRowClassName={getRowClassName}
-                    slots={{ noRowsOverlay: NoRowsOverlay, loadingOverlay: BusyOverlay }}
+                    slots={{
+                        noRowsOverlay: NoRowsOverlay,
+                        loadingOverlay: BusyOverlay,
+                    }}
                     sx={{
-                        border: "none",
-                        height: "100%",
-                        color: "#E8EAF9",
-                        "& .MuiDataGrid-virtualScroller": { overflowX: "auto" },
+                        border: "1px solid rgba(109, 213, 237, 0.16)",
+                        borderRadius: 4,
+                        background: "rgba(17, 24, 39, 0.92)",
+                        color: "#e5eef8",
+                        boxShadow: "0 12px 40px rgba(0,0,0,0.36)",
+                        backdropFilter: "blur(16px)",
 
-                        // SIFIR ÇİZGİLİ GÖRÜNÜM İÇİN TÜM BORDERLAR KALDIRILDI
-                        "& .MuiDataGrid-columnSeparator": { display: 'none' },
-                        "& .MuiDataGrid-columnHeaderTitleContainer": { padding: 0 },
-                        "& .MuiDataGrid-columnHeader": { borderRight: 'none' },
-                        // Satır Ayracı: Mor Neon Kesikli Çizgi
-                        "& .MuiDataGrid-cell": {
-                            borderRight: 'none',
-                            borderBottom: `1px dashed ${alpha("#E879F9", 0.1)}`, // Daha fütüristik alt çizgi
+                        "& .MuiDataGrid-main": {
+                            borderRadius: "inherit",
                         },
 
                         "& .MuiDataGrid-columnHeaders": {
-                            background: "linear-gradient(180deg, #1A2033 0%, #070B14 100%)",
-                            color: "#C8D1E6",
-                            borderBottom: '1px solid rgba(255,255,255,0.15)',
-                            fontWeight: 700,
-                            fontSize: 12,
+                            background: "linear-gradient(180deg, rgba(16, 26, 44, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
+                            borderBottom: "1px solid rgba(109, 213, 237, 0.25)",
+                            minHeight: "52px !important",
                         },
-                        // Şeritli Satırlar (Daha az kontrastlı)
-                        [`& .${gridClasses.row}:nth-of-type(odd)`]: {
-                            backgroundColor: alpha("#fff", 0.03),
+
+                        "& .MuiDataGrid-columnHeader": {
+                            outline: "none !important",
+                            background: "transparent",
                         },
-                        [`& .${gridClasses.row}:nth-of-type(even)`]: {
-                            backgroundColor: 'transparent',
+
+                        "& .MuiDataGrid-columnHeaderTitle": {
+                            color: "#6dd5ed",
+                            fontWeight: 800,
+                            letterSpacing: "0.08em",
+                            textTransform: "uppercase",
+                            textShadow: "0 0 6px rgba(109, 213, 237, 0.28)",
+                            fontSize: "12.5px",
                         },
-                        // HOVER EFECT (Daha keskin, fütüristik hover)
+
+                        "& .MuiDataGrid-iconSeparator": {
+                            color: "rgba(109, 213, 237, 0.18)",
+                        },
+
+                        "& .MuiDataGrid-menuIcon button, & .MuiDataGrid-sortIcon": {
+                            color: "rgba(229, 238, 248, 0.72)",
+                        },
+
+                        "& .MuiDataGrid-cell": {
+                            borderBottom: "1px solid rgba(109, 213, 237, 0.08)",
+                            color: "#e5eef8",
+                            outline: "none !important",
+                            backgroundColor: "transparent",
+                        },
+
+                        "& .MuiDataGrid-row": {
+                            backgroundColor: "transparent",
+                            transition: "background-color 0.18s ease",
+                        },
+
+                        "& .MuiDataGrid-row:nth-of-type(even)": {
+                            backgroundColor: "rgba(255,255,255,0.015)",
+                        },
+
                         "& .MuiDataGrid-row:hover": {
-                            backgroundColor: alpha("#22D3EE", 0.15) + ' !important',
-                            boxShadow: `0 0 10px ${alpha("#22D3EE", 0.4)} inset`,
-                            cursor: 'crosshair', // Fütüristik imleç efekti
+                            backgroundColor: "rgba(109, 213, 237, 0.08)",
                         },
-                        "& .MuiDataGrid-row--editing": {
-                            backgroundColor: alpha("#E879F9", 0.1) + ' !important',
-                            boxBoxShadow: `inset 0 0 0 1px ${alpha("#E879F9", 0.8)}`,
-                        }
+
+                        "& .MuiDataGrid-row.Mui-selected": {
+                            backgroundColor: "rgba(109, 213, 237, 0.12) !important",
+                        },
+
+                        "& .MuiDataGrid-row.Mui-selected:hover": {
+                            backgroundColor: "rgba(109, 213, 237, 0.16) !important",
+                        },
+
+                        "& .MuiDataGrid-footerContainer": {
+                            borderTop: "1px solid rgba(109, 213, 237, 0.12)",
+                            background: "rgba(255,255,255,0.02)",
+                        },
+
+                        "& .MuiTablePagination-root, & .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows": {
+                            color: "rgba(229, 238, 248, 0.72)",
+                        },
+
+                        "& .MuiSvgIcon-root": {
+                            color: "rgba(229, 238, 248, 0.78)",
+                        },
+
+                        "& .MuiIconButton-root": {
+                            color: "rgba(229, 238, 248, 0.8)",
+                        },
+
+                        "& .MuiCheckbox-root": {
+                            color: "rgba(109, 213, 237, 0.7)",
+                        },
+
+                        "& .MuiCheckbox-root.Mui-checked": {
+                            color: "#6dd5ed",
+                        },
+
+                        "& .MuiDataGrid-toolbarContainer": {
+                            padding: "8px 10px",
+                        },
+
+                        "& .MuiDataGrid-overlay": {
+                            background: "rgba(11, 17, 32, 0.7)",
+                            backdropFilter: "blur(6px)",
+                        },
+
+                        "& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within": {
+                            outline: "1px solid rgba(109, 213, 237, 0.28)",
+                        },
+
+                        "& .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within": {
+                            outline: "none",
+                        },
+
+                        "& .MuiDataGrid-editInputCell input": {
+                            color: "#e5eef8",
+                        },
                     }}
                 />
             </Paper>
@@ -1858,11 +1925,12 @@ export default function PlanlamaDeluxe() {
                 <Paper
                     elevation={0}
                     sx={{
-                        p: 1, borderRadius: 2, border: "1px solid rgba(255,255,255,0.08)",
-                        background: `linear-gradient(90deg, ${alpha("#E879F9", 0.16)} 0%, ${alpha("#22D3EE", 0.08)} 100%)`,
-                        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1,
-                        boxShadow: `0 -4px 20px ${alpha("#000", 0.4)}`,
-                        gridColumn: "1 / -1", zIndex: 10, mt: 1,
+                        background: "rgba(17, 24, 39, 0.92)",
+                        border: "1px solid rgba(109, 213, 237, 0.12)",
+                        borderRadius: 4,
+                        boxShadow: "0 12px 40px rgba(0,0,0,0.36)",
+                        backdropFilter: "blur(16px)",
+                        color: "#e5eef8",
                     }}
                 >
                     <Stack direction="row" spacing={1} alignItems="center">

@@ -35,6 +35,7 @@ import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import { supabase } from "../supabaseClient";
 
 import ExcelJS from "exceljs";
+import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 /* ------------------------ Koyu Tema Renkleri ------------------------ */
@@ -700,58 +701,76 @@ const toBigIntStringOrNull = (v) => {
     return digits ? digits : null;
 };
 
-/* ------------------------ Excel Okuma (ExcelJS) ------------------------------- */
+/* ------------------------ Excel Okuma (XLSX) ------------------------------- */
 const readXlsxFile = async (file) => {
-    if (!ExcelJS) throw new Error("ExcelJS kütüphanesi yüklenmemiş.");
-
-    const workbook = new ExcelJS.Workbook();
     const buffer = await file.arrayBuffer();
-    await workbook.xlsx.load(buffer);
 
-    const worksheet = workbook.worksheets[0];
-    const rows = [];
-    let rawHeaders = [];
+    let workbook;
 
-    const headerRow = worksheet.getRow(1);
-    if (!headerRow) throw new Error("Dosya boş veya başlık satırı okunamadı.");
-
-    headerRow.eachCell((cell) => {
-        rawHeaders.push(String(cell.value ?? "").trim());
-    });
-
-    const processedHeaders = rawHeaders.map((h) => h.toLowerCase().replace(/[^a-z0-9_ğüşöçıİ]/g, "_"));
-
-    for (let i = 2; i <= worksheet.rowCount; i++) {
-        const row = worksheet.getRow(i);
-        const rowData = {};
-        let isRowEmpty = true;
-
-        rawHeaders.forEach((rawHeader, index) => {
-            if (!rawHeader) return;
-
-            const cell = row.getCell(index + 1);
-            let value = cell.value;
-
-            if (typeof value === "object" && value !== null) {
-                if (value.text) value = value.text;
-                else if (value instanceof Date) value = value.toISOString();
-                else if (value.result !== undefined) value = value.result;
-            }
-
-            const processedKey = processedHeaders[index];
-            rowData[processedKey] = value;
-
-            if (value !== null && value !== undefined && String(value).trim() !== "") {
-                isRowEmpty = false;
-            }
+    try {
+        workbook = XLSX.read(buffer, {
+            type: "array",
         });
+    } catch (err) {
+        console.error("Excel parse hatası:", err);
 
-        if (!isRowEmpty) rows.push(rowData);
+        throw new Error(
+            "Excel dosyası okunamadı. Dosya bozuk olabilir veya gerçek .xlsx değildir."
+        );
     }
 
-    return { headers: processedHeaders, rows };
-};
+    const sheetName = workbook.SheetNames?.[0];
 
+    if (!sheetName) {
+        throw new Error("Excel içinde sheet bulunamadı.");
+    }
+
+    const worksheet = workbook.Sheets[sheetName];
+
+    const jsonRows = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        defval: "",
+        raw: false,
+    });
+
+    if (!jsonRows.length) {
+        throw new Error("Excel dosyası boş.");
+    }
+
+    const rawHeaders = jsonRows[0].map((h) =>
+        String(h ?? "").trim()
+    );
+
+    const processedHeaders = rawHeaders.map((h) =>
+        h
+            .toLocaleLowerCase("tr-TR")
+            .replace(/[^a-z0-9_ğüşöçıİ]/g, "_")
+    );
+
+    const rows = jsonRows
+        .slice(1)
+        .map((row) => {
+            const obj = {};
+
+            rawHeaders.forEach((rawHeader, index) => {
+                if (!rawHeader) return;
+
+                obj[processedHeaders[index]] = row[index];
+            });
+
+            return obj;
+        })
+        .filter((row) =>
+            Object.values(row).some(
+                (v) => String(v ?? "").trim() !== ""
+            )
+        );
+
+    return {
+        headers: processedHeaders,
+        rows,
+    };
+};
 /* ------------------------ Supabase Batch Insert ------------------- */
 const insertBatched = async (table, rows, batchSize = 500) => {
     // ✅ basit kolon guard
@@ -1492,7 +1511,7 @@ export default function HayatKimyaYakitHakedis() {
     const [cleaning, setCleaning] = useState(false);
     const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
 
-    const accept = ".xlsx,.xls";
+    const accept = ".xlsx";
 
     const handleSnackbarClose = () => setSnackbar({ ...snackbar, open: false });
 

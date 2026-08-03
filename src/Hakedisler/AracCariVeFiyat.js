@@ -91,7 +91,8 @@ const emptyForm = {
     odak_arac_calisma_tipi: "",
     aylik_kira: "",
     aylik_surucu: "",
-    anlasilan_yakma_orani: "",
+    sfr_yakma_orani: "",
+    bos_yakma_orani: "",
     calisma_gunu: "",
     pasif: false,
     aciklama: "",
@@ -185,6 +186,53 @@ function parseTLToNumber(v) {
     const n = Number(s);
     return Number.isNaN(n) ? null : n;
 }
+
+function parseRateToNumber(value) {
+    if (value === "" || value === null || value === undefined) {
+        return null;
+    }
+
+    let raw = value;
+
+    if (typeof raw === "object") {
+        if (raw.result !== undefined) {
+            raw = raw.result;
+        } else if (raw.text !== undefined) {
+            raw = raw.text;
+        }
+    }
+
+    if (typeof raw === "number") {
+        if (!Number.isFinite(raw)) return null;
+
+        // Excel yüzde hücresi %38'i 0.38 olarak verebilir.
+        if (raw > 0 && raw <= 1) {
+            return raw * 100;
+        }
+
+        return raw;
+    }
+
+    const normalized = String(raw)
+        .trim()
+        .replace("%", "")
+        .replace(/\s/g, "")
+        .replace(/\./g, "")
+        .replace(",", ".");
+
+    const number = Number(normalized);
+
+    if (!Number.isFinite(number)) {
+        return null;
+    }
+
+    if (number > 0 && number <= 1) {
+        return number * 100;
+    }
+
+    return number;
+}
+
 function addThousandDots(intStr) {
     const normalized = String(intStr || "").replace(/^0+(?=\d)/, "");
     return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -288,14 +336,31 @@ const headerAliases = {
         "aylik sürücü",
         "aylik_surucu",
     ],
-    anlasilan_yakma_orani: [
+    sfr_yakma_orani: [
+        "sfr yakma oranı",
+        "sfr yakma orani",
+        "sfr oranı",
+        "sfr orani",
+        "sfr_yakma_orani",
+
+        // Eski Excel dosyaları da SFR olarak kabul edilsin.
         "anlaşılan yakma oranı",
         "anlasilan yakma orani",
-        "anlaşılan yakma oran",
-        "anlasilan yakma oran",
         "yakma oranı",
         "yakma orani",
         "anlasilan_yakma_orani",
+    ],
+
+    bos_yakma_orani: [
+        "bos yakma oranı",
+        "boş yakma oranı",
+        "bos yakma orani",
+        "boş yakma orani",
+        "bos oranı",
+        "boş oranı",
+        "bos orani",
+        "boş orani",
+        "bos_yakma_orani",
     ],
     calisma_gunu: [
         "gün",
@@ -846,23 +911,31 @@ export default function AracCariVeFiyat() {
     const handleOpenEdit = (row) => {
         if (permLoading || !perms.canEditAny) return;
 
-        setEditOriginalKey({ plaka: row.plaka, cari_id: row.cari_id });
+        setEditOriginalKey({
+            plaka: row.plaka,
+            cari_id: row.cari_id,
+        });
+
         setEditForm({
             plaka: row.plaka || "",
             cari_id: row.cari_id ?? "",
             cari_adi: row.cari_adi || "",
             arac_sahip: row.arac_sahip || "",
-            odak_arac_calisma_tipi: row.odak_arac_calisma_tipi || "",
+            odak_arac_calisma_tipi:
+                row.odak_arac_calisma_tipi || "",
             aylik_kira: formatTLCompact(row.aylik_kira),
             aylik_surucu: formatTLCompact(row.aylik_surucu),
-            anlasilan_yakma_orani: row.anlasilan_yakma_orani ?? "",
+
+            sfr_yakma_orani: row.sfr_yakma_orani ?? "",
+            bos_yakma_orani: row.bos_yakma_orani ?? "",
+
             calisma_gunu: row.calisma_gunu ?? "",
             pasif: !!row.pasif,
             aciklama: row.aciklama || "",
         });
+
         setEditOpen(true);
     };
-
     const handleSaveEdit = async () => {
         if (!perms.canEditAny || !editOriginalKey) return;
 
@@ -887,16 +960,11 @@ export default function AracCariVeFiyat() {
             if (perms.fields.aylik_kira) payload.aylik_kira = parseTLToNumber(editForm.aylik_kira);
             if (perms.fields.aylik_surucu) payload.aylik_surucu = parseTLToNumber(editForm.aylik_surucu);
 
-            payload.anlasilan_yakma_orani =
-                editForm.anlasilan_yakma_orani === "" || editForm.anlasilan_yakma_orani == null
-                    ? null
-                    : Number(
-                        String(editForm.anlasilan_yakma_orani)
-                            .replace("%", "")
-                            .replace(/\./g, "")
-                            .replace(",", ".")
-                    );
+            payload.sfr_yakma_orani =
+                parseRateToNumber(editForm.sfr_yakma_orani);
 
+            payload.bos_yakma_orani =
+                parseRateToNumber(editForm.bos_yakma_orani);
             if (perms.fields.calisma_gunu)
                 payload.calisma_gunu =
                     editForm.calisma_gunu === "" || editForm.calisma_gunu == null ? null : Number(editForm.calisma_gunu);
@@ -955,15 +1023,10 @@ export default function AracCariVeFiyat() {
                 odak_arac_calisma_tipi: addForm.odak_arac_calisma_tipi?.trim() || null,
                 aylik_kira: parseTLToNumber(addForm.aylik_kira),
                 aylik_surucu: parseTLToNumber(addForm.aylik_surucu),
-                anlasilan_yakma_orani:
-                    addForm.anlasilan_yakma_orani === "" || addForm.anlasilan_yakma_orani == null
-                        ? null
-                        : Number(
-                            String(addForm.anlasilan_yakma_orani)
-                                .replace("%", "")
-                                .replace(/\./g, "")
-                                .replace(",", ".")
-                        ),
+                sfr_yakma_orani:
+                    parseRateToNumber(addForm.sfr_yakma_orani),
+                bos_yakma_orani:
+                    parseRateToNumber(addForm.bos_yakma_orani),
                 calisma_gunu: parseTLToNumber(addForm.calisma_gunu),
                 pasif: !!addForm.pasif,
                 aciklama: addForm.aciklama?.trim() || null,
@@ -997,7 +1060,8 @@ export default function AracCariVeFiyat() {
             { header: "Odak Araç Çalışma Tipi", key: "odak_arac_calisma_tipi", width: 24 },
             { header: "Aylık Kira", key: "aylik_kira", width: 16 },
             { header: "Aylık Sürücü", key: "aylik_surucu", width: 16 },
-            { header: "Anlaşılan Yakma Oranı", key: "anlasilan_yakma_orani", width: 20 },
+            { header: "SFR Yakma Oranı", key: "sfr_yakma_orani", width: 18 },
+            { header: "BOS Yakma Oranı", key: "bos_yakma_orani", width: 18 },
             { header: "Toplam Tutar", key: "toplam_tutar", width: 16 },
             { header: "Çalışma Günü", key: "calisma_gunu", width: 14 },
             { header: "Pasif", key: "pasif", width: 10 },
@@ -1016,10 +1080,14 @@ export default function AracCariVeFiyat() {
                 odak_arac_calisma_tipi: r.odak_arac_calisma_tipi ?? "",
                 aylik_kira: toNumberLoose(r.aylik_kira),
                 aylik_surucu: toNumberLoose(r.aylik_surucu),
-                anlasilan_yakma_orani:
-                    r.anlasilan_yakma_orani === null || r.anlasilan_yakma_orani === undefined
+                sfr_yakma_orani:
+                    r.sfr_yakma_orani === null || r.sfr_yakma_orani === undefined
                         ? ""
-                        : Number(r.anlasilan_yakma_orani) / 100,
+                        : Number(r.sfr_yakma_orani) / 100,
+                bos_yakma_orani:
+                    r.bos_yakma_orani === null || r.bos_yakma_orani === undefined
+                        ? ""
+                        : Number(r.bos_yakma_orani) / 100,
                 toplam_tutar: toNumberLoose(r.toplam_tutar),
                 calisma_gunu: r.calisma_gunu ?? "",
                 pasif: r.pasif ? "Evet" : "Hayır",
@@ -1042,8 +1110,9 @@ export default function AracCariVeFiyat() {
             worksheet.getColumn(idx).numFmt = '#,##0.00 [$₺-tr-TR]';
         });
 
-        worksheet.getColumn(8).numFmt = '0.00%';
-        worksheet.getColumn(9).numFmt = '#,##0.00 [$₺-tr-TR]';
+        worksheet.getColumn(8).numFmt = "0.00%";
+        worksheet.getColumn(9).numFmt = "0.00%";
+        worksheet.getColumn(10).numFmt = '#,##0.00 [$₺-tr-TR]';
         const buffer = await workbook.xlsx.writeBuffer();
         saveAs(
             new Blob([buffer], {
@@ -1065,7 +1134,8 @@ export default function AracCariVeFiyat() {
             "çalışma tipi",
             "aylık kira",
             "aylık sürücü",
-            "anlaşılan yakma oranı",
+            "sfr yakma oranı",
+            "bos yakma oranı",
             "gün",
             "pasif",
             "açıklama",
@@ -1079,7 +1149,8 @@ export default function AracCariVeFiyat() {
             "ODAK",
             "10.000,00",
             "6.500,00",
-            "12,50",
+            "38",
+            "32",
             26,
             "Hayır",
             "Toplu güncelleme örneği",
@@ -1094,7 +1165,8 @@ export default function AracCariVeFiyat() {
             "çalışma tipi",
             "aylık kira",
             "aylık sürücü",
-            "anlaşılan yakma oranı",
+            "sfr yakma oranı",
+            "bos yakma oranı",
             "gün",
             "pasif",
             "açıklama",
@@ -1108,7 +1180,8 @@ export default function AracCariVeFiyat() {
             "GÜNLÜK",
             "15.000,00",
             "8.000,00",
-            "10,75",
+            "37",
+            "30",
             30,
             "Hayır",
             "Toplu aktarım örneği",
@@ -1165,8 +1238,11 @@ export default function AracCariVeFiyat() {
                     : undefined,
                 aylik_kira: headerMap.aylik_kira ? getExcelNumericValue(row.getCell(headerMap.aylik_kira)) : undefined,
                 aylik_surucu: headerMap.aylik_surucu ? getExcelNumericValue(row.getCell(headerMap.aylik_surucu)) : undefined,
-                anlasilan_yakma_orani: headerMap.anlasilan_yakma_orani
-                    ? getExcelNumericValue(row.getCell(headerMap.anlasilan_yakma_orani))
+                sfr_yakma_orani: headerMap.sfr_yakma_orani
+                    ? getExcelNumericValue(row.getCell(headerMap.sfr_yakma_orani))
+                    : undefined,
+                bos_yakma_orani: headerMap.bos_yakma_orani
+                    ? getExcelNumericValue(row.getCell(headerMap.bos_yakma_orani))
                     : undefined,
                 calisma_gunu: headerMap.calisma_gunu ? row.getCell(headerMap.calisma_gunu).value : undefined,
                 pasif: headerMap.pasif ? row.getCell(headerMap.pasif).value : undefined,
@@ -1247,23 +1323,21 @@ export default function AracCariVeFiyat() {
             }
         }
 
-        if (excelRow.anlasilan_yakma_orani !== undefined) {
-            const raw = excelRow.anlasilan_yakma_orani;
-            const newVal =
-                raw === "" || raw === null || raw === undefined
-                    ? null
-                    : Number(
-                        String(raw)
-                            .replace("%", "")
-                            .replace(/\./g, "")
-                            .replace(",", ".")
-                    );
+        if (excelRow.sfr_yakma_orani !== undefined) {
+            const newVal = parseRateToNumber(excelRow.sfr_yakma_orani);
 
-            const normalizedNewVal = Number.isFinite(newVal) ? newVal : null;
+            if (!isSameValue(newVal, dbRow.sfr_yakma_orani)) {
+                payload.sfr_yakma_orani = newVal;
+                changedFields.push("sfr_yakma_orani");
+            }
+        }
 
-            if (!isSameValue(normalizedNewVal, dbRow.anlasilan_yakma_orani)) {
-                payload.anlasilan_yakma_orani = normalizedNewVal;
-                changedFields.push("anlasilan_yakma_orani");
+        if (excelRow.bos_yakma_orani !== undefined) {
+            const newVal = parseRateToNumber(excelRow.bos_yakma_orani);
+
+            if (!isSameValue(newVal, dbRow.bos_yakma_orani)) {
+                payload.bos_yakma_orani = newVal;
+                changedFields.push("bos_yakma_orani");
             }
         }
 
@@ -1547,15 +1621,14 @@ export default function AracCariVeFiyat() {
                             : null,
                     aylik_kira: row.aylik_kira !== undefined ? parseTLToNumber(row.aylik_kira) : null,
                     aylik_surucu: row.aylik_surucu !== undefined ? parseTLToNumber(row.aylik_surucu) : null,
-                    anlasilan_yakma_orani:
-                        row.anlasilan_yakma_orani === "" || row.anlasilan_yakma_orani === null || row.anlasilan_yakma_orani === undefined
-                            ? null
-                            : Number(
-                                String(row.anlasilan_yakma_orani)
-                                    .replace("%", "")
-                                    .replace(/\./g, "")
-                                    .replace(",", ".")
-                            ),
+                    sfr_yakma_orani:
+                        row.sfr_yakma_orani !== undefined
+                            ? parseRateToNumber(row.sfr_yakma_orani)
+                            : null,
+                    bos_yakma_orani:
+                        row.bos_yakma_orani !== undefined
+                            ? parseRateToNumber(row.bos_yakma_orani)
+                            : null,
                     calisma_gunu:
                         row.calisma_gunu === "" || row.calisma_gunu === null || row.calisma_gunu === undefined
                             ? null
@@ -1818,15 +1891,31 @@ export default function AracCariVeFiyat() {
                 ),
             },
             {
-                field: "anlasilan_yakma_orani",
-                headerName: "Anlaşılan Yakma Oranı",
+                field: "sfr_yakma_orani",
+                headerName: "SFR Yakma Oranı",
                 type: "number",
-                minWidth: 180,
+                minWidth: 165,
                 flex: 0.9,
                 valueGetter: (_, row) =>
-                    row.anlasilan_yakma_orani === null || row.anlasilan_yakma_orani === undefined
+                    row.sfr_yakma_orani === null || row.sfr_yakma_orani === undefined
                         ? null
-                        : Number(row.anlasilan_yakma_orani),
+                        : Number(row.sfr_yakma_orani),
+                renderCell: (params) => (
+                    <Typography fontWeight={700}>
+                        {formatPercent(params.value)}
+                    </Typography>
+                ),
+            },
+            {
+                field: "bos_yakma_orani",
+                headerName: "BOS Yakma Oranı",
+                type: "number",
+                minWidth: 165,
+                flex: 0.9,
+                valueGetter: (_, row) =>
+                    row.bos_yakma_orani === null || row.bos_yakma_orani === undefined
+                        ? null
+                        : Number(row.bos_yakma_orani),
                 renderCell: (params) => (
                     <Typography fontWeight={700}>
                         {formatPercent(params.value)}
@@ -2704,6 +2793,40 @@ export default function AracCariVeFiyat() {
 
                             <Grid item xs={12} sm={4}>
                                 <TextField
+                                    label="SFR Yakma Oranı (%)"
+                                    fullWidth
+                                    size="small"
+                                    value={addForm.sfr_yakma_orani}
+                                    onChange={(e) =>
+                                        handleAddChange(
+                                            "sfr_yakma_orani",
+                                            e.target.value.replace(/[^\d,%.]/g, "")
+                                        )
+                                    }
+                                    placeholder="Örn: 38"
+                                    helperText="SFR seferlerinde kullanılır"
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={4}>
+                                <TextField
+                                    label="BOS Yakma Oranı (%)"
+                                    fullWidth
+                                    size="small"
+                                    value={addForm.bos_yakma_orani}
+                                    onChange={(e) =>
+                                        handleAddChange(
+                                            "bos_yakma_orani",
+                                            e.target.value.replace(/[^\d,%.]/g, "")
+                                        )
+                                    }
+                                    placeholder="Örn: 32"
+                                    helperText="BOS seferlerinde kullanılır"
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={4}>
+                                <TextField
                                     label="Çalışma Günü"
                                     fullWidth
                                     size="small"
@@ -2843,17 +2966,35 @@ export default function AracCariVeFiyat() {
 
                             <Grid item xs={12} sm={4}>
                                 <TextField
-                                    label="Anlaşılan Yakma Oranı (%)"
+                                    label="SFR Yakma Oranı (%)"
                                     fullWidth
                                     size="small"
-                                    value={editForm.anlasilan_yakma_orani}
+                                    value={editForm.sfr_yakma_orani}
                                     onChange={(e) =>
                                         handleEditChange(
-                                            "anlasilan_yakma_orani",
+                                            "sfr_yakma_orani",
                                             e.target.value.replace(/[^\d,%.]/g, "")
                                         )
                                     }
-                                    placeholder="Örn: 12,50"
+                                    placeholder="Örn: 38"
+                                    helperText="SFR seferlerinde kullanılır"
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={4}>
+                                <TextField
+                                    label="BOS Yakma Oranı (%)"
+                                    fullWidth
+                                    size="small"
+                                    value={editForm.bos_yakma_orani}
+                                    onChange={(e) =>
+                                        handleEditChange(
+                                            "bos_yakma_orani",
+                                            e.target.value.replace(/[^\d,%.]/g, "")
+                                        )
+                                    }
+                                    placeholder="Örn: 32"
+                                    helperText="BOS seferlerinde kullanılır"
                                 />
                             </Grid>
 

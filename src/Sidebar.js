@@ -1,4 +1,3 @@
-// src/Sidebar.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -326,6 +325,7 @@ export default function Sidebar(props) {
     const hakedisAltMenuler = useMemo(() => [
         { ad: "Hayat Kimya YHH", yol: "/hakedis/hayat-kimya-yhh", ikon: <FactoryIcon /> },
         { ad: "Pepsi YHH", yol: "/hakedis/pepsi-yakit-hakedis", ikon: <FactoryIcon /> },
+        { ad: "Ebebek Hakediş", yol: "/hakedis/ebebek-yakit-hakedis", ikon: <LocalGasStationIcon /> },
         { ad: "Frigo YHH", yol: "/hakedis/frigo-yakit-hakedis", ikon: <LocalGasStationIcon /> },
         { ad: "Sefer Kira & Sürücü Hakediş", yol: "/hakedis/hakedis-seferleri", ikon: <ReceiptLongIcon /> },
         { ad: "Plaka | Kira & Sürücü Tutarları", yol: "/hakedis/arac-cari-ve-fiyat", ikon: <CreditCardIcon /> },

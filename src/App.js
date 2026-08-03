@@ -87,6 +87,11 @@ const HayatKimyaYakitHakedis = lazy(() =>
 const PepsiYakitHakedis = lazy(() =>
     import("./Hakedisler/PepsiYakitHakedis")
 );
+
+// ✅ YENİ: Ebebek Yakıt Hakediş
+const EbebekYakitHakedis = lazy(() =>
+    import("./Hakedisler/EbebekYakitHakedis")
+);
 // Test Data
 const TEST_VERILERI = {
     "Sefer Performansı": [
@@ -235,6 +240,20 @@ function App() {
                                         </Suspense>
                                     }
                                 />
+                                {/* ✅ Ebebek Yakıt Hakediş */}
+                                <Route
+                                    path="hakedis/ebebek-yakit-hakedis"
+                                    element={
+                                        <Suspense
+                                            fallback={
+                                                <div>Ebebek Hakediş yükleniyor...</div>
+                                            }
+                                        >
+                                            <EbebekYakitHakedis />
+                                        </Suspense>
+                                    }
+                                />
+
 
                                 {/* Raporlar */}
                                 <Route path="raporlar/kpi-olcumu" element={<KpiOlcumu />} />

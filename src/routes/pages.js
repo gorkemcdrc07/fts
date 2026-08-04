@@ -41,6 +41,9 @@ export const APP_PAGES = [
     { title: "Hayat Kimya Yakıt Hakediş", path: "/hakedis/hayat-kimya-yakit-hakedis" },
     { title: "Pepsi Yakıt Hakediş", path: "/hakedis/pepsi-yakit-hakedis" },
 
+    // ✅ Yeni
+    { title: "Ebebek Yakıt Hakediş", path: "/hakedis/ebebek-yakit-hakedis" },
+
     // KPI & Raporlar
     { title: "KPI Ölçümü", path: "/raporlar/kpi-olcumu" },
     { title: "Yüklemede Bekleme", path: "/raporlar/yuklemede-bekleme" },

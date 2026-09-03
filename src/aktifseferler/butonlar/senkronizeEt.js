@@ -25,6 +25,7 @@ function SenkronizeEtButton({
         setLoading(true);
         try {
             const start = `${startDate || ""}T00:00:00`;
+
             const end = `${endDate || ""}T23:59:59`;
 
             const [incoming, completedSet] = await Promise.all([

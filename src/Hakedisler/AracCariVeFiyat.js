@@ -98,27 +98,160 @@ const emptyForm = {
     aciklama: "",
 };
 /* ===================== Helpers ===================== */
+
+function parseMoneyValue(value) {
+    if (value === "" || value === null || value === undefined) {
+        return null;
+    }
+
+    if (typeof value === "number") {
+        return Number.isFinite(value) ? value : null;
+    }
+
+    if (typeof value === "object") {
+        if (typeof value.result === "number") {
+            return Number.isFinite(value.result)
+                ? value.result
+                : null;
+        }
+
+        if (value.result !== undefined && value.result !== null) {
+            value = value.result;
+        } else if (typeof value.text === "string") {
+            value = value.text;
+        } else {
+            value = String(value);
+        }
+    }
+
+    let raw = String(value)
+        .trim()
+        .replace(/[₺\s]/g, "")
+        .replace(/[^\d,.\-]/g, "");
+
+    if (!raw) return null;
+
+    const negative = raw.startsWith("-");
+    raw = raw.replace(/-/g, "");
+
+    if (!raw) return null;
+
+    const lastComma = raw.lastIndexOf(",");
+    const lastDot = raw.lastIndexOf(".");
+
+    let normalized = "";
+
+    // 12.500,50 veya 12,500.50
+    if (lastComma !== -1 && lastDot !== -1) {
+        const decimalSeparator =
+            lastComma > lastDot ? "," : ".";
+
+        const decimalIndex =
+            raw.lastIndexOf(decimalSeparator);
+
+        const integerPart = raw
+            .slice(0, decimalIndex)
+            .replace(/[.,]/g, "");
+
+        const decimalPart = raw
+            .slice(decimalIndex + 1)
+            .replace(/[.,]/g, "");
+
+        normalized =
+            integerPart +
+            (decimalPart !== ""
+                ? "." + decimalPart
+                : "");
+    }
+
+    // 12500,50
+    else if (lastComma !== -1) {
+        const isThousands =
+            /^\d{1,3}(,\d{3})+$/.test(raw);
+
+        if (isThousands) {
+            normalized = raw.replace(/,/g, "");
+        } else {
+            const decimalIndex =
+                raw.lastIndexOf(",");
+
+            const integerPart = raw
+                .slice(0, decimalIndex)
+                .replace(/[.,]/g, "");
+
+            const decimalPart = raw
+                .slice(decimalIndex + 1)
+                .replace(/[.,]/g, "");
+
+            normalized =
+                integerPart +
+                (decimalPart !== ""
+                    ? "." + decimalPart
+                    : "");
+        }
+    }
+
+    // 12500.50 veya 12.500
+    else if (lastDot !== -1) {
+        const isThousands =
+            /^\d{1,3}(\.\d{3})+$/.test(raw);
+
+        if (isThousands) {
+            normalized = raw.replace(/\./g, "");
+        } else {
+            const dotParts = raw.split(".");
+
+            if (
+                dotParts.length === 2 &&
+                dotParts[1].length <= 2
+            ) {
+                normalized =
+                    dotParts[0].replace(/\D/g, "") +
+                    "." +
+                    dotParts[1].replace(/\D/g, "");
+            } else {
+                normalized = raw.replace(/\./g, "");
+            }
+        }
+    }
+
+    // 12500
+    else {
+        normalized = raw;
+    }
+
+    if (!normalized) return null;
+
+    const number = Number(normalized);
+
+    if (!Number.isFinite(number)) {
+        return null;
+    }
+
+    return negative ? -number : number;
+}
 function formatTL(value) {
-    if (value === null || value === undefined || value === "") return "—";
-    const num = Number(value);
-    if (Number.isNaN(num)) return String(value);
+    const num = parseMoneyValue(value);
+
+    if (num === null) return "—";
+
     return num.toLocaleString("tr-TR", {
         style: "currency",
         currency: "TRY",
+        minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });
 }
-
 function formatTLCompact(value) {
-    if (value === null || value === undefined || value === "") return "";
-    const num = Number(value);
-    if (Number.isNaN(num)) return String(value);
+    const num = parseMoneyValue(value);
+
+    if (num === null) return "";
+
     return num.toLocaleString("tr-TR", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });
 }
-
 function formatPercent(value) {
     if (value === null || value === undefined || value === "") return "—";
     const num = Number(value);
@@ -137,56 +270,13 @@ function formatDate(value) {
     return d.toLocaleString("tr-TR");
 }
 
-function toNumberLoose(v) {
-    if (v === "" || v === null || v === undefined) return 0;
-    if (typeof v === "number") return v;
-    const s = String(v)
-        .replace(/[^\d,.-]/g, "")
-        .replace(/\./g, "")
-        .replace(",", ".");
-    const n = Number(s);
-    return Number.isNaN(n) ? 0 : n;
+function toNumberLoose(value) {
+    const num = parseMoneyValue(value);
+    return num === null ? 0 : num;
 }
-
-function parseTLToNumber(v) {
-    if (v === "" || v === null || v === undefined) return null;
-
-    // Excel hücresi zaten sayıysa direkt dön
-    if (typeof v === "number") {
-        return Number.isFinite(v) ? v : null;
-    }
-
-    // ExcelJS bazen obje döndürebilir
-    if (typeof v === "object") {
-        if (typeof v.result === "number") {
-            return Number.isFinite(v.result) ? v.result : null;
-        }
-        if (typeof v.text === "string") {
-            v = v.text;
-        } else {
-            v = String(v);
-        }
-    }
-
-    let s = String(v).trim();
-
-    // Para sembolü ve boşlukları temizle
-    s = s.replace(/[₺\s]/g, "");
-
-    // TR format: 252.126,56 -> 252126.56
-    if (s.includes(".") && s.includes(",")) {
-        s = s.replace(/\./g, "").replace(",", ".");
-    }
-    // 252126,56 -> 252126.56
-    else if (s.includes(",")) {
-        s = s.replace(",", ".");
-    }
-    // 252126.56 ise olduğu gibi bırak
-
-    const n = Number(s);
-    return Number.isNaN(n) ? null : n;
+function parseTLToNumber(value) {
+    return parseMoneyValue(value);
 }
-
 function parseRateToNumber(value) {
     if (value === "" || value === null || value === undefined) {
         return null;
@@ -233,23 +323,90 @@ function parseRateToNumber(value) {
     return number;
 }
 
-function addThousandDots(intStr) {
-    const normalized = String(intStr || "").replace(/^0+(?=\d)/, "");
-    return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-}
+function addThousandDots(value) {
+    let str = String(value ?? "")
+        .replace(/\D/g, "")
+        .replace(/^0+(?=\d)/, "");
 
+    if (!str) str = "0";
+
+    return str.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
 function formatTLForTyping(input) {
-    if (input === "" || input === null || input === undefined) return "";
-    let s = String(input).replace(/[^\d,]/g, "");
-    const firstComma = s.indexOf(",");
-    if (firstComma !== -1) {
-        const before = s.slice(0, firstComma);
-        const after = s.slice(firstComma + 1).replace(/,/g, "");
-        return addThousandDots(before) + "," + after;
+    if (input === "" || input === null || input === undefined) {
+        return "";
     }
-    return addThousandDots(s);
-}
 
+    let raw = String(input).replace(/[^\d.,]/g, "");
+
+    if (!raw) return "";
+
+    const lastComma = raw.lastIndexOf(",");
+    const lastDot = raw.lastIndexOf(".");
+
+    let decimalSeparator = null;
+
+    // Hem nokta hem virgül varsa sonuncusu kuruş ayracı
+    if (lastComma !== -1 && lastDot !== -1) {
+        decimalSeparator = lastComma > lastDot ? "," : ".";
+    }
+
+    // Sadece virgül
+    else if (lastComma !== -1) {
+        if (raw.endsWith(",")) {
+            decimalSeparator = ",";
+        } else {
+            const thousandsPattern = /^\d{1,3}(,\d{3})+$/.test(raw);
+
+            if (!thousandsPattern) {
+                decimalSeparator = ",";
+            }
+        }
+    }
+
+    // Sadece nokta
+    else if (lastDot !== -1) {
+        if (raw.endsWith(".")) {
+            decimalSeparator = ".";
+        } else {
+            const thousandsPattern = /^\d{1,3}(\.\d{3})+$/.test(raw);
+
+            if (!thousandsPattern) {
+                const fraction = raw.slice(lastDot + 1);
+
+                if (fraction.length <= 2) {
+                    decimalSeparator = ".";
+                }
+            }
+        }
+    }
+
+    let integerPart = raw;
+    let decimalPart = "";
+
+    if (decimalSeparator) {
+        const decimalIndex = raw.lastIndexOf(decimalSeparator);
+
+        integerPart = raw
+            .slice(0, decimalIndex)
+            .replace(/[.,]/g, "");
+
+        decimalPart = raw
+            .slice(decimalIndex + 1)
+            .replace(/[.,]/g, "")
+            .slice(0, 2);
+    } else {
+        integerPart = raw.replace(/[.,]/g, "");
+    }
+
+    const formattedInteger = addThousandDots(integerPart);
+
+    if (decimalSeparator) {
+        return `${formattedInteger},${decimalPart}`;
+    }
+
+    return formattedInteger;
+}
 function parsePasif(v) {
     if (v === null || v === undefined) return null;
     if (typeof v === "boolean") return v;

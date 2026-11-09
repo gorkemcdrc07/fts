@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
     Box,
@@ -264,22 +265,18 @@ const toBigIntStringOrNull = (v) => {
     return digits ? digits : null;
 };
 
-/* ===================== MÜŞTERİYE GÖRE ORAN (%38 / %37) ===================== */
-const normalizeCompany = (s) =>
-    String(s || "")
-        .toLocaleUpperCase("tr-TR")
-        .replace(/\s+/g, " ")
-        .trim();
+/* ===================== SEFER NUMARASINA GORE ORAN ===================== */
+const getRateBySeferNo = (seferNo) => {
+    const no = String(seferNo ?? "").trim().toUpperCase();
 
-const SPECIAL_CUSTOMERS_38 = new Set([
-    normalizeCompany("PEPSİ-COLA SERVİS VE DAĞITIM LİMİTED ŞİRKETİ"),
-]);
+    if (no.startsWith("SFR")) return 0.38;
+    if (no.startsWith("BOS")) return 0.37;
 
-const getRateByMusteri = (musteriAdi) => {
-    const n = normalizeCompany(musteriAdi);
-    return SPECIAL_CUSTOMERS_38.has(n) ? 0.38 : 0.37;
+    throw new Error(
+        `Gecersiz sefer numarasi: ${no || "(bos)"}. SFR veya BOS bekleniyor.`
+    );
 };
-/* ========================================================================== */
+/* ====================================================================== */
 
 /* ------------------------ Liste Bileşenleri ------------------------ */
 const PlakaKmList = ({ kmMap, mode = "km" }) => {
@@ -434,56 +431,85 @@ const PlakaHakedisList = ({ kmMap }) => {
 
 /* ------------------------ Excel / DB Yardımcıları ------------------------ */
 const readXlsxFile = async (file) => {
-    const workbook = new ExcelJS.Workbook();
-    const buffer = await file.arrayBuffer();
-    await workbook.xlsx.load(buffer);
+    try {
+        const buffer = await file.arrayBuffer();
 
-    const worksheet = workbook.worksheets[0];
-    const rows = [];
-    const rawHeaders = [];
-
-    const headerRow = worksheet.getRow(1);
-    if (!headerRow) throw new Error("Dosya boş veya başlık satırı okunamadı.");
-
-    headerRow.eachCell((cell) => {
-        rawHeaders.push(String(cell.value ?? "").trim());
-    });
-
-    const processedHeaders = rawHeaders.map((h) =>
-        h.toLowerCase().replace(/[^a-z0-9_ğüşöçıİ]/g, "_")
-    );
-
-    for (let i = 2; i <= worksheet.rowCount; i++) {
-        const row = worksheet.getRow(i);
-        const rowData = {};
-        let isRowEmpty = true;
-
-        rawHeaders.forEach((rawHeader, index) => {
-            if (!rawHeader) return;
-
-            const cell = row.getCell(index + 1);
-            let value = cell.value;
-
-            if (typeof value === "object" && value !== null) {
-                if (value.text) value = value.text;
-                else if (value instanceof Date) value = value.toISOString();
-                else if (value.result !== undefined) value = value.result;
-            }
-
-            const processedKey = processedHeaders[index];
-            rowData[processedKey] = value;
-
-            if (value !== null && value !== undefined && String(value).trim() !== "") {
-                isRowEmpty = false;
-            }
+        const workbook = XLSX.read(buffer, {
+            type: "array",
+            cellDates: true
         });
 
-        if (!isRowEmpty) rows.push(rowData);
+        if (!workbook.SheetNames?.length) {
+            throw new Error("Excel dosyasinda sayfa bulunamadi.");
+        }
+
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+
+        const matrix = XLSX.utils.sheet_to_json(worksheet, {
+            header: 1,
+            defval: null,
+            blankrows: false
+        });
+
+        if (!matrix.length) {
+            throw new Error("Excel dosyasi bos.");
+        }
+
+        const rawHeaders = matrix[0].map((value) =>
+            String(value ?? "").trim()
+        );
+
+        const processedHeaders = rawHeaders.map((header) =>
+            header.toLocaleLowerCase("tr-TR")
+                .replace(/[^a-z0-9_ğüşöçı]/g, "_")
+        );
+
+        const rows = [];
+
+        for (const values of matrix.slice(1)) {
+            const rowData = {};
+            let isRowEmpty = true;
+
+            rawHeaders.forEach((header, index) => {
+                if (!header) return;
+
+                let value = values[index] ?? null;
+
+                if (value instanceof Date) {
+                    value = value.toISOString();
+                }
+
+                rowData[processedHeaders[index]] = value;
+
+                if (
+                    value !== null &&
+                    String(value).trim() !== ""
+                ) {
+                    isRowEmpty = false;
+                }
+            });
+
+            if (!isRowEmpty) {
+                rows.push(rowData);
+            }
+        }
+
+        console.log("Pepsi Excel basariyla okundu:", {
+            fileName: file.name,
+            rowCount: rows.length,
+            headers: processedHeaders
+        });
+
+        return {
+            headers: processedHeaders,
+            rows
+        };
+
+    } catch (error) {
+        console.error("Pepsi Excel okuma hatasi:", error);
+        throw error;
     }
-
-    return { headers: processedHeaders, rows };
 };
-
 const insertBatched = async (table, rows, batchSize = 500) => {
     const keys = Object.keys(rows?.[0] || {});
 
@@ -930,12 +956,21 @@ export function PepsiHesaplama({
                     kmMap[plaka] = { KM_38: 0, KM_37: 0, TOPLAM_KM: 0, TOPLAM_TUKETIM: 0 };
                 }
 
-                const rate = getRateByMusteri(row.musteri_adi);
+                const rate = getRateBySeferNo(row.sefer_no);
                 if (rate === 0.38) kmMap[plaka].KM_38 += km;
                 else kmMap[plaka].KM_37 += km;
 
                 kmMap[plaka].TOPLAM_KM += km;
                 kmMap[plaka].TOPLAM_TUKETIM += km * rate;
+
+                // PEPSI TEST: Plaka bazli yakit kontrolu
+                console.log("[PEPSI-TEST] Sefer:", {
+                    seferNo: row.sefer_no,
+                    plaka,
+                    km,
+                    oran: rate,
+                    hesaplananLitre: km * rate
+                });
             });
 
             totalUniquePlates = Object.keys(kmMap).length;
